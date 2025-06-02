@@ -1,0 +1,13 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "Simple websocket chat server",
+  "main": "server.js",
+  "scripts": {
+    "test": "node -e \"console.log('tests stubbed')\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
