@@ -3,7 +3,45 @@ const WebSocket = require('ws');
 const url = require('url');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const db = require('./db');
+
+let config = { port: 3000, jwtSecret: 'changeme' };
+try {
+    const configFile = require('./config.json');
+    config = { ...config, ...configFile };
+} catch (e) {
+    console.warn('config.json not found or unreadable, using defaults.');
+}
+
+function generateSalt() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function hashPassword(password, salt) {
+  return crypto.createHmac('sha256', salt).update(password).digest('hex');
+}
+
+function createToken(userId) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ sub: userId, iat: Math.floor(Date.now() / 1000) })).toString('base64url');
+  const data = `${header}.${payload}`;
+  const signature = crypto.createHmac('sha256', config.jwtSecret).update(data).digest('base64url');
+  return `${data}.${signature}`;
+}
+
+function verifyToken(token) {
+  try {
+    const [headerB, payloadB, signature] = token.split('.');
+    const data = `${headerB}.${payloadB}`;
+    const expected = crypto.createHmac('sha256', config.jwtSecret).update(data).digest('base64url');
+    if (expected !== signature) return null;
+    const payload = JSON.parse(Buffer.from(payloadB, 'base64url').toString('utf8'));
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 // In-memory store only for tracking connected clients
 const clientSpaces = {}; // { spaceName: { channels: { channelName: { clients: Set<WebSocket> } } } }
@@ -76,6 +114,45 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
   };
 
   res.setHeader('Content-Type', 'application/json');
+
+  if (parsedUrl.pathname === '/register' && req.method === 'POST') {
+    try {
+      const { username, password } = await getJsonBody(req);
+      if (!username || !password) {
+        res.writeHead(400);
+        return res.end(JSON.stringify({ error: 'Username and password required' }));
+      }
+      if (db.getUserByUsername(username)) {
+        res.writeHead(409);
+        return res.end(JSON.stringify({ error: 'User already exists' }));
+      }
+      const salt = generateSalt();
+      const hash = hashPassword(password, salt);
+      const userId = db.createUser(username, hash, salt);
+      const token = createToken(userId);
+      res.writeHead(201);
+      return res.end(JSON.stringify({ token }));
+    } catch (e) {
+      res.writeHead(400);
+      return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
+  else if (parsedUrl.pathname === '/login' && req.method === 'POST') {
+    try {
+      const { username, password } = await getJsonBody(req);
+      const user = db.getUserByUsername(username);
+      if (!user || hashPassword(password, user.salt) !== user.password_hash) {
+        res.writeHead(401);
+        return res.end(JSON.stringify({ error: 'Invalid credentials' }));
+      }
+      const token = createToken(user.id);
+      res.writeHead(200);
+      return res.end(JSON.stringify({ token }));
+    } catch (e) {
+      res.writeHead(400);
+      return res.end(JSON.stringify({ error: e.message }));
+    }
+  }
 
   // Admin API Routes
   if (pathSegments[0] === 'admin') {
@@ -277,13 +354,20 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
 const wss = new WebSocket.Server({ noServer: true }); // noServer: true allows us to use existing HTTP server for handshake
 
 httpServer.on('upgrade', (request, socket, head) => {
-  const parsedUrl = url.parse(request.url);
+  const parsedUrl = url.parse(request.url, true);
   const match = /^\/ws\/([^/]+)\/([^/]+)/.exec(parsedUrl.pathname || '');
 
   if (match) {
     const spaceName = match[1];
     const channelName = match[2];
-    
+
+    const token = parsedUrl.query && parsedUrl.query.token;
+    const payload = token ? verifyToken(token) : null;
+    if (!payload) {
+      socket.destroy();
+      return;
+    }
+
     // Ensure channel exists before upgrading
     const channelObj = createChannel(spaceName, channelName);
 
@@ -291,7 +375,8 @@ httpServer.on('upgrade', (request, socket, head) => {
       // Store the space and channel info on the wsClient object for later use
       wsClient.spaceName = spaceName;
       wsClient.channelName = channelName;
-      
+      wsClient.userId = payload.sub;
+
       channelObj.clients.add(wsClient);
       console.log(`Client connected to ${spaceName}/${channelName}. Total clients in channel: ${channelObj.clients.size}`);
       
@@ -324,14 +409,6 @@ httpServer.on('upgrade', (request, socket, head) => {
     socket.destroy();
   }
 });
-
-let config = { port: 3000 }; // Default config
-try {
-    const configFile = require('./config.json'); // Make sure this path is correct or handle error
-    config = {...config, ...configFile};
-} catch (e) {
-    console.warn('config.json not found or unreadable, using default port 3000.');
-}
 
 httpServer.listen(config.port, () => {
   console.log(`DisGourd Server running on port ${config.port}`);
