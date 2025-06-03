@@ -483,7 +483,8 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     const writeStream = fs.createWriteStream(filePath);
     req.pipe(writeStream);
     req.on('end', () => {
-      const urlPath = `/uploads/${safeName}`;
+      const encodedName = encodeURIComponent(safeName);
+      const urlPath = `/uploads/${encodedName}`;
       res.writeHead(201);
       res.end(JSON.stringify({ url: urlPath }));
     });
@@ -491,8 +492,12 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
   }
   // Serve uploaded files
   else if (req.method === 'GET' && parsedUrl.pathname.startsWith('/uploads/')) {
-    const requestedPath = parsedUrl.pathname.substring('/uploads/'.length);
-    const safeSuffix = path.normalize(requestedPath).replace(/^(\.\.[\/\\])+/, '');
+    const requestedPath = decodeURIComponent(
+      parsedUrl.pathname.substring('/uploads/'.length)
+    );
+    const safeSuffix = path
+      .normalize(requestedPath)
+      .replace(/^(\.\.[\/\\])+/, '');
     const filePath = path.join(__dirname, '..', 'uploads', safeSuffix);
     const uploadsDir = path.join(__dirname, '..', 'uploads');
     if (!filePath.startsWith(uploadsDir)) {
@@ -510,7 +515,15 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         }
         return;
       }
-      res.writeHead(200);
+      let contentType = 'application/octet-stream';
+      if (filePath.endsWith('.png')) {
+        contentType = 'image/png';
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        contentType = 'image/jpeg';
+      } else if (filePath.endsWith('.gif')) {
+        contentType = 'image/gif';
+      }
+      res.writeHead(200, { 'Content-Type': contentType });
       res.end(content);
     });
     return;
