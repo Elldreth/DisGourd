@@ -3,7 +3,8 @@ const { createApp, ref, computed, onMounted } = Vue;
 createApp({
   setup() {
     const host = location.hostname;
-    const port = location.port || 3000;
+    const port = 3000; // backend API port
+    const baseUrl = `http://${host}:${port}`;
 
     const token = ref(localStorage.getItem('token') || '');
     const loginUser = ref('');
@@ -26,7 +27,7 @@ createApp({
     const fileRef = ref(null);
 
     async function login() {
-      const resp = await fetch('/login', {
+      const resp = await fetch(`${baseUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: loginUser.value, password: loginPass.value })
@@ -43,7 +44,7 @@ createApp({
     }
 
     async function registerUser() {
-      const resp = await fetch('/register', {
+      const resp = await fetch(`${baseUrl}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: regUser.value, password: regPass.value, email: regEmail.value })
@@ -60,7 +61,7 @@ createApp({
     }
 
     async function loadState() {
-      const resp = await fetch('/admin/state');
+      const resp = await fetch(`${baseUrl}/admin/state`);
       if (resp.ok) {
         const data = await resp.json();
         spaces.value = Object.keys(data).map(s => ({
@@ -72,12 +73,12 @@ createApp({
 
     async function loadFriends() {
       if (!token.value) return;
-      const resp = await fetch(`/friends?token=${token.value}`);
+      const resp = await fetch(`${baseUrl}/friends?token=${token.value}`);
       if (resp.ok) {
         const data = await resp.json();
         friends.value = data.friends || [];
       }
-      const r = await fetch(`/friends/requests?token=${token.value}`);
+      const r = await fetch(`${baseUrl}/friends/requests?token=${token.value}`);
       if (r.ok) {
         const d = await r.json();
         friendRequests.value = d.requests || [];
@@ -85,7 +86,7 @@ createApp({
     }
 
     async function sendFriendRequest(to) {
-      await fetch(`/friends/request?token=${token.value}`, {
+      await fetch(`${baseUrl}/friends/request?token=${token.value}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: to })
@@ -94,7 +95,7 @@ createApp({
     }
 
     async function acceptFriend(from) {
-      await fetch(`/friends/accept?token=${token.value}`, {
+      await fetch(`${baseUrl}/friends/accept?token=${token.value}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: from })
@@ -103,7 +104,7 @@ createApp({
     }
 
     async function rejectFriend(from) {
-      await fetch(`/friends/reject?token=${token.value}`, {
+      await fetch(`${baseUrl}/friends/reject?token=${token.value}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: from })
@@ -120,7 +121,7 @@ createApp({
 
     async function loadHistory() {
       if (!selectedSpace.value || !selectedChannel.value) return;
-      const url = `/spaces/${encodeURIComponent(selectedSpace.value)}/channels/${encodeURIComponent(selectedChannel.value)}/messages?limit=50`;
+      const url = `${baseUrl}/spaces/${encodeURIComponent(selectedSpace.value)}/channels/${encodeURIComponent(selectedChannel.value)}/messages?limit=50`;
       const resp = await fetch(url);
       if (resp.ok) {
         messages.value = await resp.json();
@@ -158,7 +159,7 @@ createApp({
       const fileInput = fileRef.value;
       if (fileInput && fileInput.files.length > 0) {
         const file = fileInput.files[0];
-        const res = await fetch(`/uploads?name=${encodeURIComponent(file.name)}`, {
+        const res = await fetch(`${baseUrl}/uploads?name=${encodeURIComponent(file.name)}`, {
           method: 'POST',
           body: file
         });
