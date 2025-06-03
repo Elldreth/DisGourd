@@ -4,6 +4,7 @@ const url = require('url');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+require('dotenv').config();
 const db = require('./db');
 
 let config = { port: 3000, jwtSecret: 'changeme' };
@@ -13,6 +14,9 @@ try {
 } catch (e) {
     console.warn('config.json not found or unreadable, using defaults.');
 }
+
+config.port = parseInt(process.env.PORT, 10) || config.port;
+config.jwtSecret = process.env.JWT_SECRET || config.jwtSecret;
 
 function generateSalt() {
   return crypto.randomBytes(16).toString('hex');
@@ -676,7 +680,11 @@ httpServer.on('upgrade', (request, socket, head) => {
   }
 });
 
-httpServer.listen(config.port, () => {
-  console.log(`DisGourd Server running on port ${config.port}`);
-  console.log(`WebSocket connections available at ws://localhost:${config.port}/ws/:space/:channel`);
-});
+if (require.main === module) {
+  httpServer.listen(config.port, () => {
+    console.log(`DisGourd Server running on port ${config.port}`);
+    console.log(`WebSocket connections available at ws://localhost:${config.port}/ws/:space/:channel`);
+  });
+}
+
+module.exports = { httpServer, wss, config };

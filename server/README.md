@@ -4,13 +4,23 @@ This is a minimal WebSocket chat server implemented with only Node.js built-in m
 
 ## Configuration
 
-Edit `config.json` to change the listening port and JWT secret.
+Edit `config.json` to change the listening port and JWT secret. Environment
+variables can override these values and the database location. Create a `.env`
+file or set variables at runtime.
 
 ```
 {
   "port": 3000,
   "jwtSecret": "changeme"
 }
+```
+
+Alternatively configure a `.env` file:
+
+```
+PORT=3000
+JWT_SECRET=changeme
+DB_PATH=./db/disgourd.db
 ```
 
 ## API
