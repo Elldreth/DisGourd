@@ -26,6 +26,13 @@ createApp({
     const ws = ref(null);
     const fileRef = ref(null);
 
+    function attachmentUrl(part) {
+      if (!part) return '';
+      return part.startsWith('http://') || part.startsWith('https://')
+        ? part
+        : `${baseUrl}${part}`;
+    }
+
     async function login() {
       const resp = await fetch(`${baseUrl}/login`, {
         method: 'POST',
@@ -183,7 +190,7 @@ createApp({
       }
     });
 
-    return { loginUser, loginPass, regUser, regPass, regEmail, login, registerUser, loggedIn, spaces, selectedSpace, selectedChannel, select, messages, messageInput, sendMessage, members, fileRef, friends, friendRequests, sendFriendRequest, acceptFriend, rejectFriend, messageInputFriend };
+    return { loginUser, loginPass, regUser, regPass, regEmail, login, registerUser, loggedIn, spaces, selectedSpace, selectedChannel, select, messages, messageInput, sendMessage, members, fileRef, friends, friendRequests, sendFriendRequest, acceptFriend, rejectFriend, messageInputFriend, attachmentUrl };
   },
 
   template: `
@@ -233,7 +240,7 @@ createApp({
         <strong v-if="msg.author">{{ msg.author }}:</strong>
         <span>{{ msg.content }}</span>
         <span v-if="msg.attachment_url || msg.attachment">
-          <a :href="msg.attachment_url || msg.attachment" target="_blank">[file]</a>
+          <a :href="attachmentUrl(msg.attachment_url || msg.attachment)" target="_blank">[file]</a>
         </span>
       </div>
     </div>
