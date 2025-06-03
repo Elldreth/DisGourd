@@ -94,13 +94,13 @@ function notifyAndDisconnectClients(clients, systemMessage, closeReasonCode = 10
   });
 }
 
-function broadcast(channelObj, message, senderClient) {
+function broadcast(channelObj, message) {
   // message is already a string or Buffer from ws library
   if (!channelObj || !channelObj.clients) return;
 
   channelObj.clients.forEach(client => {
     // ws clients have a readyState property
-    if (client !== senderClient && client.readyState === WebSocket.OPEN) {
+    if (client.readyState === WebSocket.OPEN) {
       client.send(message); // ws handles framing
     }
   });
@@ -655,7 +655,7 @@ httpServer.on('upgrade', (request, socket, head) => {
           timestamp: Date.now()
         };
         db.storeMessage(spaceName, channelName, content, wsClient.userId, attachment);
-        broadcast(channelObj, JSON.stringify(broadcastObj), wsClient);
+        broadcast(channelObj, JSON.stringify(broadcastObj));
       });
 
       wsClient.on('close', (code, reason) => {
