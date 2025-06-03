@@ -1,7 +1,8 @@
 const path = require('path');
 const Database = require('better-sqlite3');
+require('dotenv').config();
 
-const dbPath = path.join(__dirname, 'disgourd.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'disgourd.db');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
