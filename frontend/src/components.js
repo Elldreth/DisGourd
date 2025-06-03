@@ -604,11 +604,17 @@ export const DMSidebar = ({ directMessages, activeDM, onDMSelect }) => {
 };
 
 // Message Component
-export const Message = ({ message }) => {
+export const Message = ({ message, isDM = false }) => {
   return (
     <div className="flex hover:bg-gray-800 hover:bg-opacity-30 px-4 py-2 group">
       <div className="w-10 h-10 rounded-full overflow-hidden mr-4 flex-shrink-0">
-        <img src={message.avatar} alt={message.user} className="w-full h-full object-cover" />
+        {message.avatar ? (
+          <img src={message.avatar} alt={message.user} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-discord-blurple flex items-center justify-center">
+            <span className="text-white text-sm font-semibold">Y</span>
+          </div>
+        )}
       </div>
       
       <div className="flex-1 min-w-0">
@@ -649,6 +655,93 @@ export const Message = ({ message }) => {
             <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
           </svg>
         </button>
+      </div>
+    </div>
+  );
+};
+
+// Friends List Sidebar Component
+export const FriendsList = ({ friends, showFriendsList }) => {
+  if (!showFriendsList) return null;
+
+  const onlineFriends = friends.filter(friend => friend.status === 'online');
+
+  return (
+    <div className="bg-gray-700 w-64 flex flex-col border-l border-gray-600">
+      {/* Friends Header */}
+      <div className="h-12 border-b border-gray-600 flex items-center px-4">
+        <h2 className="text-white font-semibold text-sm">Members</h2>
+        <span className="text-gray-400 text-xs ml-auto">{onlineFriends.length}</span>
+      </div>
+
+      {/* Online Friends */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-2 py-3">
+          <div className="text-xs text-gray-400 uppercase font-semibold tracking-wide px-2 mb-2">
+            Online — {onlineFriends.length}
+          </div>
+          
+          {onlineFriends.map((friend) => (
+            <div
+              key={friend.id}
+              className="flex items-center px-2 py-1 rounded cursor-pointer hover:bg-gray-600 group"
+            >
+              <div className="relative mr-3">
+                <div className="w-8 h-8 rounded-full overflow-hidden">
+                  <img src={friend.avatar} alt={friend.username} className="w-full h-full object-cover" />
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-700"></div>
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-sm font-medium truncate">{friend.username}</div>
+                <div className="text-xs text-gray-400 truncate">{friend.activity}</div>
+              </div>
+              
+              {/* Friend Actions */}
+              <div className="opacity-0 group-hover:opacity-100 flex space-x-1">
+                <button className="p-1 text-gray-400 hover:text-white rounded">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20,2H4A2,2 0 0,0 2,4V16A2,2 0 0,0 4,18H18L22,22V4A2,2 0 0,0 20,2Z"/>
+                  </svg>
+                </button>
+                <button className="p-1 text-gray-400 hover:text-white rounded">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+          
+          {/* Offline Friends */}
+          {friends.filter(friend => friend.status !== 'online').length > 0 && (
+            <>
+              <div className="text-xs text-gray-400 uppercase font-semibold tracking-wide px-2 mb-2 mt-4">
+                Offline — {friends.filter(friend => friend.status !== 'online').length}
+              </div>
+              
+              {friends.filter(friend => friend.status !== 'online').map((friend) => (
+                <div
+                  key={friend.id}
+                  className="flex items-center px-2 py-1 rounded cursor-pointer hover:bg-gray-600 group opacity-60"
+                >
+                  <div className="relative mr-3">
+                    <div className="w-8 h-8 rounded-full overflow-hidden">
+                      <img src={friend.avatar} alt={friend.username} className="w-full h-full object-cover grayscale" />
+                    </div>
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-gray-500 rounded-full border-2 border-gray-700"></div>
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="text-gray-400 text-sm font-medium truncate">{friend.username}</div>
+                    <div className="text-xs text-gray-500 truncate">{friend.activity}</div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
