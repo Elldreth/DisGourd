@@ -32,6 +32,15 @@ POST /space/{space}/channel
 ### WebSocket Connection
 
 Connect to `/ws/{space}/{channel}`. Messages sent will be broadcast to other clients in the same channel.
+Add `?history=N` to the connection URL to receive the last `N` messages upon connecting.
+
+### Get Messages
+
+```
+GET /spaces/{space}/channels/{channel}/messages?limit=20&offset=0
+```
+
+Returns an array of recent messages, each containing `content`, `timestamp` and `author`.
 
 ## Authentication
 

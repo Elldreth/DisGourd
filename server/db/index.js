@@ -20,9 +20,11 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     channel_id INTEGER NOT NULL,
+    author_id INTEGER,
     content TEXT NOT NULL,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(channel_id) REFERENCES channels(id) ON DELETE CASCADE
+    FOREIGN KEY(channel_id) REFERENCES channels(id) ON DELETE CASCADE,
+    FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE SET NULL
   );
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +33,16 @@ db.exec(`
     salt TEXT NOT NULL
   );
 `);
+
+// Migrate existing databases to include author_id column if missing
+try {
+  const hasAuthor = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'author_id');
+  if (!hasAuthor) {
+    db.exec('ALTER TABLE messages ADD COLUMN author_id INTEGER');
+  }
+} catch (e) {
+  console.error('Error migrating messages table:', e);
+}
 
 function createSpace(name) {
   const stmt = db.prepare('INSERT OR IGNORE INTO spaces(name) VALUES (?)');
@@ -59,7 +71,7 @@ function deleteChannel(spaceName, channelName) {
   return stmt.run(spaceName, channelName).changes > 0;
 }
 
-function storeMessage(spaceName, channelName, content) {
+function storeMessage(spaceName, channelName, content, authorId) {
   createChannel(spaceName, channelName);
   const channel = db.prepare(`
     SELECT c.id FROM channels c
@@ -67,8 +79,22 @@ function storeMessage(spaceName, channelName, content) {
     WHERE s.name = ? AND c.name = ?
   `).get(spaceName, channelName);
   if (channel) {
-    db.prepare('INSERT INTO messages(channel_id, content) VALUES (?, ?)').run(channel.id, content);
+    db.prepare('INSERT INTO messages(channel_id, content, author_id) VALUES (?, ?, ?)')
+      .run(channel.id, content, authorId || null);
   }
+}
+
+function getMessages(spaceName, channelName, limit = 20, offset = 0) {
+  return db.prepare(`
+    SELECT m.id, m.content, m.timestamp, u.username as author
+    FROM messages m
+    JOIN channels c ON m.channel_id = c.id
+    JOIN spaces s ON c.space_id = s.id
+    LEFT JOIN users u ON m.author_id = u.id
+    WHERE s.name = ? AND c.name = ?
+    ORDER BY m.id DESC
+    LIMIT ? OFFSET ?
+  `).all(spaceName, channelName, limit, offset).reverse();
 }
 
 function getState() {
@@ -104,6 +130,7 @@ module.exports = {
   deleteSpace,
   deleteChannel,
   storeMessage,
+  getMessages,
   getState,
   createUser,
   getUserByUsername,

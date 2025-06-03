@@ -153,6 +153,20 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       return res.end(JSON.stringify({ error: e.message }));
     }
   }
+  else if (
+    pathSegments[0] === 'spaces' &&
+    pathSegments[2] === 'channels' &&
+    pathSegments[4] === 'messages' &&
+    req.method === 'GET'
+  ) {
+    const spaceName = pathSegments[1];
+    const channelName = pathSegments[3];
+    const limit = parseInt(parsedUrl.query.limit || '20', 10);
+    const offset = parseInt(parsedUrl.query.offset || '0', 10);
+    const messages = db.getMessages(spaceName, channelName, limit, offset);
+    res.writeHead(200);
+    return res.end(JSON.stringify(messages));
+  }
 
   // Admin API Routes
   if (pathSegments[0] === 'admin') {
@@ -383,11 +397,17 @@ httpServer.on('upgrade', (request, socket, head) => {
       // Let the new client know they're connected (optional)
       wsClient.send(JSON.stringify({ type: 'system', message: `Connected to ${spaceName}/${channelName}` }));
 
+      const historyCount = parseInt(parsedUrl.query.history || '0', 10);
+      if (historyCount > 0) {
+        const history = db.getMessages(spaceName, channelName, historyCount, 0);
+        wsClient.send(JSON.stringify({ type: 'history', messages: history }));
+      }
+
       wsClient.on('message', (message) => {
         // message is already unmasked and can be Buffer or String
         console.log(`Received from ${spaceName}/${channelName}: ${message.toString()}`);
         // Persist the message and broadcast to other clients in the same channel
-        db.storeMessage(spaceName, channelName, message.toString());
+        db.storeMessage(spaceName, channelName, message.toString(), wsClient.userId);
         // Broadcast to other clients in the same channel
         broadcast(channelObj, message, wsClient);
       });
