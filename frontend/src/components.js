@@ -3,6 +3,13 @@ import React, { useState } from 'react';
 // Mock Data
 const SERVERS = [
   {
+    id: 'dm',
+    name: "Direct Messages",
+    icon: null,
+    isActive: false,
+    isDM: true
+  },
+  {
     id: 1,
     name: "Retro Gaming Hub",
     icon: "https://images.unsplash.com/photo-1531525727990-67532cd332c6",
@@ -18,6 +25,36 @@ const SERVERS = [
     id: 3,
     name: "VR Lounge",
     icon: "https://images.pexels.com/photos/8728386/pexels-photo-8728386.jpeg",
+    isActive: false
+  },
+  {
+    id: 4,
+    name: "Music Central",
+    icon: "https://images.pexels.com/photos/972377/pexels-photo-972377.jpeg",
+    isActive: false
+  },
+  {
+    id: 5,
+    name: "Tech Community",
+    icon: "https://images.pexels.com/photos/5475761/pexels-photo-5475761.jpeg",
+    isActive: false
+  },
+  {
+    id: 6,
+    name: "Study Group",
+    icon: "https://images.pexels.com/photos/29367936/pexels-photo-29367936.jpeg",
+    isActive: false
+  },
+  {
+    id: 7,
+    name: "Anime Lovers",
+    icon: "https://images.pexels.com/photos/7267188/pexels-photo-7267188.jpeg",
+    isActive: false
+  },
+  {
+    id: 8,
+    name: "Guitar Heroes",
+    icon: "https://images.pexels.com/photos/8512209/pexels-photo-8512209.jpeg",
     isActive: false
   }
 ];
