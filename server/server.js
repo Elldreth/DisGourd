@@ -549,8 +549,13 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         contentType = 'application/javascript';
       } else if (filePath.endsWith('.html')) {
         contentType = 'text/html';
+      } else if (filePath.endsWith('.png')) {
+        contentType = 'image/png';
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        contentType = 'image/jpeg';
+      } else if (filePath.endsWith('.gif')) {
+        contentType = 'image/gif';
       }
-      // Add more content types as needed (e.g., for images)
 
       res.writeHead(200, { 'Content-Type': contentType });
       res.end(content);
