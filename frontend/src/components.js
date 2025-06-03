@@ -342,7 +342,11 @@ export const ServerSidebar = ({ servers, activeServer, onServerSelect }) => {
 };
 
 // Channel Sidebar Component
-export const ChannelSidebar = ({ channels, activeChannel, onChannelSelect, serverName }) => {
+export const ChannelSidebar = ({ channels, activeChannel, onChannelSelect, serverName, isDM, directMessages, activeDM, onDMSelect }) => {
+  if (isDM) {
+    return <DMSidebar directMessages={directMessages} activeDM={activeDM} onDMSelect={onDMSelect} />;
+  }
+
   const groupedChannels = channels.reduce((acc, channel) => {
     if (channel.type === 'category') {
       acc[channel.name] = [];
@@ -409,6 +413,158 @@ export const ChannelSidebar = ({ channels, activeChannel, onChannelSelect, serve
             ))}
           </div>
         ))}
+      </div>
+
+      {/* User Area */}
+      <div className="h-14 bg-gray-900 flex items-center px-2">
+        <div className="flex items-center flex-1">
+          <div className="w-8 h-8 rounded-full bg-discord-blurple flex items-center justify-center relative">
+            <span className="text-white text-sm font-semibold">U</span>
+            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-gray-900"></div>
+          </div>
+          <div className="ml-2 flex-1">
+            <div className="text-white text-sm font-medium">User#1234</div>
+            <div className="text-xs text-gray-400">Online</div>
+          </div>
+        </div>
+        
+        {/* User Controls */}
+        <div className="flex space-x-2">
+          <button className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"/>
+            </svg>
+          </button>
+          <button className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17,10.5V7A1,1 0 0,0 16,6H4A1,1 0 0,0 3,7V17A1,1 0 0,0 4,18H16A1,1 0 0,0 17,17V13.5L21,17.5V6.5L17,10.5Z"/>
+            </svg>
+          </button>
+          <button className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.35 19.43,11.03L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11.03C4.53,11.35 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// DM Sidebar Component
+export const DMSidebar = ({ directMessages, activeDM, onDMSelect }) => {
+  const [activeTab, setActiveTab] = useState('friends');
+
+  return (
+    <div className="bg-gray-800 w-60 flex flex-col">
+      {/* DM Header */}
+      <div className="h-12 border-b border-gray-700 flex items-center px-4 shadow-md">
+        <h1 className="text-white font-semibold text-sm">Direct Messages</h1>
+      </div>
+
+      {/* DM Tabs */}
+      <div className="flex border-b border-gray-700">
+        <button
+          className={`flex-1 px-4 py-2 text-sm font-medium ${
+            activeTab === 'friends' ? 'text-white border-b-2 border-discord-blurple' : 'text-gray-400 hover:text-white'
+          }`}
+          onClick={() => setActiveTab('friends')}
+        >
+          Friends
+        </button>
+        <button
+          className={`flex-1 px-4 py-2 text-sm font-medium ${
+            activeTab === 'dms' ? 'text-white border-b-2 border-discord-blurple' : 'text-gray-400 hover:text-white'
+          }`}
+          onClick={() => setActiveTab('dms')}
+        >
+          Messages
+        </button>
+      </div>
+
+      {/* Search Bar */}
+      <div className="p-3">
+        <div className="bg-gray-900 rounded px-3 py-2 flex items-center">
+          <svg className="w-4 h-4 text-gray-400 mr-2" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
+          <input
+            type="text"
+            placeholder={activeTab === 'friends' ? 'Search friends' : 'Search messages'}
+            className="bg-transparent text-white text-sm placeholder-gray-400 flex-1 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === 'friends' && (
+          <div className="px-2">
+            {FRIENDS.map((friend) => (
+              <div
+                key={friend.id}
+                className="flex items-center px-3 py-2 rounded cursor-pointer hover:bg-gray-700 group"
+              >
+                <div className="relative mr-3">
+                  <div className="w-8 h-8 rounded-full overflow-hidden">
+                    <img src={friend.avatar} alt={friend.username} className="w-full h-full object-cover" />
+                  </div>
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-800 ${
+                    friend.status === 'online' ? 'bg-green-500' :
+                    friend.status === 'idle' ? 'bg-yellow-500' :
+                    friend.status === 'dnd' ? 'bg-red-500' : 'bg-gray-500'
+                  }`}></div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-sm font-medium truncate">{friend.username}</div>
+                  <div className="text-xs text-gray-400 truncate">{friend.activity}</div>
+                </div>
+                <div className="opacity-0 group-hover:opacity-100 flex space-x-1">
+                  <button className="p-1 text-gray-400 hover:text-white rounded">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20,2H4A2,2 0 0,0 2,4V16A2,2 0 0,0 4,18H18L22,22V4A2,2 0 0,0 20,2Z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'dms' && (
+          <div className="px-2">
+            {directMessages.map((dm) => (
+              <div
+                key={dm.id}
+                className={`flex items-center px-3 py-2 rounded cursor-pointer hover:bg-gray-700 ${
+                  activeDM === dm.id ? 'bg-gray-600' : ''
+                }`}
+                onClick={() => onDMSelect(dm.id)}
+              >
+                <div className="relative mr-3">
+                  <div className="w-8 h-8 rounded-full overflow-hidden">
+                    <img src={dm.avatar} alt={dm.user} className="w-full h-full object-cover" />
+                  </div>
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-800 ${
+                    dm.status === 'online' ? 'bg-green-500' :
+                    dm.status === 'idle' ? 'bg-yellow-500' :
+                    dm.status === 'dnd' ? 'bg-red-500' : 'bg-gray-500'
+                  }`}></div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white text-sm font-medium truncate">{dm.user}</span>
+                    <span className="text-xs text-gray-400 ml-2">{dm.timestamp}</span>
+                  </div>
+                  <div className="text-xs text-gray-400 truncate">{dm.lastMessage}</div>
+                </div>
+                {dm.unread && (
+                  <div className="w-2 h-2 bg-red-500 rounded-full ml-2"></div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* User Area */}
