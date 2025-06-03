@@ -24,6 +24,12 @@ db.exec(`
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(channel_id) REFERENCES channels(id) ON DELETE CASCADE
   );
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    salt TEXT NOT NULL
+  );
 `);
 
 function createSpace(name) {
@@ -79,6 +85,19 @@ function getState() {
   return result;
 }
 
+function createUser(username, passwordHash, salt) {
+  const stmt = db.prepare('INSERT INTO users(username, password_hash, salt) VALUES (?, ?, ?)');
+  return stmt.run(username, passwordHash, salt).lastInsertRowid;
+}
+
+function getUserByUsername(username) {
+  return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+}
+
+function getUserById(id) {
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+}
+
 module.exports = {
   createSpace,
   createChannel,
@@ -86,4 +105,7 @@ module.exports = {
   deleteChannel,
   storeMessage,
   getState,
+  createUser,
+  getUserByUsername,
+  getUserById,
 };
