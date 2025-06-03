@@ -24,7 +24,7 @@ test('register, login and store messages', async () => {
   let res = await fetch(`${base}/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'alice', password: 'pw' })
+    body: JSON.stringify({ username: 'alice', password: 'pw', email: 'a@b.c' })
   });
   expect(res.status).toBe(201);
 
