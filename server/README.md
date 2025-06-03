@@ -1,6 +1,6 @@
 # DisGourd Server
 
-This is a minimal WebSocket chat server implemented with only Node.js built-in modules. It allows creation of custom spaces and channels similar to Discord.
+This is a minimal WebSocket chat server implemented with only Node.js built-in modules and an SQLite database. It allows creation of custom spaces and channels similar to Discord.
 
 ## Configuration
 
@@ -35,8 +35,9 @@ Connect to `/ws/{space}/{channel}`. Messages sent will be broadcast to other cli
 ## Running
 
 ```
+npm install
 node server.js
 ```
 
-The server keeps all data in memory, so restarting will clear spaces and channels.
+Data is stored in `db/disgourd.db` using SQLite, so spaces, channels and messages persist between restarts.
 
