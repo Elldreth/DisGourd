@@ -157,18 +157,18 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
 
   if (parsedUrl.pathname === '/register' && req.method === 'POST') {
     try {
-      const { username, password } = await getJsonBody(req);
-      if (!username || !password) {
+      const { username, password, email } = await getJsonBody(req);
+      if (!username || !password || !email) {
         res.writeHead(400);
-        return res.end(JSON.stringify({ error: 'Username and password required' }));
+        return res.end(JSON.stringify({ error: 'Username, password and email required' }));
       }
-      if (db.getUserByUsername(username)) {
+      if (db.getUserByUsername(username) || db.getUserByEmail(email)) {
         res.writeHead(409);
         return res.end(JSON.stringify({ error: 'User already exists' }));
       }
       const salt = generateSalt();
       const hash = hashPassword(password, salt);
-      const userId = db.createUser(username, hash, salt);
+      const userId = db.createUser(username, email, hash, salt);
       const token = createToken(userId);
       res.writeHead(201);
       return res.end(JSON.stringify({ token }));

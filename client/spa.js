@@ -6,8 +6,11 @@ createApp({
     const port = location.port || 3000;
 
     const token = ref(localStorage.getItem('token') || '');
-    const username = ref('');
-    const password = ref('');
+    const loginUser = ref('');
+    const loginPass = ref('');
+    const regUser = ref('');
+    const regPass = ref('');
+    const regEmail = ref('');
     const loggedIn = computed(() => !!token.value);
 
     const spaces = ref([]);
@@ -26,7 +29,7 @@ createApp({
       const resp = await fetch('/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.value, password: password.value })
+        body: JSON.stringify({ username: loginUser.value, password: loginPass.value })
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -36,6 +39,23 @@ createApp({
         await loadFriends();
       } else {
         alert('Login failed');
+      }
+    }
+
+    async function registerUser() {
+      const resp = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: regUser.value, password: regPass.value, email: regEmail.value })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        token.value = data.token;
+        localStorage.setItem('token', data.token);
+        await loadState();
+        await loadFriends();
+      } else {
+        alert('Registration failed');
       }
     }
 
@@ -162,15 +182,20 @@ createApp({
       }
     });
 
-    return { username, password, login, loggedIn, spaces, selectedSpace, selectedChannel, select, messages, messageInput, sendMessage, members, fileRef, friends, friendRequests, sendFriendRequest, acceptFriend, rejectFriend, messageInputFriend };
+    return { loginUser, loginPass, regUser, regPass, regEmail, login, registerUser, loggedIn, spaces, selectedSpace, selectedChannel, select, messages, messageInput, sendMessage, members, fileRef, friends, friendRequests, sendFriendRequest, acceptFriend, rejectFriend, messageInputFriend };
   },
 
   template: `
 <div v-if="!loggedIn" style="padding:1rem;">
   <h2>Login</h2>
-  <input v-model="username" placeholder="Username" />
-  <input v-model="password" placeholder="Password" type="password" />
+  <input v-model="loginUser" placeholder="Username" />
+  <input v-model="loginPass" placeholder="Password" type="password" />
   <button @click="login">Login</button>
+  <h2>Register</h2>
+  <input v-model="regUser" placeholder="Username" />
+  <input v-model="regEmail" placeholder="Email" />
+  <input v-model="regPass" placeholder="Password" type="password" />
+  <button @click="registerUser">Register</button>
 </div>
 <div v-else style="display:flex; flex:1; width:100%;">
   <div class="sidebar">

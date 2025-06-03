@@ -31,6 +31,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL
   );
@@ -51,7 +52,7 @@ db.exec(`
   );
 `);
 
-// Migrate existing databases to include author_id and attachment_url columns if missing
+// Migrate existing databases to include new columns if missing
 try {
   const hasAuthor = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'author_id');
   if (!hasAuthor) {
@@ -60,6 +61,10 @@ try {
   const hasAttachment = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'attachment_url');
   if (!hasAttachment) {
     db.exec('ALTER TABLE messages ADD COLUMN attachment_url TEXT');
+  }
+  const hasEmail = db.prepare("PRAGMA table_info(users)").all().some(c => c.name === 'email');
+  if (!hasEmail) {
+    db.exec('ALTER TABLE users ADD COLUMN email TEXT');
   }
 } catch (e) {
   console.error('Error migrating messages table:', e);
@@ -157,13 +162,17 @@ function getState() {
   return result;
 }
 
-function createUser(username, passwordHash, salt) {
-  const stmt = db.prepare('INSERT INTO users(username, password_hash, salt) VALUES (?, ?, ?)');
-  return stmt.run(username, passwordHash, salt).lastInsertRowid;
+function createUser(username, email, passwordHash, salt) {
+  const stmt = db.prepare('INSERT INTO users(username, email, password_hash, salt) VALUES (?, ?, ?, ?)');
+  return stmt.run(username, email, passwordHash, salt).lastInsertRowid;
 }
 
 function getUserByUsername(username) {
   return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+}
+
+function getUserByEmail(email) {
+  return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 }
 
 function getUserById(id) {
@@ -211,6 +220,7 @@ module.exports = {
   getState,
   createUser,
   getUserByUsername,
+  getUserByEmail,
   getUserById,
   createFriendRequest,
   getIncomingFriendRequests,

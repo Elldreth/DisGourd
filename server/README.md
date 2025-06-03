@@ -54,13 +54,13 @@ Returns an array of recent messages, each containing `content`, `timestamp` and 
 
 ## Authentication
 
-Users must register and obtain a JWT before connecting via WebSocket.
+Users must register with a username, password and email address to obtain a JWT before connecting via WebSocket.
 
 ### Register
 
 ```
 POST /register
-{"username": "alice", "password": "secret"}
+{"username": "alice", "password": "secret", "email": "alice@example.com"}
 ```
 
 Returns a token which should be supplied when connecting.
