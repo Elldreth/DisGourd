@@ -1,12 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DisGourd Client</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DisGourd Web Client</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/modern-normalize/modern-normalize.css">
+  <style>
+    body { margin:0; height:100vh; display:flex; font-family: sans-serif; }
+    .sidebar { width:200px; border-right:1px solid #ccc; padding:10px; overflow-y:auto; }
+    .content { flex:1; display:flex; flex-direction:column; }
+    .messages { flex:1; padding:10px; overflow-y:auto; }
+    .input-area { display:flex; gap:4px; padding:4px; border-top:1px solid #ccc; }
+    .input-area input[type="text"] { flex:1; }
+    .memberlist { width:150px; border-left:1px solid #ccc; padding:10px; overflow-y:auto; }
+  </style>
 </head>
 <body>
-    <h1>DisGourd Client</h1>
-    <script src="client.js"></script>
+  <div id="app"></div>
+  <script src="spa.js"></script>
 </body>
 </html>
