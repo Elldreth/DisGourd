@@ -233,6 +233,53 @@ const MESSAGES = [
   }
 ];
 
+const DM_MESSAGES = {
+  'dm1': [
+    {
+      id: 'dm1-1',
+      user: "GamerPro2024",
+      avatar: "https://images.pexels.com/photos/7658539/pexels-photo-7658539.jpeg",
+      timestamp: "Today at 3:15 PM",
+      content: "Hey! Ready for that co-op session we talked about?",
+      reactions: []
+    },
+    {
+      id: 'dm1-2',
+      user: "You",
+      avatar: null,
+      timestamp: "Today at 3:16 PM",
+      content: "Absolutely! I've been looking forward to it all day.",
+      reactions: []
+    },
+    {
+      id: 'dm1-3',
+      user: "GamerPro2024",
+      avatar: "https://images.pexels.com/photos/7658539/pexels-photo-7658539.jpeg",
+      timestamp: "Today at 3:18 PM",
+      content: "Perfect! Let me know when you're ready to hop on voice chat.",
+      reactions: [{ emoji: "👍", count: 1 }]
+    }
+  ],
+  'dm2': [
+    {
+      id: 'dm2-1',
+      user: "PixelMaster",
+      avatar: "https://images.pexels.com/photos/7658146/pexels-photo-7658146.jpeg",
+      timestamp: "Today at 2:45 PM",
+      content: "Check out this new game! It's got amazing pixel art.",
+      reactions: []
+    },
+    {
+      id: 'dm2-2',
+      user: "You",
+      avatar: null,
+      timestamp: "Today at 2:50 PM",
+      content: "Looks awesome! The art style reminds me of the old classics.",
+      reactions: []
+    }
+  ]
+};
+
 // Server Sidebar Component
 export const ServerSidebar = ({ servers, activeServer, onServerSelect }) => {
   return (
