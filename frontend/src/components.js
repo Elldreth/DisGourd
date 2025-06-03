@@ -748,33 +748,48 @@ export const FriendsList = ({ friends, showFriendsList }) => {
 };
 
 // Chat Area Component
-export const ChatArea = ({ messages, activeChannelName }) => {
+export const ChatArea = ({ messages, activeChannelName, isDM = false, dmUser = null }) => {
   return (
     <div className="flex-1 flex flex-col bg-gray-700">
       {/* Chat Header */}
       <div className="h-12 border-b border-gray-600 flex items-center px-4 shadow-sm">
-        <svg className="w-6 h-6 text-gray-400 mr-2" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M5,9V21H1V9H5M9,21A2,2 0 0,1 7,19V9C7,8.45 7.22,7.95 7.59,7.59L14.17,1L15.23,2.06C15.5,2.33 15.67,2.7 15.67,3.11L15.64,3.43L14.69,8H21C21.53,8 22,8.2 22.39,8.59C22.78,8.97 23,9.44 23,10V12C23,12.26 22.95,12.5 22.86,12.73L19.84,19.78C19.54,20.5 18.83,21 18,21H9M9,19H18.03L21,12V10H12.21L13.34,4.68L9,9.03V19Z"/>
-        </svg>
-        <h2 className="text-white font-semibold">{activeChannelName}</h2>
+        {isDM ? (
+          <>
+            <svg className="w-6 h-6 text-gray-400 mr-2" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z"/>
+            </svg>
+            <h2 className="text-white font-semibold">{dmUser}</h2>
+          </>
+        ) : (
+          <>
+            <svg className="w-6 h-6 text-gray-400 mr-2" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M5,9V21H1V9H5M9,21A2,2 0 0,1 7,19V9C7,8.45 7.22,7.95 7.59,7.59L14.17,1L15.23,2.06C15.5,2.33 15.67,2.7 15.67,3.11L15.64,3.43L14.69,8H21C21.53,8 22,8.2 22.39,8.59C22.78,8.97 23,9.44 23,10V12C23,12.26 22.95,12.5 22.86,12.73L19.84,19.78C19.54,20.5 18.83,21 18,21H9M9,19H18.03L21,12V10H12.21L13.34,4.68L9,9.03V19Z"/>
+            </svg>
+            <h2 className="text-white font-semibold">{activeChannelName}</h2>
+          </>
+        )}
         
         {/* Chat Header Actions */}
         <div className="ml-auto flex items-center space-x-4">
-          <button className="text-gray-400 hover:text-white">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12,2C13.1,2 14,2.9 14,4C14,5.1 13.1,6 12,6C10.9,6 10,5.1 10,4C10,2.9 10.9,2 12,2M21,9V7L15,1H5C3.89,1 3,1.89 3,3V18A2,2 0 0,0 5,20H19A2,2 0 0,0 21,18V9M19,9H14V4H5V18H19V9Z"/>
-            </svg>
-          </button>
-          <button className="text-gray-400 hover:text-white">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,16.5L18,9.5L16.59,8.09L11,13.67L7.91,10.59L6.5,12L11,16.5Z"/>
-            </svg>
-          </button>
-          <button className="text-gray-400 hover:text-white">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M15.5,14H20.5L22,15.5V9.5L20.5,8H15.5L14,9.5V12.5L15.5,14M16,13V10H20V13H16M6,2C4.89,2 4,2.89 4,4V16A2,2 0 0,0 6,18H9L12,21L15,18H18A2,2 0 0,0 20,16V15H18V16H14.83L12,18.83L9.17,16H6V4H18V8H20V4A2,2 0 0,0 18,2H6Z"/>
-            </svg>
-          </button>
+          {!isDM && (
+            <>
+              <button className="text-gray-400 hover:text-white">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12,2C13.1,2 14,2.9 14,4C14,5.1 13.1,6 12,6C10.9,6 10,5.1 10,4C10,2.9 10.9,2 12,2M21,9V7L15,1H5C3.89,1 3,1.89 3,3V18A2,2 0 0,0 5,20H19A2,2 0 0,0 21,18V9M19,9H14V4H5V18H19V9Z"/>
+                </svg>
+              </button>
+              <button className="text-gray-400 hover:text-white">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,16.5L18,9.5L16.59,8.09L11,13.67L7.91,10.59L6.5,12L11,16.5Z"/>
+                </svg>
+              </button>
+              <button className="text-gray-400 hover:text-white">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M15.5,14H20.5L22,15.5V9.5L20.5,8H15.5L14,9.5V12.5L15.5,14M16,13V10H20V13H16M6,2C4.89,2 4,2.89 4,4V16A2,2 0 0,0 6,18H9L12,21L15,18H18A2,2 0 0,0 20,16V15H18V16H14.83L12,18.83L9.17,16H6V4H18V8H20V4A2,2 0 0,0 18,2H6Z"/>
+                </svg>
+              </button>
+            </>
+          )}
           <button className="text-gray-400 hover:text-white">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M15.5,17C18,17 20,15 20,12.5C20,10 18,8 15.5,8C13,8 11,10 11,12.5C11,15 13,17 15.5,17M12,12.5C12,14.43 13.57,16 15.5,16C17.43,16 19,14.43 19,12.5C19,10.57 17.43,9 15.5,9C13.57,9 12,10.57 12,12.5M15.5,11A1.5,1.5 0 0,0 14,12.5A1.5,1.5 0 0,0 15.5,14A1.5,1.5 0 0,0 17,12.5A1.5,1.5 0 0,0 15.5,11Z"/>
@@ -786,7 +801,7 @@ export const ChatArea = ({ messages, activeChannelName }) => {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto">
         {messages.map((message) => (
-          <Message key={message.id} message={message} />
+          <Message key={message.id} message={message} isDM={isDM} />
         ))}
       </div>
 
@@ -801,7 +816,7 @@ export const ChatArea = ({ messages, activeChannelName }) => {
           
           <input
             type="text"
-            placeholder={`Message #${activeChannelName}`}
+            placeholder={isDM ? `Message @${dmUser}` : `Message #${activeChannelName}`}
             className="flex-1 bg-transparent text-white placeholder-gray-400 focus:outline-none"
           />
           
@@ -827,16 +842,47 @@ export const ChatArea = ({ messages, activeChannelName }) => {
 export const DiscordClone = () => {
   const [activeServer, setActiveServer] = useState(1);
   const [activeChannel, setActiveChannel] = useState(2);
+  const [activeDM, setActiveDM] = useState(null);
 
   const currentServer = SERVERS.find(s => s.id === activeServer);
   const currentChannel = CHANNELS.find(c => c.id === activeChannel);
+  const currentDM = DIRECT_MESSAGES.find(dm => dm.id === activeDM);
+  const isDMMode = activeServer === 'dm';
+
+  const handleServerSelect = (serverId) => {
+    setActiveServer(serverId);
+    if (serverId !== 'dm') {
+      setActiveDM(null);
+    }
+  };
+
+  const handleDMSelect = (dmId) => {
+    setActiveDM(dmId);
+    setActiveChannel(null);
+  };
+
+  const getCurrentMessages = () => {
+    if (isDMMode && activeDM && DM_MESSAGES[activeDM]) {
+      return DM_MESSAGES[activeDM];
+    }
+    return MESSAGES;
+  };
+
+  const getActiveChannelName = () => {
+    if (isDMMode && currentDM) {
+      return currentDM.user;
+    }
+    return currentChannel?.name || "general";
+  };
+
+  const showFriendsList = !isDMMode && activeServer !== 'dm';
 
   return (
     <div className="h-screen flex bg-gray-800 text-white">
       <ServerSidebar
         servers={SERVERS}
         activeServer={activeServer}
-        onServerSelect={setActiveServer}
+        onServerSelect={handleServerSelect}
       />
       
       <ChannelSidebar
@@ -844,11 +890,22 @@ export const DiscordClone = () => {
         activeChannel={activeChannel}
         onChannelSelect={setActiveChannel}
         serverName={currentServer?.name || "Server"}
+        isDM={isDMMode}
+        directMessages={DIRECT_MESSAGES}
+        activeDM={activeDM}
+        onDMSelect={handleDMSelect}
       />
       
       <ChatArea
-        messages={MESSAGES}
-        activeChannelName={currentChannel?.name || "general"}
+        messages={getCurrentMessages()}
+        activeChannelName={getActiveChannelName()}
+        isDM={isDMMode}
+        dmUser={currentDM?.user}
+      />
+
+      <FriendsList
+        friends={FRIENDS}
+        showFriendsList={showFriendsList}
       />
     </div>
   );
