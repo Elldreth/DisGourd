@@ -108,6 +108,96 @@ const CHANNELS = [
   }
 ];
 
+const DIRECT_MESSAGES = [
+  {
+    id: 'dm1',
+    user: "GamerPro2024",
+    avatar: "https://images.pexels.com/photos/7658539/pexels-photo-7658539.jpeg",
+    status: "online",
+    lastMessage: "Ready for that co-op session?",
+    timestamp: "2 min ago",
+    unread: true
+  },
+  {
+    id: 'dm2',
+    user: "PixelMaster",
+    avatar: "https://images.pexels.com/photos/7658146/pexels-photo-7658146.jpeg",
+    status: "idle",
+    lastMessage: "Check out this new game!",
+    timestamp: "15 min ago",
+    unread: false
+  },
+  {
+    id: 'dm3',
+    user: "RetroGamer",
+    avatar: "https://images.unsplash.com/photo-1651249098063-b3a8855e2a5a",
+    status: "dnd",
+    lastMessage: "Thanks for the help earlier",
+    timestamp: "1 hour ago",
+    unread: false
+  },
+  {
+    id: 'dm4',
+    user: "VRExplorer",
+    avatar: "https://images.pexels.com/photos/7562468/pexels-photo-7562468.jpeg",
+    status: "offline",
+    lastMessage: "See you tomorrow!",
+    timestamp: "Yesterday",
+    unread: false
+  }
+];
+
+const FRIENDS = [
+  {
+    id: 1,
+    username: "GamerPro2024",
+    avatar: "https://images.pexels.com/photos/7658539/pexels-photo-7658539.jpeg",
+    status: "online",
+    activity: "Playing Cyberpunk 2077",
+    statusText: "Ready to game!"
+  },
+  {
+    id: 2,
+    username: "PixelMaster",
+    avatar: "https://images.pexels.com/photos/7658146/pexels-photo-7658146.jpeg",
+    status: "idle",
+    activity: "Listening to Spotify",
+    statusText: "Vibing to music"
+  },
+  {
+    id: 3,
+    username: "RetroGamer",
+    avatar: "https://images.unsplash.com/photo-1651249098063-b3a8855e2a5a",
+    status: "dnd",
+    activity: "Do Not Disturb",
+    statusText: "Focused mode"
+  },
+  {
+    id: 4,
+    username: "VRExplorer",
+    avatar: "https://images.pexels.com/photos/7562468/pexels-photo-7562468.jpeg",
+    status: "offline",
+    activity: "Last seen 2 hours ago",
+    statusText: ""
+  },
+  {
+    id: 5,
+    username: "MusicLover",
+    avatar: "https://images.pexels.com/photos/972377/pexels-photo-972377.jpeg",
+    status: "online",
+    activity: "Creating playlist",
+    statusText: "Music is life"
+  },
+  {
+    id: 6,
+    username: "TechGuru",
+    avatar: "https://images.pexels.com/photos/5475761/pexels-photo-5475761.jpeg",
+    status: "online",
+    activity: "Coding",
+    statusText: "Building something cool"
+  }
+];
+
 const MESSAGES = [
   {
     id: 1,
