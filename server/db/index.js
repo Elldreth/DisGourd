@@ -33,6 +33,21 @@ db.exec(`
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS friend_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_user INTEGER NOT NULL,
+    to_user INTEGER NOT NULL,
+    UNIQUE(from_user, to_user),
+    FOREIGN KEY(from_user) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(to_user) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE TABLE IF NOT EXISTS friends (
+    user_id INTEGER NOT NULL,
+    friend_id INTEGER NOT NULL,
+    UNIQUE(user_id, friend_id),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(friend_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // Migrate existing databases to include author_id and attachment_url columns if missing
@@ -129,6 +144,35 @@ function getUserById(id) {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 }
 
+function createFriendRequest(fromId, toId) {
+  const stmt = db.prepare('INSERT OR IGNORE INTO friend_requests(from_user, to_user) VALUES (?, ?)');
+  stmt.run(fromId, toId);
+}
+
+function getIncomingFriendRequests(userId) {
+  return db.prepare('SELECT from_user FROM friend_requests WHERE to_user = ?').all(userId);
+}
+
+function removeFriendRequest(fromId, toId) {
+  db.prepare('DELETE FROM friend_requests WHERE from_user = ? AND to_user = ?').run(fromId, toId);
+}
+
+function addFriends(id1, id2) {
+  const insert = db.prepare('INSERT OR IGNORE INTO friends(user_id, friend_id) VALUES (?, ?)');
+  insert.run(id1, id2);
+  insert.run(id2, id1);
+}
+
+function removeFriend(id1, id2) {
+  const del = db.prepare('DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)');
+  del.run(id1, id2, id2, id1);
+}
+
+function getFriends(userId) {
+  const rows = db.prepare('SELECT friend_id FROM friends WHERE user_id = ?').all(userId);
+  return rows.map(r => getUserById(r.friend_id)).filter(Boolean);
+}
+
 module.exports = {
   createSpace,
   createChannel,
@@ -140,4 +184,10 @@ module.exports = {
   createUser,
   getUserByUsername,
   getUserById,
+  createFriendRequest,
+  getIncomingFriendRequests,
+  removeFriendRequest,
+  addFriends,
+  removeFriend,
+  getFriends,
 };

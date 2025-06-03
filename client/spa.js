@@ -15,6 +15,9 @@ createApp({
     const selectedChannel = ref('');
     const messages = ref([]);
     const members = ref(new Set());
+    const friends = ref([]);
+    const friendRequests = ref([]);
+    const messageInputFriend = ref('');
     const messageInput = ref('');
     const ws = ref(null);
     const fileRef = ref(null);
@@ -30,6 +33,7 @@ createApp({
         token.value = data.token;
         localStorage.setItem('token', data.token);
         await loadState();
+        await loadFriends();
       } else {
         alert('Login failed');
       }
@@ -44,6 +48,47 @@ createApp({
           channels: Object.keys(data[s].channels)
         }));
       }
+    }
+
+    async function loadFriends() {
+      if (!token.value) return;
+      const resp = await fetch(`/friends?token=${token.value}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        friends.value = data.friends || [];
+      }
+      const r = await fetch(`/friends/requests?token=${token.value}`);
+      if (r.ok) {
+        const d = await r.json();
+        friendRequests.value = d.requests || [];
+      }
+    }
+
+    async function sendFriendRequest(to) {
+      await fetch(`/friends/request?token=${token.value}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: to })
+      });
+      await loadFriends();
+    }
+
+    async function acceptFriend(from) {
+      await fetch(`/friends/accept?token=${token.value}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: from })
+      });
+      await loadFriends();
+    }
+
+    async function rejectFriend(from) {
+      await fetch(`/friends/reject?token=${token.value}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: from })
+      });
+      await loadFriends();
     }
 
     function select(space, channel) {
@@ -74,6 +119,15 @@ createApp({
       ws.value.onmessage = (event) => {
         let msg;
         try { msg = JSON.parse(event.data); } catch { msg = { content: event.data }; }
+        if (msg.type === 'friend_list') {
+          friends.value = msg.friends;
+          return;
+        }
+        if (msg.type === 'presence') {
+          const f = friends.value.find(fr => fr.username === msg.user);
+          if (f) f.online = msg.status === 'online';
+          return;
+        }
         messages.value.push(msg);
         if (msg.author) members.value.add(msg.author);
       };
@@ -102,10 +156,13 @@ createApp({
     }
 
     onMounted(() => {
-      if (token.value) loadState();
+      if (token.value) {
+        loadState();
+        loadFriends();
+      }
     });
 
-    return { username, password, login, loggedIn, spaces, selectedSpace, selectedChannel, select, messages, messageInput, sendMessage, members, fileRef };
+    return { username, password, login, loggedIn, spaces, selectedSpace, selectedChannel, select, messages, messageInput, sendMessage, members, fileRef, friends, friendRequests, sendFriendRequest, acceptFriend, rejectFriend, messageInputFriend };
   },
 
   template: `
@@ -124,6 +181,24 @@ createApp({
           <a href="#" @click.prevent="select(sp.name, ch)">{{ ch }}</a>
         </li>
       </ul>
+    </div>
+    <div style="margin-top:1rem;">
+      <h3>Friends</h3>
+      <ul>
+        <li v-for="f in friends" :key="f.username">
+          {{ f.username }} <span v-if="f.online">(online)</span>
+        </li>
+      </ul>
+      <input type="text" v-model="messageInputFriend" placeholder="Add friend" />
+      <button @click="sendFriendRequest(messageInputFriend); messageInputFriend=''">Add</button>
+      <div v-if="friendRequests.length">
+        <h4>Requests</h4>
+        <div v-for="r in friendRequests" :key="r">
+          {{ r }}
+          <button @click="acceptFriend(r)">Accept</button>
+          <button @click="rejectFriend(r)">Reject</button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="content">
