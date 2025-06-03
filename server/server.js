@@ -43,8 +43,19 @@ function verifyToken(token) {
   }
 }
 
-// In-memory store only for tracking connected clients
+function authUserId(req, parsedUrl) {
+  const auth = req.headers['authorization'];
+  const token = auth && auth.startsWith('Bearer ')
+    ? auth.slice(7)
+    : (parsedUrl.query && parsedUrl.query.token);
+  if (!token) return null;
+  const payload = verifyToken(token);
+  return payload ? payload.sub : null;
+}
+
+// In-memory stores for tracking connected clients and presence
 const clientSpaces = {}; // { spaceName: { channels: { channelName: { clients: Set<WebSocket> } } } }
+const userClients = {}; // { userId: Set<WebSocket> }
 
 function createSpace(name) {
   db.createSpace(name);
@@ -89,6 +100,31 @@ function broadcast(channelObj, message, senderClient) {
       client.send(message); // ws handles framing
     }
   });
+}
+
+function sendPresenceUpdate(userId, status) {
+  const user = db.getUserById(userId);
+  if (!user) return;
+  const friends = db.getFriends(userId);
+  friends.forEach(f => {
+    const set = userClients[f.id];
+    if (set) {
+      set.forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'presence', user: user.username, status }));
+        }
+      });
+    }
+  });
+}
+
+function sendFriendList(wsClient) {
+  const friends = db.getFriends(wsClient.userId);
+  const list = friends.map(f => ({
+    username: f.username,
+    online: !!(userClients[f.id] && userClients[f.id].size > 0)
+  }));
+  wsClient.send(JSON.stringify({ type: 'friend_list', friends: list }));
 }
 
 // Create HTTP server
@@ -152,6 +188,59 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       res.writeHead(400);
       return res.end(JSON.stringify({ error: e.message }));
     }
+  }
+  else if (pathSegments[0] === 'friends' && pathSegments.length === 1 && req.method === 'GET') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+    const friends = db.getFriends(userId).map(u => ({ username: u.username }));
+    res.writeHead(200);
+    return res.end(JSON.stringify({ friends }));
+  }
+  else if (pathSegments[0] === 'friends' && pathSegments[1] === 'requests' && req.method === 'GET') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+    const reqs = db.getIncomingFriendRequests(userId).map(r => db.getUserById(r.from_user)?.username).filter(Boolean);
+    res.writeHead(200);
+    return res.end(JSON.stringify({ requests: reqs }));
+  }
+  else if (pathSegments[0] === 'friends' && pathSegments[1] === 'request' && req.method === 'POST') {
+    const fromId = authUserId(req, parsedUrl);
+    if (!fromId) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+    const { username } = await getJsonBody(req);
+    const to = db.getUserByUsername(username);
+    if (!to) { res.writeHead(404); return res.end(JSON.stringify({ error: 'User not found' })); }
+    db.createFriendRequest(fromId, to.id);
+    res.writeHead(201);
+    return res.end(JSON.stringify({ message: 'Request sent' }));
+  }
+  else if (pathSegments[0] === 'friends' && pathSegments[1] === 'accept' && req.method === 'POST') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+    const { username } = await getJsonBody(req);
+    const fromUser = db.getUserByUsername(username);
+    if (!fromUser) { res.writeHead(404); return res.end(JSON.stringify({ error: 'User not found' })); }
+    db.removeFriendRequest(fromUser.id, userId);
+    db.addFriends(userId, fromUser.id);
+    res.writeHead(200);
+    return res.end(JSON.stringify({ message: 'Friend added' }));
+  }
+  else if (pathSegments[0] === 'friends' && pathSegments[1] === 'reject' && req.method === 'POST') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+    const { username } = await getJsonBody(req);
+    const fromUser = db.getUserByUsername(username);
+    if (fromUser) { db.removeFriendRequest(fromUser.id, userId); }
+    res.writeHead(200);
+    return res.end(JSON.stringify({ message: 'Request removed' }));
+  }
+  else if (pathSegments[0] === 'friends' && pathSegments[1] && req.method === 'DELETE') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+    const other = db.getUserByUsername(pathSegments[1]);
+    if (!other) { res.writeHead(404); return res.end(JSON.stringify({ error: 'User not found' })); }
+    db.removeFriend(userId, other.id);
+    res.writeHead(200);
+    return res.end(JSON.stringify({ message: 'Friend removed' }));
   }
   else if (
     pathSegments[0] === 'spaces' &&
@@ -438,6 +527,10 @@ httpServer.on('upgrade', (request, socket, head) => {
       wsClient.userId = payload.sub;
 
       channelObj.clients.add(wsClient);
+      const uc = userClients[wsClient.userId] || (userClients[wsClient.userId] = new Set());
+      uc.add(wsClient);
+      if (uc.size === 1) sendPresenceUpdate(wsClient.userId, 'online');
+      sendFriendList(wsClient);
       console.log(`Client connected to ${spaceName}/${channelName}. Total clients in channel: ${channelObj.clients.size}`);
       
       // Let the new client know they're connected (optional)
@@ -473,6 +566,14 @@ httpServer.on('upgrade', (request, socket, head) => {
 
       wsClient.on('close', (code, reason) => {
         channelObj.clients.delete(wsClient);
+        const set = userClients[wsClient.userId];
+        if (set) {
+          set.delete(wsClient);
+          if (set.size === 0) {
+            delete userClients[wsClient.userId];
+            sendPresenceUpdate(wsClient.userId, 'offline');
+          }
+        }
         console.log(`Client disconnected from ${spaceName}/${channelName}. Code: ${code}, Reason: ${reason ? reason.toString() : 'N/A'}. Remaining clients: ${channelObj.clients.size}`);
       });
 
@@ -480,6 +581,14 @@ httpServer.on('upgrade', (request, socket, head) => {
         console.error(`WebSocket error on client from ${spaceName}/${channelName}:`, error);
         // Ensure client is removed on error too
         channelObj.clients.delete(wsClient);
+        const set = userClients[wsClient.userId];
+        if (set) {
+          set.delete(wsClient);
+          if (set.size === 0) {
+            delete userClients[wsClient.userId];
+            sendPresenceUpdate(wsClient.userId, 'offline');
+          }
+        }
       });
     });
   } else {
