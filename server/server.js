@@ -291,6 +291,52 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       return res.end(JSON.stringify({ error: 'Admin endpoint not found' }));
     }
   }
+  // Endpoint to handle file uploads
+  else if (req.method === 'POST' && parsedUrl.pathname === '/uploads') {
+    const filename = parsedUrl.query.name;
+    if (!filename) {
+      res.writeHead(400);
+      return res.end(JSON.stringify({ error: 'Missing filename' }));
+    }
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    const safeName = path.basename(filename);
+    const filePath = path.join(uploadsDir, safeName);
+    const writeStream = fs.createWriteStream(filePath);
+    req.pipe(writeStream);
+    req.on('end', () => {
+      const urlPath = `/uploads/${safeName}`;
+      res.writeHead(201);
+      res.end(JSON.stringify({ url: urlPath }));
+    });
+    return;
+  }
+  // Serve uploaded files
+  else if (req.method === 'GET' && parsedUrl.pathname.startsWith('/uploads/')) {
+    const requestedPath = parsedUrl.pathname.substring('/uploads/'.length);
+    const safeSuffix = path.normalize(requestedPath).replace(/^(\.\.[\/\\])+/, '');
+    const filePath = path.join(__dirname, '..', 'uploads', safeSuffix);
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    if (!filePath.startsWith(uploadsDir)) {
+      res.writeHead(403);
+      return res.end('Forbidden');
+    }
+    fs.readFile(filePath, (err, content) => {
+      if (err) {
+        if (err.code === 'ENOENT') {
+          res.writeHead(404);
+          res.end('File not found');
+        } else {
+          res.writeHead(500);
+          res.end('Error loading file');
+        }
+        return;
+      }
+      res.writeHead(200);
+      res.end(content);
+    });
+    return;
+  }
   // Serve static files from 'public' directory
   else if (req.method === 'GET' && parsedUrl.pathname.startsWith('/public/')) {
     const requestedPath = parsedUrl.pathname.substring('/public/'.length);
@@ -405,11 +451,24 @@ httpServer.on('upgrade', (request, socket, head) => {
 
       wsClient.on('message', (message) => {
         // message is already unmasked and can be Buffer or String
-        console.log(`Received from ${spaceName}/${channelName}: ${message.toString()}`);
-        // Persist the message and broadcast to other clients in the same channel
-        db.storeMessage(spaceName, channelName, message.toString(), wsClient.userId);
-        // Broadcast to other clients in the same channel
-        broadcast(channelObj, message, wsClient);
+        const msgText = message.toString();
+        console.log(`Received from ${spaceName}/${channelName}: ${msgText}`);
+        let parsed;
+        try {
+          parsed = JSON.parse(msgText);
+        } catch {
+          parsed = { content: msgText };
+        }
+        const { content = '', attachment } = parsed;
+        const user = db.getUserById(wsClient.userId);
+        const broadcastObj = {
+          content,
+          attachment,
+          author: user ? user.username : wsClient.userId,
+          timestamp: Date.now()
+        };
+        db.storeMessage(spaceName, channelName, content, wsClient.userId, attachment);
+        broadcast(channelObj, JSON.stringify(broadcastObj), wsClient);
       });
 
       wsClient.on('close', (code, reason) => {

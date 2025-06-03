@@ -22,6 +22,7 @@ db.exec(`
     channel_id INTEGER NOT NULL,
     author_id INTEGER,
     content TEXT NOT NULL,
+    attachment_url TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(channel_id) REFERENCES channels(id) ON DELETE CASCADE,
     FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE SET NULL
@@ -34,11 +35,15 @@ db.exec(`
   );
 `);
 
-// Migrate existing databases to include author_id column if missing
+// Migrate existing databases to include author_id and attachment_url columns if missing
 try {
   const hasAuthor = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'author_id');
   if (!hasAuthor) {
     db.exec('ALTER TABLE messages ADD COLUMN author_id INTEGER');
+  }
+  const hasAttachment = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'attachment_url');
+  if (!hasAttachment) {
+    db.exec('ALTER TABLE messages ADD COLUMN attachment_url TEXT');
   }
 } catch (e) {
   console.error('Error migrating messages table:', e);
@@ -71,7 +76,7 @@ function deleteChannel(spaceName, channelName) {
   return stmt.run(spaceName, channelName).changes > 0;
 }
 
-function storeMessage(spaceName, channelName, content, authorId) {
+function storeMessage(spaceName, channelName, content, authorId, attachmentUrl) {
   createChannel(spaceName, channelName);
   const channel = db.prepare(`
     SELECT c.id FROM channels c
@@ -79,14 +84,14 @@ function storeMessage(spaceName, channelName, content, authorId) {
     WHERE s.name = ? AND c.name = ?
   `).get(spaceName, channelName);
   if (channel) {
-    db.prepare('INSERT INTO messages(channel_id, content, author_id) VALUES (?, ?, ?)')
-      .run(channel.id, content, authorId || null);
+    db.prepare('INSERT INTO messages(channel_id, content, author_id, attachment_url) VALUES (?, ?, ?, ?)')
+      .run(channel.id, content, authorId || null, attachmentUrl || null);
   }
 }
 
 function getMessages(spaceName, channelName, limit = 20, offset = 0) {
   return db.prepare(`
-    SELECT m.id, m.content, m.timestamp, u.username as author
+    SELECT m.id, m.content, m.attachment_url, m.timestamp, u.username as author
     FROM messages m
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
