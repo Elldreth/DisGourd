@@ -2,7 +2,7 @@ const { createApp, ref, computed, onMounted } = Vue;
 
 createApp({
   setup() {
-    const host = location.hostname;
+    const host = location.hostname || 'localhost';
     const port = 3000; // backend API port
     const baseUrl = `http://${host}:${port}`;
 
