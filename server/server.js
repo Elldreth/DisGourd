@@ -3,25 +3,30 @@ const WebSocket = require('ws');
 const url = require('url');
 const path = require('path');
 const fs = require('fs');
+const db = require('./db');
 
-// In-memory store for spaces and channels
-const spaces = {}; // { spaceName: { channels: { channelName: { clients: Set<WebSocket> } } } }
+// In-memory store only for tracking connected clients
+const clientSpaces = {}; // { spaceName: { channels: { channelName: { clients: Set<WebSocket> } } } }
 
 function createSpace(name) {
-  if (!spaces[name]) {
-    spaces[name] = { channels: {} };
+  db.createSpace(name);
+  if (!clientSpaces[name]) {
+    clientSpaces[name] = { channels: {} };
     console.log(`Space created: ${name}`);
   }
-  return spaces[name];
+  return clientSpaces[name];
 }
 
 function createChannel(spaceName, channelName) {
-  const spaceObj = createSpace(spaceName);
-  if (!spaceObj.channels[channelName]) {
-    spaceObj.channels[channelName] = { clients: new Set() };
+  db.createChannel(spaceName, channelName);
+  if (!clientSpaces[spaceName]) {
+    clientSpaces[spaceName] = { channels: {} };
+  }
+  if (!clientSpaces[spaceName].channels[channelName]) {
+    clientSpaces[spaceName].channels[channelName] = { clients: new Set() };
     console.log(`Channel created: ${channelName} in space ${spaceName}`);
   }
-  return spaceObj.channels[channelName];
+  return clientSpaces[spaceName].channels[channelName];
 }
 
 function notifyAndDisconnectClients(clients, systemMessage, closeReasonCode = 1000, closeReasonMessage = 'Resource deleted by admin') {
@@ -90,13 +95,14 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     } 
     // API endpoint for GET /admin/state
     else if (pathSegments[1] === 'state' && req.method === 'GET') {
-      const state = {};
-      for (const spaceName in spaces) {
-        state[spaceName] = { channels: {} };
-        for (const channelName in spaces[spaceName].channels) {
-          state[spaceName].channels[channelName] = {
-            clientCount: spaces[spaceName].channels[channelName].clients.size
-          };
+      const state = db.getState();
+      for (const spaceName in state) {
+        for (const channelName in state[spaceName].channels) {
+          const count =
+            clientSpaces[spaceName] && clientSpaces[spaceName].channels[channelName]
+              ? clientSpaces[spaceName].channels[channelName].clients.size
+              : 0;
+          state[spaceName].channels[channelName].clientCount = count;
         }
       }
       res.writeHead(200);
@@ -121,20 +127,24 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     // DELETE /admin/spaces/:spaceName
     else if (pathSegments[1] === 'spaces' && pathSegments[2] && !pathSegments[3] && req.method === 'DELETE') {
       const spaceName = pathSegments[2];
-      if (!spaces[spaceName]) {
+      const state = db.getState();
+      if (!state[spaceName]) {
         res.writeHead(404);
         return res.end(JSON.stringify({ error: 'Space not found' }));
       }
-      for (const channelName in spaces[spaceName].channels) {
-        const channelObj = spaces[spaceName].channels[channelName];
-        notifyAndDisconnectClients(
-          channelObj.clients,
-          `Space '${spaceName}' (channel '${channelName}') is being deleted by an administrator.`,
-          1000,
-          'Space deleted by admin'
-        );
+      if (clientSpaces[spaceName]) {
+        for (const channelName in clientSpaces[spaceName].channels) {
+          const channelObj = clientSpaces[spaceName].channels[channelName];
+          notifyAndDisconnectClients(
+            channelObj.clients,
+            `Space '${spaceName}' (channel '${channelName}') is being deleted by an administrator.`,
+            1000,
+            'Space deleted by admin'
+          );
+        }
       }
-      delete spaces[spaceName];
+      db.deleteSpace(spaceName);
+      delete clientSpaces[spaceName];
       console.log(`Admin deleted space: ${spaceName}`);
       res.writeHead(200);
       return res.end(JSON.stringify({ message: `Space '${spaceName}' deleted` }));
@@ -142,7 +152,8 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     // POST /admin/spaces/:spaceName/channels
     else if (pathSegments[1] === 'spaces' && pathSegments[2] && pathSegments[3] === 'channels' && !pathSegments[4] && req.method === 'POST') {
       const spaceName = pathSegments[2];
-      if (!spaces[spaceName]) {
+      const state = db.getState();
+      if (!state[spaceName]) {
         res.writeHead(404);
         return res.end(JSON.stringify({ error: 'Space not found' }));
       }
@@ -164,18 +175,22 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     else if (pathSegments[1] === 'spaces' && pathSegments[2] && pathSegments[3] === 'channels' && pathSegments[4] && req.method === 'DELETE') {
       const spaceName = pathSegments[2];
       const channelName = pathSegments[4];
-      if (!spaces[spaceName] || !spaces[spaceName].channels[channelName]) {
+      const state = db.getState();
+      if (!state[spaceName] || !state[spaceName].channels[channelName]) {
         res.writeHead(404);
         return res.end(JSON.stringify({ error: 'Space or Channel not found' }));
       }
-      const channelObj = spaces[spaceName].channels[channelName];
+      const channelObj = clientSpaces[spaceName] && clientSpaces[spaceName].channels[channelName];
       notifyAndDisconnectClients(
-        channelObj.clients,
+        channelObj ? channelObj.clients : null,
         `Channel '${channelName}' in space '${spaceName}' is being deleted by an administrator.`,
         1000,
         'Channel deleted by admin'
       );
-      delete spaces[spaceName].channels[channelName];
+      db.deleteChannel(spaceName, channelName);
+      if (clientSpaces[spaceName]) {
+        delete clientSpaces[spaceName].channels[channelName];
+      }
       console.log(`Admin deleted channel: ${channelName} from space: ${spaceName}`);
       res.writeHead(200);
       return res.end(JSON.stringify({ message: `Channel '${channelName}' in space '${spaceName}' deleted` }));
@@ -286,6 +301,8 @@ httpServer.on('upgrade', (request, socket, head) => {
       wsClient.on('message', (message) => {
         // message is already unmasked and can be Buffer or String
         console.log(`Received from ${spaceName}/${channelName}: ${message.toString()}`);
+        // Persist the message and broadcast to other clients in the same channel
+        db.storeMessage(spaceName, channelName, message.toString());
         // Broadcast to other clients in the same channel
         broadcast(channelObj, message, wsClient);
       });
