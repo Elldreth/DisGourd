@@ -1,38 +1,97 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
 .App {
-    text-align: center;
+  height: 100vh;
+  overflow: hidden;
 }
 
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* Custom Discord Colors */
+:root {
+  --discord-blurple: #5865f2;
+  --discord-dark: #36393f;
+  --discord-darker: #2f3136;
+  --discord-darkest: #202225;
+  --discord-green: #57f287;
+  --discord-red: #ed4245;
+  --discord-yellow: #fee75c;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.App-link {
-    color: #61dafb;
+::-webkit-scrollbar-thumb {
+  background: #202225;
+  border-radius: 4px;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+::-webkit-scrollbar-thumb:hover {
+  background: #36393f;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-enter {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Hover effects */
+.hover-lift:hover {
+  transform: translateY(-1px);
+  transition: transform 0.2s ease;
+}
+
+/* Focus styles */
+input:focus, button:focus {
+  outline: 2px solid var(--discord-blurple);
+  outline-offset: 2px;
+}
+
+/* Custom utilities */
+.text-discord-blurple {
+  color: var(--discord-blurple);
+}
+
+.bg-discord-blurple {
+  background-color: var(--discord-blurple);
+}
+
+.bg-discord-dark {
+  background-color: var(--discord-dark);
+}
+
+.bg-discord-darker {
+  background-color: var(--discord-darker);
+}
+
+.bg-discord-darkest {
+  background-color: var(--discord-darkest);
 }
