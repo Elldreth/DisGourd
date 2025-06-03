@@ -91,6 +91,31 @@ function deleteChannel(spaceName, channelName) {
   return stmt.run(spaceName, channelName).changes > 0;
 }
 
+function renameSpace(oldName, newName) {
+  const stmt = db.prepare('UPDATE spaces SET name = ? WHERE name = ?');
+  try {
+    return stmt.run(newName, oldName).changes > 0;
+  } catch (e) {
+    if (e.code === 'SQLITE_CONSTRAINT') return false;
+    throw e;
+  }
+}
+
+function renameChannel(spaceName, oldChannelName, newChannelName) {
+  const stmt = db.prepare(`
+    UPDATE channels SET name = ? WHERE id IN (
+      SELECT c.id FROM channels c
+      JOIN spaces s ON c.space_id = s.id
+      WHERE s.name = ? AND c.name = ?
+    )`);
+  try {
+    return stmt.run(newChannelName, spaceName, oldChannelName).changes > 0;
+  } catch (e) {
+    if (e.code === 'SQLITE_CONSTRAINT') return false;
+    throw e;
+  }
+}
+
 function storeMessage(spaceName, channelName, content, authorId, attachmentUrl) {
   createChannel(spaceName, channelName);
   const channel = db.prepare(`
@@ -178,6 +203,8 @@ module.exports = {
   createChannel,
   deleteSpace,
   deleteChannel,
+  renameSpace,
+  renameChannel,
   storeMessage,
   getMessages,
   getState,

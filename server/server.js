@@ -304,6 +304,45 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         return res.end(JSON.stringify({ error: e.message }));
       }
     }
+    // PUT /admin/spaces/:spaceName
+    else if (pathSegments[1] === 'spaces' && pathSegments[2] && !pathSegments[3] && req.method === 'PUT') {
+      const oldName = pathSegments[2];
+      const state = db.getState();
+      if (!state[oldName]) {
+        res.writeHead(404);
+        return res.end(JSON.stringify({ error: 'Space not found' }));
+      }
+      try {
+        const { name: newName } = await getJsonBody(req);
+        if (!newName) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ error: 'New name required' }));
+        }
+        const success = db.renameSpace(oldName, newName);
+        if (!success) {
+          res.writeHead(409);
+          return res.end(JSON.stringify({ error: 'Space name already exists' }));
+        }
+        if (clientSpaces[oldName]) {
+          for (const channelName in clientSpaces[oldName].channels) {
+            notifyAndDisconnectClients(
+              clientSpaces[oldName].channels[channelName].clients,
+              `Space '${oldName}' renamed to '${newName}' by an administrator.`,
+              1000,
+              'Space renamed by admin'
+            );
+          }
+          clientSpaces[newName] = clientSpaces[oldName];
+          delete clientSpaces[oldName];
+        }
+        console.log(`Admin renamed space '${oldName}' to '${newName}'`);
+        res.writeHead(200);
+        return res.end(JSON.stringify({ message: `Space renamed`, name: newName }));
+      } catch (e) {
+        res.writeHead(400);
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
     // DELETE /admin/spaces/:spaceName
     else if (pathSegments[1] === 'spaces' && pathSegments[2] && !pathSegments[3] && req.method === 'DELETE') {
       const spaceName = pathSegments[2];
@@ -346,6 +385,45 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         createChannel(spaceName, channelName);
         res.writeHead(201);
         return res.end(JSON.stringify({ message: 'Channel created', space: spaceName, channel: channelName }));
+      } catch (e) {
+        res.writeHead(400);
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    // PUT /admin/spaces/:spaceName/channels/:channelName
+    else if (pathSegments[1] === 'spaces' && pathSegments[2] && pathSegments[3] === 'channels' && pathSegments[4] && req.method === 'PUT') {
+      const spaceName = pathSegments[2];
+      const oldChan = pathSegments[4];
+      const state = db.getState();
+      if (!state[spaceName] || !state[spaceName].channels[oldChan]) {
+        res.writeHead(404);
+        return res.end(JSON.stringify({ error: 'Space or Channel not found' }));
+      }
+      try {
+        const { name: newName } = await getJsonBody(req);
+        if (!newName) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ error: 'New name required' }));
+        }
+        const success = db.renameChannel(spaceName, oldChan, newName);
+        if (!success) {
+          res.writeHead(409);
+          return res.end(JSON.stringify({ error: 'Channel name already exists' }));
+        }
+        const spaceObj = clientSpaces[spaceName];
+        if (spaceObj && spaceObj.channels[oldChan]) {
+          notifyAndDisconnectClients(
+            spaceObj.channels[oldChan].clients,
+            `Channel '${oldChan}' renamed to '${newName}' by an administrator.`,
+            1000,
+            'Channel renamed by admin'
+          );
+          spaceObj.channels[newName] = spaceObj.channels[oldChan];
+          delete spaceObj.channels[oldChan];
+        }
+        console.log(`Admin renamed channel '${oldChan}' to '${newName}' in space '${spaceName}'`);
+        res.writeHead(200);
+        return res.end(JSON.stringify({ message: 'Channel renamed', name: newName }));
       } catch (e) {
         res.writeHead(400);
         return res.end(JSON.stringify({ error: e.message }));
