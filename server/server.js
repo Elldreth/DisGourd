@@ -154,6 +154,13 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
   };
 
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
 
   if (parsedUrl.pathname === '/register' && req.method === 'POST') {
     try {
