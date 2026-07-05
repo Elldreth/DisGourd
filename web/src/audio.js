@@ -43,3 +43,28 @@ export async function unlockDeviceLabels() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   stream.getTracks().forEach((t) => t.stop());
 }
+
+// Turn a getUserMedia failure into a specific, actionable message. The generic
+// "needs HTTPS" line is only right for a genuinely insecure origin — most
+// failures on localhost are a browser or OS permission block instead.
+export function describeMicError(err) {
+  const secure = typeof window === 'undefined' || window.isSecureContext;
+  if (!secure) {
+    return 'This page is not a secure origin, so the browser blocks the microphone. Open it via http://localhost, or set up HTTPS for network access.';
+  }
+  switch (err && err.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'Microphone permission is blocked. Click the camera/mic icon in the address bar and allow it, and check Windows Settings → Privacy & security → Microphone (turn on microphone access for desktop apps). Then reload.';
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      return 'No microphone was found. Plug one in (or enable it in Windows sound settings) and try again.';
+    case 'NotReadableError':
+    case 'TrackStartError':
+      return 'The microphone is in use or blocked by the system. Close other apps using it, check Windows microphone privacy settings, then try again.';
+    case 'OverconstrainedError':
+      return 'The selected microphone is unavailable. Pick a different device.';
+    default:
+      return `Could not access the microphone${err && err.name ? ` (${err.name})` : ''}. Check your browser and Windows microphone permissions.`;
+  }
+}

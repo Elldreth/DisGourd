@@ -7,6 +7,7 @@ import {
   getPreferredOutput,
   setPreferredOutput,
   outputSelectionSupported,
+  describeMicError,
 } from '../audio.js';
 
 // Detect and choose the microphone and speaker DisGourd uses, independent of
@@ -45,8 +46,8 @@ export default function AudioSettings({ onOutputChange }) {
     try {
       await unlockDeviceLabels();
       await refresh();
-    } catch {
-      setError('Microphone access was blocked. Voice needs HTTPS (or localhost) and permission.');
+    } catch (err) {
+      setError(describeMicError(err));
     }
   }
 
@@ -82,8 +83,8 @@ export default function AudioSettings({ onOutputChange }) {
       }, 100);
       testRef.current = { stream, ctx, timer };
       setTesting(true);
-    } catch {
-      setError('Could not open that microphone.');
+    } catch (err) {
+      setError(describeMicError(err));
     }
   }
 
