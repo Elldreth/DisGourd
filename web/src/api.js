@@ -62,24 +62,45 @@ export function login(username, password) {
   return request('/login', { method: 'POST', auth: false, body: { username, password } });
 }
 
-// ---- Spaces / channels ----
-// The backend exposes the space/channel tree via /admin/state.
-export function getState() {
-  return request('/admin/state');
+// ---- Servers (spaces) / channels ----
+// Only servers the current user belongs to are returned.
+export function getSpaces() {
+  return request('/spaces');
 }
 export function createSpace(name) {
-  return request('/admin/spaces', { method: 'POST', body: { name } });
+  return request('/spaces', { method: 'POST', body: { name } });
+}
+export function deleteSpace(space) {
+  return request(`/spaces/${encodeURIComponent(space)}`, { method: 'DELETE' });
 }
 export function createChannel(space, name) {
-  return request(`/admin/spaces/${encodeURIComponent(space)}/channels`, { method: 'POST', body: { name } });
+  return request(`/spaces/${encodeURIComponent(space)}/channels`, { method: 'POST', body: { name } });
+}
+export function deleteChannel(space, channel) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, {
+    method: 'DELETE',
+  });
+}
+
+// ---- Members & invites ----
+export function getMembers(space) {
+  return request(`/spaces/${encodeURIComponent(space)}/members`);
+}
+export function createInvite(space) {
+  return request(`/spaces/${encodeURIComponent(space)}/invites`, { method: 'POST' });
+}
+export function previewInvite(code) {
+  return request(`/invites/${encodeURIComponent(code)}`);
+}
+export function joinInvite(code) {
+  return request(`/invites/${encodeURIComponent(code)}`, { method: 'POST' });
 }
 
 // ---- Messages ----
 export function getMessages(space, channel, { limit = 50, offset = 0 } = {}) {
   const qs = new URLSearchParams({ limit, offset });
   return request(
-    `/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages?${qs}`,
-    { auth: false }
+    `/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages?${qs}`
   );
 }
 

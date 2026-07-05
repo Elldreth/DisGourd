@@ -151,6 +151,28 @@ function safeDecode(segment) {
   }
 }
 
+function sendJson(res, code, obj) {
+  res.writeHead(code);
+  res.end(JSON.stringify(obj));
+}
+
+function validateSpaceName(name) {
+  if (typeof name !== 'string' || !name.trim()) return 'A server name is required';
+  if (name.trim().length > 60) return 'Server name must be 60 characters or fewer';
+  return null;
+}
+
+function normalizeChannelName(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '');
+}
+
+function validateChannelName(name) {
+  const normalized = normalizeChannelName(name);
+  if (!normalized) return 'A channel name is required';
+  if (normalized.length > 60) return 'Channel name must be 60 characters or fewer';
+  return null;
+}
+
 function validateRegistration({ username, password, email }) {
   if (typeof username !== 'string' || !/^[A-Za-z0-9_.-]{3,32}$/.test(username)) {
     return 'Username must be 3-32 characters using letters, numbers, or _ . -';
@@ -307,6 +329,17 @@ function createChannel(spaceName, channelName) {
   if (!clientSpaces[spaceName].channels[channelName]) {
     clientSpaces[spaceName].channels[channelName] = { clients: new Set() };
     logInfo(`Channel created: ${channelName} in space ${spaceName}`);
+  }
+  return clientSpaces[spaceName].channels[channelName];
+}
+
+// Get (or lazily create) the in-memory runtime object that tracks the live
+// sockets in a channel. Unlike createChannel this does NOT touch the database —
+// the channel must already exist and access must already be authorized.
+function runtimeChannel(spaceName, channelName) {
+  if (!clientSpaces[spaceName]) clientSpaces[spaceName] = { channels: {} };
+  if (!clientSpaces[spaceName].channels[channelName]) {
+    clientSpaces[spaceName].channels[channelName] = { clients: new Set() };
   }
   return clientSpaces[spaceName].channels[channelName];
 }
@@ -518,19 +551,129 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     res.writeHead(200);
     return res.end(JSON.stringify({ message: 'Friend removed' }));
   }
-  else if (
-    pathSegments[0] === 'spaces' &&
-    pathSegments[2] === 'channels' &&
-    pathSegments[4] === 'messages' &&
-    req.method === 'GET'
-  ) {
+  // ---- Spaces (servers), channels, members, invites — membership-aware ----
+  else if (pathSegments[0] === 'spaces') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+
+    // GET /spaces — servers I'm a member of
+    if (pathSegments.length === 1 && req.method === 'GET') {
+      return sendJson(res, 200, db.getUserSpaces(userId));
+    }
+    // POST /spaces — create a server (creator becomes owner), with a #general channel
+    if (pathSegments.length === 1 && req.method === 'POST') {
+      const { name } = await getJsonBody(req);
+      const invalid = validateSpaceName(name);
+      if (invalid) return sendJson(res, 400, { error: invalid });
+      const spaceId = db.createSpaceOwned(name.trim(), userId);
+      if (!spaceId) return sendJson(res, 409, { error: 'A server with that name already exists' });
+      db.createChannel(name.trim(), 'general');
+      return sendJson(res, 201, { name: name.trim(), role: 'owner', channels: ['general'] });
+    }
+
     const spaceName = pathSegments[1];
-    const channelName = pathSegments[3];
-    const limit = parseInt(parsedUrl.query.limit || '20', 10);
-    const offset = parseInt(parsedUrl.query.offset || '0', 10);
-    const messages = db.getMessages(spaceName, channelName, limit, offset);
-    res.writeHead(200);
-    return res.end(JSON.stringify(messages));
+    const space = db.getSpaceByName(spaceName);
+    if (!space) return sendJson(res, 404, { error: 'Server not found' });
+    const role = db.getMemberRole(space.id, userId);
+    if (!role) return sendJson(res, 403, { error: 'You are not a member of this server' });
+    const canManage = role === 'owner' || role === 'admin';
+
+    // DELETE /spaces/:name — owner only
+    if (pathSegments.length === 2 && req.method === 'DELETE') {
+      if (role !== 'owner') return sendJson(res, 403, { error: 'Only the owner can delete this server' });
+      if (clientSpaces[spaceName]) {
+        for (const channelName in clientSpaces[spaceName].channels) {
+          notifyAndDisconnectClients(
+            clientSpaces[spaceName].channels[channelName].clients,
+            `Server '${spaceName}' was deleted by its owner.`, 1000, 'Server deleted'
+          );
+        }
+      }
+      db.deleteSpace(spaceName);
+      delete clientSpaces[spaceName];
+      return sendJson(res, 200, { ok: true });
+    }
+
+    // GET /spaces/:name/members
+    if (pathSegments[2] === 'members' && pathSegments.length === 3 && req.method === 'GET') {
+      const members = db.getSpaceMembers(space.id).map((m) => ({
+        username: m.username,
+        role: m.role,
+        online: !!(userClients[m.userId] && userClients[m.userId].size > 0),
+      }));
+      return sendJson(res, 200, { members });
+    }
+
+    // POST /spaces/:name/invites — any member can invite
+    if (pathSegments[2] === 'invites' && pathSegments.length === 3 && req.method === 'POST') {
+      const code = crypto.randomBytes(6).toString('base64url');
+      db.createInvite(code, space.id, userId, null, null);
+      return sendJson(res, 201, { code });
+    }
+
+    // /spaces/:name/channels ...
+    if (pathSegments[2] === 'channels') {
+      const channelName = pathSegments[3];
+      // GET messages (members only)
+      if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
+        const limit = parseInt(parsedUrl.query.limit || '50', 10);
+        const offset = parseInt(parsedUrl.query.offset || '0', 10);
+        return sendJson(res, 200, db.getMessages(spaceName, channelName, limit, offset));
+      }
+      // POST create channel (managers only)
+      if (!channelName && req.method === 'POST') {
+        if (!canManage) return sendJson(res, 403, { error: 'Only the owner can create channels' });
+        const { name } = await getJsonBody(req);
+        const invalid = validateChannelName(name);
+        if (invalid) return sendJson(res, 400, { error: invalid });
+        db.createChannel(spaceName, normalizeChannelName(name));
+        return sendJson(res, 201, { name: normalizeChannelName(name) });
+      }
+      // DELETE channel (managers only)
+      if (channelName && pathSegments.length === 4 && req.method === 'DELETE') {
+        if (!canManage) return sendJson(res, 403, { error: 'Only the owner can delete channels' });
+        const channelObj = clientSpaces[spaceName] && clientSpaces[spaceName].channels[channelName];
+        notifyAndDisconnectClients(
+          channelObj ? channelObj.clients : null,
+          `Channel '${channelName}' was deleted.`, 1000, 'Channel deleted'
+        );
+        db.deleteChannel(spaceName, channelName);
+        if (clientSpaces[spaceName]) delete clientSpaces[spaceName].channels[channelName];
+        return sendJson(res, 200, { ok: true });
+      }
+    }
+
+    return sendJson(res, 404, { error: 'Not found' });
+  }
+  // ---- Invites: preview and join ----
+  else if (pathSegments[0] === 'invites' && pathSegments[1] && pathSegments.length === 2) {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+    const invite = db.getInvite(pathSegments[1]);
+    if (!invite) return sendJson(res, 404, { error: 'This invite is invalid or has expired' });
+    const space = db.getSpaceById(invite.space_id);
+    if (!space) return sendJson(res, 404, { error: 'That server no longer exists' });
+
+    if (req.method === 'GET') {
+      return sendJson(res, 200, {
+        space: space.name,
+        members: db.getSpaceMembers(space.id).length,
+        alreadyMember: db.isMember(space.id, userId),
+      });
+    }
+    if (req.method === 'POST') {
+      if (invite.expires_at && Date.now() > invite.expires_at) {
+        return sendJson(res, 410, { error: 'This invite has expired' });
+      }
+      if (invite.max_uses && invite.uses >= invite.max_uses) {
+        return sendJson(res, 410, { error: 'This invite has been fully used' });
+      }
+      const wasMember = db.isMember(space.id, userId);
+      db.addMember(space.id, userId, 'member');
+      if (!wasMember) db.incrementInviteUses(pathSegments[1]);
+      return sendJson(res, 200, { name: space.name });
+    }
+    return sendJson(res, 405, { error: 'Method not allowed' });
   }
 
   // Admin API Routes
@@ -964,8 +1107,14 @@ httpServer.on('upgrade', (request, socket, head) => {
       return;
     }
 
-    // Ensure channel exists before upgrading
-    const channelObj = createChannel(spaceName, channelName);
+    // Only members of the server may open a socket, and only to a channel that
+    // actually exists — no more connecting to an arbitrary space/channel by name.
+    const space = db.getSpaceByName(spaceName);
+    if (!space || !db.isMember(space.id, payload.sub) || !db.channelExists(spaceName, channelName)) {
+      socket.destroy();
+      return;
+    }
+    const channelObj = runtimeChannel(spaceName, channelName);
 
     wss.handleUpgrade(request, socket, head, (wsClient) => {
       // Store the space and channel info on the wsClient object for later use

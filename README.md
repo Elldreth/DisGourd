@@ -108,8 +108,17 @@ web/       React + Vite + Tailwind web client
 uploads/   Uploaded files (created at runtime, gitignored)
 ```
 
+## Servers & invites
+
+Anyone can create a server (they become its owner) with the **+** in the left
+rail. To bring friends in, open the server menu (click the server name) →
+**Invite people** to mint an invite code, and share it. They join by entering
+the code under **Join a server** (the ⤵ button in the rail). You only see
+servers you own or have joined, and only members can read a server's channels.
+
 ## Roadmap
 
-Text chat, servers/channels, DMs foundation, files, and presence work today.
-Planned next: richer server membership/roles/invites, message edit/delete,
-reactions, typing indicators, and — later — voice/video.
+Working today: accounts, servers with ownership and invite codes, text
+channels, real-time messaging with edit/delete, file sharing, presence, and a
+per-server member list. Planned next: reactions, typing indicators, mentions,
+direct messages, richer roles, and — later — voice/video.

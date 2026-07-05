@@ -51,6 +51,26 @@ db.exec(`
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY(friend_id) REFERENCES users(id) ON DELETE CASCADE
   );
+  CREATE TABLE IF NOT EXISTS space_members (
+    space_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member',
+    joined_at INTEGER,
+    UNIQUE(space_id, user_id),
+    FOREIGN KEY(space_id) REFERENCES spaces(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE TABLE IF NOT EXISTS invites (
+    code TEXT PRIMARY KEY,
+    space_id INTEGER NOT NULL,
+    created_by INTEGER,
+    created_at INTEGER,
+    expires_at INTEGER,
+    max_uses INTEGER,
+    uses INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(space_id) REFERENCES spaces(id) ON DELETE CASCADE,
+    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+  );
 `);
 
 // Migrate existing databases to include new columns if missing
@@ -135,6 +155,95 @@ function renameChannel(spaceName, oldChannelName, newChannelName) {
     if (e.code === 'SQLITE_CONSTRAINT') return false;
     throw e;
   }
+}
+
+// ---- Spaces: ownership, membership, invites ----
+
+function getSpaceByName(name) {
+  return db.prepare('SELECT id, name, owner_id FROM spaces WHERE name = ?').get(name);
+}
+
+function getSpaceById(id) {
+  return db.prepare('SELECT id, name, owner_id FROM spaces WHERE id = ?').get(id);
+}
+
+function channelExists(spaceName, channelName) {
+  return !!db.prepare(`
+    SELECT 1 FROM channels c
+    JOIN spaces s ON c.space_id = s.id
+    WHERE s.name = ? AND c.name = ?
+  `).get(spaceName, channelName);
+}
+
+// Create a space owned by ownerId and enrol them as its owner. Returns the new
+// space id, or null if the name is already taken.
+function createSpaceOwned(name, ownerId) {
+  const info = db.prepare('INSERT OR IGNORE INTO spaces(name, owner_id) VALUES (?, ?)').run(name, ownerId);
+  if (info.changes === 0) return null;
+  const spaceId = info.lastInsertRowid;
+  addMember(spaceId, ownerId, 'owner');
+  return spaceId;
+}
+
+function addMember(spaceId, userId, role = 'member') {
+  db.prepare('INSERT OR IGNORE INTO space_members(space_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)')
+    .run(spaceId, userId, role, Date.now());
+}
+
+function removeMember(spaceId, userId) {
+  return db.prepare('DELETE FROM space_members WHERE space_id = ? AND user_id = ?')
+    .run(spaceId, userId).changes > 0;
+}
+
+function getMemberRole(spaceId, userId) {
+  const row = db.prepare('SELECT role FROM space_members WHERE space_id = ? AND user_id = ?').get(spaceId, userId);
+  return row ? row.role : null;
+}
+
+function isMember(spaceId, userId) {
+  return !!db.prepare('SELECT 1 FROM space_members WHERE space_id = ? AND user_id = ?').get(spaceId, userId);
+}
+
+// Spaces the user belongs to, each with its channels and the user's role.
+function getUserSpaces(userId) {
+  const spaces = db.prepare(`
+    SELECT s.id, s.name, sm.role
+    FROM space_members sm
+    JOIN spaces s ON sm.space_id = s.id
+    WHERE sm.user_id = ?
+    ORDER BY s.name COLLATE NOCASE
+  `).all(userId);
+  const channelStmt = db.prepare('SELECT name FROM channels WHERE space_id = ? ORDER BY id');
+  return spaces.map((s) => ({
+    name: s.name,
+    role: s.role,
+    channels: channelStmt.all(s.id).map((c) => c.name),
+  }));
+}
+
+function getSpaceMembers(spaceId) {
+  return db.prepare(`
+    SELECT u.id AS userId, u.username, sm.role
+    FROM space_members sm
+    JOIN users u ON sm.user_id = u.id
+    WHERE sm.space_id = ?
+    ORDER BY CASE sm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.username COLLATE NOCASE
+  `).all(spaceId);
+}
+
+function createInvite(code, spaceId, createdBy, expiresAt = null, maxUses = null) {
+  db.prepare(`
+    INSERT INTO invites(code, space_id, created_by, created_at, expires_at, max_uses, uses)
+    VALUES (?, ?, ?, ?, ?, ?, 0)
+  `).run(code, spaceId, createdBy, Date.now(), expiresAt, maxUses);
+}
+
+function getInvite(code) {
+  return db.prepare('SELECT * FROM invites WHERE code = ?').get(code);
+}
+
+function incrementInviteUses(code) {
+  db.prepare('UPDATE invites SET uses = uses + 1 WHERE code = ?').run(code);
 }
 
 function storeMessage(spaceName, channelName, content, authorId, attachmentUrl) {
@@ -274,6 +383,19 @@ module.exports = {
   deleteChannel,
   renameSpace,
   renameChannel,
+  getSpaceByName,
+  getSpaceById,
+  channelExists,
+  createSpaceOwned,
+  addMember,
+  removeMember,
+  getMemberRole,
+  isMember,
+  getUserSpaces,
+  getSpaceMembers,
+  createInvite,
+  getInvite,
+  incrementInviteUses,
   storeMessage,
   editMessage,
   deleteMessage,
