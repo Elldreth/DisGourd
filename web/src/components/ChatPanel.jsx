@@ -1,7 +1,16 @@
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 
-export default function ChatPanel({ space, channel, status, messages, onSend }) {
+export default function ChatPanel({
+  space,
+  channel,
+  status,
+  messages,
+  currentUser,
+  onSend,
+  onEdit,
+  onDelete,
+}) {
   if (!space) {
     return (
       <Empty
@@ -35,7 +44,13 @@ export default function ChatPanel({ space, channel, status, messages, onSend }) 
         </div>
       )}
 
-      <MessageList messages={messages} channel={channel} />
+      <MessageList
+        messages={messages}
+        channel={channel}
+        currentUser={currentUser}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
       {/* Always enabled: sends during a blip are queued and flushed on reconnect. */}
       <Composer channel={channel} disabled={false} onSend={onSend} />
     </main>

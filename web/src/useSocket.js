@@ -97,6 +97,12 @@ export function useChannelSocket({ space, channel, token, handlers }) {
             (frame.messages || []).forEach((m) => noteId(m.id));
             h.onHistory && h.onHistory(frame.messages || []);
             break;
+          case 'message_update':
+            h.onMessageUpdate && h.onMessageUpdate(frame);
+            break;
+          case 'message_delete':
+            h.onMessageDelete && h.onMessageDelete(frame);
+            break;
           case 'presence':
             h.onPresence && h.onPresence(frame);
             break;

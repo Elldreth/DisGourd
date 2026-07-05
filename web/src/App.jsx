@@ -69,6 +69,11 @@ export default function App() {
     () => ({
       onHistory: (msgs) => setMessages((prev) => mergeMessages(prev, msgs)),
       onMessage: (m) => setMessages((prev) => mergeMessages(prev, [m])),
+      onMessageUpdate: (u) =>
+        setMessages((prev) =>
+          prev.map((m) => (m.id === u.id ? { ...m, content: u.content, editedAt: u.editedAt } : m))
+        ),
+      onMessageDelete: (d) => setMessages((prev) => prev.filter((m) => m.id !== d.id)),
       onFriendList: (list) => setFriends(list),
       onPresence: (p) =>
         setFriends((prev) =>
@@ -135,6 +140,14 @@ export default function App() {
     send({ content, attachment });
   }
 
+  function editMessage(id, content) {
+    send({ type: 'edit', id, content });
+  }
+
+  function deleteMessage(id) {
+    send({ type: 'delete', id });
+  }
+
   if (!token) return <Login onAuthed={handleAuthed} />;
 
   return (
@@ -160,7 +173,10 @@ export default function App() {
         channel={currentChannel}
         status={status}
         messages={messages}
+        currentUser={user}
         onSend={sendMessage}
+        onEdit={editMessage}
+        onDelete={deleteMessage}
       />
       <MemberList friends={friends} />
 

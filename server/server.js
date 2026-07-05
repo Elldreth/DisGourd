@@ -548,9 +548,18 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         res.end(content);
       });
       return; // Prevent fall-through to other handlers
-    } 
+    }
+
+    // Every other /admin route manages servers or channels — require a valid
+    // login token. (The React client sends one; the legacy static admin page
+    // does not, and would need to authenticate.)
+    if (!authUserId(req, parsedUrl)) {
+      res.writeHead(401);
+      return res.end(JSON.stringify({ error: 'Unauthorized' }));
+    }
+
     // API endpoint for GET /admin/state
-    else if (pathSegments[1] === 'state' && req.method === 'GET') {
+    if (pathSegments[1] === 'state' && req.method === 'GET') {
       const state = db.getState();
       for (const spaceName in state) {
         for (const channelName in state[spaceName].channels) {
@@ -998,6 +1007,41 @@ httpServer.on('upgrade', (request, socket, head) => {
         } catch {
           parsed = { content: message.toString() };
         }
+
+        // Edit an existing message — only the original author may do so.
+        if (parsed.type === 'edit') {
+          const id = parseInt(parsed.id, 10);
+          const newContent = typeof parsed.content === 'string' ? parsed.content.trim() : '';
+          if (!id || !newContent) return;
+          const editedAt = db.editMessage(id, wsClient.userId, newContent);
+          if (editedAt) {
+            broadcast(channelObj, JSON.stringify({
+              type: 'message_update',
+              id,
+              space: spaceName,
+              channel: channelName,
+              content: newContent,
+              editedAt,
+            }));
+          }
+          return;
+        }
+
+        // Delete a message — only the original author may do so.
+        if (parsed.type === 'delete') {
+          const id = parseInt(parsed.id, 10);
+          if (!id) return;
+          if (db.deleteMessage(id, wsClient.userId)) {
+            broadcast(channelObj, JSON.stringify({
+              type: 'message_delete',
+              id,
+              space: spaceName,
+              channel: channelName,
+            }));
+          }
+          return;
+        }
+
         const content = typeof parsed.content === 'string' ? parsed.content : '';
         const attachment = typeof parsed.attachment === 'string' ? parsed.attachment : undefined;
         if (!content && !attachment) return; // ignore empty frames

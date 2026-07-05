@@ -73,6 +73,14 @@ try {
     // Backfill epoch-millisecond timestamps from the legacy DATETIME column.
     db.exec("UPDATE messages SET created_at = CAST(strftime('%s', timestamp) AS INTEGER) * 1000 WHERE created_at IS NULL AND timestamp IS NOT NULL");
   }
+  const hasEditedAt = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'edited_at');
+  if (!hasEditedAt) {
+    db.exec('ALTER TABLE messages ADD COLUMN edited_at INTEGER');
+  }
+  const hasOwner = db.prepare("PRAGMA table_info(spaces)").all().some(c => c.name === 'owner_id');
+  if (!hasOwner) {
+    db.exec('ALTER TABLE spaces ADD COLUMN owner_id INTEGER');
+  }
 } catch (e) {
   console.error('Error migrating messages table:', e);
 }
@@ -151,6 +159,7 @@ const MESSAGE_SELECT = `
          m.content,
          m.attachment_url AS attachment,
          COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) AS timestamp,
+         m.edited_at AS editedAt,
          m.author_id AS authorId,
          u.username AS author
   FROM messages m
@@ -175,6 +184,22 @@ function getMessagesAfter(spaceName, channelName, afterId, limit = 200) {
     ORDER BY m.id ASC
     LIMIT ?
   `).all(spaceName, channelName, afterId, limit);
+}
+
+// Edit a message, but only if the requester is its author. Returns the new
+// edited_at timestamp on success, or null if not found / not the author.
+function editMessage(messageId, authorId, content) {
+  const editedAt = Date.now();
+  const changed = db.prepare(
+    'UPDATE messages SET content = ?, edited_at = ? WHERE id = ? AND author_id = ?'
+  ).run(content, editedAt, messageId, authorId).changes;
+  return changed > 0 ? editedAt : null;
+}
+
+// Delete a message, but only if the requester is its author.
+function deleteMessage(messageId, authorId) {
+  return db.prepare('DELETE FROM messages WHERE id = ? AND author_id = ?')
+    .run(messageId, authorId).changes > 0;
 }
 
 function getState() {
@@ -250,6 +275,8 @@ module.exports = {
   renameSpace,
   renameChannel,
   storeMessage,
+  editMessage,
+  deleteMessage,
   getMessages,
   getMessagesAfter,
   getState,

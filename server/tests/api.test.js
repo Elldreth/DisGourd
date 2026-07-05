@@ -142,6 +142,61 @@ test('realtime messages carry ids and support reconnect backfill', async () => {
   expect(contents).not.toContain('first');
 });
 
+test('admin management endpoints require authentication', async () => {
+  const base = `http://localhost:${port}`;
+  // No token -> rejected.
+  let res = await fetch(`${base}/admin/state`);
+  expect(res.status).toBe(401);
+  // alice (registered earlier) has a valid token.
+  const login = await fetch(`${base}/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: 'alice', password: 'password123' })
+  });
+  const { token } = await login.json();
+  res = await fetch(`${base}/admin/state`, { headers: { Authorization: `Bearer ${token}` } });
+  expect(res.status).toBe(200);
+});
+
+test('messages can be edited and deleted by their author', async () => {
+  const base = `http://localhost:${port}`;
+  const reg = await fetch(`${base}/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: 'frank', password: 'password123', email: 'frank@example.com' })
+  });
+  const { token } = await reg.json();
+
+  const frames = await new Promise((resolve) => {
+    const got = [];
+    const ws = new WebSocket(`ws://localhost:${port}/ws/ed/general?token=${token}`);
+    let editRequested = false;
+    ws.on('message', (raw) => {
+      const m = JSON.parse(raw.toString());
+      got.push(m);
+      if (m.type === 'message' && !editRequested) {
+        editRequested = true;
+        ws.send(JSON.stringify({ type: 'edit', id: m.id, content: 'edited text' }));
+      } else if (m.type === 'message_update') {
+        ws.send(JSON.stringify({ type: 'delete', id: m.id }));
+      }
+    });
+    ws.on('open', () => ws.send(JSON.stringify({ content: 'original text' })));
+    setTimeout(() => { ws.close(); resolve(got); }, 300);
+  });
+
+  const update = frames.find((f) => f.type === 'message_update');
+  const del = frames.find((f) => f.type === 'message_delete');
+  expect(update).toBeTruthy();
+  expect(update.content).toBe('edited text');
+  expect(typeof update.editedAt).toBe('number');
+  expect(del).toBeTruthy();
+
+  const res = await fetch(`${base}/spaces/ed/channels/general/messages?limit=50`);
+  const msgs = await res.json();
+  expect(msgs.find((m) => m.id === del.id)).toBeFalsy();
+});
+
 test('file uploads: auth required, no name collisions, type + size validation', async () => {
   const base = `http://localhost:${port}`;
   const reg = await fetch(`${base}/register`, {
