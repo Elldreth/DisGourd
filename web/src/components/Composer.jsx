@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import * as api from '../api.js';
 import { humanSize } from '../util.js';
 
-export default function Composer({ channel, disabled, onSend, onTyping }) {
+export default function Composer({ channel, disabled, onSend, onTyping, placeholder }) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState(null); // { url, name, size } once uploaded
   const [progress, setProgress] = useState(null); // 0..1 while uploading
@@ -106,7 +106,7 @@ export default function Composer({ channel, disabled, onSend, onTyping }) {
           onChange={grow}
           onKeyDown={onKeyDown}
           disabled={disabled}
-          placeholder={disabled ? 'Connecting…' : `Message #${channel}`}
+          placeholder={disabled ? 'Connecting…' : placeholder || `Message #${channel}`}
           className="max-h-52 flex-1 resize-none bg-transparent py-1.5 text-gray-100 outline-none placeholder:text-gray-500 disabled:opacity-60"
         />
         <button

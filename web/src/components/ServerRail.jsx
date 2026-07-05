@@ -2,7 +2,17 @@ import { useState } from 'react';
 import { initials, colorForName } from '../util.js';
 
 // The far-left rail of server (space) icons, Discord-style, plus create/join.
-export default function ServerRail({ spaces, currentSpace, unread = {}, onSelect, onCreate, onJoin }) {
+export default function ServerRail({
+  spaces,
+  currentSpace,
+  unread = {},
+  dmActive,
+  dmUnread = 0,
+  onSelectDms,
+  onSelect,
+  onCreate,
+  onJoin,
+}) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [joining, setJoining] = useState(false);
@@ -28,9 +38,20 @@ export default function ServerRail({ spaces, currentSpace, unread = {}, onSelect
 
   return (
     <nav className="relative flex w-[72px] flex-col items-center gap-2 bg-ink-900 py-3">
-      <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-2xl">
+      <button
+        onClick={onSelectDms}
+        title="Direct Messages"
+        className={`relative mb-1 flex h-12 w-12 items-center justify-center text-2xl text-white transition-all hover:rounded-2xl ${
+          dmActive ? 'rounded-2xl bg-brand' : 'rounded-[26px] bg-ink-700 hover:bg-brand'
+        }`}
+      >
         🥒
-      </div>
+        {dmUnread > 0 && !dmActive && (
+          <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold">
+            {dmUnread > 99 ? '99+' : dmUnread}
+          </span>
+        )}
+      </button>
       <div className="h-px w-8 bg-ink-500/50" />
 
       <div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto">

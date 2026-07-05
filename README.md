@@ -120,6 +120,6 @@ servers you own or have joined, and only members can read a server's channels.
 
 Working today: accounts with avatars, servers with ownership and invite codes,
 text channels, real-time messaging with edit/delete, emoji reactions, typing
-indicators, unread badges, file sharing, presence, and a per-server member list.
-Planned next: direct messages, mentions, richer roles, and — later —
-voice/video.
+indicators, unread badges, direct messages, file sharing, presence, and a
+per-server member list. Planned next: search, mentions, richer roles, and —
+later — voice/video.

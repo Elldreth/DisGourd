@@ -104,6 +104,15 @@ export function getMessages(space, channel, { limit = 50, offset = 0 } = {}) {
   );
 }
 
+// ---- Direct messages ----
+export function getDms() {
+  return request('/dms');
+}
+export function getDmMessages(username, { limit = 50 } = {}) {
+  const qs = new URLSearchParams({ limit });
+  return request(`/dms/${encodeURIComponent(username)}/messages?${qs}`);
+}
+
 // ---- Current user profile ----
 export function getMe() {
   return request('/me');

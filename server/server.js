@@ -514,6 +514,29 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     if (!u) return sendJson(res, 404, { error: 'User not found' });
     return sendJson(res, 200, { id: u.id, username: u.username, email: u.email, avatar: u.avatar_url || null });
   }
+  // ---- Direct messages ----
+  else if (pathSegments[0] === 'dms') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+
+    // GET /dms — conversation list with last message + unread
+    if (pathSegments.length === 1 && req.method === 'GET') {
+      const unread = {};
+      for (const u of db.getDmUnreadCounts(userId)) unread[u.other] = u.count;
+      const convos = db.getDmConversations(userId).map((c) => ({ ...c, unread: unread[c.username] || 0 }));
+      return sendJson(res, 200, convos);
+    }
+    // GET /dms/:username/messages — history (optionally ?after=<id>)
+    if (pathSegments[2] === 'messages' && req.method === 'GET') {
+      const other = db.getUserByUsername(pathSegments[1]);
+      if (!other) return sendJson(res, 404, { error: 'User not found' });
+      const after = parseInt(parsedUrl.query.after || '0', 10);
+      if (after > 0) return sendJson(res, 200, db.getDmMessagesAfter(userId, other.id, after));
+      const limit = parseInt(parsedUrl.query.limit || '50', 10);
+      return sendJson(res, 200, db.getDmMessages(userId, other.id, limit, 0));
+    }
+    return sendJson(res, 404, { error: 'Not found' });
+  }
   else if (pathSegments[0] === 'friends' && pathSegments.length === 1 && req.method === 'GET') {
     const userId = authUserId(req, parsedUrl);
     if (!userId) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
@@ -1246,6 +1269,55 @@ function handleGatewayMessage(ws, raw) {
       }
       return;
     }
+
+    // ---- Direct messages ----
+    case 'dm': {
+      const to = db.getUserByUsername(msg.to);
+      if (!to || to.id === userId) return;
+      const content = typeof msg.content === 'string' ? msg.content : '';
+      const attachment = typeof msg.attachment === 'string' ? msg.attachment : undefined;
+      if (!content && !attachment) return;
+      const from = db.getUserById(userId);
+      const stored = db.storeDm(userId, to.id, content, attachment);
+      db.markDmRead(userId, to.id, stored.id); // sender has read their own message
+      const frame = JSON.stringify({
+        type: 'dm',
+        id: stored.id,
+        from: from.username,
+        fromId: userId,
+        fromAvatar: from.avatar_url || null,
+        to: to.username,
+        toId: to.id,
+        content,
+        attachment,
+        timestamp: stored.timestamp,
+      });
+      sendToUser(userId, frame);
+      sendToUser(to.id, frame);
+      return;
+    }
+    case 'dm_focus': {
+      ws.dmFocus = typeof msg.with === 'string' ? msg.with : null;
+      return;
+    }
+    case 'dm_read': {
+      const other = db.getUserByUsername(msg.with);
+      if (other) db.markDmRead(userId, other.id, parseInt(msg.lastId, 10) || 0);
+      return;
+    }
+    case 'dm_typing': {
+      const to = db.getUserByUsername(msg.with);
+      if (!to) return;
+      const from = db.getUserById(userId);
+      const frame = JSON.stringify({ type: 'dm_typing', from: from.username });
+      const socks = userClients[to.id];
+      if (socks) {
+        socks.forEach((s) => {
+          if (s.readyState === WebSocket.OPEN && s.dmFocus === from.username) s.send(frame);
+        });
+      }
+      return;
+    }
     default:
       return;
   }
@@ -1277,6 +1349,7 @@ httpServer.on('upgrade', (request, socket, head) => {
 
     ws.send(JSON.stringify({ type: 'ready' }));
     ws.send(JSON.stringify({ type: 'unread', counts: db.getUnreadCounts(ws.userId) }));
+    ws.send(JSON.stringify({ type: 'dm_unread', counts: db.getDmUnreadCounts(ws.userId) }));
 
     ws.on('message', (raw) => handleGatewayMessage(ws, raw));
     ws.on('close', () => detachGateway(ws));

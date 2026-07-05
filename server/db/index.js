@@ -86,6 +86,24 @@ db.exec(`
     last_read_id INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY(user_id, space, channel)
   );
+  CREATE TABLE IF NOT EXISTS dm_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_a INTEGER NOT NULL,
+    user_b INTEGER NOT NULL,
+    author_id INTEGER NOT NULL,
+    content TEXT,
+    attachment_url TEXT,
+    created_at INTEGER,
+    edited_at INTEGER,
+    FOREIGN KEY(user_a) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_b) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE TABLE IF NOT EXISTS dm_read_state (
+    user_id INTEGER NOT NULL,
+    other_id INTEGER NOT NULL,
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(user_id, other_id)
+  );
 `);
 
 // Migrate existing databases to include new columns if missing
@@ -434,6 +452,84 @@ function markSpaceRead(userId, spaceName) {
   `).run(userId, spaceName);
 }
 
+// ---- Direct messages ----
+function dmPair(a, b) {
+  return a < b ? [a, b] : [b, a];
+}
+
+const DM_SELECT = `
+  SELECT m.id,
+         m.content,
+         m.attachment_url AS attachment,
+         COALESCE(m.created_at, 0) AS timestamp,
+         m.edited_at AS editedAt,
+         m.author_id AS authorId,
+         u.username AS author,
+         u.avatar_url AS authorAvatar
+  FROM dm_messages m
+  JOIN users u ON m.author_id = u.id
+`;
+
+function storeDm(fromId, toId, content, attachmentUrl) {
+  const [a, b] = dmPair(fromId, toId);
+  const createdAt = Date.now();
+  const info = db.prepare(
+    'INSERT INTO dm_messages(user_a, user_b, author_id, content, attachment_url, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(a, b, fromId, content, attachmentUrl || null, createdAt);
+  return { id: info.lastInsertRowid, timestamp: createdAt };
+}
+
+function getDmMessages(userId, otherId, limit = 50, offset = 0) {
+  const [a, b] = dmPair(userId, otherId);
+  return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? ORDER BY m.id DESC LIMIT ? OFFSET ?`)
+    .all(a, b, limit, offset).reverse();
+}
+
+function getDmMessagesAfter(userId, otherId, afterId, limit = 200) {
+  const [a, b] = dmPair(userId, otherId);
+  return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id > ? ORDER BY m.id ASC LIMIT ?`)
+    .all(a, b, afterId, limit);
+}
+
+// One row per conversation partner, newest first, with the last message.
+function getDmConversations(userId) {
+  return db.prepare(`
+    SELECT partner.username AS username, partner.avatar_url AS avatar,
+           last.content AS lastContent, last.attachment_url AS lastAttachment, last.created_at AS lastTimestamp
+    FROM (
+      SELECT CASE WHEN user_a = ? THEN user_b ELSE user_a END AS other_id, MAX(id) AS last_id
+      FROM dm_messages
+      WHERE user_a = ? OR user_b = ?
+      GROUP BY other_id
+    ) conv
+    JOIN users partner ON partner.id = conv.other_id
+    JOIN dm_messages last ON last.id = conv.last_id
+    ORDER BY last.id DESC
+  `).all(userId, userId, userId);
+}
+
+function markDmRead(userId, otherId, lastReadId) {
+  db.prepare(`
+    INSERT INTO dm_read_state(user_id, other_id, last_read_id)
+    VALUES (?, ?, ?)
+    ON CONFLICT(user_id, other_id)
+    DO UPDATE SET last_read_id = MAX(last_read_id, excluded.last_read_id)
+  `).run(userId, otherId, lastReadId || 0);
+}
+
+// Unread DM counts per partner (only the partner's own messages count).
+function getDmUnreadCounts(userId) {
+  return db.prepare(`
+    SELECT partner.username AS other, COUNT(m.id) AS count
+    FROM dm_messages m
+    JOIN users partner ON partner.id = (CASE WHEN m.user_a = ? THEN m.user_b ELSE m.user_a END)
+    LEFT JOIN dm_read_state rs ON rs.user_id = ? AND rs.other_id = partner.id
+    WHERE (m.user_a = ? OR m.user_b = ?) AND m.author_id != ? AND m.id > COALESCE(rs.last_read_id, 0)
+    GROUP BY partner.id
+    HAVING count > 0
+  `).all(userId, userId, userId, userId, userId);
+}
+
 // Distinct user ids that share at least one server with the given user.
 function getCoMemberIds(userId) {
   return db.prepare(`
@@ -563,6 +659,12 @@ module.exports = {
   markRead,
   getUnreadCounts,
   markSpaceRead,
+  storeDm,
+  getDmMessages,
+  getDmMessagesAfter,
+  getDmConversations,
+  markDmRead,
+  getDmUnreadCounts,
   getState,
   createUser,
   getUserByUsername,

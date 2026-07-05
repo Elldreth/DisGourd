@@ -7,7 +7,7 @@ const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🔥
 
 // Groups consecutive messages from the same author (within 5 minutes) into a
 // single block, and inserts day dividers — the familiar chat reading rhythm.
-export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact }) {
+export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, simple = false, emptyHeading, emptyBody }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -42,9 +42,11 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
       <div className="flex min-h-full flex-col justify-end px-4 py-4">
         {messages.length === 0 && (
           <div className="py-10 text-center text-gray-500">
-            <div className="mb-2 text-5xl">#</div>
-            <p className="text-lg font-semibold text-gray-300">Welcome to #{channel}</p>
-            <p className="text-sm">This is the start of the channel. Say hello! 👋</p>
+            <div className="mb-2 text-5xl">{simple ? '💬' : '#'}</div>
+            <p className="text-lg font-semibold text-gray-300">
+              {emptyHeading || `Welcome to #${channel}`}
+            </p>
+            <p className="text-sm">{emptyBody || 'This is the start of the channel. Say hello! 👋'}</p>
           </div>
         )}
 
@@ -65,6 +67,7 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
               onEdit={onEdit}
               onDelete={onDelete}
               onReact={onReact}
+              simple={simple}
             />
           )
         )}
@@ -74,7 +77,7 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
   );
 }
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, simple }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content || '');
   const [picker, setPicker] = useState(false);
@@ -177,7 +180,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact }
       </div>
 
       {/* Hover actions: anyone can react; only the author can edit/delete */}
-      {!editing && (
+      {!editing && !simple && (
         <div className="absolute -top-3 right-3 hidden items-center gap-1 rounded-md border border-ink-500/60 bg-ink-800 px-1 py-0.5 shadow group-hover:flex">
           <div className="relative">
             <button

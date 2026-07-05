@@ -318,6 +318,47 @@ test('unread counts track messages since last read', async () => {
   kg2.close();
 });
 
+test('direct messages deliver to both users, with unread tracking', async () => {
+  const base = baseUrl();
+  const mia = (await register('mia')).token;
+  const noah = (await register('noah')).token;
+
+  const ng = gateway(noah);
+  await ng.ready;
+  await wait(40);
+  const mg = gateway(mia);
+  await mg.ready;
+  mg.send({ op: 'dm', to: 'noah', content: 'hey noah' });
+  await wait(120);
+
+  const miaDm = mg.frames.find((f) => f.type === 'dm');
+  const noahDm = ng.frames.find((f) => f.type === 'dm');
+  expect(miaDm).toBeTruthy();
+  expect(noahDm).toBeTruthy();
+  expect(noahDm.from).toBe('mia');
+  expect(noahDm.to).toBe('noah');
+  expect(noahDm.content).toBe('hey noah');
+  mg.close();
+
+  // Noah's conversation list shows mia with one unread.
+  let convos = await (await fetch(`${base}/dms`, { headers: auth(noah) })).json();
+  let convo = convos.find((c) => c.username === 'mia');
+  expect(convo).toBeTruthy();
+  expect(convo.unread).toBe(1);
+  expect(convo.lastContent).toBe('hey noah');
+
+  const hist = await (await fetch(`${base}/dms/mia/messages`, { headers: auth(noah) })).json();
+  expect(hist.map((m) => m.content)).toContain('hey noah');
+
+  // After marking read, the unread clears.
+  ng.send({ op: 'dm_read', with: 'mia', lastId: noahDm.id });
+  await wait(60);
+  ng.close();
+  convos = await (await fetch(`${base}/dms`, { headers: auth(noah) })).json();
+  convo = convos.find((c) => c.username === 'mia');
+  expect(convo.unread).toBe(0);
+});
+
 test('users can view and update their avatar via /me', async () => {
   const base = baseUrl();
   const { token } = await register('jane');
