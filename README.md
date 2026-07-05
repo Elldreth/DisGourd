@@ -146,6 +146,12 @@ Capturing audio this way needs **Chrome or Edge**, but everyone *listening*
 hears it on any browser — so one person can DJ for a mixed-browser room. The
 button only appears where the browser can capture display audio.
 
+**Video & screen sharing**: while in a voice channel, turn on your **camera**
+(📹) or **share your screen** (🖥️). Live video appears in a grid above the chat,
+so you can keep reading and typing while you watch. Both are separate tracks, so
+you can do either or both, and other people's video shows up automatically. (For
+a friend-group mesh, video is best with a handful of people at once.)
+
 Connections **recover automatically** from brief network drops (an ICE restart
 re-establishes the link rather than going silent), and changing your microphone
 or speaker in Settings **applies immediately** to a call in progress.
@@ -164,4 +170,5 @@ text channels, real-time messaging with edit/delete, emoji reactions, typing
 indicators, unread badges, @mentions, direct messages, message search, file
 sharing, presence, a per-server member list, roles (owner/admin/member with
 promote, demote, and remove), spoiler tags (`||text||` and per-image), and
-peer-to-peer voice channels. Planned next: video/screenshare in calls.
+peer-to-peer voice channels with app-audio sharing, camera video, and screen
+sharing.

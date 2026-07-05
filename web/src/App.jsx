@@ -8,6 +8,7 @@ import Login from './components/Login.jsx';
 import ServerRail from './components/ServerRail.jsx';
 import ChannelList from './components/ChannelList.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
+import VideoStage from './components/VideoStage.jsx';
 import MemberList from './components/MemberList.jsx';
 import InviteDialog from './components/InviteDialog.jsx';
 import ProfileDialog from './components/ProfileDialog.jsx';
@@ -41,7 +42,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
-  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, sharing: false, shareError: '', participants: [] });
+  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, sharing: false, shareError: '', cameraOn: false, screenOn: false, videoError: '', videos: [], participants: [] });
   const myVoice = voiceCall.room;
   const [loadError, setLoadError] = useState('');
 
@@ -505,6 +506,12 @@ export default function App() {
   function setShareVolume(userId, vol) {
     if (voiceRef.current) voiceRef.current.setShareVolume(userId, vol);
   }
+  function toggleCamera() {
+    if (voiceRef.current) voiceRef.current.toggleCamera();
+  }
+  function toggleScreenShare() {
+    if (voiceRef.current) voiceRef.current.toggleScreen();
+  }
 
   async function makeInvite() {
     try {
@@ -647,6 +654,9 @@ export default function App() {
             voiceUnstable={voiceCall.unstable}
             voiceSharing={voiceCall.sharing}
             voiceShareError={voiceCall.shareError}
+            voiceCameraOn={voiceCall.cameraOn}
+            voiceScreenOn={voiceCall.screenOn}
+            voiceVideoError={voiceCall.videoError}
             onJoinVoice={joinVoice}
             onLeaveVoice={leaveVoice}
             onToggleMute={toggleMute}
@@ -654,6 +664,8 @@ export default function App() {
             onToggleShare={toggleShareAudio}
             onToggleShareMute={toggleShareMute}
             onSetShareVolume={setShareVolume}
+            onToggleCamera={toggleCamera}
+            onToggleScreen={toggleScreenShare}
             selfId={myId}
             onSelect={setCurrentChannel}
             onCreateChannel={createChannel}
@@ -667,21 +679,26 @@ export default function App() {
             status={status}
             onLogout={logout}
           />
-          <ChatPanel
-            space={currentSpace}
-            channel={currentChannel}
-            status={status}
-            messages={messages}
-            currentUser={user}
-            typingUsers={typingNames}
-            memberNames={memberNames}
-            onSend={sendMessage}
-            onEdit={editMessage}
-            onDelete={deleteMessage}
-            onReact={reactToMessage}
-            onTyping={sendTyping}
-            onOpenSearch={() => setSearchOpen(true)}
-          />
+          <div className="flex min-w-0 flex-1 flex-col">
+            {voiceCall.room && voiceCall.videos.length > 0 && (
+              <VideoStage videos={voiceCall.videos} />
+            )}
+            <ChatPanel
+              space={currentSpace}
+              channel={currentChannel}
+              status={status}
+              messages={messages}
+              currentUser={user}
+              typingUsers={typingNames}
+              memberNames={memberNames}
+              onSend={sendMessage}
+              onEdit={editMessage}
+              onDelete={deleteMessage}
+              onReact={reactToMessage}
+              onTyping={sendTyping}
+              onOpenSearch={() => setSearchOpen(true)}
+            />
+          </div>
           <MemberList
             members={members}
             currentUser={user}

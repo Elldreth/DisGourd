@@ -31,6 +31,10 @@ export function createVoiceController({ send, myId, onChange }) {
   let shareTrack = null;
   let sharing = false;
   let shareError = ''; // last share failure message, for the UI
+  let cameraStream = null; // our outgoing camera video (separate track)
+  let screenStream = null; // our outgoing screen-share video (separate track)
+  let videoError = ''; // last camera/screen failure message, for the UI
+  const remoteVideos = new Map(); // streamId -> { userId, stream } for remote video
   let participants = []; // authoritative list from the server (voice_state)
   let knownIds = null; // Set of participant userIds, for join/leave chimes
   const pcs = new Map(); // userId -> peer state { pc, polite, makingOffer, ignoreOffer, state }
@@ -65,6 +69,10 @@ export function createVoiceController({ send, myId, onChange }) {
       unstable: unstable(),
       sharing,
       shareError,
+      cameraOn: !!cameraStream,
+      screenOn: !!screenStream,
+      videoError,
+      videos: buildVideoTiles(),
       participants: participants.map((p) => ({
         ...p,
         speaking: speaking.has(p.userId),
@@ -282,6 +290,9 @@ export function createVoiceController({ send, myId, onChange }) {
     // If we're already broadcasting app audio, send that too (as its own track)
     // so peers joining mid-share hear it.
     if (shareStream) shareStream.getTracks().forEach((t) => pc.addTrack(t, shareStream));
+    // Likewise any camera / screen video already running.
+    if (cameraStream) cameraStream.getTracks().forEach((t) => pc.addTrack(t, cameraStream));
+    if (screenStream) screenStream.getTracks().forEach((t) => pc.addTrack(t, screenStream));
 
     pc.onnegotiationneeded = async () => {
       try {
@@ -316,7 +327,12 @@ export function createVoiceController({ send, myId, onChange }) {
       emit();
     };
 
-    pc.ontrack = ({ streams }) => attachRemote(userId, streams[0]);
+    pc.ontrack = (e) => {
+      const stream = e.streams[0];
+      if (!stream) return;
+      if (e.track.kind === 'video') addRemoteVideo(userId, stream, e.track);
+      else attachRemote(userId, stream);
+    };
 
     return st;
   }
@@ -348,6 +364,15 @@ export function createVoiceController({ send, myId, onChange }) {
 
   function leave() {
     if (sharing || shareTrack) stopShare();
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((t) => t.stop());
+      cameraStream = null;
+    }
+    if (screenStream) {
+      screenStream.getTracks().forEach((t) => t.stop());
+      screenStream = null;
+    }
+    remoteVideos.clear();
     if (room) {
       send({ op: 'voice_leave' });
       if (getVoiceSounds()) playSelfLeave();
@@ -386,6 +411,7 @@ export function createVoiceController({ send, myId, onChange }) {
     pttActive = false;
     sharing = false;
     shareError = '';
+    videoError = '';
     knownIds = null;
     participants = [];
     emit();
@@ -517,6 +543,122 @@ export function createVoiceController({ send, myId, onChange }) {
     else startShare();
   }
 
+  // ---- Video: camera & screen share ----
+  function nameFor(userId) {
+    const p = participants.find((x) => x.userId === userId);
+    return p ? p.username : '';
+  }
+
+  // The tiles the video grid should render: our own camera/screen previews plus
+  // every remote video stream.
+  function buildVideoTiles() {
+    const tiles = [];
+    if (cameraStream) {
+      tiles.push({ key: 'self-camera', userId: myId, label: 'You', stream: cameraStream, self: true, mirror: true });
+    }
+    if (screenStream) {
+      tiles.push({ key: 'self-screen', userId: myId, label: 'You — screen', stream: screenStream, self: true, mirror: false });
+    }
+    for (const [sid, v] of remoteVideos) {
+      tiles.push({ key: sid, userId: v.userId, label: nameFor(v.userId), stream: v.stream, self: false, mirror: false });
+    }
+    return tiles;
+  }
+
+  function addRemoteVideo(userId, stream, track) {
+    remoteVideos.set(stream.id, { userId, stream });
+    track.onended = () => {
+      if (remoteVideos.delete(stream.id)) emit();
+    };
+    emit();
+  }
+
+  function addTrackToPeers(track, stream) {
+    pcs.forEach(({ pc }) => pc.addTrack(track, stream)); // triggers renegotiation
+  }
+  function removeTrackFromPeers(track) {
+    pcs.forEach(({ pc }) => {
+      const sender = pc.getSenders().find((s) => s.track === track);
+      if (sender) {
+        try {
+          pc.removeTrack(sender);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+  }
+
+  async function startCamera() {
+    if (!room || cameraStream) return;
+    videoError = '';
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    } catch {
+      videoError = 'Could not access the camera. Check the browser and OS camera permissions.';
+      emit();
+      return;
+    }
+    cameraStream = stream;
+    const track = stream.getVideoTracks()[0];
+    if (track) track.onended = () => stopCamera();
+    addTrackToPeers(track, stream);
+    emit();
+  }
+  function stopCamera() {
+    if (!cameraStream) return;
+    cameraStream.getTracks().forEach((t) => {
+      removeTrackFromPeers(t);
+      try {
+        t.stop();
+      } catch {
+        /* ignore */
+      }
+    });
+    cameraStream = null;
+    emit();
+  }
+
+  async function startScreen() {
+    if (!room || screenStream) return;
+    videoError = '';
+    let stream;
+    try {
+      // Video only; screen *audio* is handled by the separate "share app audio".
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    } catch {
+      return; // user dismissed the picker
+    }
+    screenStream = stream;
+    const track = stream.getVideoTracks()[0];
+    if (track) track.onended = () => stopScreen(); // browser's native "Stop sharing"
+    addTrackToPeers(track, stream);
+    emit();
+  }
+  function stopScreen() {
+    if (!screenStream) return;
+    screenStream.getTracks().forEach((t) => {
+      removeTrackFromPeers(t);
+      try {
+        t.stop();
+      } catch {
+        /* ignore */
+      }
+    });
+    screenStream = null;
+    emit();
+  }
+
+  function toggleCamera() {
+    if (cameraStream) stopCamera();
+    else startCamera();
+  }
+  function toggleScreen() {
+    if (screenStream) stopScreen();
+    else startScreen();
+  }
+
   // ---- Gateway frames ----
   // Both sides proactively create the peer connection (the joiner from the peer
   // list, existing members from peer-joined); perfect negotiation resolves the
@@ -571,6 +713,9 @@ export function createVoiceController({ send, myId, onChange }) {
         streamOwner.delete(sid);
       }
     }
+    for (const [sid, v] of remoteVideos) {
+      if (v.userId === userId) remoteVideos.delete(sid);
+    }
     micStreamId.delete(userId);
     analysers.delete(userId);
     speaking.delete(userId);
@@ -606,6 +751,10 @@ export function createVoiceController({ send, myId, onChange }) {
     toggleShare,
     toggleShareMute,
     setShareVolume,
+    toggleCamera,
+    toggleScreen,
+    stopCamera,
+    stopScreen,
     applyOutput,
     handlePeers,
     handlePeerJoined,

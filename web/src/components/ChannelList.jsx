@@ -21,6 +21,9 @@ export default function ChannelList({
   voiceUnstable,
   voiceSharing,
   voiceShareError,
+  voiceCameraOn,
+  voiceScreenOn,
+  voiceVideoError,
   onJoinVoice,
   onLeaveVoice,
   onToggleMute,
@@ -28,6 +31,8 @@ export default function ChannelList({
   onToggleShare,
   onToggleShareMute,
   onSetShareVolume,
+  onToggleCamera,
+  onToggleScreen,
   selfId,
   onSelect,
   onCreateChannel,
@@ -251,6 +256,15 @@ export default function ChannelList({
               </div>
               <div className="truncate text-xs text-gray-400">{myVoice.channel} · {myVoice.space}</div>
             </div>
+            <button
+              onClick={onLeaveVoice}
+              title="Disconnect"
+              className="rounded bg-danger/80 px-2 py-1 text-xs font-semibold text-white hover:bg-danger"
+            >
+              Leave
+            </button>
+          </div>
+          <div className="mt-2 flex items-center gap-1.5">
             {!voiceMicError && (
               <button
                 onClick={onToggleMute}
@@ -272,12 +286,25 @@ export default function ChannelList({
               {voiceDeafened ? '🔕' : '🎧'}
             </button>
             <button
-              onClick={onLeaveVoice}
-              title="Disconnect"
-              className="rounded bg-danger/80 px-2 py-1 text-xs font-semibold text-white hover:bg-danger"
+              onClick={onToggleCamera}
+              title={voiceCameraOn ? 'Turn camera off' : 'Turn camera on'}
+              className={`rounded px-2 py-1 text-sm ${
+                voiceCameraOn ? 'bg-brand text-white hover:bg-brand-hover' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+              }`}
             >
-              Leave
+              📹
             </button>
+            {displayCaptureSupported() && (
+              <button
+                onClick={onToggleScreen}
+                title={voiceScreenOn ? 'Stop sharing your screen' : 'Share your screen'}
+                className={`rounded px-2 py-1 text-sm ${
+                  voiceScreenOn ? 'bg-brand text-white hover:bg-brand-hover' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+                }`}
+              >
+                🖥️
+              </button>
+            )}
           </div>
           {displayCaptureSupported() && (
             <button
@@ -292,6 +319,7 @@ export default function ChannelList({
             </button>
           )}
           {voiceShareError && <div className="mt-1 text-[11px] text-idle">{voiceShareError}</div>}
+          {voiceVideoError && <div className="mt-1 text-[11px] text-idle">{voiceVideoError}</div>}
           {voicePttEnabled && !voiceMicError && (
             <div className="mt-1 text-[11px] text-gray-400">🎙 Push-to-talk on — hold your key to speak.</div>
           )}
