@@ -359,6 +359,29 @@ test('direct messages deliver to both users, with unread tracking', async () => 
   expect(convo.unread).toBe(0);
 });
 
+test('search finds channel and direct messages, respecting membership', async () => {
+  const base = baseUrl();
+  const oscar = (await register('oscar')).token;
+  const pete = (await register('pete')).token;
+  await createServer(oscar, 'srch');
+
+  const gw = gateway(oscar);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'srch', channel: 'general', content: 'findme in a channel' });
+  gw.send({ op: 'dm', to: 'pete', content: 'findme in a dm' });
+  await wait(150);
+  gw.close();
+
+  const res = await (await fetch(`${base}/search?q=findme`, { headers: auth(oscar) })).json();
+  expect(res.channels.some((c) => c.content.includes('findme') && c.space === 'srch' && c.channel === 'general')).toBe(true);
+  expect(res.dms.some((d) => d.content.includes('findme') && d.dmWith === 'pete')).toBe(true);
+
+  // Pete finds the DM (a participant) but NOT the channel (not a member of that server).
+  const res2 = await (await fetch(`${base}/search?q=findme`, { headers: auth(pete) })).json();
+  expect(res2.dms.some((d) => d.dmWith === 'oscar')).toBe(true);
+  expect(res2.channels.length).toBe(0);
+});
+
 test('users can view and update their avatar via /me', async () => {
   const base = baseUrl();
   const { token } = await register('jane');

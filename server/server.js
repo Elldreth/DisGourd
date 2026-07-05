@@ -537,6 +537,14 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     }
     return sendJson(res, 404, { error: 'Not found' });
   }
+  // ---- Search ----
+  else if (pathSegments[0] === 'search' && req.method === 'GET') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+    const q = String(parsedUrl.query.q || '').trim();
+    if (q.length < 2) return sendJson(res, 200, { channels: [], dms: [] });
+    return sendJson(res, 200, db.searchMessages(userId, q, 40));
+  }
   else if (pathSegments[0] === 'friends' && pathSegments.length === 1 && req.method === 'GET') {
     const userId = authUserId(req, parsedUrl);
     if (!userId) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }

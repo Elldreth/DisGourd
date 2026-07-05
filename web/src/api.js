@@ -104,6 +104,11 @@ export function getMessages(space, channel, { limit = 50, offset = 0 } = {}) {
   );
 }
 
+// ---- Search ----
+export function search(q) {
+  return request(`/search?q=${encodeURIComponent(q)}`);
+}
+
 // ---- Direct messages ----
 export function getDms() {
   return request('/dms');

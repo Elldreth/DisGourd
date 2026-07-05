@@ -14,6 +14,7 @@ export default function ChatPanel({
   onDelete,
   onReact,
   onTyping,
+  onOpenSearch,
 }) {
   if (!space) {
     return (
@@ -39,6 +40,14 @@ export default function ChatPanel({
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
         <span className="text-xl text-gray-500">#</span>
         <h2 className="font-bold">{channel}</h2>
+        <div className="flex-1" />
+        <button
+          onClick={onOpenSearch}
+          title="Search messages"
+          className="rounded p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-white"
+        >
+          🔍
+        </button>
       </header>
 
       {degraded && (

@@ -4,7 +4,7 @@ import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 
 // The conversation view in Direct Messages mode.
-export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onTyping }) {
+export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onTyping, onOpenSearch }) {
   if (!username) {
     return (
       <main className="flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
@@ -22,6 +22,14 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
         <Avatar name={username} size={24} />
         <h2 className="font-bold">{username}</h2>
+        <div className="flex-1" />
+        <button
+          onClick={onOpenSearch}
+          title="Search messages"
+          className="rounded p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-white"
+        >
+          🔍
+        </button>
       </header>
 
       <MessageList

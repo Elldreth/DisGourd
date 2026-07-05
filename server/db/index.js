@@ -530,6 +530,40 @@ function getDmUnreadCounts(userId) {
   `).all(userId, userId, userId, userId, userId);
 }
 
+// Full-text-ish search over messages the user can see: channel messages in
+// their servers, plus their direct messages. Returns two lists.
+function searchMessages(userId, query, limit = 40) {
+  const like = `%${query.replace(/[\\%_]/g, '\\$&')}%`;
+  const channels = db.prepare(`
+    SELECT m.id, m.content,
+           COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) AS timestamp,
+           u.username AS author, u.avatar_url AS authorAvatar,
+           s.name AS space, c.name AS channel
+    FROM messages m
+    JOIN channels c ON m.channel_id = c.id
+    JOIN spaces s ON c.space_id = s.id
+    JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = ?
+    LEFT JOIN users u ON m.author_id = u.id
+    WHERE m.content LIKE ? ESCAPE '\\'
+    ORDER BY m.id DESC
+    LIMIT ?
+  `).all(userId, like, limit);
+
+  const dms = db.prepare(`
+    SELECT m.id, m.content, COALESCE(m.created_at, 0) AS timestamp,
+           u.username AS author, u.avatar_url AS authorAvatar,
+           partner.username AS dmWith
+    FROM dm_messages m
+    JOIN users u ON m.author_id = u.id
+    JOIN users partner ON partner.id = (CASE WHEN m.user_a = ? THEN m.user_b ELSE m.user_a END)
+    WHERE (m.user_a = ? OR m.user_b = ?) AND m.content LIKE ? ESCAPE '\\'
+    ORDER BY m.id DESC
+    LIMIT ?
+  `).all(userId, userId, userId, like, limit);
+
+  return { channels, dms };
+}
+
 // Distinct user ids that share at least one server with the given user.
 function getCoMemberIds(userId) {
   return db.prepare(`
@@ -665,6 +699,7 @@ module.exports = {
   getDmConversations,
   markDmRead,
   getDmUnreadCounts,
+  searchMessages,
   getState,
   createUser,
   getUserByUsername,
