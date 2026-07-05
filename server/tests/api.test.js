@@ -359,6 +359,50 @@ test('direct messages deliver to both users, with unread tracking', async () => 
   expect(convo.unread).toBe(0);
 });
 
+test('roles: owner promotes, admins kick members, permissions enforced', async () => {
+  const base = baseUrl();
+  const sam = (await register('sam')).token;
+  await createServer(sam, 'roleco');
+  const tara = (await register('tara')).token;
+  const uma = (await register('uma')).token;
+
+  const join = async (tok) => {
+    const { code } = await (await fetch(`${base}/spaces/roleco/invites`, { method: 'POST', headers: auth(sam) })).json();
+    await fetch(`${base}/invites/${code}`, { method: 'POST', headers: auth(tok) });
+  };
+  await join(tara);
+  await join(uma);
+
+  const members = async (tok) =>
+    (await (await fetch(`${base}/spaces/roleco/members`, { headers: auth(tok) })).json()).members;
+
+  // Owner promotes tara to admin.
+  let res = await fetch(`${base}/spaces/roleco/members/tara`, {
+    method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(sam) }, body: JSON.stringify({ role: 'admin' }),
+  });
+  expect(res.status).toBe(200);
+  expect((await members(sam)).find((x) => x.username === 'tara').role).toBe('admin');
+
+  // A plain member cannot change roles.
+  res = await fetch(`${base}/spaces/roleco/members/uma`, {
+    method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(uma) }, body: JSON.stringify({ role: 'admin' }),
+  });
+  expect(res.status).toBe(403);
+
+  // Admin (tara) may kick a member (uma).
+  res = await fetch(`${base}/spaces/roleco/members/uma`, { method: 'DELETE', headers: auth(tara) });
+  expect(res.status).toBe(200);
+  expect((await members(sam)).find((x) => x.username === 'uma')).toBeFalsy();
+
+  // Admin cannot kick the owner.
+  res = await fetch(`${base}/spaces/roleco/members/sam`, { method: 'DELETE', headers: auth(tara) });
+  expect(res.status).toBe(403);
+
+  // Owner can kick the admin.
+  res = await fetch(`${base}/spaces/roleco/members/tara`, { method: 'DELETE', headers: auth(sam) });
+  expect(res.status).toBe(200);
+});
+
 test('mentions are detected, delivered, and counted', async () => {
   const base = baseUrl();
   const quinn = (await register('quinn')).token;

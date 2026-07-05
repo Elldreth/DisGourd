@@ -244,6 +244,11 @@ function getMemberRole(spaceId, userId) {
   return row ? row.role : null;
 }
 
+function setMemberRole(spaceId, userId, role) {
+  return db.prepare('UPDATE space_members SET role = ? WHERE space_id = ? AND user_id = ?')
+    .run(role, spaceId, userId).changes > 0;
+}
+
 function isMember(spaceId, userId) {
   return !!db.prepare('SELECT 1 FROM space_members WHERE space_id = ? AND user_id = ?').get(spaceId, userId);
 }
@@ -716,6 +721,7 @@ module.exports = {
   addMember,
   removeMember,
   getMemberRole,
+  setMemberRole,
   isMember,
   getUserSpaces,
   getSpaceMembers,

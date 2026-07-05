@@ -89,6 +89,17 @@ export function getMembers(space) {
 export function createInvite(space) {
   return request(`/spaces/${encodeURIComponent(space)}/invites`, { method: 'POST' });
 }
+export function setMemberRole(space, username, role) {
+  return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}`, {
+    method: 'PATCH',
+    body: { role },
+  });
+}
+export function kickMember(space, username) {
+  return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}`, {
+    method: 'DELETE',
+  });
+}
 export function previewInvite(code) {
   return request(`/invites/${encodeURIComponent(code)}`);
 }

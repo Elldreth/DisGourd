@@ -647,10 +647,39 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     if (pathSegments[2] === 'members' && pathSegments.length === 3 && req.method === 'GET') {
       const members = db.getSpaceMembers(space.id).map((m) => ({
         username: m.username,
+        avatar: m.avatar,
         role: m.role,
         online: !!(userClients[m.userId] && userClients[m.userId].size > 0),
       }));
       return sendJson(res, 200, { members });
+    }
+
+    // PATCH /spaces/:name/members/:username — change a member's role (owner only)
+    if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'PATCH') {
+      if (role !== 'owner') return sendJson(res, 403, { error: 'Only the owner can change roles' });
+      const target = db.getUserByUsername(pathSegments[3]);
+      if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
+      if (target.id === space.owner_id) return sendJson(res, 400, { error: "The owner's role can't be changed" });
+      const { role: newRole } = await getJsonBody(req);
+      if (newRole !== 'admin' && newRole !== 'member') return sendJson(res, 400, { error: 'Invalid role' });
+      db.setMemberRole(space.id, target.id, newRole);
+      deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
+      return sendJson(res, 200, { ok: true });
+    }
+
+    // DELETE /spaces/:name/members/:username — remove a member (owner: anyone but
+    // the owner; admin: members only)
+    if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'DELETE') {
+      const target = db.getUserByUsername(pathSegments[3]);
+      if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
+      if (target.id === userId) return sendJson(res, 400, { error: "You can't remove yourself" });
+      const targetRole = db.getMemberRole(space.id, target.id);
+      const allowed = role === 'owner' ? targetRole !== 'owner' : role === 'admin' && targetRole === 'member';
+      if (!allowed) return sendJson(res, 403, { error: 'You cannot remove this member' });
+      db.removeMember(space.id, target.id);
+      deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
+      sendToUser(target.id, JSON.stringify({ type: 'space_left', space: spaceName }));
+      return sendJson(res, 200, { ok: true });
     }
 
     // POST /spaces/:name/invites — any member can invite
