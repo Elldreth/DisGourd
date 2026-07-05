@@ -13,11 +13,14 @@ export default function ChannelList({
   activeVoiceParticipants = [],
   myVoice,
   voiceMuted,
+  voiceDeafened,
+  voicePttEnabled,
   voiceStatus,
   voiceMicError,
   onJoinVoice,
   onLeaveVoice,
   onToggleMute,
+  onToggleDeafen,
   onSelect,
   onCreateChannel,
   canManage,
@@ -228,14 +231,23 @@ export default function ChannelList({
             {!voiceMicError && (
               <button
                 onClick={onToggleMute}
-                title={voiceMuted ? 'Unmute' : 'Mute'}
-                className={`rounded px-2 py-1 text-xs font-semibold ${
+                title={voiceMuted ? 'Unmute (Ctrl+Shift+M)' : 'Mute (Ctrl+Shift+M)'}
+                className={`rounded px-2 py-1 text-sm ${
                   voiceMuted ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
                 }`}
               >
-                {voiceMuted ? 'Unmute' : 'Mute'}
+                {voiceMuted ? '🔇' : '🎤'}
               </button>
             )}
+            <button
+              onClick={onToggleDeafen}
+              title={voiceDeafened ? 'Undeafen (Ctrl+Shift+D)' : 'Deafen (Ctrl+Shift+D)'}
+              className={`rounded px-2 py-1 text-sm ${
+                voiceDeafened ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+              }`}
+            >
+              {voiceDeafened ? '🔕' : '🎧'}
+            </button>
             <button
               onClick={onLeaveVoice}
               title="Disconnect"
@@ -244,6 +256,9 @@ export default function ChannelList({
               Leave
             </button>
           </div>
+          {voicePttEnabled && !voiceMicError && (
+            <div className="mt-1 text-[11px] text-gray-400">🎙 Push-to-talk on — hold your key to speak.</div>
+          )}
           {voiceMicError && (
             <div className="mt-1 text-[11px] text-idle">
               🎤 No microphone — you can hear others but not speak. This usually means the site

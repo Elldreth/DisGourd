@@ -4,7 +4,7 @@ import Avatar from './Avatar.jsx';
 import AudioSettings from './AudioSettings.jsx';
 
 // User settings: avatar/profile and audio devices.
-export default function ProfileDialog({ profile, onClose, onUpdated, onOutputChange }) {
+export default function ProfileDialog({ profile, onClose, onUpdated, onOutputChange, onPttChange }) {
   const [avatar, setAvatar] = useState(profile?.avatar || null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -97,7 +97,7 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
             <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
               Voice &amp; audio
             </h4>
-            <AudioSettings onOutputChange={onOutputChange} />
+            <AudioSettings onOutputChange={onOutputChange} onPttChange={onPttChange} />
           </section>
         </div>
       </div>

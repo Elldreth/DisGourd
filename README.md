@@ -128,6 +128,13 @@ flows directly between browsers and never touches the server (it only relays the
 connection handshake), so there's still nothing extra to run. This is ideal for
 small friend-group calls (roughly up to 5–6 people at once).
 
+While connected you can **mute** yourself (🎤), **deafen** (🎧 — silences
+everyone and mutes you), or use **push-to-talk** so your mic only transmits
+while you hold a key. Configure these under **Settings → Voice & audio**, along
+with a **speaker test** tone and **join/leave chimes**. Keyboard shortcuts
+(mute `Ctrl+Shift+M`, deafen `Ctrl+Shift+D`, and your push-to-talk key) work
+while the DisGourd window is focused.
+
 - Requires **HTTPS** in production — browsers only grant microphone access on
   secure origins (localhost is exempt for testing).
 - A public STUN server is used by default for NAT traversal, which works on most

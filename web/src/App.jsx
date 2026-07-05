@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { createVoiceController } from './voice.js';
+import { getPttEnabled, getPttKey } from './audio.js';
 import { mergeMessages } from './util.js';
 import Login from './components/Login.jsx';
 import ServerRail from './components/ServerRail.jsx';
@@ -40,7 +41,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
-  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, micError: false, participants: [] });
+  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, participants: [] });
   const myVoice = voiceCall.room;
   const [loadError, setLoadError] = useState('');
 
@@ -244,6 +245,43 @@ export default function App() {
     voiceRef.current = createVoiceController({ send, myId, onChange: setVoiceCall });
     return () => voiceRef.current && voiceRef.current.leave();
   }, [myId, send]);
+
+  // Voice keyboard shortcuts, active only while in a call. Note: browsers only
+  // deliver these while the DisGourd window is focused (no true global hotkeys
+  // without a desktop wrapper). Mute/deafen use modifiers so they're safe even
+  // while typing; push-to-talk is ignored while a text field is focused.
+  useEffect(() => {
+    if (!voiceCall.room) return undefined;
+    const isTyping = () => {
+      const el = document.activeElement;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    };
+    const onKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
+        if (e.code === 'KeyM') { e.preventDefault(); toggleMute(); return; }
+        if (e.code === 'KeyD') { e.preventDefault(); toggleDeafen(); return; }
+      }
+      if (getPttEnabled() && getPttKey() && e.code === getPttKey() && !e.repeat && !isTyping()) {
+        e.preventDefault();
+        if (voiceRef.current) voiceRef.current.setPttActive(true);
+      }
+    };
+    const onKeyUp = (e) => {
+      if (getPttEnabled() && e.code === getPttKey() && voiceRef.current) {
+        voiceRef.current.setPttActive(false);
+      }
+    };
+    const releasePtt = () => voiceRef.current && voiceRef.current.setPttActive(false);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', releasePtt);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', releasePtt);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceCall.room]);
 
   // Clear the transcript immediately when switching channels.
   useEffect(() => {
@@ -449,6 +487,12 @@ export default function App() {
   function toggleMute() {
     if (voiceRef.current) voiceRef.current.toggleMute();
   }
+  function toggleDeafen() {
+    if (voiceRef.current) voiceRef.current.toggleDeafen();
+  }
+  function refreshPtt() {
+    if (voiceRef.current) voiceRef.current.refreshPtt();
+  }
 
   async function makeInvite() {
     try {
@@ -584,11 +628,14 @@ export default function App() {
             activeVoiceParticipants={voiceCall.participants}
             myVoice={myVoice}
             voiceMuted={voiceCall.muted}
+            voiceDeafened={voiceCall.deafened}
+            voicePttEnabled={voiceCall.pttEnabled}
             voiceStatus={voiceCall.status}
             voiceMicError={voiceCall.micError}
             onJoinVoice={joinVoice}
             onLeaveVoice={leaveVoice}
             onToggleMute={toggleMute}
+            onToggleDeafen={toggleDeafen}
             onSelect={setCurrentChannel}
             onCreateChannel={createChannel}
             canManage={canManage}
@@ -636,6 +683,7 @@ export default function App() {
           onClose={() => setProfileOpen(false)}
           onUpdated={setProfile}
           onOutputChange={() => voiceRef.current && voiceRef.current.applyOutput()}
+          onPttChange={refreshPtt}
         />
       )}
       {searchOpen && (

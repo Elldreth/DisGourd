@@ -8,11 +8,19 @@ import {
   setPreferredOutput,
   outputSelectionSupported,
   describeMicError,
+  getPttEnabled,
+  setPttEnabled,
+  getPttKey,
+  setPttKey,
+  getVoiceSounds,
+  setVoiceSounds,
+  keyLabel,
 } from '../audio.js';
+import { playTestTone } from '../sounds.js';
 
 // Detect and choose the microphone and speaker DisGourd uses, independent of
 // the OS default, with a mic level test.
-export default function AudioSettings({ onOutputChange }) {
+export default function AudioSettings({ onOutputChange, onPttChange }) {
   const [inputs, setInputs] = useState([]);
   const [outputs, setOutputs] = useState([]);
   const [labeled, setLabeled] = useState(false);
@@ -21,6 +29,10 @@ export default function AudioSettings({ onOutputChange }) {
   const [error, setError] = useState('');
   const [testing, setTesting] = useState(false);
   const [level, setLevel] = useState(0);
+  const [pttOn, setPttOn] = useState(getPttEnabled());
+  const [pttKey, setPttKeyState] = useState(getPttKey());
+  const [recording, setRecording] = useState(false);
+  const [sounds, setSounds] = useState(getVoiceSounds());
   const testRef = useRef(null);
   const outputSupported = outputSelectionSupported();
 
@@ -100,6 +112,36 @@ export default function AudioSettings({ onOutputChange }) {
     setLevel(0);
   }
 
+  function togglePtt() {
+    const next = !pttOn;
+    setPttOn(next);
+    setPttEnabled(next);
+    if (onPttChange) onPttChange();
+  }
+
+  function toggleSounds() {
+    const next = !sounds;
+    setSounds(next);
+    setVoiceSounds(next);
+  }
+
+  // Record the next key press as the push-to-talk key.
+  useEffect(() => {
+    if (!recording) return undefined;
+    const onKey = (e) => {
+      e.preventDefault();
+      if (e.code === 'Escape') {
+        setRecording(false);
+        return;
+      }
+      setPttKey(e.code);
+      setPttKeyState(e.code);
+      setRecording(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [recording]);
+
   const micLabel = (d, i) => d.label || `Microphone ${i + 1}`;
   const spkLabel = (d, i) => d.label || `Speaker ${i + 1}`;
 
@@ -149,10 +191,16 @@ export default function AudioSettings({ onOutputChange }) {
         {testing && <div className="mt-1 text-xs text-gray-500">Speak — the bar should move.</div>}
       </div>
 
-      <label className="block">
-        <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
-          Speaker
-        </span>
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Speaker</span>
+          <button
+            onClick={() => playTestTone()}
+            className="rounded bg-ink-600 px-2 py-1 text-xs font-semibold text-gray-200 hover:bg-ink-500"
+          >
+            Test
+          </button>
+        </div>
         <select
           value={speaker}
           onChange={(e) => chooseSpeaker(e.target.value)}
@@ -166,12 +214,65 @@ export default function AudioSettings({ onOutputChange }) {
             </option>
           ))}
         </select>
-        {!outputSupported && (
+        {!outputSupported ? (
           <span className="mt-1 block text-xs text-gray-500">
             Your browser always uses the system default speaker. (Speaker choice works in Chrome/Edge.)
           </span>
+        ) : (
+          <span className="mt-1 block text-xs text-gray-500">
+            Press Test to play a tone through the selected speaker.
+          </span>
         )}
+      </div>
+
+      <label className="flex items-center justify-between gap-3 pt-1">
+        <span className="text-sm text-gray-200">
+          Join/leave sounds
+          <span className="block text-xs text-gray-500">A chime when people enter or leave the call.</span>
+        </span>
+        <input
+          type="checkbox"
+          checked={sounds}
+          onChange={toggleSounds}
+          className="h-4 w-4 accent-brand"
+        />
       </label>
+
+      <div className="rounded-lg bg-ink-900/60 p-3">
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-sm text-gray-200">
+            Push-to-talk
+            <span className="block text-xs text-gray-500">
+              Transmit only while holding a key (otherwise your mic is always live).
+            </span>
+          </span>
+          <input type="checkbox" checked={pttOn} onChange={togglePtt} className="h-4 w-4 accent-brand" />
+        </label>
+        {pttOn && (
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={() => setRecording((r) => !r)}
+              className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                recording ? 'bg-brand text-white' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+              }`}
+            >
+              {recording ? 'Press any key… (Esc cancels)' : 'Set key'}
+            </button>
+            <span className="text-sm text-gray-300">
+              Key: <span className="font-semibold text-white">{keyLabel(pttKey)}</span>
+            </span>
+          </div>
+        )}
+        {pttOn && !pttKey && !recording && (
+          <div className="mt-2 text-xs text-idle">Choose a key or you won't be able to talk.</div>
+        )}
+        <div className="mt-2 text-xs text-gray-500">
+          Shortcuts (while the DisGourd window is focused): mute <kbd className="rounded bg-ink-700 px-1">Ctrl</kbd>+
+          <kbd className="rounded bg-ink-700 px-1">Shift</kbd>+<kbd className="rounded bg-ink-700 px-1">M</kbd>, deafen{' '}
+          <kbd className="rounded bg-ink-700 px-1">Ctrl</kbd>+<kbd className="rounded bg-ink-700 px-1">Shift</kbd>+
+          <kbd className="rounded bg-ink-700 px-1">D</kbd>.
+        </div>
+      </div>
 
       {error && <div className="text-sm text-danger">{error}</div>}
       <p className="text-xs text-gray-500">

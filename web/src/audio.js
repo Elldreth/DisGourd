@@ -2,6 +2,9 @@
 // the OS default. Empty string means "use the system default".
 const MIC_KEY = 'disgourd.audioInput';
 const SPK_KEY = 'disgourd.audioOutput';
+const PTT_ON = 'disgourd.pttEnabled';
+const PTT_KEY = 'disgourd.pttKey';
+const SND_KEY = 'disgourd.voiceSounds';
 
 export const getPreferredInput = () => localStorage.getItem(MIC_KEY) || '';
 export const getPreferredOutput = () => localStorage.getItem(SPK_KEY) || '';
@@ -13,6 +16,42 @@ export function setPreferredInput(id) {
 export function setPreferredOutput(id) {
   if (id) localStorage.setItem(SPK_KEY, id);
   else localStorage.removeItem(SPK_KEY);
+}
+
+// Push-to-talk: when enabled, the mic only transmits while the chosen key is
+// held. pttKey is a KeyboardEvent.code (e.g. "Space", "KeyT", "Backquote").
+export const getPttEnabled = () => localStorage.getItem(PTT_ON) === '1';
+export function setPttEnabled(on) {
+  if (on) localStorage.setItem(PTT_ON, '1');
+  else localStorage.removeItem(PTT_ON);
+}
+export const getPttKey = () => localStorage.getItem(PTT_KEY) || '';
+export function setPttKey(code) {
+  if (code) localStorage.setItem(PTT_KEY, code);
+  else localStorage.removeItem(PTT_KEY);
+}
+
+// Join/leave chimes. On by default.
+export const getVoiceSounds = () => localStorage.getItem(SND_KEY) !== '0';
+export function setVoiceSounds(on) {
+  if (on) localStorage.removeItem(SND_KEY);
+  else localStorage.setItem(SND_KEY, '0');
+}
+
+// Human-readable label for a KeyboardEvent.code, for the settings UI.
+export function keyLabel(code) {
+  if (!code) return 'none';
+  return code
+    .replace(/^Key/, '')
+    .replace(/^Digit/, '')
+    .replace(/^Arrow/, '')
+    .replace('Backquote', '` (backtick)')
+    .replace('ControlLeft', 'Left Ctrl')
+    .replace('ControlRight', 'Right Ctrl')
+    .replace('ShiftLeft', 'Left Shift')
+    .replace('ShiftRight', 'Right Shift')
+    .replace('AltLeft', 'Left Alt')
+    .replace('AltRight', 'Right Alt');
 }
 
 // Choosing an output device requires HTMLMediaElement.setSinkId (Chromium).

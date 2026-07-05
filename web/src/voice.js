@@ -4,7 +4,14 @@
 //
 // STUN handles most NATs; for tricky networks add a TURN server by setting
 // window.__DISGOURD_ICE__ (an array of RTCIceServer objects) before load.
-import { audioConstraints, getPreferredInput, getPreferredOutput } from './audio.js';
+import {
+  audioConstraints,
+  getPreferredInput,
+  getPreferredOutput,
+  getPttEnabled,
+  getVoiceSounds,
+} from './audio.js';
+import { playSelfJoin, playSelfLeave, playPeerJoin, playPeerLeave } from './sounds.js';
 
 const ICE_SERVERS =
   (typeof window !== 'undefined' && window.__DISGOURD_ICE__) || [
@@ -15,9 +22,13 @@ export function createVoiceController({ send, myId, onChange }) {
   let room = null; // { space, channel }
   let status = 'idle'; // idle | connecting | connected
   let muted = false;
+  let deafened = false; // silence everyone else (also forces self-mute)
+  let mutedBeforeDeafen = false; // restore this mute state when un-deafening
+  let pttActive = false; // push-to-talk key currently held
   let micError = false; // joined but couldn't get a microphone (listen-only)
   let localStream = null;
   let participants = []; // authoritative list from the server (voice_state)
+  let knownIds = null; // Set of participant userIds, for join/leave chimes
   const pcs = new Map(); // userId -> RTCPeerConnection
   const audioEls = new Map(); // userId -> HTMLAudioElement
   const analysers = new Map(); // userId -> { analyser, data }
@@ -30,8 +41,30 @@ export function createVoiceController({ send, myId, onChange }) {
       room,
       status,
       muted,
+      deafened,
+      pttEnabled: getPttEnabled(),
       micError,
       participants: participants.map((p) => ({ ...p, speaking: speaking.has(p.userId) })),
+    });
+  }
+
+  // Whether the local mic should currently send audio, given mute, deafen and
+  // push-to-talk state.
+  function micShouldTransmit() {
+    if (!localStream || muted || deafened) return false;
+    if (getPttEnabled()) return pttActive;
+    return true;
+  }
+
+  // Apply the transmit decision to the outgoing audio tracks.
+  function applyMic() {
+    if (localStream) localStream.getAudioTracks().forEach((t) => (t.enabled = micShouldTransmit()));
+  }
+
+  // Mute/unmute remote audio elements when deafened.
+  function applyDeafen() {
+    audioEls.forEach((el) => {
+      el.muted = deafened;
     });
   }
 
@@ -54,7 +87,8 @@ export function createVoiceController({ send, myId, onChange }) {
       let sum = 0;
       for (let i = 0; i < data.length; i += 1) sum += data[i];
       const level = sum / data.length;
-      const active = level > 12 && !(userId === myId && muted);
+      // Don't show ourselves as speaking when we aren't actually transmitting.
+      const active = level > 12 && !(userId === myId && !micShouldTransmit());
       if (active !== speaking.has(userId)) {
         if (active) speaking.add(userId);
         else speaking.delete(userId);
@@ -107,6 +141,7 @@ export function createVoiceController({ send, myId, onChange }) {
         audioEls.set(userId, el);
       }
       el.srcObject = e.streams[0];
+      el.muted = deafened;
       applySink(el);
       const p = el.play?.();
       if (p) p.catch(() => {});
@@ -127,10 +162,11 @@ export function createVoiceController({ send, myId, onChange }) {
     room = { space, channel };
     status = 'connecting';
     micError = false;
+    knownIds = null; // reset chime baseline for the new channel
     emit();
     try {
       localStream = await getMicStream();
-      if (muted) localStream.getAudioTracks().forEach((t) => (t.enabled = false));
+      applyMic(); // honor mute / deafen / push-to-talk from the start
       setupAnalyser(myId, localStream);
     } catch {
       // No mic (permission denied, none present, or an insecure/non-HTTPS
@@ -143,10 +179,14 @@ export function createVoiceController({ send, myId, onChange }) {
     status = 'connected';
     emit();
     send({ op: 'voice_join', space, channel });
+    if (getVoiceSounds()) playSelfJoin();
   }
 
   function leave() {
-    if (room) send({ op: 'voice_leave' });
+    if (room) {
+      send({ op: 'voice_leave' });
+      if (getVoiceSounds()) playSelfLeave();
+    }
     pcs.forEach((pc) => {
       try {
         pc.close();
@@ -172,14 +212,47 @@ export function createVoiceController({ send, myId, onChange }) {
     room = null;
     status = 'idle';
     micError = false;
+    deafened = false;
+    pttActive = false;
+    knownIds = null;
     participants = [];
     emit();
   }
 
   function toggleMute() {
     muted = !muted;
-    if (localStream) localStream.getAudioTracks().forEach((t) => (t.enabled = !muted));
+    applyMic();
     if (room) send({ op: 'voice_mute', muted });
+    emit();
+  }
+
+  // Deafen silences everyone else and forces your mic off; un-deafening
+  // restores whatever mute state you had before (Discord's behavior).
+  function toggleDeafen() {
+    deafened = !deafened;
+    if (deafened) {
+      mutedBeforeDeafen = muted;
+      muted = true;
+    } else {
+      muted = mutedBeforeDeafen;
+    }
+    applyDeafen();
+    applyMic();
+    if (room) send({ op: 'voice_mute', muted });
+    emit();
+  }
+
+  // Push-to-talk: App calls this on key down/up for the configured key.
+  function setPttActive(active) {
+    if (pttActive === active) return;
+    pttActive = active;
+    applyMic();
+    emit();
+  }
+
+  // Re-apply mic gating after the PTT setting changes while connected.
+  function refreshPtt() {
+    applyMic();
     emit();
   }
 
@@ -231,6 +304,18 @@ export function createVoiceController({ send, myId, onChange }) {
   function handleState(f) {
     if (!room || f.space !== room.space || f.channel !== room.channel) return;
     participants = f.participants || [];
+    const ids = new Set(participants.map((p) => p.userId));
+    if (knownIds === null) {
+      // First roster for this channel — establish a baseline without chiming
+      // (this includes everyone already present when we joined).
+      knownIds = ids;
+    } else if (getVoiceSounds()) {
+      for (const id of ids) if (id !== myId && !knownIds.has(id)) playPeerJoin();
+      for (const id of knownIds) if (id !== myId && !ids.has(id)) playPeerLeave();
+      knownIds = ids;
+    } else {
+      knownIds = ids;
+    }
     emit();
   }
 
@@ -238,6 +323,9 @@ export function createVoiceController({ send, myId, onChange }) {
     join,
     leave,
     toggleMute,
+    toggleDeafen,
+    setPttActive,
+    refreshPtt,
     applyOutput,
     handlePeers,
     handlePeerJoined,
