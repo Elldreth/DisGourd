@@ -235,6 +235,65 @@ test('server membership is enforced and invites grant access', async () => {
   expect(res.status).toBe(200);
 });
 
+test('reactions toggle, persist in history, and typing is relayed', async () => {
+  const base = baseUrl();
+  const { token } = await register('ivy');
+  await createServer(token, 'rx');
+
+  // Send a message, react 👍 (on), 👍 again (off), then ❤️ (stays on).
+  const frames = await new Promise((resolve) => {
+    const got = [];
+    const ws = new WebSocket(`ws://localhost:${port}/ws/rx/general?token=${token}`);
+    let msgId = null;
+    ws.on('message', (raw) => {
+      const m = JSON.parse(raw.toString());
+      got.push(m);
+      if (m.type === 'message' && msgId === null) {
+        msgId = m.id;
+        ws.send(JSON.stringify({ type: 'react', id: msgId, emoji: '👍' }));
+      } else if (m.type === 'reaction') {
+        const reactions = got.filter((f) => f.type === 'reaction');
+        if (reactions.length === 1) ws.send(JSON.stringify({ type: 'react', id: msgId, emoji: '👍' }));
+        else if (reactions.length === 2) ws.send(JSON.stringify({ type: 'react', id: msgId, emoji: '❤️' }));
+        else ws.close();
+      }
+    });
+    ws.on('open', () => ws.send(JSON.stringify({ content: 'react to me' })));
+    setTimeout(() => { ws.close(); resolve(got); }, 400);
+  });
+
+  const reactions = frames.filter((f) => f.type === 'reaction');
+  expect(reactions[0]).toMatchObject({ emoji: '👍', count: 1 });
+  expect(reactions[0].users).toContain('ivy');
+  expect(reactions[1]).toMatchObject({ emoji: '👍', count: 0 });
+  expect(reactions[2]).toMatchObject({ emoji: '❤️', count: 1 });
+
+  // The surviving ❤️ reaction is reflected in the message history.
+  const msgs = await (await fetch(`${base}/spaces/rx/channels/general/messages`, { headers: auth(token) })).json();
+  const target = msgs.find((m) => m.reactions && m.reactions.length);
+  expect(target).toBeTruthy();
+  expect(target.reactions.find((r) => r.emoji === '❤️').count).toBe(1);
+
+  // Typing: a second socket (same user) receives the typing relay from the first.
+  const relayed = await new Promise((resolve) => {
+    const listener = new WebSocket(`ws://localhost:${port}/ws/rx/general?token=${token}`);
+    let done = false;
+    listener.on('message', (raw) => {
+      const m = JSON.parse(raw.toString());
+      if (m.type === 'typing' && m.user === 'ivy') { done = true; listener.close(); resolve(true); }
+    });
+    listener.on('open', () => {
+      const sender = new WebSocket(`ws://localhost:${port}/ws/rx/general?token=${token}`);
+      sender.on('open', () => {
+        sender.send(JSON.stringify({ type: 'typing' }));
+        setTimeout(() => sender.close(), 100);
+      });
+    });
+    setTimeout(() => { if (!done) { listener.close(); resolve(false); } }, 500);
+  });
+  expect(relayed).toBe(true);
+});
+
 test('file uploads: auth required, no name collisions, type + size validation', async () => {
   const base = baseUrl();
   const { token } = await register('erin');

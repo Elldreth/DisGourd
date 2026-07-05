@@ -22,6 +22,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [inviteCode, setInviteCode] = useState(null); // shown in the invite dialog
+  const [typingUsers, setTypingUsers] = useState({}); // username -> expires-at ms
   const [loadError, setLoadError] = useState('');
 
   const activeSpace = spaces.find((s) => s.name === currentSpace);
@@ -53,11 +54,29 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Reset the transcript when moving to a different channel; the socket re-opens
-  // and repopulates history.
+  // Reset the transcript and typing state when moving to a different channel;
+  // the socket re-opens and repopulates history.
   useEffect(() => {
     setMessages([]);
+    setTypingUsers({});
   }, [currentSpace, currentChannel]);
+
+  // Expire typing indicators a few seconds after the last keystroke event.
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setTypingUsers((prev) => {
+        const now = Date.now();
+        const next = {};
+        let changed = false;
+        for (const [u, exp] of Object.entries(prev)) {
+          if (exp > now) next[u] = exp;
+          else changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, []);
 
   // ---- Realtime socket for the active channel ----
   const handlers = useMemo(
@@ -69,6 +88,16 @@ export default function App() {
           prev.map((m) => (m.id === u.id ? { ...m, content: u.content, editedAt: u.editedAt } : m))
         ),
       onMessageDelete: (d) => setMessages((prev) => prev.filter((m) => m.id !== d.id)),
+      onReaction: (r) =>
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== r.id) return m;
+            const others = (m.reactions || []).filter((x) => x.emoji !== r.emoji);
+            const next = r.count > 0 ? [...others, { emoji: r.emoji, count: r.count, users: r.users }] : others;
+            return { ...m, reactions: next };
+          })
+        ),
+      onTyping: (t) => setTypingUsers((prev) => ({ ...prev, [t.user]: Date.now() + 4000 })),
     }),
     []
   );
@@ -182,6 +211,14 @@ export default function App() {
   function deleteMessage(id) {
     send({ type: 'delete', id });
   }
+  function reactToMessage(id, emoji) {
+    send({ type: 'react', id, emoji });
+  }
+  function sendTyping() {
+    send({ type: 'typing' });
+  }
+
+  const typingNames = Object.keys(typingUsers).filter((u) => u !== user);
 
   if (!token) return <Login onAuthed={setTokenState} />;
 
@@ -214,9 +251,12 @@ export default function App() {
         status={status}
         messages={messages}
         currentUser={user}
+        typingUsers={typingNames}
         onSend={sendMessage}
         onEdit={editMessage}
         onDelete={deleteMessage}
+        onReact={reactToMessage}
+        onTyping={sendTyping}
       />
       <MemberList members={members} />
 

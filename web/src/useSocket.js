@@ -103,6 +103,12 @@ export function useChannelSocket({ space, channel, token, handlers }) {
           case 'message_delete':
             h.onMessageDelete && h.onMessageDelete(frame);
             break;
+          case 'reaction':
+            h.onReaction && h.onReaction(frame);
+            break;
+          case 'typing':
+            h.onTyping && h.onTyping(frame);
+            break;
           case 'presence':
             h.onPresence && h.onPresence(frame);
             break;

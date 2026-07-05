@@ -2,13 +2,14 @@ import { useRef, useState } from 'react';
 import * as api from '../api.js';
 import { humanSize } from '../util.js';
 
-export default function Composer({ channel, disabled, onSend }) {
+export default function Composer({ channel, disabled, onSend, onTyping }) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState(null); // { url, name, size } once uploaded
   const [progress, setProgress] = useState(null); // 0..1 while uploading
   const [error, setError] = useState('');
   const fileRef = useRef(null);
   const taRef = useRef(null);
+  const lastTypingRef = useRef(0);
 
   const uploading = progress !== null;
 
@@ -49,6 +50,14 @@ export default function Composer({ channel, disabled, onSend }) {
     const ta = e.target;
     ta.style.height = 'auto';
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    // Emit a typing signal at most once every 2.5s while there's text.
+    if (onTyping && e.target.value.trim()) {
+      const now = Date.now();
+      if (now - lastTypingRef.current > 2500) {
+        lastTypingRef.current = now;
+        onTyping();
+      }
+    }
   }
 
   return (

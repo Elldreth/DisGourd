@@ -1191,6 +1191,40 @@ httpServer.on('upgrade', (request, socket, head) => {
           return;
         }
 
+        // Toggle an emoji reaction on a message in this channel.
+        if (parsed.type === 'react') {
+          const id = parseInt(parsed.id, 10);
+          const emoji = typeof parsed.emoji === 'string' ? parsed.emoji.trim().slice(0, 16) : '';
+          if (!id || !emoji || !db.isMessageInChannel(id, spaceName, channelName)) return;
+          db.toggleReaction(id, wsClient.userId, emoji);
+          const agg = db.getReaction(id, emoji);
+          broadcast(channelObj, JSON.stringify({
+            type: 'reaction',
+            id,
+            emoji,
+            count: agg.count,
+            users: agg.users,
+            space: spaceName,
+            channel: channelName,
+          }));
+          return;
+        }
+
+        // Ephemeral typing signal — relayed to everyone else in the channel.
+        if (parsed.type === 'typing') {
+          const typer = db.getUserById(wsClient.userId);
+          const frame = JSON.stringify({
+            type: 'typing',
+            user: typer ? typer.username : String(wsClient.userId),
+            space: spaceName,
+            channel: channelName,
+          });
+          channelObj.clients.forEach((c) => {
+            if (c !== wsClient && c.readyState === WebSocket.OPEN) c.send(frame);
+          });
+          return;
+        }
+
         const content = typeof parsed.content === 'string' ? parsed.content : '';
         const attachment = typeof parsed.attachment === 'string' ? parsed.attachment : undefined;
         if (!content && !attachment) return; // ignore empty frames

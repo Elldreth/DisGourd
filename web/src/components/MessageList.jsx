@@ -3,9 +3,11 @@ import Avatar from './Avatar.jsx';
 import Attachment from './Attachment.jsx';
 import { formatTime, formatDay } from '../util.js';
 
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🔥', '✅'];
+
 // Groups consecutive messages from the same author (within 5 minutes) into a
 // single block, and inserts day dividers — the familiar chat reading rhythm.
-export default function MessageList({ messages, channel, currentUser, onEdit, onDelete }) {
+export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -59,8 +61,10 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
               m={row.m}
               grouped={row.grouped}
               mine={row.m.author === currentUser}
+              currentUser={currentUser}
               onEdit={onEdit}
               onDelete={onDelete}
+              onReact={onReact}
             />
           )
         )}
@@ -70,9 +74,11 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
   );
 }
 
-function MessageRow({ m, grouped, mine, onEdit, onDelete }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content || '');
+  const [picker, setPicker] = useState(false);
+  const reactions = m.reactions || [];
 
   function startEdit() {
     setDraft(m.content || '');
@@ -144,29 +150,83 @@ function MessageRow({ m, grouped, mine, onEdit, onDelete }) {
               </div>
             )}
             {m.attachment && <Attachment url={m.attachment} />}
+            {reactions.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {reactions.map((r) => {
+                  const mineReacted = r.users?.includes(currentUser);
+                  return (
+                    <button
+                      key={r.emoji}
+                      onClick={() => onReact(m.id, r.emoji)}
+                      title={(r.users || []).join(', ')}
+                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition ${
+                        mineReacted
+                          ? 'bg-brand/25 text-white ring-brand'
+                          : 'bg-ink-600/60 text-gray-200 ring-ink-500/60 hover:ring-brand'
+                      }`}
+                    >
+                      <span>{r.emoji}</span>
+                      <span>{r.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
       </div>
 
-      {/* Hover actions for your own messages */}
-      {mine && !editing && (
+      {/* Hover actions: anyone can react; only the author can edit/delete */}
+      {!editing && (
         <div className="absolute -top-3 right-3 hidden items-center gap-1 rounded-md border border-ink-500/60 bg-ink-800 px-1 py-0.5 shadow group-hover:flex">
-          <button
-            onClick={startEdit}
-            title="Edit"
-            className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
-          >
-            ✎
-          </button>
-          <button
-            onClick={() => {
-              if (window.confirm('Delete this message?')) onDelete(m.id);
-            }}
-            title="Delete"
-            className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-danger"
-          >
-            🗑
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setPicker((v) => !v)}
+              title="Add reaction"
+              className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
+            >
+              😊
+            </button>
+            {picker && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setPicker(false)} />
+                <div className="absolute right-0 top-8 z-20 flex gap-1 rounded-lg border border-ink-500/60 bg-ink-900 p-1.5 shadow-xl">
+                  {REACTION_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => {
+                        onReact(m.id, e);
+                        setPicker(false);
+                      }}
+                      className="rounded p-1 text-lg hover:bg-ink-600"
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          {mine && (
+            <button
+              onClick={startEdit}
+              title="Edit"
+              className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
+            >
+              ✎
+            </button>
+          )}
+          {mine && (
+            <button
+              onClick={() => {
+                if (window.confirm('Delete this message?')) onDelete(m.id);
+              }}
+              title="Delete"
+              className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-danger"
+            >
+              🗑
+            </button>
+          )}
         </div>
       )}
     </div>

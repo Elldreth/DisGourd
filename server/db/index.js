@@ -71,6 +71,14 @@ db.exec(`
     FOREIGN KEY(space_id) REFERENCES spaces(id) ON DELETE CASCADE,
     FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
   );
+  CREATE TABLE IF NOT EXISTS reactions (
+    message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    emoji TEXT NOT NULL,
+    UNIQUE(message_id, user_id, emoji),
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // Migrate existing databases to include new columns if missing
@@ -278,21 +286,85 @@ const MESSAGE_SELECT = `
 `;
 
 function getMessages(spaceName, channelName, limit = 20, offset = 0) {
-  return db.prepare(`${MESSAGE_SELECT}
+  const rows = db.prepare(`${MESSAGE_SELECT}
     WHERE s.name = ? AND c.name = ?
     ORDER BY m.id DESC
     LIMIT ? OFFSET ?
   `).all(spaceName, channelName, limit, offset).reverse();
+  return attachReactions(rows);
 }
 
 // Messages newer than a given id, oldest-first — used to backfill gaps after a
 // client reconnects so no messages are missed during a network blip.
 function getMessagesAfter(spaceName, channelName, afterId, limit = 200) {
-  return db.prepare(`${MESSAGE_SELECT}
+  const rows = db.prepare(`${MESSAGE_SELECT}
     WHERE s.name = ? AND c.name = ? AND m.id > ?
     ORDER BY m.id ASC
     LIMIT ?
   `).all(spaceName, channelName, afterId, limit);
+  return attachReactions(rows);
+}
+
+// ---- Reactions ----
+
+// Attach an aggregated `reactions` array to each message: [{ emoji, count, users }].
+function attachReactions(messages) {
+  if (!messages.length) return messages;
+  const ids = messages.map((m) => m.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT r.message_id AS messageId, r.emoji, u.username
+    FROM reactions r
+    JOIN users u ON r.user_id = u.id
+    WHERE r.message_id IN (${placeholders})
+    ORDER BY r.rowid
+  `).all(...ids);
+  const byMsg = new Map();
+  for (const row of rows) {
+    let emojis = byMsg.get(row.messageId);
+    if (!emojis) { emojis = new Map(); byMsg.set(row.messageId, emojis); }
+    let entry = emojis.get(row.emoji);
+    if (!entry) { entry = { emoji: row.emoji, count: 0, users: [] }; emojis.set(row.emoji, entry); }
+    entry.count += 1;
+    entry.users.push(row.username);
+  }
+  for (const msg of messages) {
+    const emojis = byMsg.get(msg.id);
+    msg.reactions = emojis ? Array.from(emojis.values()) : [];
+  }
+  return messages;
+}
+
+// Add the reaction if the user hasn't used this emoji here, otherwise remove it.
+function toggleReaction(messageId, userId, emoji) {
+  const existing = db.prepare('SELECT 1 FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?')
+    .get(messageId, userId, emoji);
+  if (existing) {
+    db.prepare('DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?')
+      .run(messageId, userId, emoji);
+    return { added: false };
+  }
+  db.prepare('INSERT INTO reactions(message_id, user_id, emoji) VALUES (?, ?, ?)')
+    .run(messageId, userId, emoji);
+  return { added: true };
+}
+
+function getReaction(messageId, emoji) {
+  const rows = db.prepare(`
+    SELECT u.username FROM reactions r
+    JOIN users u ON r.user_id = u.id
+    WHERE r.message_id = ? AND r.emoji = ?
+  `).all(messageId, emoji);
+  return { count: rows.length, users: rows.map((r) => r.username) };
+}
+
+function isMessageInChannel(messageId, spaceName, channelName) {
+  return !!db.prepare(`
+    SELECT 1 FROM messages m
+    JOIN channels c ON m.channel_id = c.id
+    JOIN spaces s ON c.space_id = s.id
+    WHERE m.id = ? AND s.name = ? AND c.name = ?
+  `).get(messageId, spaceName, channelName);
 }
 
 // Edit a message, but only if the requester is its author. Returns the new
@@ -401,6 +473,9 @@ module.exports = {
   deleteMessage,
   getMessages,
   getMessagesAfter,
+  toggleReaction,
+  getReaction,
+  isMessageInChannel,
   getState,
   createUser,
   getUserByUsername,
