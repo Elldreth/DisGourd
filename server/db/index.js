@@ -189,31 +189,6 @@ function deleteChannel(spaceName, channelName) {
   return stmt.run(spaceName, channelName).changes > 0;
 }
 
-function renameSpace(oldName, newName) {
-  const stmt = db.prepare('UPDATE spaces SET name = ? WHERE name = ?');
-  try {
-    return stmt.run(newName, oldName).changes > 0;
-  } catch (e) {
-    if (e.code === 'SQLITE_CONSTRAINT') return false;
-    throw e;
-  }
-}
-
-function renameChannel(spaceName, oldChannelName, newChannelName) {
-  const stmt = db.prepare(`
-    UPDATE channels SET name = ? WHERE id IN (
-      SELECT c.id FROM channels c
-      JOIN spaces s ON c.space_id = s.id
-      WHERE s.name = ? AND c.name = ?
-    )`);
-  try {
-    return stmt.run(newChannelName, spaceName, oldChannelName).changes > 0;
-  } catch (e) {
-    if (e.code === 'SQLITE_CONSTRAINT') return false;
-    throw e;
-  }
-}
-
 // ---- Spaces: ownership, membership, invites ----
 
 function getSpaceByName(name) {
@@ -222,14 +197,6 @@ function getSpaceByName(name) {
 
 function getSpaceById(id) {
   return db.prepare('SELECT id, name, owner_id FROM spaces WHERE id = ?').get(id);
-}
-
-function channelExists(spaceName, channelName) {
-  return !!db.prepare(`
-    SELECT 1 FROM channels c
-    JOIN spaces s ON c.space_id = s.id
-    WHERE s.name = ? AND c.name = ?
-  `).get(spaceName, channelName);
 }
 
 // Create a space owned by ownerId and enrol them as its owner. Returns the new
@@ -654,20 +621,6 @@ function deleteMessage(messageId, authorId) {
     .run(messageId, authorId).changes > 0;
 }
 
-function getState() {
-  const spaces = db.prepare('SELECT id, name FROM spaces').all();
-  const channelStmt = db.prepare('SELECT name FROM channels WHERE space_id = ?');
-  const result = {};
-  for (const space of spaces) {
-    result[space.name] = { channels: {} };
-    const channels = channelStmt.all(space.id);
-    for (const channel of channels) {
-      result[space.name].channels[channel.name] = {};
-    }
-  }
-  return result;
-}
-
 function createUser(username, email, passwordHash, salt) {
   const stmt = db.prepare('INSERT INTO users(username, email, password_hash, salt) VALUES (?, ?, ?, ?)');
   return stmt.run(username, email, passwordHash, salt).lastInsertRowid;
@@ -729,11 +682,8 @@ module.exports = {
   createChannel,
   deleteSpace,
   deleteChannel,
-  renameSpace,
-  renameChannel,
   getSpaceByName,
   getSpaceById,
-  channelExists,
   channelType,
   createSpaceOwned,
   addMember,
@@ -768,7 +718,6 @@ module.exports = {
   markDmRead,
   getDmUnreadCounts,
   searchMessages,
-  getState,
   createUser,
   getUserByUsername,
   getUserByEmail,

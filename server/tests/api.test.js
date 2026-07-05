@@ -157,19 +157,6 @@ test('realtime messages carry ids; REST backfills after an id', async () => {
   expect(contents).not.toContain('first');
 });
 
-test('admin management endpoints require authentication', async () => {
-  const base = baseUrl();
-  let res = await fetch(`${base}/admin/state`);
-  expect(res.status).toBe(401);
-  const login = await fetch(`${base}/login`, {
-    method: 'POST', headers: JSON_HEADERS,
-    body: JSON.stringify({ username: 'alice', password: 'password123' })
-  });
-  const { token } = await login.json();
-  res = await fetch(`${base}/admin/state`, { headers: auth(token) });
-  expect(res.status).toBe(200);
-});
-
 test('messages can be edited and deleted by their author', async () => {
   const { token } = await register('frank');
   await createServer(token, 'ed');
