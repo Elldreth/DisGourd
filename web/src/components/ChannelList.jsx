@@ -320,8 +320,9 @@ export default function ChannelList({
 function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
   const vol = typeof p.shareVolume === 'number' ? p.shareVolume : 1;
   return (
-    <div className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-xs text-gray-400">
-      <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-ink-700 text-[11px]">🎵</span>
+    <div className="flex items-center gap-1.5 py-0.5 pl-14 pr-2 text-xs text-gray-400">
+      <span className="-ml-3 select-none text-ink-500">↳</span>
+      <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-ink-700 text-[10px]">🎵</span>
       <span className="min-w-0 flex-1 truncate">{p.username}’s audio</span>
       {isSelf && <span className="text-[10px] font-semibold uppercase text-gray-500">you</span>}
       {controllable && (
