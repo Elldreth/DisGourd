@@ -703,13 +703,14 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       // POST create channel (managers only)
       if (!channelName && req.method === 'POST') {
         if (!canManage) return sendJson(res, 403, { error: 'Only the owner can create channels' });
-        const { name } = await getJsonBody(req);
+        const { name, type } = await getJsonBody(req);
         const invalid = validateChannelName(name);
         if (invalid) return sendJson(res, 400, { error: invalid });
         const channel = normalizeChannelName(name);
-        db.createChannel(spaceName, channel);
-        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_created', space: spaceName, channel }));
-        return sendJson(res, 201, { name: channel });
+        const chType = type === 'voice' ? 'voice' : 'text';
+        db.createChannel(spaceName, channel, chType);
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_created', space: spaceName, channel, channelType: chType }));
+        return sendJson(res, 201, { name: channel, type: chType });
       }
       // DELETE channel (managers only)
       if (channelName && pathSegments.length === 4 && req.method === 'DELETE') {
@@ -1202,6 +1203,7 @@ function broadcastPresence(userId, status) {
 }
 
 function detachGateway(ws) {
+  voiceLeave(ws);
   const set = userClients[ws.userId];
   if (!set) return;
   set.delete(ws);
@@ -1209,6 +1211,40 @@ function detachGateway(ws) {
     delete userClients[ws.userId];
     broadcastPresence(ws.userId, 'offline');
   }
+}
+
+// ---- Voice rooms (mesh WebRTC signaling relay; no media touches the server) ----
+// roomKey -> { space, channel, members: Map<userId, { ws, userId, username, avatar, muted }> }
+const voiceRooms = new Map();
+const voiceKey = (space, channel) => JSON.stringify([space, channel]);
+
+function voiceParticipants(room) {
+  return [...room.members.values()].map((p) => ({ username: p.username, avatar: p.avatar, muted: p.muted }));
+}
+
+// Tell every server member who is currently in this voice channel.
+function broadcastVoiceState(room) {
+  deliverToSpaceMembers(room.space, JSON.stringify({
+    type: 'voice_state', space: room.space, channel: room.channel, participants: voiceParticipants(room),
+  }));
+}
+
+function voiceLeave(ws) {
+  const key = ws.voiceRoom;
+  if (!key) return;
+  ws.voiceRoom = null;
+  const room = voiceRooms.get(key);
+  if (!room) return;
+  const entry = room.members.get(ws.userId);
+  if (!entry || entry.ws !== ws) return;
+  room.members.delete(ws.userId);
+  for (const p of room.members.values()) {
+    if (p.ws.readyState === WebSocket.OPEN) {
+      p.ws.send(JSON.stringify({ type: 'voice_peer_left', space: room.space, channel: room.channel, userId: ws.userId }));
+    }
+  }
+  if (room.members.size === 0) voiceRooms.delete(key);
+  broadcastVoiceState(room);
 }
 
 function handleGatewayMessage(ws, raw) {
@@ -1233,7 +1269,7 @@ function handleGatewayMessage(ws, raw) {
     }
     case 'message': {
       const space = db.getSpaceByName(msg.space);
-      if (!space || !db.isMember(space.id, userId) || !db.channelExists(msg.space, msg.channel)) return;
+      if (!space || !db.isMember(space.id, userId) || db.channelType(msg.space, msg.channel) !== 'text') return;
       const content = typeof msg.content === 'string' ? msg.content : '';
       const attachment = typeof msg.attachment === 'string' ? msg.attachment : undefined;
       if (!content && !attachment) return;
@@ -1367,6 +1403,61 @@ function handleGatewayMessage(ws, raw) {
         socks.forEach((s) => {
           if (s.readyState === WebSocket.OPEN && s.dmFocus === from.username) s.send(frame);
         });
+      }
+      return;
+    }
+
+    // ---- Voice (mesh signaling) ----
+    case 'voice_join': {
+      const space = db.getSpaceByName(msg.space);
+      if (!space || !db.isMember(space.id, userId) || db.channelType(msg.space, msg.channel) !== 'voice') return;
+      voiceLeave(ws); // only one voice channel at a time
+      const key = voiceKey(msg.space, msg.channel);
+      let room = voiceRooms.get(key);
+      if (!room) {
+        room = { space: msg.space, channel: msg.channel, members: new Map() };
+        voiceRooms.set(key, room);
+      }
+      const user = db.getUserById(userId);
+      const existing = [...room.members.values()].map((p) => ({
+        userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
+      }));
+      const me = { ws, userId, username: user.username, avatar: user.avatar_url || null, muted: false };
+      room.members.set(userId, me);
+      ws.voiceRoom = key;
+      // The joiner initiates offers to everyone already here.
+      ws.send(JSON.stringify({ type: 'voice_peers', space: msg.space, channel: msg.channel, peers: existing }));
+      for (const p of room.members.values()) {
+        if (p.userId !== userId && p.ws.readyState === WebSocket.OPEN) {
+          p.ws.send(JSON.stringify({
+            type: 'voice_peer_joined', space: msg.space, channel: msg.channel,
+            peer: { userId, username: me.username, avatar: me.avatar, muted: false },
+          }));
+        }
+      }
+      broadcastVoiceState(room);
+      return;
+    }
+    case 'voice_leave': {
+      voiceLeave(ws);
+      return;
+    }
+    case 'voice_signal': {
+      const room = voiceRooms.get(ws.voiceRoom);
+      if (!room) return;
+      const target = room.members.get(parseInt(msg.to, 10));
+      if (target && target.ws.readyState === WebSocket.OPEN) {
+        target.ws.send(JSON.stringify({ type: 'voice_signal', from: userId, data: msg.data }));
+      }
+      return;
+    }
+    case 'voice_mute': {
+      const room = voiceRooms.get(ws.voiceRoom);
+      if (!room) return;
+      const entry = room.members.get(userId);
+      if (entry) {
+        entry.muted = !!msg.muted;
+        broadcastVoiceState(room);
       }
       return;
     }

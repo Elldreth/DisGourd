@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Avatar from './Avatar.jsx';
 import UserFooter from './UserFooter.jsx';
 
 export default function ChannelList({
@@ -7,6 +8,11 @@ export default function ChannelList({
   currentChannel,
   unread = {},
   mentions = {},
+  voiceChannels = [],
+  voiceParticipants = {},
+  myVoice,
+  onJoinVoice,
+  onLeaveVoice,
   onSelect,
   onCreateChannel,
   canManage,
@@ -21,6 +27,8 @@ export default function ChannelList({
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  const [addingVoice, setAddingVoice] = useState(false);
+  const [voiceName, setVoiceName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
 
   async function submit(e) {
@@ -30,6 +38,15 @@ export default function ChannelList({
     await onCreateChannel(trimmed);
     setName('');
     setAdding(false);
+  }
+
+  async function submitVoice(e) {
+    e.preventDefault();
+    const trimmed = voiceName.trim().replace(/\s+/g, '-').toLowerCase();
+    if (!trimmed) return;
+    await onCreateChannel(trimmed, 'voice');
+    setVoiceName('');
+    setAddingVoice(false);
   }
 
   return (
@@ -134,7 +151,81 @@ export default function ChannelList({
         {space && channels.length === 0 && !adding && (
           <p className="px-2 py-1 text-sm text-gray-500">No channels yet.</p>
         )}
+
+        {/* Voice channels */}
+        {space && (voiceChannels.length > 0 || canManage) && (
+          <>
+            <div className="mb-1 mt-4 flex items-center justify-between px-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Voice channels
+              </span>
+              {canManage && (
+                <button
+                  onClick={() => setAddingVoice((v) => !v)}
+                  title="Create voice channel"
+                  className="text-lg leading-none text-gray-400 hover:text-white"
+                >
+                  +
+                </button>
+              )}
+            </div>
+            {addingVoice && (
+              <form onSubmit={submitVoice} className="mb-1 px-1">
+                <input
+                  autoFocus
+                  value={voiceName}
+                  onChange={(e) => setVoiceName(e.target.value)}
+                  onBlur={() => !voiceName && setAddingVoice(false)}
+                  placeholder="voice-channel"
+                  className="w-full rounded bg-ink-900 px-2 py-1 text-sm outline-none ring-1 ring-ink-500 focus:ring-brand"
+                />
+              </form>
+            )}
+            {voiceChannels.map((vc) => {
+              const inThis = myVoice && myVoice.channel === vc && myVoice.space === space;
+              const people = voiceParticipants[vc] || [];
+              return (
+                <div key={vc} className="mb-0.5">
+                  <button
+                    onClick={() => onJoinVoice(space, vc)}
+                    className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
+                      inThis ? 'bg-ink-600 text-white' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
+                    }`}
+                  >
+                    <span className="text-gray-500">🔊</span>
+                    <span className="flex-1 truncate">{vc}</span>
+                    {people.length > 0 && <span className="text-xs text-gray-500">{people.length}</span>}
+                  </button>
+                  {people.map((p) => (
+                    <div key={p.username} className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
+                      <Avatar name={p.username} size={20} src={p.avatar} status="online" />
+                      <span className="min-w-0 flex-1 truncate">{p.username}</span>
+                      {p.muted && <span title="Muted" className="text-xs text-danger">🔇</span>}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
+
+      {myVoice && (
+        <div className="flex items-center gap-2 border-t border-ink-900/60 bg-ink-900/40 px-3 py-2">
+          <span className="text-online">🔊</span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-semibold text-online">Voice connected</div>
+            <div className="truncate text-xs text-gray-400">{myVoice.channel} · {myVoice.space}</div>
+          </div>
+          <button
+            onClick={onLeaveVoice}
+            title="Disconnect"
+            className="rounded bg-danger/80 px-2 py-1 text-xs font-semibold text-white hover:bg-danger"
+          >
+            Leave
+          </button>
+        </div>
+      )}
 
       <UserFooter
         user={user}

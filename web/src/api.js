@@ -73,8 +73,11 @@ export function createSpace(name) {
 export function deleteSpace(space) {
   return request(`/spaces/${encodeURIComponent(space)}`, { method: 'DELETE' });
 }
-export function createChannel(space, name) {
-  return request(`/spaces/${encodeURIComponent(space)}/channels`, { method: 'POST', body: { name } });
+export function createChannel(space, name, type) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels`, {
+    method: 'POST',
+    body: type ? { name, type } : { name },
+  });
 }
 export function deleteChannel(space, channel) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, {

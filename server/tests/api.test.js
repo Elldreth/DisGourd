@@ -359,6 +359,58 @@ test('direct messages deliver to both users, with unread tracking', async () => 
   expect(convo.unread).toBe(0);
 });
 
+test('voice: peer discovery, signaling relay, and leave', async () => {
+  const base = baseUrl();
+  const vera = (await register('vera')).token;
+  const vince = (await register('vince')).token;
+  await createServer(vera, 'voco');
+  await fetch(`${base}/spaces/voco/channels`, {
+    method: 'POST', headers: { ...JSON_HEADERS, ...auth(vera) }, body: JSON.stringify({ name: 'lounge', type: 'voice' }),
+  });
+  const { code } = await (await fetch(`${base}/spaces/voco/invites`, { method: 'POST', headers: auth(vera) })).json();
+  await fetch(`${base}/invites/${code}`, { method: 'POST', headers: auth(vince) });
+
+  const ga = gateway(vera);
+  await ga.ready;
+  const gb = gateway(vince);
+  await gb.ready;
+
+  ga.send({ op: 'voice_join', space: 'voco', channel: 'lounge' });
+  await wait(60);
+  const aPeers = ga.frames.find((f) => f.type === 'voice_peers');
+  expect(aPeers.peers.length).toBe(0);
+
+  gb.send({ op: 'voice_join', space: 'voco', channel: 'lounge' });
+  await wait(80);
+  const bPeers = gb.frames.find((f) => f.type === 'voice_peers');
+  expect(bPeers.peers.map((p) => p.username)).toContain('vera');
+  const aJoined = ga.frames.find((f) => f.type === 'voice_peer_joined');
+  expect(aJoined.peer.username).toBe('vince');
+
+  const vinceId = aJoined.peer.userId;
+  const veraId = bPeers.peers.find((p) => p.username === 'vera').userId;
+
+  // Signaling relay: vera -> vince.
+  ga.send({ op: 'voice_signal', to: vinceId, data: { kind: 'offer', sdp: 'x' } });
+  await wait(60);
+  const sig = gb.frames.find((f) => f.type === 'voice_signal');
+  expect(sig.from).toBe(veraId);
+  expect(sig.data.kind).toBe('offer');
+
+  // Both are shown in the voice state.
+  const state = gb.frames.filter((f) => f.type === 'voice_state').pop();
+  expect(state.participants.length).toBe(2);
+
+  // Leaving notifies the remaining peer.
+  ga.send({ op: 'voice_leave' });
+  await wait(60);
+  const left = gb.frames.find((f) => f.type === 'voice_peer_left');
+  expect(left.userId).toBe(veraId);
+
+  ga.close();
+  gb.close();
+});
+
 test('roles: owner promotes, admins kick members, permissions enforced', async () => {
   const base = baseUrl();
   const sam = (await register('sam')).token;

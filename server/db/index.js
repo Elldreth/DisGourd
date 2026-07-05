@@ -15,6 +15,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     space_id INTEGER NOT NULL,
     name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'text',
     UNIQUE(space_id, name),
     FOREIGN KEY(space_id) REFERENCES spaces(id) ON DELETE CASCADE
   );
@@ -145,6 +146,10 @@ try {
   if (!hasAvatar) {
     db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
   }
+  const hasChannelType = db.prepare("PRAGMA table_info(channels)").all().some(c => c.name === 'type');
+  if (!hasChannelType) {
+    db.exec("ALTER TABLE channels ADD COLUMN type TEXT NOT NULL DEFAULT 'text'");
+  }
 } catch (e) {
   console.error('Error migrating messages table:', e);
 }
@@ -154,11 +159,19 @@ function createSpace(name) {
   stmt.run(name);
 }
 
-function createChannel(spaceName, channelName) {
+function createChannel(spaceName, channelName, type = 'text') {
   createSpace(spaceName);
   const space = db.prepare('SELECT id FROM spaces WHERE name = ?').get(spaceName);
-  const stmt = db.prepare('INSERT OR IGNORE INTO channels(space_id, name) VALUES (?, ?)');
-  stmt.run(space.id, channelName);
+  db.prepare('INSERT OR IGNORE INTO channels(space_id, name, type) VALUES (?, ?, ?)')
+    .run(space.id, channelName, type === 'voice' ? 'voice' : 'text');
+}
+
+function channelType(spaceName, channelName) {
+  const row = db.prepare(`
+    SELECT c.type FROM channels c JOIN spaces s ON c.space_id = s.id
+    WHERE s.name = ? AND c.name = ?
+  `).get(spaceName, channelName);
+  return row ? row.type : null;
 }
 
 function deleteSpace(name) {
@@ -262,12 +275,16 @@ function getUserSpaces(userId) {
     WHERE sm.user_id = ?
     ORDER BY s.name COLLATE NOCASE
   `).all(userId);
-  const channelStmt = db.prepare('SELECT name FROM channels WHERE space_id = ? ORDER BY id');
-  return spaces.map((s) => ({
-    name: s.name,
-    role: s.role,
-    channels: channelStmt.all(s.id).map((c) => c.name),
-  }));
+  const channelStmt = db.prepare('SELECT name, type FROM channels WHERE space_id = ? ORDER BY id');
+  return spaces.map((s) => {
+    const chans = channelStmt.all(s.id);
+    return {
+      name: s.name,
+      role: s.role,
+      channels: chans.filter((c) => c.type !== 'voice').map((c) => c.name),
+      voiceChannels: chans.filter((c) => c.type === 'voice').map((c) => c.name),
+    };
+  });
 }
 
 function getSpaceMembers(spaceId) {
@@ -717,6 +734,7 @@ module.exports = {
   getSpaceByName,
   getSpaceById,
   channelExists,
+  channelType,
   createSpaceOwned,
   addMember,
   removeMember,
