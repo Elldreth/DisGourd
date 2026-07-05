@@ -31,6 +31,7 @@ afterAll(done => {
 const baseUrl = () => `http://localhost:${port}`;
 const JSON_HEADERS = { 'content-type': 'application/json' };
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function register(username, password = 'password123') {
   const res = await fetch(`${baseUrl()}/register`, {
@@ -50,18 +51,38 @@ function createServer(token, name) {
   });
 }
 
+// Open the per-user gateway socket and record every frame it receives.
+function gateway(token) {
+  const ws = new WebSocket(`ws://localhost:${port}/gateway?token=${token}`);
+  const frames = [];
+  ws.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
+  const ready = new Promise((resolve, reject) => {
+    ws.on('open', resolve);
+    ws.on('error', reject);
+  });
+  return {
+    frames,
+    ready,
+    send: (obj) => ws.send(JSON.stringify(obj)),
+    close: () => ws.close(),
+  };
+}
+
+function messages(token, space, channel, query = '') {
+  return fetch(`${baseUrl()}/spaces/${space}/channels/${channel}/messages${query}`, { headers: auth(token) })
+    .then((r) => r.json());
+}
+
 test('register, login, create a server and store messages', async () => {
   const base = baseUrl();
   let res = await fetch(`${base}/register`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
+    method: 'POST', headers: JSON_HEADERS,
     body: JSON.stringify({ username: 'alice', password: 'password123', email: 'a@b.c' })
   });
   expect(res.status).toBe(201);
 
   res = await fetch(`${base}/login`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
+    method: 'POST', headers: JSON_HEADERS,
     body: JSON.stringify({ username: 'alice', password: 'password123' })
   });
   expect(res.status).toBe(200);
@@ -70,16 +91,13 @@ test('register, login, create a server and store messages', async () => {
 
   expect((await createServer(token, 'test')).status).toBe(201);
 
-  await new Promise(resolve => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/test/general?token=${token}`);
-    ws.on('open', () => {
-      ws.send(JSON.stringify({ content: 'hello' }));
-      setTimeout(() => { ws.close(); resolve(); }, 50);
-    });
-  });
+  const gw = gateway(token);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'test', channel: 'general', content: 'hello' });
+  await wait(80);
+  gw.close();
 
-  res = await fetch(`${base}/spaces/test/channels/general/messages?limit=1`, { headers: auth(token) });
-  const msgs = await res.json();
+  const msgs = await messages(token, 'test', 'general', '?limit=1');
   expect(msgs.length).toBe(1);
   expect(msgs[0].content).toBe('hello');
 });
@@ -116,34 +134,25 @@ test('stored password uses the scrypt scheme', () => {
   expect(user.password_hash.startsWith('scrypt$')).toBe(true);
 });
 
-test('realtime messages carry ids and support reconnect backfill', async () => {
+test('realtime messages carry ids; REST backfills after an id', async () => {
   const { token } = await register('dave');
   await createServer(token, 'rt');
+  const gw = gateway(token);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'rt', channel: 'general', content: 'first' });
+  await wait(50);
+  gw.send({ op: 'message', space: 'rt', channel: 'general', content: 'second' });
+  await wait(80);
+  gw.close();
 
-  function openAndCollect(query, onOpen) {
-    return new Promise((resolve) => {
-      const got = [];
-      const ws = new WebSocket(`ws://localhost:${port}/ws/rt/general?token=${token}${query}`);
-      ws.on('message', (raw) => got.push(JSON.parse(raw.toString())));
-      ws.on('open', () => { if (onOpen) onOpen(ws); });
-      setTimeout(() => { ws.close(); resolve(got); }, 150);
-    });
-  }
+  const msgs = gw.frames.filter((f) => f.type === 'message');
+  expect(msgs.length).toBe(2);
+  expect(typeof msgs[0].id).toBe('number');
+  expect(typeof msgs[0].timestamp).toBe('number');
+  const firstId = msgs[0].id;
 
-  const sent = await openAndCollect('', (ws) => {
-    ws.send(JSON.stringify({ content: 'first' }));
-    setTimeout(() => ws.send(JSON.stringify({ content: 'second' })), 40);
-  });
-  const messages = sent.filter(m => m.type === 'message');
-  expect(messages.length).toBe(2);
-  expect(typeof messages[0].id).toBe('number');
-  expect(typeof messages[0].timestamp).toBe('number');
-  const firstId = messages[0].id;
-
-  const backfill = await openAndCollect(`&after=${firstId}`);
-  const history = backfill.find(m => m.type === 'history');
-  expect(history).toBeTruthy();
-  const contents = history.messages.map(m => m.content);
+  const backfill = await messages(token, 'rt', 'general', `?after=${firstId}`);
+  const contents = backfill.map((m) => m.content);
   expect(contents).toContain('second');
   expect(contents).not.toContain('first');
 });
@@ -162,37 +171,30 @@ test('admin management endpoints require authentication', async () => {
 });
 
 test('messages can be edited and deleted by their author', async () => {
-  const base = baseUrl();
   const { token } = await register('frank');
   await createServer(token, 'ed');
+  const gw = gateway(token);
+  await gw.ready;
 
-  const frames = await new Promise((resolve) => {
-    const got = [];
-    const ws = new WebSocket(`ws://localhost:${port}/ws/ed/general?token=${token}`);
-    let editRequested = false;
-    ws.on('message', (raw) => {
-      const m = JSON.parse(raw.toString());
-      got.push(m);
-      if (m.type === 'message' && !editRequested) {
-        editRequested = true;
-        ws.send(JSON.stringify({ type: 'edit', id: m.id, content: 'edited text' }));
-      } else if (m.type === 'message_update') {
-        ws.send(JSON.stringify({ type: 'delete', id: m.id }));
-      }
-    });
-    ws.on('open', () => ws.send(JSON.stringify({ content: 'original text' })));
-    setTimeout(() => { ws.close(); resolve(got); }, 300);
-  });
+  gw.send({ op: 'message', space: 'ed', channel: 'general', content: 'original text' });
+  await wait(60);
+  const msg = gw.frames.find((f) => f.type === 'message');
+  expect(msg).toBeTruthy();
 
-  const update = frames.find((f) => f.type === 'message_update');
-  const del = frames.find((f) => f.type === 'message_delete');
+  gw.send({ op: 'edit', id: msg.id, content: 'edited text' });
+  await wait(60);
+  const update = gw.frames.find((f) => f.type === 'message_update');
   expect(update).toBeTruthy();
   expect(update.content).toBe('edited text');
   expect(typeof update.editedAt).toBe('number');
-  expect(del).toBeTruthy();
 
-  const res = await fetch(`${base}/spaces/ed/channels/general/messages?limit=50`, { headers: auth(token) });
-  const msgs = await res.json();
+  gw.send({ op: 'delete', id: msg.id });
+  await wait(60);
+  const del = gw.frames.find((f) => f.type === 'message_delete');
+  expect(del).toBeTruthy();
+  gw.close();
+
+  const msgs = await messages(token, 'ed', 'general');
   expect(msgs.find((m) => m.id === del.id)).toBeFalsy();
 });
 
@@ -206,29 +208,27 @@ test('server membership is enforced and invites grant access', async () => {
   let mine = await (await fetch(`${base}/spaces`, { headers: auth(outsider) })).json();
   expect(mine.find((s) => s.name === 'grace-hq')).toBeFalsy();
 
-  // Outsider cannot read its messages...
+  // Outsider cannot read its messages.
   let res = await fetch(`${base}/spaces/grace-hq/channels/general/messages`, { headers: auth(outsider) });
   expect(res.status).toBe(403);
 
-  // ...nor open a socket to it.
-  const rejected = await new Promise((resolve) => {
-    const ws = new WebSocket(`ws://localhost:${port}/ws/grace-hq/general?token=${outsider}`);
-    ws.on('open', () => { ws.close(); resolve(false); });
-    ws.on('error', () => resolve(true));
-    ws.on('close', () => resolve(true));
-  });
-  expect(rejected).toBe(true);
+  // A gateway message op aimed at a server they don't belong to is ignored.
+  const gw = gateway(outsider);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'grace-hq', channel: 'general', content: 'intrusion' });
+  await wait(80);
+  gw.close();
+  let msgs = await messages(owner, 'grace-hq', 'general');
+  expect(msgs.find((m) => m.content === 'intrusion')).toBeFalsy();
 
   // Owner mints an invite; outsider joins with it.
   res = await fetch(`${base}/spaces/grace-hq/invites`, { method: 'POST', headers: auth(owner) });
   expect(res.status).toBe(201);
   const { code } = await res.json();
-  expect(code).toBeTruthy();
 
   res = await fetch(`${base}/invites/${code}`, { method: 'POST', headers: auth(outsider) });
   expect(res.status).toBe(200);
 
-  // Now the outsider is a member: server appears and messages are readable.
   mine = await (await fetch(`${base}/spaces`, { headers: auth(outsider) })).json();
   expect(mine.find((s) => s.name === 'grace-hq')).toBeTruthy();
   res = await fetch(`${base}/spaces/grace-hq/channels/general/messages`, { headers: auth(outsider) });
@@ -236,62 +236,45 @@ test('server membership is enforced and invites grant access', async () => {
 });
 
 test('reactions toggle, persist in history, and typing is relayed', async () => {
-  const base = baseUrl();
   const { token } = await register('ivy');
   await createServer(token, 'rx');
+  const gw = gateway(token);
+  await gw.ready;
 
-  // Send a message, react 👍 (on), 👍 again (off), then ❤️ (stays on).
-  const frames = await new Promise((resolve) => {
-    const got = [];
-    const ws = new WebSocket(`ws://localhost:${port}/ws/rx/general?token=${token}`);
-    let msgId = null;
-    ws.on('message', (raw) => {
-      const m = JSON.parse(raw.toString());
-      got.push(m);
-      if (m.type === 'message' && msgId === null) {
-        msgId = m.id;
-        ws.send(JSON.stringify({ type: 'react', id: msgId, emoji: '👍' }));
-      } else if (m.type === 'reaction') {
-        const reactions = got.filter((f) => f.type === 'reaction');
-        if (reactions.length === 1) ws.send(JSON.stringify({ type: 'react', id: msgId, emoji: '👍' }));
-        else if (reactions.length === 2) ws.send(JSON.stringify({ type: 'react', id: msgId, emoji: '❤️' }));
-        else ws.close();
-      }
-    });
-    ws.on('open', () => ws.send(JSON.stringify({ content: 'react to me' })));
-    setTimeout(() => { ws.close(); resolve(got); }, 400);
-  });
+  gw.send({ op: 'message', space: 'rx', channel: 'general', content: 'react to me' });
+  await wait(60);
+  const msg = gw.frames.find((f) => f.type === 'message');
+  gw.send({ op: 'react', id: msg.id, emoji: '👍' });
+  await wait(50);
+  gw.send({ op: 'react', id: msg.id, emoji: '👍' });
+  await wait(50);
+  gw.send({ op: 'react', id: msg.id, emoji: '❤️' });
+  await wait(60);
+  gw.close();
 
-  const reactions = frames.filter((f) => f.type === 'reaction');
+  const reactions = gw.frames.filter((f) => f.type === 'reaction');
   expect(reactions[0]).toMatchObject({ emoji: '👍', count: 1 });
   expect(reactions[0].users).toContain('ivy');
   expect(reactions[1]).toMatchObject({ emoji: '👍', count: 0 });
   expect(reactions[2]).toMatchObject({ emoji: '❤️', count: 1 });
 
-  // The surviving ❤️ reaction is reflected in the message history.
-  const msgs = await (await fetch(`${base}/spaces/rx/channels/general/messages`, { headers: auth(token) })).json();
+  const msgs = await messages(token, 'rx', 'general');
   const target = msgs.find((m) => m.reactions && m.reactions.length);
-  expect(target).toBeTruthy();
   expect(target.reactions.find((r) => r.emoji === '❤️').count).toBe(1);
 
-  // Typing: a second socket (same user) receives the typing relay from the first.
-  const relayed = await new Promise((resolve) => {
-    const listener = new WebSocket(`ws://localhost:${port}/ws/rx/general?token=${token}`);
-    let done = false;
-    listener.on('message', (raw) => {
-      const m = JSON.parse(raw.toString());
-      if (m.type === 'typing' && m.user === 'ivy') { done = true; listener.close(); resolve(true); }
-    });
-    listener.on('open', () => {
-      const sender = new WebSocket(`ws://localhost:${port}/ws/rx/general?token=${token}`);
-      sender.on('open', () => {
-        sender.send(JSON.stringify({ type: 'typing' }));
-        setTimeout(() => sender.close(), 100);
-      });
-    });
-    setTimeout(() => { if (!done) { listener.close(); resolve(false); } }, 500);
-  });
-  expect(relayed).toBe(true);
+  // Typing relays only to sockets focused on the channel (excluding the sender).
+  const listener = gateway(token);
+  await listener.ready;
+  listener.send({ op: 'focus', space: 'rx', channel: 'general' });
+  await wait(40);
+  const sender = gateway(token);
+  await sender.ready;
+  sender.send({ op: 'typing', space: 'rx', channel: 'general' });
+  await wait(100);
+  const relayed = listener.frames.find((f) => f.type === 'typing' && f.user === 'ivy');
+  listener.close();
+  sender.close();
+  expect(relayed).toBeTruthy();
 });
 
 test('users can view and update their avatar via /me', async () => {
@@ -304,7 +287,6 @@ test('users can view and update their avatar via /me', async () => {
   expect(me.username).toBe('jane');
   expect(me.avatar).toBeNull();
 
-  // A non-upload URL is rejected (prevents pointing avatars at arbitrary hosts).
   res = await fetch(`${base}/me`, {
     method: 'PATCH',
     headers: { ...JSON_HEADERS, ...auth(token) },
@@ -312,7 +294,6 @@ test('users can view and update their avatar via /me', async () => {
   });
   expect(res.status).toBe(400);
 
-  // An uploaded image URL is accepted.
   res = await fetch(`${base}/me`, {
     method: 'PATCH',
     headers: { ...JSON_HEADERS, ...auth(token) },
@@ -328,11 +309,9 @@ test('file uploads: auth required, no name collisions, type + size validation', 
   const { token } = await register('erin');
   const headers = auth(token);
 
-  // Anonymous upload is rejected.
   let res = await fetch(`${base}/uploads?name=photo.png`, { method: 'POST', body: 'AAA' });
   expect(res.status).toBe(401);
 
-  // Authenticated upload returns rich metadata.
   res = await fetch(`${base}/uploads?name=photo.png`, { method: 'POST', headers, body: 'hello-image' });
   expect(res.status).toBe(201);
   const up1 = await res.json();
@@ -342,22 +321,18 @@ test('file uploads: auth required, no name collisions, type + size validation', 
   expect(up1.inline).toBe(true);
   expect(up1.size).toBe('hello-image'.length);
 
-  // A second file with the same name does not overwrite the first.
   res = await fetch(`${base}/uploads?name=photo.png`, { method: 'POST', headers, body: 'other-bytes' });
   const up2 = await res.json();
   expect(up2.url).not.toBe(up1.url);
 
-  // The first file is still downloadable with the correct content type.
   res = await fetch(`${base}${up1.url}`);
   expect(res.status).toBe(200);
   expect(res.headers.get('content-type')).toBe('image/png');
   expect(await res.text()).toBe('hello-image');
 
-  // Executable types are blocked.
   res = await fetch(`${base}/uploads?name=virus.exe`, { method: 'POST', headers, body: 'MZ' });
   expect(res.status).toBe(415);
 
-  // Oversize uploads are rejected (limit set to 256 bytes for this suite).
   res = await fetch(`${base}/uploads?name=big.png`, { method: 'POST', headers, body: 'x'.repeat(1000) });
   expect(res.status).toBe(413);
 });

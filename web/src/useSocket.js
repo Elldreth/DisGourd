@@ -1,24 +1,23 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-// A resilient channel WebSocket.
+// A single resilient "gateway" WebSocket for the whole session. It carries
+// events for every server/channel the user belongs to, so the client keeps one
+// connection regardless of which channel is open.
 //
-//  - Auto-reconnects with exponential backoff + jitter after any unclean close
-//    (crash, dropped wifi, server restart) until it gets back in.
-//  - Tracks the last message id it has seen and reconnects with ?after=<id> so
-//    the server backfills exactly what was missed — no gaps, no duplicates.
-//  - Queues outgoing messages while offline and flushes them on reconnect, so a
-//    message typed during a blip is never silently lost.
+//  - Auto-reconnects with exponential backoff + jitter after any unclean close.
+//  - Queues outgoing frames while offline and flushes them on reconnect.
+//  - Dispatches incoming frames to handlers keyed by the frame's `type`.
 //
 // Returns { status, send } where status is one of:
 //   'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
-export function useChannelSocket({ space, channel, token, handlers }) {
+export function useGateway({ token, handlers }) {
   const [status, setStatus] = useState('idle');
   const handlersRef = useRef(handlers);
-  handlersRef.current = handlers; // always call the latest handlers
+  handlersRef.current = handlers;
   const sendRef = useRef(() => false);
 
   useEffect(() => {
-    if (!space || !channel || !token) {
+    if (!token) {
       setStatus('idle');
       return undefined;
     }
@@ -27,31 +26,20 @@ export function useChannelSocket({ space, channel, token, handlers }) {
     let intentional = false;
     let attempt = 0;
     let timer = null;
-    let lastId = 0; // highest message id seen this channel session
     const queue = [];
 
-    const buildUrl = () => {
+    const url = () => {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const params = new URLSearchParams({ token });
-      // Fresh open loads recent history; a reconnect backfills only what we missed.
-      if (lastId > 0) params.set('after', String(lastId));
-      else params.set('history', '50');
-      const s = encodeURIComponent(space);
-      const c = encodeURIComponent(channel);
-      return `${proto}//${window.location.host}/ws/${s}/${c}?${params}`;
-    };
-
-    const noteId = (id) => {
-      if (typeof id === 'number' && id > lastId) lastId = id;
+      return `${proto}//${window.location.host}/gateway?token=${encodeURIComponent(token)}`;
     };
 
     const flush = () => {
       while (queue.length && ws && ws.readyState === WebSocket.OPEN) {
-        const msg = queue.shift();
+        const frame = queue.shift();
         try {
-          ws.send(JSON.stringify(msg));
+          ws.send(JSON.stringify(frame));
         } catch {
-          queue.unshift(msg);
+          queue.unshift(frame);
           break;
         }
       }
@@ -68,7 +56,7 @@ export function useChannelSocket({ space, channel, token, handlers }) {
     const connect = () => {
       setStatus(attempt === 0 ? 'connecting' : 'reconnecting');
       try {
-        ws = new WebSocket(buildUrl());
+        ws = new WebSocket(url());
       } catch {
         scheduleReconnect();
         return;
@@ -87,40 +75,8 @@ export function useChannelSocket({ space, channel, token, handlers }) {
         } catch {
           return;
         }
-        const h = handlersRef.current || {};
-        switch (frame.type) {
-          case 'message':
-            noteId(frame.id);
-            h.onMessage && h.onMessage(frame);
-            break;
-          case 'history':
-            (frame.messages || []).forEach((m) => noteId(m.id));
-            h.onHistory && h.onHistory(frame.messages || []);
-            break;
-          case 'message_update':
-            h.onMessageUpdate && h.onMessageUpdate(frame);
-            break;
-          case 'message_delete':
-            h.onMessageDelete && h.onMessageDelete(frame);
-            break;
-          case 'reaction':
-            h.onReaction && h.onReaction(frame);
-            break;
-          case 'typing':
-            h.onTyping && h.onTyping(frame);
-            break;
-          case 'presence':
-            h.onPresence && h.onPresence(frame);
-            break;
-          case 'friend_list':
-            h.onFriendList && h.onFriendList(frame.friends || []);
-            break;
-          case 'system':
-            h.onSystem && h.onSystem(frame);
-            break;
-          default:
-            break;
-        }
+        const handler = (handlersRef.current || {})[frame.type];
+        if (typeof handler === 'function') handler(frame);
       };
 
       ws.onerror = () => {
@@ -168,7 +124,7 @@ export function useChannelSocket({ space, channel, token, handlers }) {
         }
       }
     };
-  }, [space, channel, token]);
+  }, [token]);
 
   const send = useCallback((obj) => sendRef.current(obj), []);
   return { status, send };

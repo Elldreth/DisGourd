@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
-import { useChannelSocket } from './useSocket.js';
+import { useGateway } from './useSocket.js';
 import { mergeMessages } from './util.js';
 import Login from './components/Login.jsx';
 import ServerRail from './components/ServerRail.jsx';
@@ -11,7 +11,7 @@ import InviteDialog from './components/InviteDialog.jsx';
 import ProfileDialog from './components/ProfileDialog.jsx';
 
 export default function App() {
-  const [token, setTokenState] = useState(api.getToken());
+  const [token, setToken] = useState(api.getToken());
   const user = useMemo(() => {
     const p = api.decodeToken(token);
     return p ? p.name || p.username || p.sub : '';
@@ -22,19 +22,24 @@ export default function App() {
   const [currentChannel, setCurrentChannel] = useState('');
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
-  const [inviteCode, setInviteCode] = useState(null); // shown in the invite dialog
-  const [typingUsers, setTypingUsers] = useState({}); // username -> expires-at ms
-  const [profile, setProfile] = useState(null); // current user's profile (avatar, email)
+  const [inviteCode, setInviteCode] = useState(null);
+  const [typingUsers, setTypingUsers] = useState({});
+  const [profile, setProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [loadError, setLoadError] = useState('');
+
+  // Refs so gateway handlers (created once) can read the latest selection.
+  const spaceRef = useRef(currentSpace);
+  spaceRef.current = currentSpace;
+  const channelRef = useRef(currentChannel);
+  channelRef.current = currentChannel;
 
   const activeSpace = spaces.find((s) => s.name === currentSpace);
   const channels = activeSpace ? activeSpace.channels : [];
   const role = activeSpace ? activeSpace.role : null;
   const canManage = role === 'owner' || role === 'admin';
 
-  // ---- Load the servers the user belongs to ----
-  const loadSpaces = useCallback(async () => {
+  async function loadSpaces() {
     try {
       const next = await api.getSpaces();
       setSpaces(next);
@@ -44,12 +49,18 @@ export default function App() {
       setLoadError(err.message || 'Could not reach the server');
       return [];
     }
-  }, []);
+  }
 
+  function refreshMembers(space) {
+    if (!space) return;
+    api.getMembers(space).then((r) => setMembers(r.members || [])).catch(() => {});
+  }
+
+  // Initial load after auth.
   useEffect(() => {
     if (!token) return;
     loadSpaces().then((next) => {
-      if (next.length && !currentSpace) {
+      if (next.length && !spaceRef.current) {
         setCurrentSpace(next[0].name);
         setCurrentChannel(next[0].channels[0] || '');
       }
@@ -58,12 +69,104 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Reset the transcript and typing state when moving to a different channel;
-  // the socket re-opens and repopulates history.
+  // ---- Gateway (one connection for the whole app) ----
+  const handlers = useMemo(
+    () => ({
+      message: (m) => {
+        if (m.space === spaceRef.current && m.channel === channelRef.current) {
+          setMessages((prev) => mergeMessages(prev, [m]));
+        }
+      },
+      message_update: (u) => {
+        if (u.space === spaceRef.current && u.channel === channelRef.current) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === u.id ? { ...m, content: u.content, editedAt: u.editedAt } : m))
+          );
+        }
+      },
+      message_delete: (d) => {
+        if (d.space === spaceRef.current && d.channel === channelRef.current) {
+          setMessages((prev) => prev.filter((m) => m.id !== d.id));
+        }
+      },
+      reaction: (r) => {
+        if (r.space !== spaceRef.current || r.channel !== channelRef.current) return;
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== r.id) return m;
+            const others = (m.reactions || []).filter((x) => x.emoji !== r.emoji);
+            const next = r.count > 0 ? [...others, { emoji: r.emoji, count: r.count, users: r.users }] : others;
+            return { ...m, reactions: next };
+          })
+        );
+      },
+      typing: (t) => {
+        if (t.space === spaceRef.current && t.channel === channelRef.current) {
+          setTypingUsers((prev) => ({ ...prev, [t.user]: Date.now() + 4000 }));
+        }
+      },
+      presence: (p) => {
+        setMembers((prev) =>
+          prev.map((m) => (m.username === p.user ? { ...m, online: p.status === 'online' } : m))
+        );
+      },
+      channel_created: () => loadSpaces(),
+      channel_deleted: (f) => {
+        loadSpaces().then((next) => {
+          if (spaceRef.current === f.space && channelRef.current === f.channel) {
+            const s = next.find((x) => x.name === f.space);
+            setCurrentChannel(s && s.channels[0] ? s.channels[0] : '');
+          }
+        });
+      },
+      space_deleted: (f) => {
+        loadSpaces().then((next) => {
+          if (spaceRef.current === f.space) {
+            const first = next[0];
+            setCurrentSpace(first ? first.name : '');
+            setCurrentChannel(first && first.channels[0] ? first.channels[0] : '');
+          }
+        });
+      },
+      members_changed: (f) => {
+        if (f.space === spaceRef.current) refreshMembers(f.space);
+      },
+    }),
+    []
+  );
+
+  const { status, send } = useGateway({ token, handlers });
+
+  // Clear the transcript immediately when switching channels.
   useEffect(() => {
     setMessages([]);
     setTypingUsers({});
   }, [currentSpace, currentChannel]);
+
+  // Focus the active channel and (re)load its history — also on reconnect.
+  useEffect(() => {
+    if (!currentSpace || !currentChannel) return undefined;
+    send({ op: 'focus', space: currentSpace, channel: currentChannel });
+    let cancelled = false;
+    api
+      .getMessages(currentSpace, currentChannel)
+      .then((msgs) => {
+        if (!cancelled) setMessages(msgs);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSpace, currentChannel, status, send]);
+
+  // Load members on server switch and when the gateway (re)connects.
+  useEffect(() => {
+    if (!currentSpace) {
+      setMembers([]);
+      return;
+    }
+    refreshMembers(currentSpace);
+  }, [currentSpace, status]);
 
   // Expire typing indicators a few seconds after the last keystroke event.
   useEffect(() => {
@@ -82,60 +185,10 @@ export default function App() {
     return () => clearInterval(iv);
   }, []);
 
-  // ---- Realtime socket for the active channel ----
-  const handlers = useMemo(
-    () => ({
-      onHistory: (msgs) => setMessages((prev) => mergeMessages(prev, msgs)),
-      onMessage: (m) => setMessages((prev) => mergeMessages(prev, [m])),
-      onMessageUpdate: (u) =>
-        setMessages((prev) =>
-          prev.map((m) => (m.id === u.id ? { ...m, content: u.content, editedAt: u.editedAt } : m))
-        ),
-      onMessageDelete: (d) => setMessages((prev) => prev.filter((m) => m.id !== d.id)),
-      onReaction: (r) =>
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== r.id) return m;
-            const others = (m.reactions || []).filter((x) => x.emoji !== r.emoji);
-            const next = r.count > 0 ? [...others, { emoji: r.emoji, count: r.count, users: r.users }] : others;
-            return { ...m, reactions: next };
-          })
-        ),
-      onTyping: (t) => setTypingUsers((prev) => ({ ...prev, [t.user]: Date.now() + 4000 })),
-    }),
-    []
-  );
-
-  const { status, send } = useChannelSocket({
-    space: currentSpace,
-    channel: currentChannel,
-    token,
-    handlers,
-  });
-
-  // Load the member list for the active server, refreshed when the socket
-  // (re)connects so presence stays reasonably fresh.
-  useEffect(() => {
-    if (!currentSpace) {
-      setMembers([]);
-      return undefined;
-    }
-    let cancelled = false;
-    api
-      .getMembers(currentSpace)
-      .then((r) => {
-        if (!cancelled) setMembers(r.members || []);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [currentSpace, status]);
-
   // ---- Actions ----
   function logout() {
     api.clearToken();
-    setTokenState('');
+    setToken('');
     setSpaces([]);
     setCurrentSpace('');
     setCurrentChannel('');
@@ -198,6 +251,7 @@ export default function App() {
     if (!currentSpace) return;
     try {
       await api.deleteSpace(currentSpace);
+      // The gateway also broadcasts space_deleted; refresh proactively.
       const next = await loadSpaces();
       const first = next[0];
       setCurrentSpace(first ? first.name : '');
@@ -207,25 +261,16 @@ export default function App() {
     }
   }
 
-  function sendMessage(content, attachment) {
-    send({ content, attachment });
-  }
-  function editMessage(id, content) {
-    send({ type: 'edit', id, content });
-  }
-  function deleteMessage(id) {
-    send({ type: 'delete', id });
-  }
-  function reactToMessage(id, emoji) {
-    send({ type: 'react', id, emoji });
-  }
-  function sendTyping() {
-    send({ type: 'typing' });
-  }
+  const sendMessage = (content, attachment) =>
+    send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachment });
+  const editMessage = (id, content) => send({ op: 'edit', id, content });
+  const deleteMessage = (id) => send({ op: 'delete', id });
+  const reactToMessage = (id, emoji) => send({ op: 'react', id, emoji });
+  const sendTyping = () => send({ op: 'typing', space: currentSpace, channel: currentChannel });
 
   const typingNames = Object.keys(typingUsers).filter((u) => u !== user);
 
-  if (!token) return <Login onAuthed={setTokenState} />;
+  if (!token) return <Login onAuthed={setToken} />;
 
   return (
     <div className="flex h-full w-full overflow-hidden">
@@ -249,7 +294,7 @@ export default function App() {
         user={user}
         avatar={profile?.avatar}
         onOpenProfile={() => setProfileOpen(true)}
-        status={currentChannel ? status : 'idle'}
+        status={status}
         onLogout={logout}
       />
       <ChatPanel
@@ -270,15 +315,9 @@ export default function App() {
       {inviteCode && (
         <InviteDialog space={currentSpace} code={inviteCode} onClose={() => setInviteCode(null)} />
       )}
-
       {profileOpen && profile && (
-        <ProfileDialog
-          profile={profile}
-          onClose={() => setProfileOpen(false)}
-          onUpdated={setProfile}
-        />
+        <ProfileDialog profile={profile} onClose={() => setProfileOpen(false)} onUpdated={setProfile} />
       )}
-
       {loadError && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-danger px-4 py-2 text-sm text-white shadow-lg">
           {loadError}

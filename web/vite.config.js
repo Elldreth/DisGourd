@@ -16,7 +16,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       ...Object.fromEntries(apiPaths.map((p) => [p, { target: server, changeOrigin: true }])),
-      '/ws': { target: wsServer, ws: true },
+      '/gateway': { target: wsServer, ws: true },
     },
   },
 });

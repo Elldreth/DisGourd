@@ -597,16 +597,9 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     // DELETE /spaces/:name — owner only
     if (pathSegments.length === 2 && req.method === 'DELETE') {
       if (role !== 'owner') return sendJson(res, 403, { error: 'Only the owner can delete this server' });
-      if (clientSpaces[spaceName]) {
-        for (const channelName in clientSpaces[spaceName].channels) {
-          notifyAndDisconnectClients(
-            clientSpaces[spaceName].channels[channelName].clients,
-            `Server '${spaceName}' was deleted by its owner.`, 1000, 'Server deleted'
-          );
-        }
-      }
+      // Notify members over the gateway before the space (and its membership) is gone.
+      deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_deleted', space: spaceName }));
       db.deleteSpace(spaceName);
-      delete clientSpaces[spaceName];
       return sendJson(res, 200, { ok: true });
     }
 
@@ -630,8 +623,10 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     // /spaces/:name/channels ...
     if (pathSegments[2] === 'channels') {
       const channelName = pathSegments[3];
-      // GET messages (members only)
+      // GET messages (members only). ?after=<id> backfills only newer messages.
       if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
+        const after = parseInt(parsedUrl.query.after || '0', 10);
+        if (after > 0) return sendJson(res, 200, db.getMessagesAfter(spaceName, channelName, after));
         const limit = parseInt(parsedUrl.query.limit || '50', 10);
         const offset = parseInt(parsedUrl.query.offset || '0', 10);
         return sendJson(res, 200, db.getMessages(spaceName, channelName, limit, offset));
@@ -642,19 +637,16 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         const { name } = await getJsonBody(req);
         const invalid = validateChannelName(name);
         if (invalid) return sendJson(res, 400, { error: invalid });
-        db.createChannel(spaceName, normalizeChannelName(name));
-        return sendJson(res, 201, { name: normalizeChannelName(name) });
+        const channel = normalizeChannelName(name);
+        db.createChannel(spaceName, channel);
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_created', space: spaceName, channel }));
+        return sendJson(res, 201, { name: channel });
       }
       // DELETE channel (managers only)
       if (channelName && pathSegments.length === 4 && req.method === 'DELETE') {
         if (!canManage) return sendJson(res, 403, { error: 'Only the owner can delete channels' });
-        const channelObj = clientSpaces[spaceName] && clientSpaces[spaceName].channels[channelName];
-        notifyAndDisconnectClients(
-          channelObj ? channelObj.clients : null,
-          `Channel '${channelName}' was deleted.`, 1000, 'Channel deleted'
-        );
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_deleted', space: spaceName, channel: channelName }));
         db.deleteChannel(spaceName, channelName);
-        if (clientSpaces[spaceName]) delete clientSpaces[spaceName].channels[channelName];
         return sendJson(res, 200, { ok: true });
       }
     }
@@ -686,7 +678,10 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       }
       const wasMember = db.isMember(space.id, userId);
       db.addMember(space.id, userId, 'member');
-      if (!wasMember) db.incrementInviteUses(pathSegments[1]);
+      if (!wasMember) {
+        db.incrementInviteUses(pathSegments[1]);
+        deliverToSpaceMembers(space.name, JSON.stringify({ type: 'members_changed', space: space.name }));
+      }
       return sendJson(res, 200, { name: space.name });
     }
     return sendJson(res, 405, { error: 'Method not allowed' });
@@ -1098,7 +1093,7 @@ const HEARTBEAT_INTERVAL_MS = 30000;
 const heartbeatTimer = setInterval(() => {
   wss.clients.forEach((ws) => {
     if (ws.isAlive === false) {
-      detachClient(ws);
+      detachGateway(ws);
       return ws.terminate();
     }
     ws.isAlive = false;
@@ -1108,176 +1103,176 @@ const heartbeatTimer = setInterval(() => {
 heartbeatTimer.unref(); // don't keep the process (or tests) alive just for this
 wss.on('close', () => clearInterval(heartbeatTimer));
 
+// ---- Gateway routing ----
+// The client holds a single "gateway" socket. Events are routed by membership:
+// a message in a server is delivered to every online member's gateway, tagged
+// with its space + channel so the client can place it (and, later, drive unread).
+
+function sendToUser(userId, frameStr) {
+  const set = userClients[userId];
+  if (!set) return;
+  set.forEach((ws) => { if (ws.readyState === WebSocket.OPEN) ws.send(frameStr); });
+}
+
+function deliverToSpaceMembers(spaceName, frameStr) {
+  const space = db.getSpaceByName(spaceName);
+  if (!space) return;
+  for (const m of db.getSpaceMembers(space.id)) sendToUser(m.userId, frameStr);
+}
+
+// Announce a user's online/offline transition to everyone who shares a server
+// (or friendship) with them, so member lists update live.
+function broadcastPresence(userId, status) {
+  const user = db.getUserById(userId);
+  if (!user) return;
+  const frame = JSON.stringify({ type: 'presence', user: user.username, userId, status });
+  const targets = new Set(db.getCoMemberIds(userId));
+  for (const f of db.getFriends(userId)) targets.add(f.id);
+  targets.forEach((id) => sendToUser(id, frame));
+}
+
+function detachGateway(ws) {
+  const set = userClients[ws.userId];
+  if (!set) return;
+  set.delete(ws);
+  if (set.size === 0) {
+    delete userClients[ws.userId];
+    broadcastPresence(ws.userId, 'offline');
+  }
+}
+
+function handleGatewayMessage(ws, raw) {
+  let msg;
+  try { msg = JSON.parse(raw.toString()); } catch { return; }
+  const userId = ws.userId;
+
+  switch (msg.op) {
+    case 'focus': {
+      if (typeof msg.space === 'string' && typeof msg.channel === 'string') {
+        ws.focus = { space: msg.space, channel: msg.channel };
+      } else {
+        ws.focus = null;
+      }
+      return;
+    }
+    case 'message': {
+      const space = db.getSpaceByName(msg.space);
+      if (!space || !db.isMember(space.id, userId) || !db.channelExists(msg.space, msg.channel)) return;
+      const content = typeof msg.content === 'string' ? msg.content : '';
+      const attachment = typeof msg.attachment === 'string' ? msg.attachment : undefined;
+      if (!content && !attachment) return;
+      const user = db.getUserById(userId);
+      const stored = db.storeMessage(msg.space, msg.channel, content, userId, attachment);
+      deliverToSpaceMembers(msg.space, JSON.stringify({
+        type: 'message',
+        id: stored ? stored.id : undefined,
+        space: msg.space,
+        channel: msg.channel,
+        author: user ? user.username : userId,
+        authorId: userId,
+        authorAvatar: user ? user.avatar_url || null : null,
+        content,
+        attachment,
+        timestamp: stored ? stored.timestamp : Date.now(),
+      }));
+      return;
+    }
+    case 'edit': {
+      const id = parseInt(msg.id, 10);
+      const newContent = typeof msg.content === 'string' ? msg.content.trim() : '';
+      if (!id || !newContent) return;
+      const loc = db.getMessageLocation(id);
+      if (!loc) return;
+      const editedAt = db.editMessage(id, userId, newContent); // author-only in DB
+      if (editedAt) {
+        deliverToSpaceMembers(loc.space, JSON.stringify({
+          type: 'message_update', id, space: loc.space, channel: loc.channel, content: newContent, editedAt,
+        }));
+      }
+      return;
+    }
+    case 'delete': {
+      const id = parseInt(msg.id, 10);
+      if (!id) return;
+      const loc = db.getMessageLocation(id);
+      if (!loc) return;
+      if (db.deleteMessage(id, userId)) {
+        deliverToSpaceMembers(loc.space, JSON.stringify({
+          type: 'message_delete', id, space: loc.space, channel: loc.channel,
+        }));
+      }
+      return;
+    }
+    case 'react': {
+      const id = parseInt(msg.id, 10);
+      const emoji = typeof msg.emoji === 'string' ? msg.emoji.trim().slice(0, 16) : '';
+      if (!id || !emoji) return;
+      const loc = db.getMessageLocation(id);
+      if (!loc) return;
+      const space = db.getSpaceByName(loc.space);
+      if (!space || !db.isMember(space.id, userId)) return;
+      db.toggleReaction(id, userId, emoji);
+      const agg = db.getReaction(id, emoji);
+      deliverToSpaceMembers(loc.space, JSON.stringify({
+        type: 'reaction', id, emoji, count: agg.count, users: agg.users, space: loc.space, channel: loc.channel,
+      }));
+      return;
+    }
+    case 'typing': {
+      const space = db.getSpaceByName(msg.space);
+      if (!space || !db.isMember(space.id, userId)) return;
+      const user = db.getUserById(userId);
+      const frame = JSON.stringify({
+        type: 'typing', user: user ? user.username : String(userId), space: msg.space, channel: msg.channel,
+      });
+      // Relay only to members currently viewing this channel (excluding sender).
+      for (const m of db.getSpaceMembers(space.id)) {
+        const socks = userClients[m.userId];
+        if (!socks) continue;
+        socks.forEach((s) => {
+          if (s !== ws && s.readyState === WebSocket.OPEN && s.focus &&
+              s.focus.space === msg.space && s.focus.channel === msg.channel) {
+            s.send(frame);
+          }
+        });
+      }
+      return;
+    }
+    default:
+      return;
+  }
+}
+
 httpServer.on('upgrade', (request, socket, head) => {
   const parsedUrl = url.parse(request.url, true);
-  const match = /^\/ws\/([^/]+)\/([^/]+)/.exec(parsedUrl.pathname || '');
-
-  if (match) {
-    const spaceName = safeDecode(match[1]);
-    const channelName = safeDecode(match[2]);
-
-    const token = parsedUrl.query && parsedUrl.query.token;
-    const payload = token ? verifyToken(token) : null;
-    if (!payload) {
-      socket.destroy();
-      return;
-    }
-
-    // Only members of the server may open a socket, and only to a channel that
-    // actually exists — no more connecting to an arbitrary space/channel by name.
-    const space = db.getSpaceByName(spaceName);
-    if (!space || !db.isMember(space.id, payload.sub) || !db.channelExists(spaceName, channelName)) {
-      socket.destroy();
-      return;
-    }
-    const channelObj = runtimeChannel(spaceName, channelName);
-
-    wss.handleUpgrade(request, socket, head, (wsClient) => {
-      // Store the space and channel info on the wsClient object for later use
-      wsClient.spaceName = spaceName;
-      wsClient.channelName = channelName;
-      wsClient.userId = payload.sub;
-      wsClient.isAlive = true;
-      wsClient.on('pong', () => { wsClient.isAlive = true; });
-
-      channelObj.clients.add(wsClient);
-      const uc = userClients[wsClient.userId] || (userClients[wsClient.userId] = new Set());
-      uc.add(wsClient);
-      if (uc.size === 1) sendPresenceUpdate(wsClient.userId, 'online');
-      sendFriendList(wsClient);
-      logInfo(`Client connected to ${spaceName}/${channelName} (channel now has ${channelObj.clients.size} client(s))`);
-
-      // Let the new client know they're connected (optional)
-      wsClient.send(JSON.stringify({ type: 'system', message: `Connected to ${spaceName}/${channelName}` }));
-
-      // Reconnect backfill: ?after=<lastMessageId> streams every message the
-      // client missed while disconnected. Otherwise ?history=<N> sends the last
-      // N messages for a fresh open.
-      const afterId = parseInt(parsedUrl.query.after || '0', 10);
-      const historyCount = parseInt(parsedUrl.query.history || '0', 10);
-      if (afterId > 0) {
-        const missed = db.getMessagesAfter(spaceName, channelName, afterId);
-        if (missed.length) {
-          wsClient.send(JSON.stringify({ type: 'history', messages: missed }));
-        }
-      } else if (historyCount > 0) {
-        const history = db.getMessages(spaceName, channelName, historyCount, 0);
-        wsClient.send(JSON.stringify({ type: 'history', messages: history }));
-      }
-
-      wsClient.on('message', (message) => {
-        let parsed;
-        try {
-          parsed = JSON.parse(message.toString());
-        } catch {
-          parsed = { content: message.toString() };
-        }
-
-        // Edit an existing message — only the original author may do so.
-        if (parsed.type === 'edit') {
-          const id = parseInt(parsed.id, 10);
-          const newContent = typeof parsed.content === 'string' ? parsed.content.trim() : '';
-          if (!id || !newContent) return;
-          const editedAt = db.editMessage(id, wsClient.userId, newContent);
-          if (editedAt) {
-            broadcast(channelObj, JSON.stringify({
-              type: 'message_update',
-              id,
-              space: spaceName,
-              channel: channelName,
-              content: newContent,
-              editedAt,
-            }));
-          }
-          return;
-        }
-
-        // Delete a message — only the original author may do so.
-        if (parsed.type === 'delete') {
-          const id = parseInt(parsed.id, 10);
-          if (!id) return;
-          if (db.deleteMessage(id, wsClient.userId)) {
-            broadcast(channelObj, JSON.stringify({
-              type: 'message_delete',
-              id,
-              space: spaceName,
-              channel: channelName,
-            }));
-          }
-          return;
-        }
-
-        // Toggle an emoji reaction on a message in this channel.
-        if (parsed.type === 'react') {
-          const id = parseInt(parsed.id, 10);
-          const emoji = typeof parsed.emoji === 'string' ? parsed.emoji.trim().slice(0, 16) : '';
-          if (!id || !emoji || !db.isMessageInChannel(id, spaceName, channelName)) return;
-          db.toggleReaction(id, wsClient.userId, emoji);
-          const agg = db.getReaction(id, emoji);
-          broadcast(channelObj, JSON.stringify({
-            type: 'reaction',
-            id,
-            emoji,
-            count: agg.count,
-            users: agg.users,
-            space: spaceName,
-            channel: channelName,
-          }));
-          return;
-        }
-
-        // Ephemeral typing signal — relayed to everyone else in the channel.
-        if (parsed.type === 'typing') {
-          const typer = db.getUserById(wsClient.userId);
-          const frame = JSON.stringify({
-            type: 'typing',
-            user: typer ? typer.username : String(wsClient.userId),
-            space: spaceName,
-            channel: channelName,
-          });
-          channelObj.clients.forEach((c) => {
-            if (c !== wsClient && c.readyState === WebSocket.OPEN) c.send(frame);
-          });
-          return;
-        }
-
-        const content = typeof parsed.content === 'string' ? parsed.content : '';
-        const attachment = typeof parsed.attachment === 'string' ? parsed.attachment : undefined;
-        if (!content && !attachment) return; // ignore empty frames
-
-        const user = db.getUserById(wsClient.userId);
-        // Persist first so the broadcast carries the authoritative id + timestamp.
-        const stored = db.storeMessage(spaceName, channelName, content, wsClient.userId, attachment);
-        const outgoing = {
-          type: 'message',
-          id: stored ? stored.id : undefined,
-          space: spaceName,
-          channel: channelName,
-          author: user ? user.username : wsClient.userId,
-          authorId: wsClient.userId,
-          authorAvatar: user ? user.avatar_url || null : null,
-          content,
-          attachment,
-          timestamp: stored ? stored.timestamp : Date.now(),
-        };
-        broadcast(channelObj, JSON.stringify(outgoing));
-      });
-
-      wsClient.on('close', (code) => {
-        detachClient(wsClient);
-        logInfo(`Client disconnected from ${spaceName}/${channelName} (code ${code})`);
-      });
-
-      wsClient.on('error', (error) => {
-        console.error(`WebSocket error on ${spaceName}/${channelName}:`, error.message);
-        detachClient(wsClient);
-      });
-    });
-  } else {
-    // If the path doesn't match our WebSocket endpoint, destroy the socket
-    console.log('WebSocket upgrade request for unknown path, destroying socket.');
+  if (parsedUrl.pathname !== '/gateway') {
     socket.destroy();
+    return;
   }
+  const token = parsedUrl.query && parsedUrl.query.token;
+  const payload = token ? verifyToken(token) : null;
+  if (!payload) {
+    socket.destroy();
+    return;
+  }
+
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    ws.userId = payload.sub;
+    ws.focus = null;
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+
+    const set = userClients[ws.userId] || (userClients[ws.userId] = new Set());
+    set.add(ws);
+    if (set.size === 1) broadcastPresence(ws.userId, 'online');
+    logInfo(`Gateway connected for user ${ws.userId} (${set.size} socket(s))`);
+
+    ws.send(JSON.stringify({ type: 'ready' }));
+
+    ws.on('message', (raw) => handleGatewayMessage(ws, raw));
+    ws.on('close', () => detachGateway(ws));
+    ws.on('error', () => detachGateway(ws));
+  });
 });
 
 if (require.main === module) {

@@ -372,6 +372,28 @@ function isMessageInChannel(messageId, spaceName, channelName) {
   `).get(messageId, spaceName, channelName);
 }
 
+// Where a message lives — { space, channel } — used to route edit/delete/react
+// events from the single gateway socket to the right server's members.
+function getMessageLocation(messageId) {
+  return db.prepare(`
+    SELECT s.name AS space, c.name AS channel
+    FROM messages m
+    JOIN channels c ON m.channel_id = c.id
+    JOIN spaces s ON c.space_id = s.id
+    WHERE m.id = ?
+  `).get(messageId);
+}
+
+// Distinct user ids that share at least one server with the given user.
+function getCoMemberIds(userId) {
+  return db.prepare(`
+    SELECT DISTINCT sm2.user_id AS id
+    FROM space_members sm1
+    JOIN space_members sm2 ON sm1.space_id = sm2.space_id
+    WHERE sm1.user_id = ? AND sm2.user_id != ?
+  `).all(userId, userId).map((r) => r.id);
+}
+
 // Edit a message, but only if the requester is its author. Returns the new
 // edited_at timestamp on success, or null if not found / not the author.
 function editMessage(messageId, authorId, content) {
@@ -486,6 +508,8 @@ module.exports = {
   toggleReaction,
   getReaction,
   isMessageInChannel,
+  getMessageLocation,
+  getCoMemberIds,
   getState,
   createUser,
   getUserByUsername,
