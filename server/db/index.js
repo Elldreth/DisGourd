@@ -150,6 +150,14 @@ try {
   if (!hasChannelType) {
     db.exec("ALTER TABLE channels ADD COLUMN type TEXT NOT NULL DEFAULT 'text'");
   }
+  const hasSpoiler = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'attachment_spoiler');
+  if (!hasSpoiler) {
+    db.exec('ALTER TABLE messages ADD COLUMN attachment_spoiler INTEGER NOT NULL DEFAULT 0');
+  }
+  const dmHasSpoiler = db.prepare("PRAGMA table_info(dm_messages)").all().some(c => c.name === 'attachment_spoiler');
+  if (!dmHasSpoiler) {
+    db.exec('ALTER TABLE dm_messages ADD COLUMN attachment_spoiler INTEGER NOT NULL DEFAULT 0');
+  }
 } catch (e) {
   console.error('Error migrating messages table:', e);
 }
@@ -279,7 +287,7 @@ function incrementInviteUses(code) {
   db.prepare('UPDATE invites SET uses = uses + 1 WHERE code = ?').run(code);
 }
 
-function storeMessage(spaceName, channelName, content, authorId, attachmentUrl) {
+function storeMessage(spaceName, channelName, content, authorId, attachmentUrl, spoiler = false) {
   createChannel(spaceName, channelName);
   const channel = db.prepare(`
     SELECT c.id FROM channels c
@@ -289,8 +297,8 @@ function storeMessage(spaceName, channelName, content, authorId, attachmentUrl) 
   if (!channel) return null;
   const createdAt = Date.now();
   const info = db.prepare(
-    'INSERT INTO messages(channel_id, content, author_id, attachment_url, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(channel.id, content, authorId || null, attachmentUrl || null, createdAt);
+    'INSERT INTO messages(channel_id, content, author_id, attachment_url, attachment_spoiler, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(channel.id, content, authorId || null, attachmentUrl || null, spoiler ? 1 : 0, createdAt);
   return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 
@@ -300,6 +308,7 @@ const MESSAGE_SELECT = `
   SELECT m.id,
          m.content,
          m.attachment_url AS attachment,
+         m.attachment_spoiler AS spoiler,
          COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) AS timestamp,
          m.edited_at AS editedAt,
          m.author_id AS authorId,
@@ -492,6 +501,7 @@ const DM_SELECT = `
   SELECT m.id,
          m.content,
          m.attachment_url AS attachment,
+         m.attachment_spoiler AS spoiler,
          COALESCE(m.created_at, 0) AS timestamp,
          m.edited_at AS editedAt,
          m.author_id AS authorId,
@@ -501,12 +511,12 @@ const DM_SELECT = `
   JOIN users u ON m.author_id = u.id
 `;
 
-function storeDm(fromId, toId, content, attachmentUrl) {
+function storeDm(fromId, toId, content, attachmentUrl, spoiler = false) {
   const [a, b] = dmPair(fromId, toId);
   const createdAt = Date.now();
   const info = db.prepare(
-    'INSERT INTO dm_messages(user_a, user_b, author_id, content, attachment_url, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(a, b, fromId, content, attachmentUrl || null, createdAt);
+    'INSERT INTO dm_messages(user_a, user_b, author_id, content, attachment_url, attachment_spoiler, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(a, b, fromId, content, attachmentUrl || null, spoiler ? 1 : 0, createdAt);
   return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 

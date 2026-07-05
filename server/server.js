@@ -907,8 +907,9 @@ function handleGatewayMessage(ws, raw) {
       const content = typeof msg.content === 'string' ? msg.content : '';
       const attachment = typeof msg.attachment === 'string' ? msg.attachment : undefined;
       if (!content && !attachment) return;
+      const spoiler = !!msg.spoiler && !!attachment;
       const user = db.getUserById(userId);
-      const stored = db.storeMessage(msg.space, msg.channel, content, userId, attachment);
+      const stored = db.storeMessage(msg.space, msg.channel, content, userId, attachment, spoiler);
       if (stored) db.markRead(userId, msg.space, msg.channel, stored.id); // author has read their own message
       let mentions = [];
       if (stored && content) {
@@ -925,6 +926,7 @@ function handleGatewayMessage(ws, raw) {
         authorAvatar: user ? user.avatar_url || null : null,
         content,
         attachment,
+        spoiler,
         mentions,
         timestamp: stored ? stored.timestamp : Date.now(),
       }));
@@ -999,8 +1001,9 @@ function handleGatewayMessage(ws, raw) {
       const content = typeof msg.content === 'string' ? msg.content : '';
       const attachment = typeof msg.attachment === 'string' ? msg.attachment : undefined;
       if (!content && !attachment) return;
+      const spoiler = !!msg.spoiler && !!attachment;
       const from = db.getUserById(userId);
-      const stored = db.storeDm(userId, to.id, content, attachment);
+      const stored = db.storeDm(userId, to.id, content, attachment, spoiler);
       db.markDmRead(userId, to.id, stored.id); // sender has read their own message
       const frame = JSON.stringify({
         type: 'dm',
@@ -1012,6 +1015,7 @@ function handleGatewayMessage(ws, raw) {
         toId: to.id,
         content,
         attachment,
+        spoiler,
         timestamp: stored.timestamp,
       });
       sendToUser(userId, frame);

@@ -5,6 +5,7 @@ import { humanSize } from '../util.js';
 export default function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [] }) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState(null); // { url, name, size } once uploaded
+  const [spoilerPending, setSpoilerPending] = useState(false);
   const [progress, setProgress] = useState(null); // 0..1 while uploading
   const [error, setError] = useState('');
   const [mentionMatch, setMentionMatch] = useState(null); // { query, candidates } | null
@@ -39,9 +40,10 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
   function submit() {
     const content = text.trim();
     if ((!content && !pending) || disabled) return;
-    onSend(content, pending ? pending.url : undefined);
+    onSend(content, pending ? pending.url : undefined, pending ? spoilerPending : false);
     setText('');
     setPending(null);
+    setSpoilerPending(false);
     setMentionMatch(null);
     if (taRef.current) taRef.current.style.height = 'auto';
   }
@@ -107,7 +109,21 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
           </div>
           {pending && (
             <button
-              onClick={() => setPending(null)}
+              onClick={() => setSpoilerPending((v) => !v)}
+              title={spoilerPending ? 'Spoiler on — click to turn off' : 'Mark as spoiler'}
+              className={`shrink-0 rounded px-2 py-1 text-xs font-semibold transition ${
+                spoilerPending ? 'bg-brand text-white' : 'bg-ink-600 text-gray-300 hover:bg-ink-500'
+              }`}
+            >
+              {spoilerPending ? '🙈 Spoiler' : 'Spoiler'}
+            </button>
+          )}
+          {pending && (
+            <button
+              onClick={() => {
+                setPending(null);
+                setSpoilerPending(false);
+              }}
               className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
               title="Remove"
             >

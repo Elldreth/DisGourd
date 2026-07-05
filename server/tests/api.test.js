@@ -524,6 +524,22 @@ test('users can view and update their avatar via /me', async () => {
   expect(me.avatar).toBe('/uploads/abc123/pic.png');
 });
 
+test('attachments can be marked as spoilers', async () => {
+  const token = (await register('sid')).token;
+  await createServer(token, 'sp');
+  const gw = gateway(token);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'sp', channel: 'general', content: 'hidden', attachment: '/uploads/x/pic.png', spoiler: true });
+  await wait(80);
+  gw.close();
+
+  const msgs = await messages(token, 'sp', 'general');
+  const m = msgs.find((x) => x.content === 'hidden');
+  expect(m).toBeTruthy();
+  expect(m.spoiler).toBe(1);
+  expect(m.attachment).toBe('/uploads/x/pic.png');
+});
+
 test('file uploads: auth required, no name collisions, type + size validation', async () => {
   const base = baseUrl();
   const { token } = await register('erin');

@@ -30,6 +30,37 @@ function mentionsUser(content, me) {
   return content.split(MENTION_RE).some((p) => p[0] === '@' && p.slice(1) === me);
 }
 
+// A ||spoiler|| segment: hidden until clicked.
+function SpoilerText({ children }) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <span
+      onClick={() => !revealed && setRevealed(true)}
+      title={revealed ? undefined : 'Spoiler — click to reveal'}
+      className={
+        revealed
+          ? 'rounded bg-ink-600/40 px-0.5'
+          : 'cursor-pointer select-none rounded bg-ink-500 px-0.5 text-transparent hover:bg-ink-600'
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+// Render message text with ||spoiler|| segments and (optionally) @mentions.
+function renderRich(content, me, withMentions) {
+  const nodes = [];
+  content.split(/(\|\|[\s\S]+?\|\|)/g).forEach((seg, i) => {
+    if (seg.length >= 4 && seg.startsWith('||') && seg.endsWith('||')) {
+      nodes.push(<SpoilerText key={`s${i}`}>{seg.slice(2, -2)}</SpoilerText>);
+    } else if (seg) {
+      nodes.push(withMentions ? <span key={`t${i}`}>{renderMentions(seg, me)}</span> : seg);
+    }
+  });
+  return nodes;
+}
+
 // Groups consecutive messages from the same author (within 5 minutes) into a
 // single block, and inserts day dividers — the familiar chat reading rhythm.
 export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, simple = false, emptyHeading, emptyBody }) {
@@ -178,11 +209,11 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
           <>
             {m.content && (
               <div className="whitespace-pre-wrap break-words text-gray-200">
-                {simple ? m.content : renderMentions(m.content, currentUser)}
+                {renderRich(m.content, currentUser, !simple)}
                 {m.editedAt && <span className="ml-1 text-[10px] text-gray-500">(edited)</span>}
               </div>
             )}
-            {m.attachment && <Attachment url={m.attachment} />}
+            {m.attachment && <Attachment url={m.attachment} spoiler={m.spoiler} />}
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {reactions.map((r) => {

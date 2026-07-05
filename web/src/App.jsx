@@ -211,6 +211,7 @@ export default function App() {
             authorAvatar: m.fromAvatar,
             content: m.content,
             attachment: m.attachment,
+            spoiler: m.spoiler,
             timestamp: m.timestamp,
           };
           setDmMessages((prev) => mergeMessages(prev, [normalized]));
@@ -394,8 +395,8 @@ export default function App() {
     startDm(username);
   }
 
-  const sendDm = (content, attachment) => {
-    if (currentDm) send({ op: 'dm', to: currentDm, content, attachment });
+  const sendDm = (content, attachment, spoiler) => {
+    if (currentDm) send({ op: 'dm', to: currentDm, content, attachment, spoiler });
   };
   const sendDmTyping = () => {
     if (currentDm) send({ op: 'dm_typing', with: currentDm });
@@ -490,8 +491,8 @@ export default function App() {
     }
   }
 
-  const sendMessage = (content, attachment) =>
-    send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachment });
+  const sendMessage = (content, attachment, spoiler) =>
+    send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachment, spoiler });
   const editMessage = (id, content) => send({ op: 'edit', id, content });
   const deleteMessage = (id) => send({ op: 'delete', id });
   const reactToMessage = (id, emoji) => send({ op: 'react', id, emoji });

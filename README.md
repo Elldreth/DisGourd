@@ -137,5 +137,5 @@ Working today: accounts with avatars, servers with ownership and invite codes,
 text channels, real-time messaging with edit/delete, emoji reactions, typing
 indicators, unread badges, @mentions, direct messages, message search, file
 sharing, presence, a per-server member list, roles (owner/admin/member with
-promote, demote, and remove), and peer-to-peer voice channels. Planned next:
-video/screenshare in calls.
+promote, demote, and remove), spoiler tags (`||text||` and per-image), and
+peer-to-peer voice channels. Planned next: video/screenshare in calls.
