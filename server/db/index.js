@@ -1,6 +1,6 @@
 const path = require('path');
 const Database = require('better-sqlite3');
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'disgourd.db');
 const db = new Database(dbPath);
@@ -25,6 +25,7 @@ db.exec(`
     content TEXT NOT NULL,
     attachment_url TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at INTEGER,
     FOREIGN KEY(channel_id) REFERENCES channels(id) ON DELETE CASCADE,
     FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE SET NULL
   );
@@ -65,6 +66,12 @@ try {
   const hasEmail = db.prepare("PRAGMA table_info(users)").all().some(c => c.name === 'email');
   if (!hasEmail) {
     db.exec('ALTER TABLE users ADD COLUMN email TEXT');
+  }
+  const hasCreatedAt = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'created_at');
+  if (!hasCreatedAt) {
+    db.exec('ALTER TABLE messages ADD COLUMN created_at INTEGER');
+    // Backfill epoch-millisecond timestamps from the legacy DATETIME column.
+    db.exec("UPDATE messages SET created_at = CAST(strftime('%s', timestamp) AS INTEGER) * 1000 WHERE created_at IS NULL AND timestamp IS NOT NULL");
   }
 } catch (e) {
   console.error('Error migrating messages table:', e);
@@ -129,23 +136,45 @@ function storeMessage(spaceName, channelName, content, authorId, attachmentUrl) 
     JOIN spaces s ON c.space_id = s.id
     WHERE s.name = ? AND c.name = ?
   `).get(spaceName, channelName);
-  if (channel) {
-    db.prepare('INSERT INTO messages(channel_id, content, author_id, attachment_url) VALUES (?, ?, ?, ?)')
-      .run(channel.id, content, authorId || null, attachmentUrl || null);
-  }
+  if (!channel) return null;
+  const createdAt = Date.now();
+  const info = db.prepare(
+    'INSERT INTO messages(channel_id, content, author_id, attachment_url, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(channel.id, content, authorId || null, attachmentUrl || null, createdAt);
+  return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 
+// Canonical message projection shared by history and backfill queries.
+// `timestamp` is always epoch milliseconds; `attachment` is the stored URL.
+const MESSAGE_SELECT = `
+  SELECT m.id,
+         m.content,
+         m.attachment_url AS attachment,
+         COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) AS timestamp,
+         m.author_id AS authorId,
+         u.username AS author
+  FROM messages m
+  JOIN channels c ON m.channel_id = c.id
+  JOIN spaces s ON c.space_id = s.id
+  LEFT JOIN users u ON m.author_id = u.id
+`;
+
 function getMessages(spaceName, channelName, limit = 20, offset = 0) {
-  return db.prepare(`
-    SELECT m.id, m.content, m.attachment_url, m.timestamp, u.username as author
-    FROM messages m
-    JOIN channels c ON m.channel_id = c.id
-    JOIN spaces s ON c.space_id = s.id
-    LEFT JOIN users u ON m.author_id = u.id
+  return db.prepare(`${MESSAGE_SELECT}
     WHERE s.name = ? AND c.name = ?
     ORDER BY m.id DESC
     LIMIT ? OFFSET ?
   `).all(spaceName, channelName, limit, offset).reverse();
+}
+
+// Messages newer than a given id, oldest-first — used to backfill gaps after a
+// client reconnects so no messages are missed during a network blip.
+function getMessagesAfter(spaceName, channelName, afterId, limit = 200) {
+  return db.prepare(`${MESSAGE_SELECT}
+    WHERE s.name = ? AND c.name = ? AND m.id > ?
+    ORDER BY m.id ASC
+    LIMIT ?
+  `).all(spaceName, channelName, afterId, limit);
 }
 
 function getState() {
@@ -177,6 +206,11 @@ function getUserByEmail(email) {
 
 function getUserById(id) {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+}
+
+function setUserPassword(userId, passwordHash, salt) {
+  return db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?')
+    .run(passwordHash, salt, userId).changes > 0;
 }
 
 function createFriendRequest(fromId, toId) {
@@ -217,11 +251,13 @@ module.exports = {
   renameChannel,
   storeMessage,
   getMessages,
+  getMessagesAfter,
   getState,
   createUser,
   getUserByUsername,
   getUserByEmail,
   getUserById,
+  setUserPassword,
   createFriendRequest,
   getIncomingFriendRequests,
   removeFriendRequest,
