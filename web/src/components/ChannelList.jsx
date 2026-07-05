@@ -20,6 +20,8 @@ export default function ChannelList({
   onInvite,
   onDeleteServer,
   user,
+  avatar,
+  onOpenProfile,
   status,
   onLogout,
 }) {
@@ -132,15 +134,21 @@ export default function ChannelList({
       </div>
 
       {/* Current-user footer with live connection status */}
-      <div className="flex items-center gap-2 bg-ink-900/60 px-2 py-2">
-        <Avatar name={user} size={32} status="online" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">{user}</div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-            <span className={`h-2 w-2 rounded-full ${st.color}`} />
-            {st.text}
+      <div className="flex items-center gap-1 bg-ink-900/60 px-2 py-2">
+        <button
+          onClick={onOpenProfile}
+          title="Edit your profile"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded p-1 text-left transition hover:bg-ink-600/50"
+        >
+          <Avatar name={user} size={32} status="online" src={avatar} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{user}</div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <span className={`h-2 w-2 rounded-full ${st.color}`} />
+              {st.text}
+            </div>
           </div>
-        </div>
+        </button>
         <button
           onClick={onLogout}
           title="Sign out"

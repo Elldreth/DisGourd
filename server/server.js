@@ -121,6 +121,8 @@ function verifyToken(token) {
 // ---- Rate limiting & validation for auth endpoints ----
 const rateBuckets = new Map();
 function rateLimitOk(key, max, windowMs) {
+  // Tests share one IP and register many users; don't throttle them.
+  if (process.env.NODE_ENV === 'test') return true;
   const now = Date.now();
   let bucket = rateBuckets.get(key);
   if (!bucket || now > bucket.reset) {
@@ -497,6 +499,20 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       res.writeHead(400);
       return res.end(JSON.stringify({ error: e.message }));
     }
+  }
+  else if (parsedUrl.pathname === '/me' && (req.method === 'GET' || req.method === 'PATCH')) {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+    if (req.method === 'PATCH') {
+      const { avatar } = await getJsonBody(req);
+      if (avatar != null && (typeof avatar !== 'string' || (avatar && !avatar.startsWith('/uploads/')))) {
+        return sendJson(res, 400, { error: 'Avatar must be an uploaded image URL' });
+      }
+      db.setUserAvatar(userId, avatar || null);
+    }
+    const u = db.getUserById(userId);
+    if (!u) return sendJson(res, 404, { error: 'User not found' });
+    return sendJson(res, 200, { id: u.id, username: u.username, email: u.email, avatar: u.avatar_url || null });
   }
   else if (pathSegments[0] === 'friends' && pathSegments.length === 1 && req.method === 'GET') {
     const userId = authUserId(req, parsedUrl);
@@ -1239,6 +1255,7 @@ httpServer.on('upgrade', (request, socket, head) => {
           channel: channelName,
           author: user ? user.username : wsClient.userId,
           authorId: wsClient.userId,
+          authorAvatar: user ? user.avatar_url || null : null,
           content,
           attachment,
           timestamp: stored ? stored.timestamp : Date.now(),

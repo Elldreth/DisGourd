@@ -8,6 +8,7 @@ import ChannelList from './components/ChannelList.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import MemberList from './components/MemberList.jsx';
 import InviteDialog from './components/InviteDialog.jsx';
+import ProfileDialog from './components/ProfileDialog.jsx';
 
 export default function App() {
   const [token, setTokenState] = useState(api.getToken());
@@ -23,6 +24,8 @@ export default function App() {
   const [members, setMembers] = useState([]);
   const [inviteCode, setInviteCode] = useState(null); // shown in the invite dialog
   const [typingUsers, setTypingUsers] = useState({}); // username -> expires-at ms
+  const [profile, setProfile] = useState(null); // current user's profile (avatar, email)
+  const [profileOpen, setProfileOpen] = useState(false);
   const [loadError, setLoadError] = useState('');
 
   const activeSpace = spaces.find((s) => s.name === currentSpace);
@@ -51,6 +54,7 @@ export default function App() {
         setCurrentChannel(next[0].channels[0] || '');
       }
     });
+    api.getMe().then(setProfile).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -137,6 +141,7 @@ export default function App() {
     setCurrentChannel('');
     setMessages([]);
     setMembers([]);
+    setProfile(null);
   }
 
   function selectSpace(name) {
@@ -242,6 +247,8 @@ export default function App() {
         onInvite={makeInvite}
         onDeleteServer={deleteServer}
         user={user}
+        avatar={profile?.avatar}
+        onOpenProfile={() => setProfileOpen(true)}
         status={currentChannel ? status : 'idle'}
         onLogout={logout}
       />
@@ -262,6 +269,14 @@ export default function App() {
 
       {inviteCode && (
         <InviteDialog space={currentSpace} code={inviteCode} onClose={() => setInviteCode(null)} />
+      )}
+
+      {profileOpen && profile && (
+        <ProfileDialog
+          profile={profile}
+          onClose={() => setProfileOpen(false)}
+          onUpdated={setProfile}
+        />
       )}
 
       {loadError && (

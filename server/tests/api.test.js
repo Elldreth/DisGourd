@@ -294,6 +294,35 @@ test('reactions toggle, persist in history, and typing is relayed', async () => 
   expect(relayed).toBe(true);
 });
 
+test('users can view and update their avatar via /me', async () => {
+  const base = baseUrl();
+  const { token } = await register('jane');
+
+  let res = await fetch(`${base}/me`, { headers: auth(token) });
+  expect(res.status).toBe(200);
+  let me = await res.json();
+  expect(me.username).toBe('jane');
+  expect(me.avatar).toBeNull();
+
+  // A non-upload URL is rejected (prevents pointing avatars at arbitrary hosts).
+  res = await fetch(`${base}/me`, {
+    method: 'PATCH',
+    headers: { ...JSON_HEADERS, ...auth(token) },
+    body: JSON.stringify({ avatar: 'http://evil.example/x.png' }),
+  });
+  expect(res.status).toBe(400);
+
+  // An uploaded image URL is accepted.
+  res = await fetch(`${base}/me`, {
+    method: 'PATCH',
+    headers: { ...JSON_HEADERS, ...auth(token) },
+    body: JSON.stringify({ avatar: '/uploads/abc123/pic.png' }),
+  });
+  expect(res.status).toBe(200);
+  me = await res.json();
+  expect(me.avatar).toBe('/uploads/abc123/pic.png');
+});
+
 test('file uploads: auth required, no name collisions, type + size validation', async () => {
   const base = baseUrl();
   const { token } = await register('erin');

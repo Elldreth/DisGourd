@@ -104,6 +104,14 @@ export function getMessages(space, channel, { limit = 50, offset = 0 } = {}) {
   );
 }
 
+// ---- Current user profile ----
+export function getMe() {
+  return request('/me');
+}
+export function updateMe(patch) {
+  return request('/me', { method: 'PATCH', body: patch });
+}
+
 // ---- Friends ----
 export function getFriends() {
   return request('/friends');

@@ -109,6 +109,10 @@ try {
   if (!hasOwner) {
     db.exec('ALTER TABLE spaces ADD COLUMN owner_id INTEGER');
   }
+  const hasAvatar = db.prepare("PRAGMA table_info(users)").all().some(c => c.name === 'avatar_url');
+  if (!hasAvatar) {
+    db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+  }
 } catch (e) {
   console.error('Error migrating messages table:', e);
 }
@@ -231,7 +235,7 @@ function getUserSpaces(userId) {
 
 function getSpaceMembers(spaceId) {
   return db.prepare(`
-    SELECT u.id AS userId, u.username, sm.role
+    SELECT u.id AS userId, u.username, u.avatar_url AS avatar, sm.role
     FROM space_members sm
     JOIN users u ON sm.user_id = u.id
     WHERE sm.space_id = ?
@@ -278,7 +282,8 @@ const MESSAGE_SELECT = `
          COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) AS timestamp,
          m.edited_at AS editedAt,
          m.author_id AS authorId,
-         u.username AS author
+         u.username AS author,
+         u.avatar_url AS authorAvatar
   FROM messages m
   JOIN channels c ON m.channel_id = c.id
   JOIN spaces s ON c.space_id = s.id
@@ -419,6 +424,11 @@ function setUserPassword(userId, passwordHash, salt) {
     .run(passwordHash, salt, userId).changes > 0;
 }
 
+function setUserAvatar(userId, avatarUrl) {
+  return db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?')
+    .run(avatarUrl || null, userId).changes > 0;
+}
+
 function createFriendRequest(fromId, toId) {
   const stmt = db.prepare('INSERT OR IGNORE INTO friend_requests(from_user, to_user) VALUES (?, ?)');
   stmt.run(fromId, toId);
@@ -482,6 +492,7 @@ module.exports = {
   getUserByEmail,
   getUserById,
   setUserPassword,
+  setUserAvatar,
   createFriendRequest,
   getIncomingFriendRequests,
   removeFriendRequest,

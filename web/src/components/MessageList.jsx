@@ -108,7 +108,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact }
             {formatTime(m.timestamp)}
           </span>
         ) : (
-          <Avatar name={m.author} size={40} />
+          <Avatar name={m.author} size={40} src={m.authorAvatar} />
         )}
       </div>
 

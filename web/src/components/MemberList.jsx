@@ -36,7 +36,7 @@ function Group({ label, people, status }) {
             status === 'offline' ? 'opacity-50' : ''
           }`}
         >
-          <Avatar name={p.username} size={30} status={status} />
+          <Avatar name={p.username} size={30} status={status} src={p.avatar} />
           <span className="min-w-0 flex-1 truncate text-sm text-gray-200">{p.username}</span>
           {p.role === 'owner' && (
             <span className="shrink-0 rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand">
