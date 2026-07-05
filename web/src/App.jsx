@@ -631,7 +631,12 @@ export default function App() {
         <InviteDialog space={currentSpace} code={inviteCode} onClose={() => setInviteCode(null)} />
       )}
       {profileOpen && profile && (
-        <ProfileDialog profile={profile} onClose={() => setProfileOpen(false)} onUpdated={setProfile} />
+        <ProfileDialog
+          profile={profile}
+          onClose={() => setProfileOpen(false)}
+          onUpdated={setProfile}
+          onOutputChange={() => voiceRef.current && voiceRef.current.applyOutput()}
+        />
       )}
       {searchOpen && (
         <SearchOverlay

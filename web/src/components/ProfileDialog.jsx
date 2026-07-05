@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
+import AudioSettings from './AudioSettings.jsx';
 
-// Lets the user view their account and upload/remove an avatar image.
-export default function ProfileDialog({ profile, onClose, onUpdated }) {
+// User settings: avatar/profile and audio devices.
+export default function ProfileDialog({ profile, onClose, onUpdated, onOutputChange }) {
   const [avatar, setAvatar] = useState(profile?.avatar || null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -50,41 +51,54 @@ export default function ProfileDialog({ profile, onClose, onUpdated }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-xl bg-ink-800 p-6 shadow-2xl ring-1 ring-ink-500/50"
+        className="flex max-h-[85vh] w-full max-w-md flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-4 text-lg font-bold">Your profile</h3>
-        <div className="flex items-center gap-4">
-          <Avatar name={profile?.username} size={64} src={avatar} />
-          <div className="min-w-0">
-            <div className="truncate font-semibold">{profile?.username}</div>
-            <div className="truncate text-sm text-gray-400">{profile?.email}</div>
-          </div>
-        </div>
-
-        {error && <div className="mt-3 text-sm text-danger">{error}</div>}
-
-        <div className="mt-5 flex items-center gap-2">
-          <label
-            className={`cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover ${
-              busy ? 'pointer-events-none opacity-60' : ''
-            }`}
-          >
-            {busy ? 'Saving…' : avatar ? 'Change avatar' : 'Upload avatar'}
-            <input type="file" accept="image/*" hidden onChange={pickFile} disabled={busy} />
-          </label>
-          {avatar && (
-            <button
-              onClick={removeAvatar}
-              disabled={busy}
-              className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:text-white"
-            >
-              Remove
-            </button>
-          )}
-          <button onClick={onClose} className="ml-auto text-sm text-gray-400 hover:text-white">
+        <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
+          <h3 className="text-lg font-bold">Settings</h3>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white">
             Close
           </button>
+        </div>
+
+        <div className="space-y-6 overflow-y-auto p-6">
+          <section>
+            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Profile</h4>
+            <div className="flex items-center gap-4">
+              <Avatar name={profile?.username} size={64} src={avatar} />
+              <div className="min-w-0">
+                <div className="truncate font-semibold">{profile?.username}</div>
+                <div className="truncate text-sm text-gray-400">{profile?.email}</div>
+              </div>
+            </div>
+            {error && <div className="mt-3 text-sm text-danger">{error}</div>}
+            <div className="mt-4 flex items-center gap-2">
+              <label
+                className={`cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover ${
+                  busy ? 'pointer-events-none opacity-60' : ''
+                }`}
+              >
+                {busy ? 'Saving…' : avatar ? 'Change avatar' : 'Upload avatar'}
+                <input type="file" accept="image/*" hidden onChange={pickFile} disabled={busy} />
+              </label>
+              {avatar && (
+                <button
+                  onClick={removeAvatar}
+                  disabled={busy}
+                  className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:text-white"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Voice &amp; audio
+            </h4>
+            <AudioSettings onOutputChange={onOutputChange} />
+          </section>
         </div>
       </div>
     </div>

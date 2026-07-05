@@ -4,6 +4,8 @@
 //
 // STUN handles most NATs; for tricky networks add a TURN server by setting
 // window.__DISGOURD_ICE__ (an array of RTCIceServer objects) before load.
+import { audioConstraints, getPreferredInput, getPreferredOutput } from './audio.js';
+
 const ICE_SERVERS =
   (typeof window !== 'undefined' && window.__DISGOURD_ICE__) || [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -62,6 +64,30 @@ export function createVoiceController({ send, myId, onChange }) {
     if (changed) emit();
   }
 
+  // Open the preferred microphone, falling back to the system default if that
+  // specific device is unavailable.
+  async function getMicStream() {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: audioConstraints() });
+    } catch (err) {
+      if (getPreferredInput()) {
+        return navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      throw err;
+    }
+  }
+
+  function applySink(el) {
+    const out = getPreferredOutput();
+    if (out && typeof el.setSinkId === 'function') el.setSinkId(out).catch(() => {});
+  }
+
+  // Re-route all remote audio to the preferred speaker (call after the user
+  // changes their output device while in a call).
+  function applyOutput() {
+    audioEls.forEach((el) => applySink(el));
+  }
+
   function newPeer(userId, initiator) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     if (localStream) {
@@ -81,6 +107,7 @@ export function createVoiceController({ send, myId, onChange }) {
         audioEls.set(userId, el);
       }
       el.srcObject = e.streams[0];
+      applySink(el);
       const p = el.play?.();
       if (p) p.catch(() => {});
       setupAnalyser(userId, e.streams[0]);
@@ -102,7 +129,7 @@ export function createVoiceController({ send, myId, onChange }) {
     micError = false;
     emit();
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStream = await getMicStream();
       if (muted) localStream.getAudioTracks().forEach((t) => (t.enabled = false));
       setupAnalyser(myId, localStream);
     } catch {
@@ -211,6 +238,7 @@ export function createVoiceController({ send, myId, onChange }) {
     join,
     leave,
     toggleMute,
+    applyOutput,
     handlePeers,
     handlePeerJoined,
     handlePeerLeft,

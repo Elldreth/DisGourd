@@ -46,6 +46,10 @@ your friends just need to reach that port on your machine:
 Set a fixed secret in production so tokens stay valid across restarts and
 deployments (see below).
 
+Each person can pick their own **microphone and speaker** for voice under
+**Settings** (click your name in the bottom-left) → **Voice & audio**, including
+a mic test — independent of the operating-system default.
+
 ## Configuration
 
 All settings are optional and provided via environment variables (or
