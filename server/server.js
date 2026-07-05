@@ -852,7 +852,7 @@ const voiceKey = (space, channel) => JSON.stringify([space, channel]);
 
 function voiceParticipants(room) {
   return [...room.members.values()].map((p) => ({
-    userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
+    userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted, sharing: !!p.sharing,
   }));
 }
 
@@ -1060,7 +1060,7 @@ function handleGatewayMessage(ws, raw) {
       const existing = [...room.members.values()].map((p) => ({
         userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
       }));
-      const me = { ws, userId, username: user.username, avatar: user.avatar_url || null, muted: false };
+      const me = { ws, userId, username: user.username, avatar: user.avatar_url || null, muted: false, sharing: false };
       room.members.set(userId, me);
       ws.voiceRoom = key;
       // The joiner initiates offers to everyone already here.
@@ -1095,6 +1095,16 @@ function handleGatewayMessage(ws, raw) {
       const entry = room.members.get(userId);
       if (entry) {
         entry.muted = !!msg.muted;
+        broadcastVoiceState(room);
+      }
+      return;
+    }
+    case 'voice_share': {
+      const room = voiceRooms.get(ws.voiceRoom);
+      if (!room) return;
+      const entry = room.members.get(userId);
+      if (entry) {
+        entry.sharing = !!msg.sharing;
         broadcastVoiceState(room);
       }
       return;

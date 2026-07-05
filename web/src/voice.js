@@ -27,11 +27,17 @@ export function createVoiceController({ send, myId, onChange }) {
   let pttActive = false; // push-to-talk key currently held
   let micError = false; // joined but couldn't get a microphone (listen-only)
   let localStream = null;
+  let shareStream = null; // app/screen audio we're broadcasting (separate track)
+  let shareTrack = null;
+  let sharing = false;
+  let shareError = ''; // last share failure message, for the UI
   let participants = []; // authoritative list from the server (voice_state)
   let knownIds = null; // Set of participant userIds, for join/leave chimes
   const pcs = new Map(); // userId -> peer state { pc, polite, makingOffer, ignoreOffer, state }
-  const audioEls = new Map(); // userId -> HTMLAudioElement
-  const analysers = new Map(); // userId -> { analyser, data }
+  const audioEls = new Map(); // streamId -> HTMLAudioElement (a user may send 2)
+  const streamOwner = new Map(); // streamId -> userId, for cleanup
+  const micStreamId = new Map(); // userId -> their first (mic) streamId
+  const analysers = new Map(); // userId -> { analyser, data } (mic stream only)
   const speaking = new Set(); // userIds currently speaking
   let audioCtx = null;
   let speakTimer = null;
@@ -55,6 +61,8 @@ export function createVoiceController({ send, myId, onChange }) {
       pttEnabled: getPttEnabled(),
       micError,
       unstable: unstable(),
+      sharing,
+      shareError,
       participants: participants.map((p) => ({ ...p, speaking: speaking.has(p.userId) })),
     });
   }
@@ -165,17 +173,43 @@ export function createVoiceController({ send, myId, onChange }) {
 
   function attachRemote(userId, stream) {
     if (!stream) return;
-    let el = audioEls.get(userId);
+    const sid = stream.id;
+    let el = audioEls.get(sid);
     if (!el) {
       el = new Audio();
       el.autoplay = true;
-      audioEls.set(userId, el);
+      audioEls.set(sid, el);
+      streamOwner.set(sid, userId);
     }
     el.srcObject = stream;
     el.muted = deafened;
     applySink(el);
     playEl(el);
-    setupAnalyser(userId, stream);
+    // Only a user's first stream (their mic) drives the speaking indicator; a
+    // shared-audio stream must not light up their avatar.
+    if (!micStreamId.has(userId)) {
+      micStreamId.set(userId, sid);
+      setupAnalyser(userId, stream);
+    }
+    // Drop the element when a shared stream stops (sharer ended it).
+    stream.getAudioTracks().forEach((t) => {
+      t.onended = () => removeStream(sid);
+    });
+  }
+
+  function removeStream(sid) {
+    const el = audioEls.get(sid);
+    if (el) {
+      el.srcObject = null;
+      audioEls.delete(sid);
+    }
+    const owner = streamOwner.get(sid);
+    streamOwner.delete(sid);
+    if (owner != null && micStreamId.get(owner) === sid) {
+      micStreamId.delete(owner);
+      analysers.delete(owner);
+      speaking.delete(owner);
+    }
   }
 
   // Create (or reuse) a peer connection using the "perfect negotiation" pattern
@@ -202,6 +236,9 @@ export function createVoiceController({ send, myId, onChange }) {
         /* ignore */
       }
     }
+    // If we're already broadcasting app audio, send that too (as its own track)
+    // so peers joining mid-share hear it.
+    if (shareStream) shareStream.getTracks().forEach((t) => pc.addTrack(t, shareStream));
 
     pc.onnegotiationneeded = async () => {
       try {
@@ -267,13 +304,14 @@ export function createVoiceController({ send, myId, onChange }) {
   }
 
   function leave() {
+    if (sharing || shareTrack) stopShare();
     if (room) {
       send({ op: 'voice_leave' });
       if (getVoiceSounds()) playSelfLeave();
     }
-    pcs.forEach((pc) => {
+    pcs.forEach((st) => {
       try {
-        pc.close();
+        st.pc.close();
       } catch {
         /* ignore */
       }
@@ -283,6 +321,8 @@ export function createVoiceController({ send, myId, onChange }) {
       el.srcObject = null;
     });
     audioEls.clear();
+    streamOwner.clear();
+    micStreamId.clear();
     analysers.clear();
     speaking.clear();
     pendingPlay.clear();
@@ -299,6 +339,8 @@ export function createVoiceController({ send, myId, onChange }) {
     micError = false;
     deafened = false;
     pttActive = false;
+    sharing = false;
+    shareError = '';
     knownIds = null;
     participants = [];
     emit();
@@ -366,6 +408,70 @@ export function createVoiceController({ send, myId, onChange }) {
     emit();
   }
 
+  // Start broadcasting app/screen audio as a SEPARATE track alongside the mic,
+  // so you can keep talking while others hear (e.g.) music. The audio is
+  // captured via getDisplayMedia; only Chromium actually provides it.
+  async function startShare() {
+    if (!room || sharing) return;
+    shareError = '';
+    emit();
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    } catch {
+      return; // user dismissed the picker — nothing to report
+    }
+    // We only want the audio; discard any video (Phase C handles video).
+    stream.getVideoTracks().forEach((t) => t.stop());
+    const audio = stream.getAudioTracks()[0];
+    if (!audio) {
+      stream.getTracks().forEach((t) => t.stop());
+      shareError =
+        'No audio was captured. Use Chrome/Edge and share a Tab with “Share tab audio”, or your whole Screen with “Share system audio”.';
+      emit();
+      return;
+    }
+    shareStream = new MediaStream([audio]);
+    shareTrack = audio;
+    sharing = true;
+    audio.onended = () => stopShare(); // browser's native "Stop sharing"
+    pcs.forEach(({ pc }) => pc.addTrack(audio, shareStream)); // triggers renegotiation
+    send({ op: 'voice_share', sharing: true });
+    emit();
+  }
+
+  function stopShare() {
+    if (!sharing && !shareTrack) return;
+    sharing = false;
+    if (shareTrack) {
+      pcs.forEach(({ pc }) => {
+        const sender = pc.getSenders().find((s) => s.track === shareTrack);
+        if (sender) {
+          try {
+            pc.removeTrack(sender); // triggers renegotiation
+          } catch {
+            /* ignore */
+          }
+        }
+      });
+      shareTrack.onended = null;
+      try {
+        shareTrack.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+    shareStream = null;
+    shareTrack = null;
+    if (room) send({ op: 'voice_share', sharing: false });
+    emit();
+  }
+
+  function toggleShare() {
+    if (sharing) stopShare();
+    else startShare();
+  }
+
   // ---- Gateway frames ----
   // Both sides proactively create the peer connection (the joiner from the peer
   // list, existing members from peer-joined); perfect negotiation resolves the
@@ -411,11 +517,16 @@ export function createVoiceController({ send, myId, onChange }) {
       }
       pcs.delete(userId);
     }
-    const el = audioEls.get(userId);
-    if (el) {
-      el.srcObject = null;
-      audioEls.delete(userId);
+    // Tear down every stream this user was sending (mic and any shared audio).
+    for (const [sid, owner] of streamOwner) {
+      if (owner === userId) {
+        const el = audioEls.get(sid);
+        if (el) el.srcObject = null;
+        audioEls.delete(sid);
+        streamOwner.delete(sid);
+      }
     }
+    micStreamId.delete(userId);
     analysers.delete(userId);
     speaking.delete(userId);
   }
@@ -445,6 +556,9 @@ export function createVoiceController({ send, myId, onChange }) {
     setPttActive,
     refreshPtt,
     switchMic,
+    startShare,
+    stopShare,
+    toggleShare,
     applyOutput,
     handlePeers,
     handlePeerJoined,

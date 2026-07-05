@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Avatar from './Avatar.jsx';
 import UserFooter from './UserFooter.jsx';
+import { displayCaptureSupported } from '../audio.js';
 
 export default function ChannelList({
   space,
@@ -18,10 +19,13 @@ export default function ChannelList({
   voiceStatus,
   voiceMicError,
   voiceUnstable,
+  voiceSharing,
+  voiceShareError,
   onJoinVoice,
   onLeaveVoice,
   onToggleMute,
   onToggleDeafen,
+  onToggleShare,
   onSelect,
   onCreateChannel,
   canManage,
@@ -209,6 +213,7 @@ export default function ChannelList({
                     <div key={p.username} className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
                       <Avatar name={p.username} size={20} src={p.avatar} status="online" speaking={p.speaking} />
                       <span className="min-w-0 flex-1 truncate">{p.username}</span>
+                      {p.sharing && <span title="Sharing audio" className="text-xs">🎵</span>}
                       {p.muted && <span title="Muted" className="text-xs text-danger">🔇</span>}
                     </div>
                   ))}
@@ -261,6 +266,19 @@ export default function ChannelList({
               Leave
             </button>
           </div>
+          {displayCaptureSupported() && (
+            <button
+              onClick={onToggleShare}
+              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs font-semibold transition ${
+                voiceSharing
+                  ? 'bg-danger/80 text-white hover:bg-danger'
+                  : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+              }`}
+            >
+              {voiceSharing ? '⏹ Stop sharing audio' : '🎵 Share app audio'}
+            </button>
+          )}
+          {voiceShareError && <div className="mt-1 text-[11px] text-idle">{voiceShareError}</div>}
           {voicePttEnabled && !voiceMicError && (
             <div className="mt-1 text-[11px] text-gray-400">🎙 Push-to-talk on — hold your key to speak.</div>
           )}

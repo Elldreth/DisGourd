@@ -59,6 +59,12 @@ export function outputSelectionSupported() {
   return typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
 }
 
+// Capturing tab/screen (and its audio) needs getDisplayMedia. Present on
+// Chromium and Firefox; only Chromium actually delivers the audio track.
+export function displayCaptureSupported() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+}
+
 // Build getUserMedia audio constraints honoring the preferred input device.
 export function audioConstraints() {
   const id = getPreferredInput();

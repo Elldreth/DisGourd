@@ -41,7 +41,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
-  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, participants: [] });
+  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, sharing: false, shareError: '', participants: [] });
   const myVoice = voiceCall.room;
   const [loadError, setLoadError] = useState('');
 
@@ -496,6 +496,9 @@ export default function App() {
   function switchMic() {
     if (voiceRef.current) voiceRef.current.switchMic();
   }
+  function toggleShareAudio() {
+    if (voiceRef.current) voiceRef.current.toggleShare();
+  }
 
   async function makeInvite() {
     try {
@@ -636,10 +639,13 @@ export default function App() {
             voiceStatus={voiceCall.status}
             voiceMicError={voiceCall.micError}
             voiceUnstable={voiceCall.unstable}
+            voiceSharing={voiceCall.sharing}
+            voiceShareError={voiceCall.shareError}
             onJoinVoice={joinVoice}
             onLeaveVoice={leaveVoice}
             onToggleMute={toggleMute}
             onToggleDeafen={toggleDeafen}
+            onToggleShare={toggleShareAudio}
             onSelect={setCurrentChannel}
             onCreateChannel={createChannel}
             canManage={canManage}
