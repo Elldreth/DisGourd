@@ -20,7 +20,7 @@ import { playTestTone } from '../sounds.js';
 
 // Detect and choose the microphone and speaker DisGourd uses, independent of
 // the OS default, with a mic level test.
-export default function AudioSettings({ onOutputChange, onPttChange }) {
+export default function AudioSettings({ onOutputChange, onPttChange, onMicChange, inCall }) {
   const [inputs, setInputs] = useState([]);
   const [outputs, setOutputs] = useState([]);
   const [labeled, setLabeled] = useState(false);
@@ -67,6 +67,7 @@ export default function AudioSettings({ onOutputChange, onPttChange }) {
     setMic(id);
     setPreferredInput(id);
     if (testing) startTest(id); // restart the meter on the new device
+    if (onMicChange) onMicChange(); // apply live if we're in a call
   }
 
   function chooseSpeaker(id) {
@@ -276,7 +277,9 @@ export default function AudioSettings({ onOutputChange, onPttChange }) {
 
       {error && <div className="text-sm text-danger">{error}</div>}
       <p className="text-xs text-gray-500">
-        The microphone applies the next time you join a voice channel; the speaker applies right away.
+        {inCall
+          ? 'Microphone and speaker changes apply immediately to your current call.'
+          : 'Your microphone and speaker choices apply the next time you join a voice channel.'}
       </p>
     </div>
   );

@@ -17,6 +17,7 @@ export default function ChannelList({
   voicePttEnabled,
   voiceStatus,
   voiceMicError,
+  voiceUnstable,
   onJoinVoice,
   onLeaveVoice,
   onToggleMute,
@@ -221,10 +222,14 @@ export default function ChannelList({
       {myVoice && (
         <div className="border-t border-ink-900/60 bg-ink-900/40 px-3 py-2">
           <div className="flex items-center gap-2">
-            <span className={voiceMicError ? 'text-idle' : 'text-online'}>🔊</span>
+            <span className={voiceMicError || voiceUnstable ? 'text-idle' : 'text-online'}>🔊</span>
             <div className="min-w-0 flex-1">
-              <div className={`truncate text-xs font-semibold ${voiceMicError ? 'text-idle' : 'text-online'}`}>
-                {voiceStatus === 'connecting' ? 'Connecting…' : 'Voice connected'}
+              <div className={`truncate text-xs font-semibold ${voiceMicError || voiceUnstable ? 'text-idle' : 'text-online'}`}>
+                {voiceStatus === 'connecting'
+                  ? 'Connecting…'
+                  : voiceUnstable
+                    ? 'Reconnecting…'
+                    : 'Voice connected'}
               </div>
               <div className="truncate text-xs text-gray-400">{myVoice.channel} · {myVoice.space}</div>
             </div>

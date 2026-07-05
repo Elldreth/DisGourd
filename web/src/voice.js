@@ -29,12 +29,22 @@ export function createVoiceController({ send, myId, onChange }) {
   let localStream = null;
   let participants = []; // authoritative list from the server (voice_state)
   let knownIds = null; // Set of participant userIds, for join/leave chimes
-  const pcs = new Map(); // userId -> RTCPeerConnection
+  const pcs = new Map(); // userId -> peer state { pc, polite, makingOffer, ignoreOffer, state }
   const audioEls = new Map(); // userId -> HTMLAudioElement
   const analysers = new Map(); // userId -> { analyser, data }
   const speaking = new Set(); // userIds currently speaking
   let audioCtx = null;
   let speakTimer = null;
+  const pendingPlay = new Set(); // audio elements blocked by autoplay policy
+  let autoplayArmed = false;
+
+  // A peer link is "unstable" once it has dropped and is trying to recover.
+  function unstable() {
+    for (const st of pcs.values()) {
+      if (st.state === 'disconnected' || st.state === 'failed') return true;
+    }
+    return false;
+  }
 
   function emit() {
     onChange({
@@ -44,6 +54,7 @@ export function createVoiceController({ send, myId, onChange }) {
       deafened,
       pttEnabled: getPttEnabled(),
       micError,
+      unstable: unstable(),
       participants: participants.map((p) => ({ ...p, speaking: speaking.has(p.userId) })),
     });
   }
@@ -122,39 +133,112 @@ export function createVoiceController({ send, myId, onChange }) {
     audioEls.forEach((el) => applySink(el));
   }
 
-  function newPeer(userId, initiator) {
+  // Try to play an element; if the browser blocks autoplay, queue it and retry
+  // on the next user gesture so remote audio always eventually starts.
+  function playEl(el) {
+    const p = el.play?.();
+    if (p && p.catch) {
+      p.catch(() => {
+        pendingPlay.add(el);
+        armAutoplayResume();
+      });
+    }
+  }
+
+  function armAutoplayResume() {
+    if (autoplayArmed) return;
+    autoplayArmed = true;
+    const resume = () => {
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      pendingPlay.forEach((el) => {
+        const p = el.play?.();
+        if (p && p.catch) p.catch(() => {});
+      });
+      pendingPlay.clear();
+      autoplayArmed = false;
+      document.removeEventListener('click', resume);
+      document.removeEventListener('keydown', resume);
+    };
+    document.addEventListener('click', resume, { once: true });
+    document.addEventListener('keydown', resume, { once: true });
+  }
+
+  function attachRemote(userId, stream) {
+    if (!stream) return;
+    let el = audioEls.get(userId);
+    if (!el) {
+      el = new Audio();
+      el.autoplay = true;
+      audioEls.set(userId, el);
+    }
+    el.srcObject = stream;
+    el.muted = deafened;
+    applySink(el);
+    playEl(el);
+    setupAnalyser(userId, stream);
+  }
+
+  // Create (or reuse) a peer connection using the "perfect negotiation" pattern
+  // so either side can (re)negotiate — needed for reconnects and, later, for
+  // adding screen/app-audio tracks mid-call without glare.
+  function newPeer(userId) {
+    const existing = pcs.get(userId);
+    if (existing) return existing;
+
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    // Deterministic, opposite roles per pair so simultaneous offers resolve.
+    const polite = Number(myId) < Number(userId);
+    const st = { pc, polite, makingOffer: false, ignoreOffer: false, state: 'new' };
+    pcs.set(userId, st);
+
+    // Our outgoing media. With a mic we send it; without one we still add a
+    // receive-only line so we can hear everyone (listen-only mode).
     if (localStream) {
       localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
-    } else if (initiator) {
-      // No mic: still negotiate a receive-only audio line so we can hear others.
-      pc.addTransceiver('audio', { direction: 'recvonly' });
-    }
-    pc.onicecandidate = (e) => {
-      if (e.candidate) send({ op: 'voice_signal', to: userId, data: { candidate: e.candidate } });
-    };
-    pc.ontrack = (e) => {
-      let el = audioEls.get(userId);
-      if (!el) {
-        el = new Audio();
-        el.autoplay = true;
-        audioEls.set(userId, el);
+    } else {
+      try {
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+      } catch {
+        /* ignore */
       }
-      el.srcObject = e.streams[0];
-      el.muted = deafened;
-      applySink(el);
-      const p = el.play?.();
-      if (p) p.catch(() => {});
-      setupAnalyser(userId, e.streams[0]);
-    };
-    pcs.set(userId, pc);
-    if (initiator) {
-      pc.createOffer()
-        .then((offer) => pc.setLocalDescription(offer))
-        .then(() => send({ op: 'voice_signal', to: userId, data: { sdp: pc.localDescription } }))
-        .catch(() => {});
     }
-    return pc;
+
+    pc.onnegotiationneeded = async () => {
+      try {
+        st.makingOffer = true;
+        await pc.setLocalDescription();
+        send({ op: 'voice_signal', to: userId, data: { sdp: pc.localDescription } });
+      } catch {
+        /* ignore */
+      } finally {
+        st.makingOffer = false;
+      }
+    };
+
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) send({ op: 'voice_signal', to: userId, data: { candidate } });
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      // A dropped link (network blip, roaming) recovers via an ICE restart
+      // instead of going silent forever.
+      if (pc.iceConnectionState === 'failed') {
+        try {
+          pc.restartIce();
+        } catch {
+          /* older browsers: renegotiation below will still retry */
+        }
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      st.state = pc.connectionState;
+      emit();
+    };
+
+    pc.ontrack = ({ streams }) => attachRemote(userId, streams[0]);
+
+    return st;
   }
 
   async function join(space, channel) {
@@ -201,6 +285,7 @@ export function createVoiceController({ send, myId, onChange }) {
     audioEls.clear();
     analysers.clear();
     speaking.clear();
+    pendingPlay.clear();
     if (localStream) {
       localStream.getTracks().forEach((t) => t.stop());
       localStream = null;
@@ -256,38 +341,71 @@ export function createVoiceController({ send, myId, onChange }) {
     emit();
   }
 
-  // ---- Gateway frames ----
-  function handlePeers(peers) {
-    // We joined last, so we initiate the offer to everyone already here.
-    for (const p of peers) if (!pcs.has(p.userId)) newPeer(p.userId, true);
+  // Swap the outgoing microphone live (used when the preferred input device
+  // changes mid-call) without dropping the connection.
+  async function switchMic() {
+    if (!room) return;
+    let stream;
+    try {
+      stream = await getMicStream();
+    } catch {
+      return; // keep the current mic if the new one can't be opened
+    }
+    const track = stream.getAudioTracks()[0];
+    const oldTrack = localStream && localStream.getAudioTracks()[0];
+    pcs.forEach(({ pc }) => {
+      const sender = oldTrack && pc.getSenders().find((s) => s.track === oldTrack);
+      if (sender) sender.replaceTrack(track).catch(() => {});
+      else pc.addTrack(track, stream); // upgrading from listen-only → renegotiates
+    });
+    if (localStream) localStream.getTracks().forEach((t) => t.stop());
+    localStream = stream;
+    micError = false;
+    applyMic(); // preserve mute / push-to-talk state on the new track
+    setupAnalyser(myId, localStream);
+    emit();
   }
-  function handlePeerJoined() {
-    // A newcomer will send us their offer; the peer connection is created lazily
-    // when that offer arrives (handleSignal).
+
+  // ---- Gateway frames ----
+  // Both sides proactively create the peer connection (the joiner from the peer
+  // list, existing members from peer-joined); perfect negotiation resolves the
+  // resulting simultaneous offers.
+  function handlePeers(peers) {
+    for (const p of peers) newPeer(p.userId);
+  }
+  function handlePeerJoined(peer) {
+    if (peer && peer.userId != null) newPeer(peer.userId);
   }
   async function handleSignal(from, data) {
-    let pc = pcs.get(from);
-    if (!pc) pc = newPeer(from, false);
+    const st = pcs.get(from) || newPeer(from);
+    const { pc } = st;
     try {
       if (data.sdp) {
-        await pc.setRemoteDescription(data.sdp);
-        if (data.sdp.type === 'offer') {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
+        const desc = data.sdp;
+        const collision = desc.type === 'offer' && (st.makingOffer || pc.signalingState !== 'stable');
+        st.ignoreOffer = !st.polite && collision;
+        if (st.ignoreOffer) return; // impolite peer keeps its own offer
+        await pc.setRemoteDescription(desc);
+        if (desc.type === 'offer') {
+          await pc.setLocalDescription();
           send({ op: 'voice_signal', to: from, data: { sdp: pc.localDescription } });
         }
       } else if (data.candidate) {
-        await pc.addIceCandidate(data.candidate);
+        try {
+          await pc.addIceCandidate(data.candidate);
+        } catch (err) {
+          if (!st.ignoreOffer) throw err; // ignore candidates for a rejected offer
+        }
       }
     } catch {
-      /* ignore malformed signaling */
+      /* ignore malformed or out-of-order signaling */
     }
   }
   function handlePeerLeft(userId) {
-    const pc = pcs.get(userId);
-    if (pc) {
+    const st = pcs.get(userId);
+    if (st) {
       try {
-        pc.close();
+        st.pc.close();
       } catch {
         /* ignore */
       }
@@ -326,6 +444,7 @@ export function createVoiceController({ send, myId, onChange }) {
     toggleDeafen,
     setPttActive,
     refreshPtt,
+    switchMic,
     applyOutput,
     handlePeers,
     handlePeerJoined,

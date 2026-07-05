@@ -41,7 +41,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
-  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, participants: [] });
+  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, participants: [] });
   const myVoice = voiceCall.room;
   const [loadError, setLoadError] = useState('');
 
@@ -493,6 +493,9 @@ export default function App() {
   function refreshPtt() {
     if (voiceRef.current) voiceRef.current.refreshPtt();
   }
+  function switchMic() {
+    if (voiceRef.current) voiceRef.current.switchMic();
+  }
 
   async function makeInvite() {
     try {
@@ -632,6 +635,7 @@ export default function App() {
             voicePttEnabled={voiceCall.pttEnabled}
             voiceStatus={voiceCall.status}
             voiceMicError={voiceCall.micError}
+            voiceUnstable={voiceCall.unstable}
             onJoinVoice={joinVoice}
             onLeaveVoice={leaveVoice}
             onToggleMute={toggleMute}
@@ -684,6 +688,8 @@ export default function App() {
           onUpdated={setProfile}
           onOutputChange={() => voiceRef.current && voiceRef.current.applyOutput()}
           onPttChange={refreshPtt}
+          onMicChange={switchMic}
+          inCall={!!myVoice}
         />
       )}
       {searchOpen && (

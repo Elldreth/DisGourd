@@ -135,6 +135,10 @@ with a **speaker test** tone and **join/leave chimes**. Keyboard shortcuts
 (mute `Ctrl+Shift+M`, deafen `Ctrl+Shift+D`, and your push-to-talk key) work
 while the DisGourd window is focused.
 
+Connections **recover automatically** from brief network drops (an ICE restart
+re-establishes the link rather than going silent), and changing your microphone
+or speaker in Settings **applies immediately** to a call in progress.
+
 - Requires **HTTPS** in production — browsers only grant microphone access on
   secure origins (localhost is exempt for testing).
 - A public STUN server is used by default for NAT traversal, which works on most
