@@ -14,6 +14,7 @@ export default function ChannelList({
   myVoice,
   voiceMuted,
   voiceStatus,
+  voiceMicError,
   onJoinVoice,
   onLeaveVoice,
   onToggleMute,
@@ -215,30 +216,40 @@ export default function ChannelList({
       </div>
 
       {myVoice && (
-        <div className="flex items-center gap-2 border-t border-ink-900/60 bg-ink-900/40 px-3 py-2">
-          <span className="text-online">🔊</span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-semibold text-online">
-              {voiceStatus === 'error' ? 'Mic unavailable' : voiceStatus === 'connecting' ? 'Connecting…' : 'Voice connected'}
+        <div className="border-t border-ink-900/60 bg-ink-900/40 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <span className={voiceMicError ? 'text-idle' : 'text-online'}>🔊</span>
+            <div className="min-w-0 flex-1">
+              <div className={`truncate text-xs font-semibold ${voiceMicError ? 'text-idle' : 'text-online'}`}>
+                {voiceStatus === 'connecting' ? 'Connecting…' : 'Voice connected'}
+              </div>
+              <div className="truncate text-xs text-gray-400">{myVoice.channel} · {myVoice.space}</div>
             </div>
-            <div className="truncate text-xs text-gray-400">{myVoice.channel} · {myVoice.space}</div>
+            {!voiceMicError && (
+              <button
+                onClick={onToggleMute}
+                title={voiceMuted ? 'Unmute' : 'Mute'}
+                className={`rounded px-2 py-1 text-xs font-semibold ${
+                  voiceMuted ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+                }`}
+              >
+                {voiceMuted ? 'Unmute' : 'Mute'}
+              </button>
+            )}
+            <button
+              onClick={onLeaveVoice}
+              title="Disconnect"
+              className="rounded bg-danger/80 px-2 py-1 text-xs font-semibold text-white hover:bg-danger"
+            >
+              Leave
+            </button>
           </div>
-          <button
-            onClick={onToggleMute}
-            title={voiceMuted ? 'Unmute' : 'Mute'}
-            className={`rounded px-2 py-1 text-xs font-semibold ${
-              voiceMuted ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
-            }`}
-          >
-            {voiceMuted ? 'Unmute' : 'Mute'}
-          </button>
-          <button
-            onClick={onLeaveVoice}
-            title="Disconnect"
-            className="rounded bg-danger/80 px-2 py-1 text-xs font-semibold text-white hover:bg-danger"
-          >
-            Leave
-          </button>
+          {voiceMicError && (
+            <div className="mt-1 text-[11px] text-idle">
+              🎤 No microphone — you can hear others but not speak. This usually means the site
+              isn’t served over HTTPS, or mic access was blocked.
+            </div>
+          )}
         </div>
       )}
 

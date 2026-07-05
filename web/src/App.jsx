@@ -40,7 +40,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
-  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, participants: [] });
+  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, micError: false, participants: [] });
   const myVoice = voiceCall.room;
   const [loadError, setLoadError] = useState('');
 
@@ -585,6 +585,7 @@ export default function App() {
             myVoice={myVoice}
             voiceMuted={voiceCall.muted}
             voiceStatus={voiceCall.status}
+            voiceMicError={voiceCall.micError}
             onJoinVoice={joinVoice}
             onLeaveVoice={leaveVoice}
             onToggleMute={toggleMute}

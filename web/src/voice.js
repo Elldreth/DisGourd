@@ -11,8 +11,9 @@ const ICE_SERVERS =
 
 export function createVoiceController({ send, myId, onChange }) {
   let room = null; // { space, channel }
-  let status = 'idle'; // idle | connecting | connected | error
+  let status = 'idle'; // idle | connecting | connected
   let muted = false;
+  let micError = false; // joined but couldn't get a microphone (listen-only)
   let localStream = null;
   let participants = []; // authoritative list from the server (voice_state)
   const pcs = new Map(); // userId -> RTCPeerConnection
@@ -27,6 +28,7 @@ export function createVoiceController({ send, myId, onChange }) {
       room,
       status,
       muted,
+      micError,
       participants: participants.map((p) => ({ ...p, speaking: speaking.has(p.userId) })),
     });
   }
@@ -62,7 +64,12 @@ export function createVoiceController({ send, myId, onChange }) {
 
   function newPeer(userId, initiator) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+    if (localStream) {
+      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+    } else if (initiator) {
+      // No mic: still negotiate a receive-only audio line so we can hear others.
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+    }
     pc.onicecandidate = (e) => {
       if (e.candidate) send({ op: 'voice_signal', to: userId, data: { candidate: e.candidate } });
     };
@@ -92,17 +99,19 @@ export function createVoiceController({ send, myId, onChange }) {
     if (room) leave();
     room = { space, channel };
     status = 'connecting';
+    micError = false;
     emit();
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (muted) localStream.getAudioTracks().forEach((t) => (t.enabled = false));
+      setupAnalyser(myId, localStream);
     } catch {
-      status = 'error';
-      room = null;
-      emit();
-      return;
+      // No mic (permission denied, none present, or an insecure/non-HTTPS
+      // origin). Join anyway in listen-only mode: presence works and you can
+      // still hear everyone else.
+      localStream = null;
+      micError = true;
     }
-    if (muted) localStream.getAudioTracks().forEach((t) => (t.enabled = false));
-    setupAnalyser(myId, localStream);
     if (!speakTimer) speakTimer = setInterval(pollSpeaking, 200);
     status = 'connected';
     emit();
@@ -135,6 +144,7 @@ export function createVoiceController({ send, myId, onChange }) {
     }
     room = null;
     status = 'idle';
+    micError = false;
     participants = [];
     emit();
   }
