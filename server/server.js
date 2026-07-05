@@ -679,6 +679,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       const wasMember = db.isMember(space.id, userId);
       db.addMember(space.id, userId, 'member');
       if (!wasMember) {
+        db.markSpaceRead(userId, space.name); // start with a clean slate, not a wall of unread
         db.incrementInviteUses(pathSegments[1]);
         deliverToSpaceMembers(space.name, JSON.stringify({ type: 'members_changed', space: space.name }));
       }
@@ -1155,6 +1156,12 @@ function handleGatewayMessage(ws, raw) {
       }
       return;
     }
+    case 'read': {
+      if (typeof msg.space === 'string' && typeof msg.channel === 'string') {
+        db.markRead(userId, msg.space, msg.channel, parseInt(msg.lastId, 10) || 0);
+      }
+      return;
+    }
     case 'message': {
       const space = db.getSpaceByName(msg.space);
       if (!space || !db.isMember(space.id, userId) || !db.channelExists(msg.space, msg.channel)) return;
@@ -1163,6 +1170,7 @@ function handleGatewayMessage(ws, raw) {
       if (!content && !attachment) return;
       const user = db.getUserById(userId);
       const stored = db.storeMessage(msg.space, msg.channel, content, userId, attachment);
+      if (stored) db.markRead(userId, msg.space, msg.channel, stored.id); // author has read their own message
       deliverToSpaceMembers(msg.space, JSON.stringify({
         type: 'message',
         id: stored ? stored.id : undefined,
@@ -1268,6 +1276,7 @@ httpServer.on('upgrade', (request, socket, head) => {
     logInfo(`Gateway connected for user ${ws.userId} (${set.size} socket(s))`);
 
     ws.send(JSON.stringify({ type: 'ready' }));
+    ws.send(JSON.stringify({ type: 'unread', counts: db.getUnreadCounts(ws.userId) }));
 
     ws.on('message', (raw) => handleGatewayMessage(ws, raw));
     ws.on('close', () => detachGateway(ws));

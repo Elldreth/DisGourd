@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { initials, colorForName } from '../util.js';
 
 // The far-left rail of server (space) icons, Discord-style, plus create/join.
-export default function ServerRail({ spaces, currentSpace, onSelect, onCreate, onJoin }) {
+export default function ServerRail({ spaces, currentSpace, unread = {}, onSelect, onCreate, onJoin }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [joining, setJoining] = useState(false);
@@ -36,6 +36,7 @@ export default function ServerRail({ spaces, currentSpace, onSelect, onCreate, o
       <div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto">
         {spaces.map((s) => {
           const active = s.name === currentSpace;
+          const count = unread[s.name] || 0;
           return (
             <button
               key={s.name}
@@ -48,10 +49,15 @@ export default function ServerRail({ spaces, currentSpace, onSelect, onCreate, o
             >
               <span
                 className={`absolute -left-3 w-1 rounded-r bg-white transition-all ${
-                  active ? 'h-8' : 'h-0 group-hover:h-5'
+                  active ? 'h-8' : count > 0 ? 'h-3' : 'h-0 group-hover:h-5'
                 }`}
               />
               {initials(s.name)}
+              {count > 0 && !active && (
+                <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-white">
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
             </button>
           );
         })}

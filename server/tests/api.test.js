@@ -277,6 +277,47 @@ test('reactions toggle, persist in history, and typing is relayed', async () => 
   expect(relayed).toBeTruthy();
 });
 
+test('unread counts track messages since last read', async () => {
+  const base = baseUrl();
+  const owner = (await register('nate')).token;
+  await createServer(owner, 'un');
+  const kev = (await register('kev')).token;
+
+  const { code } = await (await fetch(`${base}/spaces/un/invites`, { method: 'POST', headers: auth(owner) })).json();
+  await fetch(`${base}/invites/${code}`, { method: 'POST', headers: auth(kev) }); // clean slate on join
+
+  // Owner posts a message after kev joined.
+  const og = gateway(owner);
+  await og.ready;
+  og.send({ op: 'message', space: 'un', channel: 'general', content: 'ping' });
+  await wait(80);
+  const msg = og.frames.find((f) => f.type === 'message');
+  og.close();
+  expect(msg).toBeTruthy();
+
+  // Kev connects: the unread snapshot shows 1 for un/general.
+  const kg = gateway(kev);
+  await kg.ready;
+  await wait(60);
+  let unread = kg.frames.find((f) => f.type === 'unread');
+  expect(unread).toBeTruthy();
+  let entry = unread.counts.find((c) => c.space === 'un' && c.channel === 'general');
+  expect(entry && entry.count).toBe(1);
+
+  // Kev marks it read, then reconnects: no unread remains.
+  kg.send({ op: 'read', space: 'un', channel: 'general', lastId: msg.id });
+  await wait(60);
+  kg.close();
+
+  const kg2 = gateway(kev);
+  await kg2.ready;
+  await wait(60);
+  unread = kg2.frames.find((f) => f.type === 'unread');
+  entry = (unread.counts || []).find((c) => c.space === 'un' && c.channel === 'general');
+  expect(entry).toBeFalsy();
+  kg2.close();
+});
+
 test('users can view and update their avatar via /me', async () => {
   const base = baseUrl();
   const { token } = await register('jane');

@@ -79,6 +79,13 @@ db.exec(`
     FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+  CREATE TABLE IF NOT EXISTS read_state (
+    user_id INTEGER NOT NULL,
+    space TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(user_id, space, channel)
+  );
 `);
 
 // Migrate existing databases to include new columns if missing
@@ -384,6 +391,49 @@ function getMessageLocation(messageId) {
   `).get(messageId);
 }
 
+// ---- Unread / read state ----
+
+// Advance the user's read marker for a channel (never moves backwards).
+function markRead(userId, space, channel, lastReadId) {
+  db.prepare(`
+    INSERT INTO read_state(user_id, space, channel, last_read_id)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id, space, channel)
+    DO UPDATE SET last_read_id = MAX(last_read_id, excluded.last_read_id)
+  `).run(userId, space, channel, lastReadId || 0);
+}
+
+// Unread message counts per channel across all of the user's servers.
+function getUnreadCounts(userId) {
+  return db.prepare(`
+    SELECT s.name AS space, c.name AS channel, COUNT(m.id) AS count
+    FROM space_members sm
+    JOIN spaces s ON sm.space_id = s.id
+    JOIN channels c ON c.space_id = s.id
+    LEFT JOIN read_state rs ON rs.user_id = sm.user_id AND rs.space = s.name AND rs.channel = c.name
+    LEFT JOIN messages m ON m.channel_id = c.id AND m.id > COALESCE(rs.last_read_id, 0)
+    WHERE sm.user_id = ?
+    GROUP BY s.name, c.name
+    HAVING count > 0
+  `).all(userId);
+}
+
+// Mark every channel of a server read up to its latest message (used on join so
+// a new member starts with a clean slate rather than a wall of "unread").
+function markSpaceRead(userId, spaceName) {
+  db.prepare(`
+    INSERT INTO read_state(user_id, space, channel, last_read_id)
+    SELECT ?, s.name, c.name, COALESCE(MAX(m.id), 0)
+    FROM channels c
+    JOIN spaces s ON c.space_id = s.id
+    LEFT JOIN messages m ON m.channel_id = c.id
+    WHERE s.name = ?
+    GROUP BY c.id
+    ON CONFLICT(user_id, space, channel)
+    DO UPDATE SET last_read_id = MAX(last_read_id, excluded.last_read_id)
+  `).run(userId, spaceName);
+}
+
 // Distinct user ids that share at least one server with the given user.
 function getCoMemberIds(userId) {
   return db.prepare(`
@@ -510,6 +560,9 @@ module.exports = {
   isMessageInChannel,
   getMessageLocation,
   getCoMemberIds,
+  markRead,
+  getUnreadCounts,
+  markSpaceRead,
   getState,
   createUser,
   getUserByUsername,
