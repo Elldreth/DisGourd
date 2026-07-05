@@ -499,6 +499,12 @@ export default function App() {
   function toggleShareAudio() {
     if (voiceRef.current) voiceRef.current.toggleShare();
   }
+  function toggleShareMute(userId) {
+    if (voiceRef.current) voiceRef.current.toggleShareMute(userId);
+  }
+  function setShareVolume(userId, vol) {
+    if (voiceRef.current) voiceRef.current.setShareVolume(userId, vol);
+  }
 
   async function makeInvite() {
     try {
@@ -646,6 +652,9 @@ export default function App() {
             onToggleMute={toggleMute}
             onToggleDeafen={toggleDeafen}
             onToggleShare={toggleShareAudio}
+            onToggleShareMute={toggleShareMute}
+            onSetShareVolume={setShareVolume}
+            selfId={myId}
             onSelect={setCurrentChannel}
             onCreateChannel={createChannel}
             canManage={canManage}

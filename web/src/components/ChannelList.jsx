@@ -26,6 +26,9 @@ export default function ChannelList({
   onToggleMute,
   onToggleDeafen,
   onToggleShare,
+  onToggleShareMute,
+  onSetShareVolume,
+  selfId,
   onSelect,
   onCreateChannel,
   canManage,
@@ -210,11 +213,21 @@ export default function ChannelList({
                     {people.length > 0 && <span className="text-xs text-gray-500">{people.length}</span>}
                   </button>
                   {people.map((p) => (
-                    <div key={p.username} className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
-                      <Avatar name={p.username} size={20} src={p.avatar} status="online" speaking={p.speaking} />
-                      <span className="min-w-0 flex-1 truncate">{p.username}</span>
-                      {p.sharing && <span title="Sharing audio" className="text-xs">🎵</span>}
-                      {p.muted && <span title="Muted" className="text-xs text-danger">🔇</span>}
+                    <div key={p.username}>
+                      <div className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
+                        <Avatar name={p.username} size={20} src={p.avatar} status="online" speaking={p.speaking} />
+                        <span className="min-w-0 flex-1 truncate">{p.username}</span>
+                        {p.muted && <span title="Muted" className="text-xs text-danger">🔇</span>}
+                      </div>
+                      {p.sharing && (
+                        <ShareRow
+                          p={p}
+                          controllable={inThis && p.userId !== selfId}
+                          isSelf={p.userId === selfId}
+                          onToggleMute={() => onToggleShareMute(p.userId)}
+                          onVolume={(v) => onSetShareVolume(p.userId, v)}
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -298,6 +311,40 @@ export default function ChannelList({
         onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />
+    </div>
+  );
+}
+
+// The shared app audio shows as its own participant row. Each listener can mute
+// or set its volume locally, independent of the sharer's voice.
+function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
+  const vol = typeof p.shareVolume === 'number' ? p.shareVolume : 1;
+  return (
+    <div className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-xs text-gray-400">
+      <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-ink-700 text-[11px]">🎵</span>
+      <span className="min-w-0 flex-1 truncate">{p.username}’s audio</span>
+      {isSelf && <span className="text-[10px] font-semibold uppercase text-gray-500">you</span>}
+      {controllable && (
+        <>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={vol}
+            onChange={(e) => onVolume(parseFloat(e.target.value))}
+            title="Volume (only for you)"
+            className="h-1 w-14 accent-brand"
+          />
+          <button
+            onClick={onToggleMute}
+            title={p.shareMutedLocally ? 'Unmute for me' : 'Mute for me'}
+            className={p.shareMutedLocally ? 'text-danger' : 'text-gray-400 hover:text-white'}
+          >
+            {p.shareMutedLocally ? '🔇' : '🔊'}
+          </button>
+        </>
+      )}
     </div>
   );
 }

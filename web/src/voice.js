@@ -37,6 +37,8 @@ export function createVoiceController({ send, myId, onChange }) {
   const audioEls = new Map(); // streamId -> HTMLAudioElement (a user may send 2)
   const streamOwner = new Map(); // streamId -> userId, for cleanup
   const micStreamId = new Map(); // userId -> their first (mic) streamId
+  const shareMutedUsers = new Set(); // userIds whose shared audio I've muted locally
+  const shareVolume = new Map(); // userId -> local volume [0..1] for their shared audio
   const analysers = new Map(); // userId -> { analyser, data } (mic stream only)
   const speaking = new Set(); // userIds currently speaking
   let audioCtx = null;
@@ -63,7 +65,12 @@ export function createVoiceController({ send, myId, onChange }) {
       unstable: unstable(),
       sharing,
       shareError,
-      participants: participants.map((p) => ({ ...p, speaking: speaking.has(p.userId) })),
+      participants: participants.map((p) => ({
+        ...p,
+        speaking: speaking.has(p.userId),
+        shareMutedLocally: shareMutedUsers.has(p.userId),
+        shareVolume: shareVolume.has(p.userId) ? shareVolume.get(p.userId) : 1,
+      })),
     });
   }
 
@@ -80,11 +87,47 @@ export function createVoiceController({ send, myId, onChange }) {
     if (localStream) localStream.getAudioTracks().forEach((t) => (t.enabled = micShouldTransmit()));
   }
 
-  // Mute/unmute remote audio elements when deafened.
-  function applyDeafen() {
-    audioEls.forEach((el) => {
+  // A stream is "shared audio" (not a mic) if its owner has an earlier stream.
+  function isShareStream(sid) {
+    const owner = streamOwner.get(sid);
+    return owner != null && micStreamId.get(owner) !== sid;
+  }
+
+  // Apply the effective mute/volume for one remote element: deafen silences
+  // everything; otherwise a shared-audio stream honors this listener's local
+  // mute and volume for that user.
+  function applyElState(sid, el) {
+    const owner = streamOwner.get(sid);
+    if (isShareStream(sid)) {
+      el.muted = deafened || shareMutedUsers.has(owner);
+      el.volume = shareVolume.has(owner) ? shareVolume.get(owner) : 1;
+    } else {
       el.muted = deafened;
+    }
+  }
+
+  function applyDeafen() {
+    audioEls.forEach((el, sid) => applyElState(sid, el));
+  }
+
+  // Locally mute/unmute another user's shared audio (does not affect their
+  // voice, and is this listener's choice only).
+  function toggleShareMute(userId) {
+    if (shareMutedUsers.has(userId)) shareMutedUsers.delete(userId);
+    else shareMutedUsers.add(userId);
+    audioEls.forEach((el, sid) => {
+      if (streamOwner.get(sid) === userId && isShareStream(sid)) applyElState(sid, el);
     });
+    emit();
+  }
+
+  // Set the local playback volume of another user's shared audio.
+  function setShareVolume(userId, vol) {
+    shareVolume.set(userId, vol);
+    audioEls.forEach((el, sid) => {
+      if (streamOwner.get(sid) === userId && isShareStream(sid)) applyElState(sid, el);
+    });
+    emit();
   }
 
   function setupAnalyser(userId, stream) {
@@ -182,15 +225,15 @@ export function createVoiceController({ send, myId, onChange }) {
       streamOwner.set(sid, userId);
     }
     el.srcObject = stream;
-    el.muted = deafened;
-    applySink(el);
-    playEl(el);
     // Only a user's first stream (their mic) drives the speaking indicator; a
     // shared-audio stream must not light up their avatar.
     if (!micStreamId.has(userId)) {
       micStreamId.set(userId, sid);
       setupAnalyser(userId, stream);
     }
+    applyElState(sid, el); // honor deafen + any local share mute/volume
+    applySink(el);
+    playEl(el);
     // Drop the element when a shared stream stops (sharer ended it).
     stream.getAudioTracks().forEach((t) => {
       t.onended = () => removeStream(sid);
@@ -323,6 +366,8 @@ export function createVoiceController({ send, myId, onChange }) {
     audioEls.clear();
     streamOwner.clear();
     micStreamId.clear();
+    shareMutedUsers.clear();
+    shareVolume.clear();
     analysers.clear();
     speaking.clear();
     pendingPlay.clear();
@@ -559,6 +604,8 @@ export function createVoiceController({ send, myId, onChange }) {
     startShare,
     stopShare,
     toggleShare,
+    toggleShareMute,
+    setShareVolume,
     applyOutput,
     handlePeers,
     handlePeerJoined,

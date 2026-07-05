@@ -136,13 +136,15 @@ with a **speaker test** tone and **join/leave chimes**. Keyboard shortcuts
 while the DisGourd window is focused.
 
 **Sharing app audio** (🎵 *Share app audio*): broadcast sound from another
-program — music, a video — to everyone in the channel as a *separate* stream, so
-people keep hearing you talk at the same time. Pick a browser **Tab** and check
-"Share tab audio" (works on any OS), or your whole **Screen** with "Share system
-audio" (Windows/ChromeOS) to share a desktop app like Spotify. Capturing audio
-this way needs **Chrome or Edge**, but everyone *listening* hears it on any
-browser — so one person can DJ for a mixed-browser room. The button only appears
-where the browser can capture display audio.
+program — music, a video — to everyone in the channel. It appears as its **own
+participant** ("🎵 *name*'s audio") separate from your microphone, so people keep
+hearing you talk while it plays, and **each listener can mute it or set its
+volume just for themselves** without affecting your voice. Pick a browser **Tab**
+and check "Share tab audio" (works on any OS), or your whole **Screen** with
+"Share system audio" (Windows/ChromeOS) to share a desktop app like Spotify.
+Capturing audio this way needs **Chrome or Edge**, but everyone *listening*
+hears it on any browser — so one person can DJ for a mixed-browser room. The
+button only appears where the browser can capture display audio.
 
 Connections **recover automatically** from brief network drops (an ICE restart
 re-establishes the link rather than going silent), and changing your microphone
