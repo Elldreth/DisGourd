@@ -1219,7 +1219,9 @@ const voiceRooms = new Map();
 const voiceKey = (space, channel) => JSON.stringify([space, channel]);
 
 function voiceParticipants(room) {
-  return [...room.members.values()].map((p) => ({ username: p.username, avatar: p.avatar, muted: p.muted }));
+  return [...room.members.values()].map((p) => ({
+    userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
+  }));
 }
 
 // Tell every server member who is currently in this voice channel.

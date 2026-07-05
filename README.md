@@ -116,10 +116,26 @@ rail. To bring friends in, open the server menu (click the server name) →
 the code under **Join a server** (the ⤵ button in the rail). You only see
 servers you own or have joined, and only members can read a server's channels.
 
+## Voice chat
+
+Owners/admins can create **voice channels** (🔊). Click one to join, and talk
+with everyone else in it. Voice uses **peer-to-peer WebRTC in a mesh** — audio
+flows directly between browsers and never touches the server (it only relays the
+connection handshake), so there's still nothing extra to run. This is ideal for
+small friend-group calls (roughly up to 5–6 people at once).
+
+- Requires **HTTPS** in production — browsers only grant microphone access on
+  secure origins (localhost is exempt for testing).
+- A public STUN server is used by default for NAT traversal, which works on most
+  home networks. For stricter networks you can add a TURN relay by setting
+  `window.__DISGOURD_ICE__` to an array of `RTCIceServer` objects before the app
+  loads (e.g. via a small inline script), pointing at your own coturn server.
+
 ## Roadmap
 
 Working today: accounts with avatars, servers with ownership and invite codes,
 text channels, real-time messaging with edit/delete, emoji reactions, typing
 indicators, unread badges, @mentions, direct messages, message search, file
-sharing, presence, a per-server member list, and roles (owner/admin/member with
-promote, demote, and remove). Planned next: voice/video.
+sharing, presence, a per-server member list, roles (owner/admin/member with
+promote, demote, and remove), and peer-to-peer voice channels. Planned next:
+video/screenshare in calls.

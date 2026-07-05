@@ -1,6 +1,6 @@
 import { initials, colorForName } from '../util.js';
 
-export default function Avatar({ name, size = 40, status, src }) {
+export default function Avatar({ name, size = 40, status, src, speaking }) {
   const dot = {
     online: 'bg-online',
     offline: 'bg-gray-500',
@@ -8,7 +8,10 @@ export default function Avatar({ name, size = 40, status, src }) {
   }[status];
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
+    <div
+      className={`relative shrink-0 rounded-full ${speaking ? 'ring-2 ring-online' : ''}`}
+      style={{ width: size, height: size }}
+    >
       {src ? (
         <img
           src={src}

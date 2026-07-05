@@ -10,9 +10,13 @@ export default function ChannelList({
   mentions = {},
   voiceChannels = [],
   voiceParticipants = {},
+  activeVoiceParticipants = [],
   myVoice,
+  voiceMuted,
+  voiceStatus,
   onJoinVoice,
   onLeaveVoice,
+  onToggleMute,
   onSelect,
   onCreateChannel,
   canManage,
@@ -183,7 +187,7 @@ export default function ChannelList({
             )}
             {voiceChannels.map((vc) => {
               const inThis = myVoice && myVoice.channel === vc && myVoice.space === space;
-              const people = voiceParticipants[vc] || [];
+              const people = inThis ? activeVoiceParticipants : voiceParticipants[vc] || [];
               return (
                 <div key={vc} className="mb-0.5">
                   <button
@@ -198,7 +202,7 @@ export default function ChannelList({
                   </button>
                   {people.map((p) => (
                     <div key={p.username} className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
-                      <Avatar name={p.username} size={20} src={p.avatar} status="online" />
+                      <Avatar name={p.username} size={20} src={p.avatar} status="online" speaking={p.speaking} />
                       <span className="min-w-0 flex-1 truncate">{p.username}</span>
                       {p.muted && <span title="Muted" className="text-xs text-danger">🔇</span>}
                     </div>
@@ -214,9 +218,20 @@ export default function ChannelList({
         <div className="flex items-center gap-2 border-t border-ink-900/60 bg-ink-900/40 px-3 py-2">
           <span className="text-online">🔊</span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-semibold text-online">Voice connected</div>
+            <div className="truncate text-xs font-semibold text-online">
+              {voiceStatus === 'error' ? 'Mic unavailable' : voiceStatus === 'connecting' ? 'Connecting…' : 'Voice connected'}
+            </div>
             <div className="truncate text-xs text-gray-400">{myVoice.channel} · {myVoice.space}</div>
           </div>
+          <button
+            onClick={onToggleMute}
+            title={voiceMuted ? 'Unmute' : 'Mute'}
+            className={`rounded px-2 py-1 text-xs font-semibold ${
+              voiceMuted ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+            }`}
+          >
+            {voiceMuted ? 'Unmute' : 'Mute'}
+          </button>
           <button
             onClick={onLeaveVoice}
             title="Disconnect"

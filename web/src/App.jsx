@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
 import { useGateway } from './useSocket.js';
+import { createVoiceController } from './voice.js';
 import { mergeMessages } from './util.js';
 import Login from './components/Login.jsx';
 import ServerRail from './components/ServerRail.jsx';
@@ -21,6 +22,10 @@ export default function App() {
     const p = api.decodeToken(token);
     return p ? p.name || p.username || p.sub : '';
   }, [token]);
+  const myId = useMemo(() => {
+    const p = api.decodeToken(token);
+    return p ? p.sub : null;
+  }, [token]);
 
   const [spaces, setSpaces] = useState([]);
   const [currentSpace, setCurrentSpace] = useState('');
@@ -35,7 +40,8 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
-  const [myVoice, setMyVoice] = useState(null); // { space, channel } | null
+  const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, participants: [] });
+  const myVoice = voiceCall.room;
   const [loadError, setLoadError] = useState('');
 
   // Direct messages
@@ -187,7 +193,12 @@ export default function App() {
       },
       voice_state: (f) => {
         setVoiceStates((prev) => ({ ...prev, [unreadKey(f.space, f.channel)]: f.participants || [] }));
+        voiceRef.current && voiceRef.current.handleState(f);
       },
+      voice_peers: (f) => voiceRef.current && voiceRef.current.handlePeers(f.peers || []),
+      voice_peer_joined: (f) => voiceRef.current && voiceRef.current.handlePeerJoined(f.peer),
+      voice_peer_left: (f) => voiceRef.current && voiceRef.current.handlePeerLeft(f.userId),
+      voice_signal: (f) => voiceRef.current && voiceRef.current.handleSignal(f.from, f.data),
       dm: (m) => {
         const me = userRef.current;
         const partner = m.from === me ? m.to : m.from;
@@ -224,6 +235,14 @@ export default function App() {
   );
 
   const { status, send } = useGateway({ token, handlers });
+
+  // Voice controller (WebRTC mesh). Recreated per session; tears down its call
+  // when the user (or the session) changes.
+  const voiceRef = useRef(null);
+  useEffect(() => {
+    voiceRef.current = createVoiceController({ send, myId, onChange: setVoiceCall });
+    return () => voiceRef.current && voiceRef.current.leave();
+  }, [myId, send]);
 
   // Clear the transcript immediately when switching channels.
   useEffect(() => {
@@ -321,8 +340,7 @@ export default function App() {
 
   // ---- Actions ----
   function logout() {
-    if (myVoice) send({ op: 'voice_leave' });
-    setMyVoice(null);
+    if (voiceRef.current) voiceRef.current.leave();
     setVoiceStates({});
     api.clearToken();
     setToken('');
@@ -422,12 +440,13 @@ export default function App() {
 
   function joinVoice(space, channel) {
     if (myVoice && myVoice.space === space && myVoice.channel === channel) return;
-    send({ op: 'voice_join', space, channel });
-    setMyVoice({ space, channel });
+    if (voiceRef.current) voiceRef.current.join(space, channel);
   }
   function leaveVoice() {
-    send({ op: 'voice_leave' });
-    setMyVoice(null);
+    if (voiceRef.current) voiceRef.current.leave();
+  }
+  function toggleMute() {
+    if (voiceRef.current) voiceRef.current.toggleMute();
   }
 
   async function makeInvite() {
@@ -561,9 +580,13 @@ export default function App() {
             mentions={channelMentions}
             voiceChannels={voiceChannels}
             voiceParticipants={voiceParticipantsByChannel}
+            activeVoiceParticipants={voiceCall.participants}
             myVoice={myVoice}
+            voiceMuted={voiceCall.muted}
+            voiceStatus={voiceCall.status}
             onJoinVoice={joinVoice}
             onLeaveVoice={leaveVoice}
+            onToggleMute={toggleMute}
             onSelect={setCurrentChannel}
             onCreateChannel={createChannel}
             canManage={canManage}
