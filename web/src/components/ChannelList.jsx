@@ -6,6 +6,7 @@ export default function ChannelList({
   channels,
   currentChannel,
   unread = {},
+  mentions = {},
   onSelect,
   onCreateChannel,
   canManage,
@@ -103,8 +104,8 @@ export default function ChannelList({
 
         {channels.map((c) => {
           const active = c === currentChannel;
-          const count = unread[c] || 0;
-          const hasUnread = count > 0 && !active;
+          const hasUnread = (unread[c] || 0) > 0 && !active;
+          const mentionCount = active ? 0 : mentions[c] || 0;
           return (
             <button
               key={c}
@@ -112,18 +113,20 @@ export default function ChannelList({
               className={`mb-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
                 active
                   ? 'bg-ink-600 text-white'
-                  : hasUnread
+                  : hasUnread || mentionCount
                     ? 'font-semibold text-white hover:bg-ink-700/60'
                     : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
               }`}
             >
               <span className="text-gray-500">#</span>
               <span className="flex-1 truncate">{c}</span>
-              {hasUnread && (
+              {mentionCount > 0 ? (
                 <span className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-white">
-                  {count}
+                  {mentionCount}
                 </span>
-              )}
+              ) : hasUnread ? (
+                <span className="h-2 w-2 shrink-0 rounded-full bg-gray-300" />
+              ) : null}
             </button>
           );
         })}

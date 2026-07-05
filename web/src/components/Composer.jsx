@@ -2,14 +2,21 @@ import { useRef, useState } from 'react';
 import * as api from '../api.js';
 import { humanSize } from '../util.js';
 
-export default function Composer({ channel, disabled, onSend, onTyping, placeholder }) {
+export default function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [] }) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState(null); // { url, name, size } once uploaded
   const [progress, setProgress] = useState(null); // 0..1 while uploading
   const [error, setError] = useState('');
+  const [mentionMatch, setMentionMatch] = useState(null); // { query, candidates } | null
   const fileRef = useRef(null);
   const taRef = useRef(null);
   const lastTypingRef = useRef(0);
+
+  function pickMention(name) {
+    setText((prev) => prev.replace(/@([A-Za-z0-9_.-]*)$/, `@${name} `));
+    setMentionMatch(null);
+    taRef.current?.focus();
+  }
 
   const uploading = progress !== null;
 
@@ -35,10 +42,20 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
     onSend(content, pending ? pending.url : undefined);
     setText('');
     setPending(null);
+    setMentionMatch(null);
     if (taRef.current) taRef.current.style.height = 'auto';
   }
 
   function onKeyDown(e) {
+    if (mentionMatch && (e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
+      e.preventDefault();
+      pickMention(mentionMatch.candidates[0]);
+      return;
+    }
+    if (e.key === 'Escape' && mentionMatch) {
+      setMentionMatch(null);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -46,10 +63,21 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
   }
 
   function grow(e) {
-    setText(e.target.value);
+    const value = e.target.value;
+    setText(value);
     const ta = e.target;
     ta.style.height = 'auto';
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+
+    // Mention autocomplete: an @token being typed at the end of the text.
+    const tok = /@([A-Za-z0-9_.-]*)$/.exec(value);
+    if (tok && mentionCandidates.length) {
+      const q = tok[1].toLowerCase();
+      const cands = mentionCandidates.filter((n) => n.toLowerCase().startsWith(q)).slice(0, 6);
+      setMentionMatch(cands.length ? { query: tok[1], candidates: cands } : null);
+    } else {
+      setMentionMatch(null);
+    }
     // Emit a typing signal at most once every 2.5s while there's text.
     if (onTyping && e.target.value.trim()) {
       const now = Date.now();
@@ -86,6 +114,27 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
               ✕
             </button>
           )}
+        </div>
+      )}
+
+      {mentionMatch && (
+        <div className="mb-1 overflow-hidden rounded-lg bg-ink-800 shadow-lg ring-1 ring-ink-500/50">
+          <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Members</div>
+          {mentionMatch.candidates.map((n, i) => (
+            <button
+              key={n}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pickMention(n);
+              }}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
+                i === 0 ? 'bg-ink-600/60' : 'hover:bg-ink-600'
+              }`}
+            >
+              <span className="text-brand">@</span>
+              {n}
+            </button>
+          ))}
         </div>
       )}
 

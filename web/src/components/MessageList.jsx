@@ -5,6 +5,31 @@ import { formatTime, formatDay } from '../util.js';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🔥', '✅'];
 
+const MENTION_RE = /(@[A-Za-z0-9_.-]+)/g;
+
+// Render message text with @mentions highlighted (extra-highlighted if it's you).
+function renderMentions(content, me) {
+  return content.split(MENTION_RE).map((part, i) => {
+    if (part[0] === '@') {
+      const isMe = part.slice(1) === me;
+      return (
+        <span
+          key={i}
+          className={`rounded px-0.5 font-medium ${isMe ? 'bg-brand/40 text-white' : 'bg-brand/15 text-brand'}`}
+        >
+          {part}
+        </span>
+      );
+    }
+    return part;
+  });
+}
+
+function mentionsUser(content, me) {
+  if (!content || !me) return false;
+  return content.split(MENTION_RE).some((p) => p[0] === '@' && p.slice(1) === me);
+}
+
 // Groups consecutive messages from the same author (within 5 minutes) into a
 // single block, and inserts day dividers — the familiar chat reading rhythm.
 export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, simple = false, emptyHeading, emptyBody }) {
@@ -82,6 +107,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
   const [draft, setDraft] = useState(m.content || '');
   const [picker, setPicker] = useState(false);
   const reactions = m.reactions || [];
+  const mentionsMe = !simple && mentionsUser(m.content, currentUser);
 
   function startEdit() {
     setDraft(m.content || '');
@@ -104,7 +130,11 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
   }
 
   return (
-    <div className={`group relative flex gap-3 px-2 hover:bg-ink-600/30 ${grouped ? 'py-0.5' : 'mt-3 py-0.5'}`}>
+    <div
+      className={`group relative flex gap-3 px-2 hover:bg-ink-600/30 ${grouped ? 'py-0.5' : 'mt-3 py-0.5'} ${
+        mentionsMe ? 'border-l-2 border-idle bg-idle/10' : ''
+      }`}
+    >
       <div className="w-10 shrink-0">
         {grouped ? (
           <span className="hidden w-10 pt-1 text-right text-[10px] text-gray-500 group-hover:inline-block">
@@ -148,7 +178,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
           <>
             {m.content && (
               <div className="whitespace-pre-wrap break-words text-gray-200">
-                {m.content}
+                {simple ? m.content : renderMentions(m.content, currentUser)}
                 {m.editedAt && <span className="ml-1 text-[10px] text-gray-500">(edited)</span>}
               </div>
             )}

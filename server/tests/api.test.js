@@ -359,6 +359,38 @@ test('direct messages deliver to both users, with unread tracking', async () => 
   expect(convo.unread).toBe(0);
 });
 
+test('mentions are detected, delivered, and counted', async () => {
+  const base = baseUrl();
+  const quinn = (await register('quinn')).token;
+  const rob = (await register('rob')).token;
+  await createServer(quinn, 'mnt');
+  const { code } = await (await fetch(`${base}/spaces/mnt/invites`, { method: 'POST', headers: auth(quinn) })).json();
+  await fetch(`${base}/invites/${code}`, { method: 'POST', headers: auth(rob) });
+
+  // Rob is connected (but not focused/reading); Quinn mentions him.
+  const rg = gateway(rob);
+  await rg.ready;
+  await wait(40);
+  const qg = gateway(quinn);
+  await qg.ready;
+  qg.send({ op: 'message', space: 'mnt', channel: 'general', content: '@rob please look' });
+  await wait(140);
+  const msg = rg.frames.find((f) => f.type === 'message');
+  expect(msg).toBeTruthy();
+  expect(msg.mentions).toContain('rob');
+  qg.close();
+  rg.close();
+
+  // On reconnect, Rob's unread snapshot includes a mention for mnt/general.
+  const rg2 = gateway(rob);
+  await rg2.ready;
+  await wait(60);
+  const unread = rg2.frames.find((f) => f.type === 'unread');
+  const men = (unread.mentions || []).find((x) => x.space === 'mnt' && x.channel === 'general');
+  expect(men && men.count).toBe(1);
+  rg2.close();
+});
+
 test('search finds channel and direct messages, respecting membership', async () => {
   const base = baseUrl();
   const oscar = (await register('oscar')).token;

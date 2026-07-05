@@ -104,6 +104,13 @@ db.exec(`
     last_read_id INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY(user_id, other_id)
   );
+  CREATE TABLE IF NOT EXISTS mentions (
+    message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    PRIMARY KEY(message_id, user_id),
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // Migrate existing databases to include new columns if missing
@@ -436,6 +443,41 @@ function getUnreadCounts(userId) {
   `).all(userId);
 }
 
+// Record which server members a message mentions (only real members count).
+// Returns the resolved usernames so the sender's client can highlight them.
+function addMentions(messageId, spaceId, usernames) {
+  if (!usernames.length) return [];
+  const memberByName = db.prepare(
+    'SELECT u.id, u.username FROM users u JOIN space_members sm ON sm.user_id = u.id WHERE sm.space_id = ? AND u.username = ?'
+  );
+  const insert = db.prepare('INSERT OR IGNORE INTO mentions(message_id, user_id) VALUES (?, ?)');
+  const resolved = [];
+  for (const name of usernames) {
+    const row = memberByName.get(spaceId, name);
+    if (row) {
+      insert.run(messageId, row.id);
+      resolved.push(row.username);
+    }
+  }
+  return resolved;
+}
+
+// Unread mentions of the user, per channel (mentions in messages newer than the
+// user's read marker for that channel).
+function getMentionCounts(userId) {
+  return db.prepare(`
+    SELECT s.name AS space, c.name AS channel, COUNT(m.id) AS count
+    FROM mentions mn
+    JOIN messages m ON mn.message_id = m.id
+    JOIN channels c ON m.channel_id = c.id
+    JOIN spaces s ON c.space_id = s.id
+    LEFT JOIN read_state rs ON rs.user_id = ? AND rs.space = s.name AND rs.channel = c.name
+    WHERE mn.user_id = ? AND m.id > COALESCE(rs.last_read_id, 0)
+    GROUP BY s.name, c.name
+    HAVING count > 0
+  `).all(userId, userId);
+}
+
 // Mark every channel of a server read up to its latest message (used on join so
 // a new member starts with a clean slate rather than a wall of "unread").
 function markSpaceRead(userId, spaceName) {
@@ -693,6 +735,8 @@ module.exports = {
   markRead,
   getUnreadCounts,
   markSpaceRead,
+  addMentions,
+  getMentionCounts,
   storeDm,
   getDmMessages,
   getDmMessagesAfter,

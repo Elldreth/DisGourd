@@ -9,6 +9,7 @@ export default function ChatPanel({
   messages,
   currentUser,
   typingUsers = [],
+  memberNames = [],
   onSend,
   onEdit,
   onDelete,
@@ -67,7 +68,13 @@ export default function ChatPanel({
       />
       <TypingIndicator names={typingUsers} />
       {/* Always enabled: sends during a blip are queued and flushed on reconnect. */}
-      <Composer channel={channel} disabled={false} onSend={onSend} onTyping={onTyping} />
+      <Composer
+        channel={channel}
+        disabled={false}
+        onSend={onSend}
+        onTyping={onTyping}
+        mentionCandidates={memberNames}
+      />
     </main>
   );
 }

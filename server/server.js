@@ -175,6 +175,15 @@ function validateChannelName(name) {
   return null;
 }
 
+// Extract @username tokens from message content (deduplicated).
+function parseMentionUsernames(content) {
+  const names = new Set();
+  const re = /@([A-Za-z0-9_.-]{3,32})/g;
+  let m;
+  while ((m = re.exec(content)) !== null) names.add(m[1]);
+  return [...names];
+}
+
 function validateRegistration({ username, password, email }) {
   if (typeof username !== 'string' || !/^[A-Za-z0-9_.-]{3,32}$/.test(username)) {
     return 'Username must be 3-32 characters using letters, numbers, or _ . -';
@@ -1202,6 +1211,11 @@ function handleGatewayMessage(ws, raw) {
       const user = db.getUserById(userId);
       const stored = db.storeMessage(msg.space, msg.channel, content, userId, attachment);
       if (stored) db.markRead(userId, msg.space, msg.channel, stored.id); // author has read their own message
+      let mentions = [];
+      if (stored && content) {
+        const names = parseMentionUsernames(content);
+        if (names.length) mentions = db.addMentions(stored.id, space.id, names);
+      }
       deliverToSpaceMembers(msg.space, JSON.stringify({
         type: 'message',
         id: stored ? stored.id : undefined,
@@ -1212,6 +1226,7 @@ function handleGatewayMessage(ws, raw) {
         authorAvatar: user ? user.avatar_url || null : null,
         content,
         attachment,
+        mentions,
         timestamp: stored ? stored.timestamp : Date.now(),
       }));
       return;
@@ -1356,7 +1371,7 @@ httpServer.on('upgrade', (request, socket, head) => {
     logInfo(`Gateway connected for user ${ws.userId} (${set.size} socket(s))`);
 
     ws.send(JSON.stringify({ type: 'ready' }));
-    ws.send(JSON.stringify({ type: 'unread', counts: db.getUnreadCounts(ws.userId) }));
+    ws.send(JSON.stringify({ type: 'unread', counts: db.getUnreadCounts(ws.userId), mentions: db.getMentionCounts(ws.userId) }));
     ws.send(JSON.stringify({ type: 'dm_unread', counts: db.getDmUnreadCounts(ws.userId) }));
 
     ws.on('message', (raw) => handleGatewayMessage(ws, raw));

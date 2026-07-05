@@ -6,6 +6,7 @@ export default function ServerRail({
   spaces,
   currentSpace,
   unread = {},
+  mentions = {},
   dmActive,
   dmUnread = 0,
   onSelectDms,
@@ -58,6 +59,7 @@ export default function ServerRail({
         {spaces.map((s) => {
           const active = s.name === currentSpace;
           const count = unread[s.name] || 0;
+          const mentionCount = mentions[s.name] || 0;
           return (
             <button
               key={s.name}
@@ -74,9 +76,9 @@ export default function ServerRail({
                 }`}
               />
               {initials(s.name)}
-              {count > 0 && !active && (
+              {mentionCount > 0 && !active && (
                 <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-white">
-                  {count > 99 ? '99+' : count}
+                  {mentionCount > 99 ? '99+' : mentionCount}
                 </span>
               )}
             </button>
