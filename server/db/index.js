@@ -158,8 +158,36 @@ try {
   if (!dmHasSpoiler) {
     db.exec('ALTER TABLE dm_messages ADD COLUMN attachment_spoiler INTEGER NOT NULL DEFAULT 0');
   }
+  // Albums: a JSON array of attachment URLs (attachment_url holds the first, for
+  // back-compat and previews).
+  const hasAttachments = db.prepare("PRAGMA table_info(messages)").all().some(c => c.name === 'attachments');
+  if (!hasAttachments) {
+    db.exec('ALTER TABLE messages ADD COLUMN attachments TEXT');
+  }
+  const dmHasAttachments = db.prepare("PRAGMA table_info(dm_messages)").all().some(c => c.name === 'attachments');
+  if (!dmHasAttachments) {
+    db.exec('ALTER TABLE dm_messages ADD COLUMN attachments TEXT');
+  }
 } catch (e) {
   console.error('Error migrating messages table:', e);
+}
+
+// Parse the stored attachments JSON into an array, falling back to the single
+// attachment column for older rows. Mutates and returns the row.
+function hydrateAttachments(row) {
+  if (!row) return row;
+  let list = [];
+  if (row.attachments) {
+    try {
+      const parsed = JSON.parse(row.attachments);
+      if (Array.isArray(parsed)) list = parsed.filter((u) => typeof u === 'string');
+    } catch {
+      /* ignore malformed */
+    }
+  }
+  if (list.length === 0 && row.attachment) list = [row.attachment];
+  row.attachments = list;
+  return row;
 }
 
 function createSpace(name) {
@@ -287,7 +315,7 @@ function incrementInviteUses(code) {
   db.prepare('UPDATE invites SET uses = uses + 1 WHERE code = ?').run(code);
 }
 
-function storeMessage(spaceName, channelName, content, authorId, attachmentUrl, spoiler = false) {
+function storeMessage(spaceName, channelName, content, authorId, attachments = [], spoiler = false) {
   createChannel(spaceName, channelName);
   const channel = db.prepare(`
     SELECT c.id FROM channels c
@@ -295,10 +323,13 @@ function storeMessage(spaceName, channelName, content, authorId, attachmentUrl, 
     WHERE s.name = ? AND c.name = ?
   `).get(spaceName, channelName);
   if (!channel) return null;
+  const list = Array.isArray(attachments) ? attachments : (attachments ? [attachments] : []);
+  const first = list[0] || null;
+  const json = list.length ? JSON.stringify(list) : null;
   const createdAt = Date.now();
   const info = db.prepare(
-    'INSERT INTO messages(channel_id, content, author_id, attachment_url, attachment_spoiler, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(channel.id, content, authorId || null, attachmentUrl || null, spoiler ? 1 : 0, createdAt);
+    'INSERT INTO messages(channel_id, content, author_id, attachment_url, attachments, attachment_spoiler, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(channel.id, content, authorId || null, first, json, spoiler ? 1 : 0, createdAt);
   return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 
@@ -308,6 +339,7 @@ const MESSAGE_SELECT = `
   SELECT m.id,
          m.content,
          m.attachment_url AS attachment,
+         m.attachments AS attachments,
          m.attachment_spoiler AS spoiler,
          COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) AS timestamp,
          m.edited_at AS editedAt,
@@ -326,7 +358,7 @@ function getMessages(spaceName, channelName, limit = 20, offset = 0) {
     ORDER BY m.id DESC
     LIMIT ? OFFSET ?
   `).all(spaceName, channelName, limit, offset).reverse();
-  return attachReactions(rows);
+  return attachReactions(rows.map(hydrateAttachments));
 }
 
 // Messages newer than a given id, oldest-first — used to backfill gaps after a
@@ -337,7 +369,7 @@ function getMessagesAfter(spaceName, channelName, afterId, limit = 200) {
     ORDER BY m.id ASC
     LIMIT ?
   `).all(spaceName, channelName, afterId, limit);
-  return attachReactions(rows);
+  return attachReactions(rows.map(hydrateAttachments));
 }
 
 // ---- Reactions ----
@@ -501,6 +533,7 @@ const DM_SELECT = `
   SELECT m.id,
          m.content,
          m.attachment_url AS attachment,
+         m.attachments AS attachments,
          m.attachment_spoiler AS spoiler,
          COALESCE(m.created_at, 0) AS timestamp,
          m.edited_at AS editedAt,
@@ -511,25 +544,28 @@ const DM_SELECT = `
   JOIN users u ON m.author_id = u.id
 `;
 
-function storeDm(fromId, toId, content, attachmentUrl, spoiler = false) {
+function storeDm(fromId, toId, content, attachments = [], spoiler = false) {
   const [a, b] = dmPair(fromId, toId);
+  const list = Array.isArray(attachments) ? attachments : (attachments ? [attachments] : []);
+  const first = list[0] || null;
+  const json = list.length ? JSON.stringify(list) : null;
   const createdAt = Date.now();
   const info = db.prepare(
-    'INSERT INTO dm_messages(user_a, user_b, author_id, content, attachment_url, attachment_spoiler, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(a, b, fromId, content, attachmentUrl || null, spoiler ? 1 : 0, createdAt);
+    'INSERT INTO dm_messages(user_a, user_b, author_id, content, attachment_url, attachments, attachment_spoiler, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(a, b, fromId, content, first, json, spoiler ? 1 : 0, createdAt);
   return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 
 function getDmMessages(userId, otherId, limit = 50, offset = 0) {
   const [a, b] = dmPair(userId, otherId);
   return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? ORDER BY m.id DESC LIMIT ? OFFSET ?`)
-    .all(a, b, limit, offset).reverse();
+    .all(a, b, limit, offset).reverse().map(hydrateAttachments);
 }
 
 function getDmMessagesAfter(userId, otherId, afterId, limit = 200) {
   const [a, b] = dmPair(userId, otherId);
   return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id > ? ORDER BY m.id ASC LIMIT ?`)
-    .all(a, b, afterId, limit);
+    .all(a, b, afterId, limit).map(hydrateAttachments);
 }
 
 // The two participants + author of a DM, so we can notify both sides.

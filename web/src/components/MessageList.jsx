@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
-import Attachment from './Attachment.jsx';
+import Album from './Album.jsx';
 import { formatTime, formatDay } from '../util.js';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🔥', '✅'];
@@ -213,7 +213,12 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
                 {m.editedAt && <span className="ml-1 text-[10px] text-gray-500">(edited)</span>}
               </div>
             )}
-            {m.attachment && <Attachment url={m.attachment} spoiler={m.spoiler} />}
+            {(m.attachments?.length || m.attachment) && (
+              <Album
+                items={m.attachments?.length ? m.attachments : [m.attachment]}
+                spoiler={m.spoiler}
+              />
+            )}
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {reactions.map((r) => {

@@ -1,6 +1,7 @@
 // Small presentation helpers shared across components.
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif'];
+const VIDEO_EXT = ['mp4', 'webm', 'mov', 'm4v', 'ogv'];
 
 export function attachmentInfo(url) {
   if (!url) return null;
@@ -11,7 +12,9 @@ export function attachmentInfo(url) {
     name = url.split('/').pop() || url;
   }
   const ext = (name.split('.').pop() || '').toLowerCase();
-  return { url, name, ext, isImage: IMAGE_EXT.includes(ext) };
+  const isImage = IMAGE_EXT.includes(ext);
+  const isVideo = VIDEO_EXT.includes(ext);
+  return { url, name, ext, isImage, isVideo, isMedia: isImage || isVideo };
 }
 
 export function formatTime(ts) {

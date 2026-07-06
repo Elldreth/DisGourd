@@ -37,7 +37,7 @@ export default function ChatPanel({
   const degraded = status === 'reconnecting' || status === 'closed' || status === 'connecting';
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-ink-700">
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700">
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
         <span className="text-xl text-gray-500">#</span>
         <h2 className="font-bold">{channel}</h2>

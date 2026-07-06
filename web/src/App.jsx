@@ -213,6 +213,7 @@ export default function App() {
             authorAvatar: m.fromAvatar,
             content: m.content,
             attachment: m.attachment,
+            attachments: m.attachments,
             spoiler: m.spoiler,
             timestamp: m.timestamp,
           };
@@ -442,8 +443,8 @@ export default function App() {
     startDm(username);
   }
 
-  const sendDm = (content, attachment, spoiler) => {
-    if (currentDm) send({ op: 'dm', to: currentDm, content, attachment, spoiler });
+  const sendDm = (content, attachments, spoiler) => {
+    if (currentDm) send({ op: 'dm', to: currentDm, content, attachments, spoiler });
   };
   const editDm = (id, content) => send({ op: 'dm_edit', id, content });
   const deleteDm = (id) => send({ op: 'dm_delete', id });
@@ -564,8 +565,8 @@ export default function App() {
     }
   }
 
-  const sendMessage = (content, attachment, spoiler) =>
-    send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachment, spoiler });
+  const sendMessage = (content, attachments, spoiler) =>
+    send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachments, spoiler });
   const editMessage = (id, content) => send({ op: 'edit', id, content });
   const deleteMessage = (id) => send({ op: 'delete', id });
   const reactToMessage = (id, emoji) => send({ op: 'react', id, emoji });
@@ -691,7 +692,7 @@ export default function App() {
             status={status}
             onLogout={logout}
           />
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {voiceCall.room && voiceCall.videos.length > 0 && (
               <VideoStage videos={voiceCall.videos} />
             )}

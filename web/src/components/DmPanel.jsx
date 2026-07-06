@@ -18,7 +18,7 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
   }
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-ink-700">
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700">
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
         <Avatar name={username} size={24} />
         <h2 className="font-bold">{username}</h2>

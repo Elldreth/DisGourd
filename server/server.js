@@ -184,6 +184,18 @@ function parseMentionUsernames(content) {
   return [...names];
 }
 
+// Album support: accept a list of attachment URLs (msg.attachments) or a single
+// msg.attachment, keeping only our own uploaded paths and capping the count.
+const MAX_ATTACHMENTS = 10;
+function normalizeAttachments(msg) {
+  let list = [];
+  if (Array.isArray(msg.attachments)) list = msg.attachments;
+  else if (typeof msg.attachment === 'string') list = [msg.attachment];
+  return list
+    .filter((u) => typeof u === 'string' && u.startsWith('/uploads/'))
+    .slice(0, MAX_ATTACHMENTS);
+}
+
 function validateRegistration({ username, password, email }) {
   if (typeof username !== 'string' || !/^[A-Za-z0-9_.-]{3,32}$/.test(username)) {
     return 'Username must be 3-32 characters using letters, numbers, or _ . -';
@@ -905,11 +917,11 @@ function handleGatewayMessage(ws, raw) {
       const space = db.getSpaceByName(msg.space);
       if (!space || !db.isMember(space.id, userId) || db.channelType(msg.space, msg.channel) !== 'text') return;
       const content = typeof msg.content === 'string' ? msg.content : '';
-      const attachment = typeof msg.attachment === 'string' ? msg.attachment : undefined;
-      if (!content && !attachment) return;
-      const spoiler = !!msg.spoiler && !!attachment;
+      const attachments = normalizeAttachments(msg);
+      if (!content && attachments.length === 0) return;
+      const spoiler = !!msg.spoiler && attachments.length > 0;
       const user = db.getUserById(userId);
-      const stored = db.storeMessage(msg.space, msg.channel, content, userId, attachment, spoiler);
+      const stored = db.storeMessage(msg.space, msg.channel, content, userId, attachments, spoiler);
       if (stored) db.markRead(userId, msg.space, msg.channel, stored.id); // author has read their own message
       let mentions = [];
       if (stored && content) {
@@ -925,7 +937,8 @@ function handleGatewayMessage(ws, raw) {
         authorId: userId,
         authorAvatar: user ? user.avatar_url || null : null,
         content,
-        attachment,
+        attachment: attachments[0], // first, for older clients
+        attachments,
         spoiler,
         mentions,
         timestamp: stored ? stored.timestamp : Date.now(),
@@ -999,11 +1012,11 @@ function handleGatewayMessage(ws, raw) {
       const to = db.getUserByUsername(msg.to);
       if (!to || to.id === userId) return;
       const content = typeof msg.content === 'string' ? msg.content : '';
-      const attachment = typeof msg.attachment === 'string' ? msg.attachment : undefined;
-      if (!content && !attachment) return;
-      const spoiler = !!msg.spoiler && !!attachment;
+      const attachments = normalizeAttachments(msg);
+      if (!content && attachments.length === 0) return;
+      const spoiler = !!msg.spoiler && attachments.length > 0;
       const from = db.getUserById(userId);
-      const stored = db.storeDm(userId, to.id, content, attachment, spoiler);
+      const stored = db.storeDm(userId, to.id, content, attachments, spoiler);
       db.markDmRead(userId, to.id, stored.id); // sender has read their own message
       const frame = JSON.stringify({
         type: 'dm',
@@ -1014,7 +1027,8 @@ function handleGatewayMessage(ws, raw) {
         to: to.username,
         toId: to.id,
         content,
-        attachment,
+        attachment: attachments[0],
+        attachments,
         spoiler,
         timestamp: stored.timestamp,
       });
