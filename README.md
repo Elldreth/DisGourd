@@ -63,9 +63,10 @@ All settings are optional and provided via environment variables (or
 | `UPLOADS_DIR`      | `uploads/`               | Where uploaded files are stored                    |
 | `MAX_UPLOAD_BYTES` | `26214400` (25 MB)       | Maximum upload size                                |
 | `WEB_DIST`         | `web/dist`               | Location of the built web client                   |
-| `REGISTRATION_MODE`| `open`                   | `open`, `code` (a shared code is required), or `closed` (no new accounts) |
-| `REGISTRATION_CODE`| _(none)_                 | The shared code friends enter to sign up. Setting it implies `code` mode  |
+| `REGISTRATION_MODE`| `open`                   | Initial mode: `open`, `code`, or `closed`. Seeds the setting on first run; after that, site admins change it in-app |
+| `REGISTRATION_CODE`| _(none)_                 | An optional always-valid shared code (in addition to any codes minted in-app) |
 | `MAX_ACCOUNTS`     | `0` (unlimited)          | Cap on the total number of accounts                |
+| `SITE_ADMINS`      | _(none)_                 | Comma-separated usernames to make site admins (e.g. `alice,bob`)   |
 
 Example (Linux/macOS):
 
@@ -78,16 +79,26 @@ PORT=8080 JWT_SECRET="a-long-random-string" npm start
 Because DisGourd is meant for a known group of friends, lock down who can make
 an account. Two layers, use both:
 
-**1. Gate registration (app level).** Set a shared code so only people you've
-given it to can sign up — no email or SMTP needed:
+**1. Gate registration (app level).** The **first account created becomes the
+site admin**. Site admins get a **Registration & access** panel in **Settings**
+where they can, with no config editing:
+
+- switch the mode between **open** / **code required** / **closed**,
+- **mint invite codes** (with optional use limits and expiry), **copy** them to
+  share, and **revoke** them, and
+- **promote/demote other site admins**.
+
+New users then enter a code on the sign-up screen. You can also pre-seed things
+from the environment — an initial mode, an always-valid shared code, an account
+cap, and site admins by username:
 
 ```bash
-REGISTRATION_MODE=code REGISTRATION_CODE="pickles-4-life" npm start
+REGISTRATION_MODE=code REGISTRATION_CODE="pickles-4-life" \
+  MAX_ACCOUNTS=25 SITE_ADMINS="alice" npm start
 ```
 
-New users then need that code on the sign-up screen. Once everyone's in, you can
-freeze sign-ups entirely with `REGISTRATION_MODE=closed`, and cap the total with
-`MAX_ACCOUNTS`. Registration attempts are also rate-limited per IP.
+Registration attempts are rate-limited per IP, and codes are compared in
+constant time and never sent to the browser.
 
 **2. Don't expose it to the whole internet (network level — the strongest).**
 The surest way to keep strangers out is to make sure they can't reach the server

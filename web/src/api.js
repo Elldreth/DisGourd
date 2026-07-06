@@ -66,6 +66,23 @@ export function getAuthInfo() {
   return request('/auth-info', { method: 'GET', auth: false });
 }
 
+// ---- Instance admin: registration management (site admins only) ----
+export function getAdminRegistration() {
+  return request('/admin/registration');
+}
+export function setRegistrationMode(mode) {
+  return request('/admin/registration', { method: 'PUT', body: { mode } });
+}
+export function createRegCode(opts) {
+  return request('/admin/registration/codes', { method: 'POST', body: opts || {} });
+}
+export function revokeRegCode(id) {
+  return request(`/admin/registration/codes/${id}`, { method: 'DELETE' });
+}
+export function setSiteAdmin(username, admin) {
+  return request(`/admin/registration/admins/${encodeURIComponent(username)}`, { method: 'PUT', body: { admin } });
+}
+
 // ---- Servers (spaces) / channels ----
 // Only servers the current user belongs to are returned.
 export function getSpaces() {

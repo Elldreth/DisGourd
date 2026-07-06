@@ -2,6 +2,7 @@ import { useState } from 'react';
 import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
 import AudioSettings from './AudioSettings.jsx';
+import RegistrationAdmin from './RegistrationAdmin.jsx';
 
 // User settings: avatar/profile and audio devices.
 export default function ProfileDialog({ profile, onClose, onUpdated, onOutputChange, onPttChange, onMicChange, inCall }) {
@@ -104,6 +105,15 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
               inCall={inCall}
             />
           </section>
+
+          {profile?.siteAdmin && (
+            <section>
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Registration &amp; access (site admin)
+              </h4>
+              <RegistrationAdmin />
+            </section>
+          )}
         </div>
       </div>
     </div>
