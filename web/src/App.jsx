@@ -13,6 +13,7 @@ import {
   applyServerOrder,
 } from './util.js';
 import Login from './components/Login.jsx';
+import SetupWizard from './components/SetupWizard.jsx';
 import ServerRail from './components/ServerRail.jsx';
 import ChannelList from './components/ChannelList.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
@@ -54,6 +55,13 @@ export default function App() {
   const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, sharing: false, shareError: '', cameraOn: false, screenOn: false, videoError: '', videos: [], participants: [] });
   const myVoice = voiceCall.room;
   const [loadError, setLoadError] = useState('');
+  const [authInfo, setAuthInfo] = useState(null); // { registration, setup } for the logged-out screen
+
+  // When logged out, find out whether this is a brand-new install (show setup).
+  useEffect(() => {
+    if (token) return;
+    api.getAuthInfo().then(setAuthInfo).catch(() => setAuthInfo({ setup: false }));
+  }, [token]);
 
   // Direct messages
   const [view, setView] = useState('server'); // 'server' | 'dm'
@@ -689,7 +697,12 @@ export default function App() {
     voiceParticipantsByChannel[vc] = voiceStates[unreadKey(currentSpace, vc)] || [];
   }
 
-  if (!token) return <Login onAuthed={setToken} />;
+  if (!token) {
+    if (!authInfo) {
+      return <div className="flex h-full items-center justify-center bg-ink-900 text-3xl">🥒</div>;
+    }
+    return authInfo.setup ? <SetupWizard onAuthed={setToken} /> : <Login onAuthed={setToken} />;
+  }
 
   return (
     <div className="flex h-full w-full overflow-hidden">

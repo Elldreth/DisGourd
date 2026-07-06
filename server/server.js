@@ -413,7 +413,9 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
   // or hide sign-up entirely. Never exposes the code itself.
   if (parsedUrl.pathname === '/auth-info' && req.method === 'GET') {
     res.writeHead(200);
-    return res.end(JSON.stringify({ registration: registrationMode() }));
+    // `setup` is true on a brand-new install (no accounts yet) — the client
+    // shows a first-run wizard, and that first account becomes the site admin.
+    return res.end(JSON.stringify({ registration: registrationMode(), setup: db.countUsers() === 0 }));
   }
   if (parsedUrl.pathname === '/register' && req.method === 'POST') {
     try {
