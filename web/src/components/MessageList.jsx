@@ -66,11 +66,26 @@ function renderRich(content, me, withMentions) {
 export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, simple = false, emptyHeading, emptyBody }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
+  // When a channel is first opened (or the transcript was cleared on switch /
+  // refresh), the next batch of messages should jump straight to the newest.
+  const pendingInitialScroll = useRef(true);
 
-  // Auto-scroll to newest, but only if the user is already near the bottom.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    if (messages.length === 0) {
+      pendingInitialScroll.current = true; // empty transcript → next load lands at the bottom
+      return;
+    }
+    if (pendingInitialScroll.current) {
+      pendingInitialScroll.current = false;
+      const toBottom = () => bottomRef.current?.scrollIntoView({ block: 'end' });
+      toBottom();
+      // Content below (images/albums) can settle a frame later and shift things.
+      requestAnimationFrame(toBottom);
+      return;
+    }
+    // Subsequent updates: only follow the newest if you're already near the bottom.
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
     if (nearBottom) bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages]);
