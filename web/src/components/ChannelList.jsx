@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { initials, colorForName } from '../util.js';
 import Avatar from './Avatar.jsx';
 import UserFooter from './UserFooter.jsx';
+import ServerPermissionsDialog from './ServerPermissionsDialog.jsx';
+import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
 import { displayCaptureSupported } from '../audio.js';
 
 export default function ChannelList({
@@ -45,6 +47,10 @@ export default function ChannelList({
   hasIcon,
   onChangeServerIcon,
   onRemoveServerIcon,
+  role,
+  permissions,
+  channelMeta = {},
+  onPermsChanged,
   user,
   avatar,
   onOpenProfile,
@@ -56,6 +62,8 @@ export default function ChannelList({
   const [addingVoice, setAddingVoice] = useState(false);
   const [voiceName, setVoiceName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [permsOpen, setPermsOpen] = useState(false);
+  const [channelSettings, setChannelSettings] = useState(null); // channel name or null
   const iconInputRef = useRef(null);
 
   async function submit(e) {
@@ -145,6 +153,16 @@ export default function ChannelList({
               )}
               {isOwner && (
                 <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setPermsOpen(true);
+                  }}
+                >
+                  🛡 Permissions
+                </MenuItem>
+              )}
+              {isOwner && (
+                <MenuItem
                   danger
                   onClick={() => {
                     setMenuOpen(false);
@@ -205,28 +223,40 @@ export default function ChannelList({
           const active = c === currentChannel;
           const hasUnread = (unread[c] || 0) > 0 && !active;
           const mentionCount = active ? 0 : mentions[c] || 0;
+          const restricted = (channelMeta[c]?.view ?? 1) > 1 || (channelMeta[c]?.post ?? 1) > 1;
           return (
-            <button
-              key={c}
-              onClick={() => onSelect(c)}
-              className={`mb-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
-                active
-                  ? 'bg-ink-600 text-white'
-                  : hasUnread || mentionCount
-                    ? 'font-semibold text-white hover:bg-ink-700/60'
-                    : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
-              }`}
-            >
-              <span className="text-gray-500">#</span>
-              <span className="flex-1 truncate">{c}</span>
-              {mentionCount > 0 ? (
-                <span className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-white">
-                  {mentionCount}
-                </span>
-              ) : hasUnread ? (
-                <span className="h-2 w-2 shrink-0 rounded-full bg-gray-300" />
-              ) : null}
-            </button>
+            <div key={c} className="group relative mb-0.5">
+              <button
+                onClick={() => onSelect(c)}
+                className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
+                  active
+                    ? 'bg-ink-600 text-white'
+                    : hasUnread || mentionCount
+                      ? 'font-semibold text-white hover:bg-ink-700/60'
+                      : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
+                }`}
+              >
+                <span className="text-gray-500">#</span>
+                <span className="flex-1 truncate">{c}</span>
+                {restricted && <span title="Restricted access" className="shrink-0 text-xs text-gray-500">🔒</span>}
+                {mentionCount > 0 ? (
+                  <span className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-white">
+                    {mentionCount}
+                  </span>
+                ) : hasUnread ? (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-gray-300" />
+                ) : null}
+              </button>
+              {canManage && (
+                <button
+                  onClick={() => setChannelSettings(c)}
+                  title="Channel settings"
+                  className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded bg-ink-600 p-1 text-xs text-gray-300 hover:text-white group-hover:block"
+                >
+                  ⚙
+                </button>
+              )}
+            </div>
           );
         })}
 
@@ -400,6 +430,24 @@ export default function ChannelList({
         onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />
+
+      {permsOpen && (
+        <ServerPermissionsDialog
+          space={space}
+          permissions={permissions || {}}
+          onClose={() => setPermsOpen(false)}
+          onSaved={onPermsChanged}
+        />
+      )}
+      {channelSettings && (
+        <ChannelSettingsDialog
+          space={space}
+          channel={channelSettings}
+          meta={channelMeta[channelSettings]}
+          onClose={() => setChannelSettings(null)}
+          onSaved={onPermsChanged}
+        />
+      )}
     </div>
   );
 }

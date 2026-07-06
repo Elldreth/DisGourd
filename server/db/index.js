@@ -173,8 +173,91 @@ try {
   if (!hasSpaceIcon) {
     db.exec('ALTER TABLE spaces ADD COLUMN icon_url TEXT');
   }
+  // Role-based permissions: per-server action thresholds (JSON) and per-channel
+  // minimum ranks to view/post. Rank: member=1, admin=2, owner=3.
+  const hasPerms = db.prepare("PRAGMA table_info(spaces)").all().some(c => c.name === 'permissions');
+  if (!hasPerms) {
+    db.exec('ALTER TABLE spaces ADD COLUMN permissions TEXT');
+  }
+  const chanCols = db.prepare("PRAGMA table_info(channels)").all();
+  if (!chanCols.some(c => c.name === 'view_role')) {
+    db.exec('ALTER TABLE channels ADD COLUMN view_role INTEGER NOT NULL DEFAULT 1');
+  }
+  if (!chanCols.some(c => c.name === 'post_role')) {
+    db.exec('ALTER TABLE channels ADD COLUMN post_role INTEGER NOT NULL DEFAULT 1');
+  }
 } catch (e) {
   console.error('Error migrating messages table:', e);
+}
+
+// ---- Role-based permissions ----
+const ROLE_RANK = { member: 1, admin: 2, owner: 3 };
+function roleRank(role) {
+  return ROLE_RANK[role] || 0;
+}
+
+// Server actions and their default minimum rank. Owner (3) always passes.
+const DEFAULT_PERMISSIONS = {
+  create_channel: 2,
+  delete_channel: 2,
+  invite: 1,
+  kick: 2,
+  edit_server: 2,
+  delete_others_messages: 2,
+  manage_roles: 3,
+};
+
+// Merge a space's stored permission overrides onto the defaults.
+function getSpacePermissions(spaceId) {
+  const row = db.prepare('SELECT permissions FROM spaces WHERE id = ?').get(spaceId);
+  let stored = {};
+  if (row && row.permissions) {
+    try {
+      stored = JSON.parse(row.permissions) || {};
+    } catch {
+      stored = {};
+    }
+  }
+  const out = { ...DEFAULT_PERMISSIONS };
+  for (const k of Object.keys(DEFAULT_PERMISSIONS)) {
+    const v = parseInt(stored[k], 10);
+    if (v >= 1 && v <= 3) out[k] = v;
+  }
+  return out;
+}
+
+function setSpacePermissions(spaceId, perms) {
+  const clean = {};
+  for (const k of Object.keys(DEFAULT_PERMISSIONS)) {
+    const v = parseInt(perms && perms[k], 10);
+    // manage_roles stays owner-only; never let it drop below owner.
+    const min = k === 'manage_roles' ? 3 : 1;
+    if (v >= min && v <= 3) clean[k] = v;
+  }
+  db.prepare('UPDATE spaces SET permissions = ? WHERE id = ?').run(JSON.stringify(clean), spaceId);
+}
+
+// Whether a role rank may perform a server action.
+function canDo(spaceId, role, action) {
+  return roleRank(role) >= (getSpacePermissions(spaceId)[action] || 3);
+}
+
+function getChannelPerms(spaceName, channelName) {
+  return db.prepare(`
+    SELECT c.view_role AS view, c.post_role AS post
+    FROM channels c JOIN spaces s ON c.space_id = s.id
+    WHERE s.name = ? AND c.name = ?
+  `).get(spaceName, channelName) || null;
+}
+
+function setChannelPerms(spaceName, channelName, viewRole, postRole) {
+  const v = Math.min(3, Math.max(1, parseInt(viewRole, 10) || 1));
+  // You can't post somewhere you can't see, so post threshold >= view threshold.
+  const p = Math.min(3, Math.max(v, parseInt(postRole, 10) || 1));
+  return db.prepare(`
+    UPDATE channels SET view_role = ?, post_role = ?
+    WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ?
+  `).run(v, p, spaceName, channelName).changes > 0;
 }
 
 // Parse the stored attachments JSON into an array, falling back to the single
@@ -283,15 +366,23 @@ function getUserSpaces(userId) {
     WHERE sm.user_id = ?
     ORDER BY s.name COLLATE NOCASE
   `).all(userId);
-  const channelStmt = db.prepare('SELECT name, type FROM channels WHERE space_id = ? ORDER BY id');
+  const channelStmt = db.prepare(
+    'SELECT name, type, view_role AS view, post_role AS post FROM channels WHERE space_id = ? ORDER BY id'
+  );
   return spaces.map((s) => {
-    const chans = channelStmt.all(s.id);
+    const rank = roleRank(s.role);
+    // Members only see channels their rank is allowed to view.
+    const chans = channelStmt.all(s.id).filter((c) => rank >= (c.view || 1));
+    const channelMeta = {};
+    for (const c of chans) channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1 };
     return {
       name: s.name,
       icon: s.icon || null,
       role: s.role,
+      permissions: getSpacePermissions(s.id),
       channels: chans.filter((c) => c.type !== 'voice').map((c) => c.name),
       voiceChannels: chans.filter((c) => c.type === 'voice').map((c) => c.name),
+      channelMeta,
     };
   });
 }
@@ -769,6 +860,12 @@ module.exports = {
   isMember,
   getUserSpaces,
   setSpaceIcon,
+  roleRank,
+  getSpacePermissions,
+  setSpacePermissions,
+  canDo,
+  getChannelPerms,
+  setChannelPerms,
   getSpaceMembers,
   createInvite,
   getInvite,

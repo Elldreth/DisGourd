@@ -1,5 +1,19 @@
 // Small presentation helpers shared across components.
 
+// Role hierarchy: member < admin < owner. Permissions are "minimum rank to act".
+export const ROLE_RANK = { member: 1, admin: 2, owner: 3 };
+export const roleRank = (role) => ROLE_RANK[role] || 0;
+// Server actions the owner can gate, with friendly labels (order = display order).
+export const PERMISSION_ACTIONS = [
+  { key: 'create_channel', label: 'Create channels' },
+  { key: 'delete_channel', label: 'Delete channels' },
+  { key: 'invite', label: 'Invite people' },
+  { key: 'kick', label: 'Remove members' },
+  { key: 'delete_others_messages', label: "Delete others' messages" },
+  { key: 'edit_server', label: 'Edit server (name, icon)' },
+  { key: 'manage_roles', label: 'Manage roles' },
+];
+
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif'];
 const VIDEO_EXT = ['mp4', 'webm', 'mov', 'm4v', 'ogv'];
 
