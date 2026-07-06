@@ -280,7 +280,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
               {picker && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setPicker(false)} />
-                  <div className="absolute right-0 top-8 z-20 flex gap-1 rounded-lg border border-ink-500/60 bg-ink-900 p-1.5 shadow-xl">
+                  <div className="anim-pop absolute right-0 top-8 z-20 flex gap-1 rounded-lg border border-ink-500/60 bg-ink-900 p-1.5 shadow-xl">
                     {REACTION_EMOJIS.map((e) => (
                       <button
                         key={e}

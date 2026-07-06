@@ -18,11 +18,11 @@ export default function InviteDialog({ space, code, onClose }) {
 
   return (
     <div
-      className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-4"
+      className="anim-fade absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl bg-ink-800 p-6 shadow-2xl ring-1 ring-ink-500/50"
+        className="anim-scale-in w-full max-w-md rounded-xl bg-ink-800 p-6 shadow-2xl ring-1 ring-ink-500/50"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-bold">Invite people to {space}</h3>

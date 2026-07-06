@@ -160,7 +160,7 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
       )}
 
       {mentionMatch && (
-        <div className="mb-1 overflow-hidden rounded-lg bg-ink-800 shadow-lg ring-1 ring-ink-500/50">
+        <div className="anim-pop mb-1 overflow-hidden rounded-lg bg-ink-800 shadow-lg ring-1 ring-ink-500/50">
           <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Members</div>
           {mentionMatch.candidates.map((n, i) => (
             <button
@@ -185,7 +185,7 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
           onClick={() => fileRef.current?.click()}
           disabled={disabled}
           title="Attach files (images, videos, and more)"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-500 text-gray-200 transition hover:bg-brand hover:text-white disabled:opacity-50"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-500 text-gray-200 transition hover:bg-brand hover:text-white active:scale-90 disabled:opacity-50"
         >
           <Icon name="plus" size={18} />
         </button>
@@ -203,7 +203,7 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
         <button
           onClick={submit}
           disabled={disabled || (!text.trim() && pending.length === 0)}
-          className="flex h-8 shrink-0 items-center rounded-lg bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:opacity-40"
+          className="flex h-8 shrink-0 items-center rounded-lg bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover active:scale-95 disabled:opacity-40 disabled:active:scale-100"
         >
           Send
         </button>

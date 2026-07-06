@@ -58,7 +58,7 @@ export default function ServerRail({
       <button
         onClick={onSelectDms}
         title="Direct Messages"
-        className={`relative mb-1 flex h-12 w-12 items-center justify-center text-white transition-all hover:rounded-2xl ${
+        className={`relative mb-1 flex h-12 w-12 items-center justify-center text-white transition-all hover:rounded-2xl active:scale-90 ${
           dmActive ? 'rounded-2xl bg-brand' : 'rounded-[26px] bg-ink-700 hover:bg-brand'
         }`}
       >
@@ -86,7 +86,7 @@ export default function ServerRail({
               onDragOver={(e) => { e.preventDefault(); if (dropIndex !== i) setDropIndex(i); }}
               onDrop={() => handleDrop(i)}
               onDragEnd={() => { setDragIndex(null); setDropIndex(null); }}
-              className={`group relative flex h-12 w-12 items-center justify-center overflow-hidden font-semibold text-white transition-all duration-150 hover:rounded-2xl ${
+              className={`group relative flex h-12 w-12 items-center justify-center overflow-hidden font-semibold text-white transition-all duration-150 hover:rounded-2xl active:scale-90 ${
                 active ? 'rounded-2xl' : 'rounded-[26px]'
               } ${dragIndex === i ? 'opacity-40' : ''} ${dropIndex === i && dragIndex !== i ? 'ring-2 ring-white/70' : ''}`}
               style={{ backgroundColor: s.icon ? undefined : active ? '#7d6ff3' : colorForName(s.name) }}
@@ -125,7 +125,7 @@ export default function ServerRail({
           <button
             onClick={() => { setAdding(true); setJoining(false); }}
             title="Create a server"
-            className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-white"
+            className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-white active:scale-90"
           >
             <Icon name="plus" size={24} />
           </button>
@@ -134,14 +134,14 @@ export default function ServerRail({
         <button
           onClick={() => { setJoining((v) => !v); setAdding(false); }}
           title="Join a server with an invite"
-          className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-gray-300 transition-all hover:rounded-2xl hover:bg-brand hover:text-white"
+          className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-gray-300 transition-all hover:rounded-2xl hover:bg-brand hover:text-white active:scale-90"
         >
           <Icon name="login" size={20} />
         </button>
       </div>
 
       {joining && (
-        <div className="absolute bottom-3 left-[76px] z-20 w-60 rounded-lg bg-ink-800 p-3 shadow-xl ring-1 ring-ink-500/50">
+        <div className="anim-pop absolute bottom-3 left-[76px] z-20 w-60 rounded-lg bg-ink-800 p-3 shadow-xl ring-1 ring-ink-500/50">
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
             Join a server
           </div>

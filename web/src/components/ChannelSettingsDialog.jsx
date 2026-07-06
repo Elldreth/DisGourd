@@ -34,9 +34,9 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="anim-fade absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-sm rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
+        className="anim-scale-in w-full max-w-sm rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">

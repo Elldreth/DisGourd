@@ -34,11 +34,11 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm }) {
 
   return (
     <div
-      className="absolute inset-0 z-30 flex items-start justify-center bg-black/60 p-4 pt-20"
+      className="anim-fade absolute inset-0 z-30 flex items-start justify-center bg-black/60 p-4 pt-20"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[70vh] w-full max-w-2xl flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
+        className="anim-scale-in flex max-h-[70vh] w-full max-w-2xl flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-ink-500/40 p-3">

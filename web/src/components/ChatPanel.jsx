@@ -55,7 +55,7 @@ export default function ChatPanel({
       </header>
 
       {degraded && (
-        <div className="bg-idle/20 px-4 py-1 text-center text-sm text-idle">
+        <div className="anim-slide-down bg-idle/20 px-4 py-1 text-center text-sm text-idle">
           {status === 'closed' ? 'Disconnected — retrying…' : 'Reconnecting…'} Messages you send will
           be delivered once you’re back online.
         </div>

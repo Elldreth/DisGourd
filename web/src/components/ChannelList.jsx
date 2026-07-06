@@ -123,7 +123,7 @@ export default function ChannelList({
         {menuOpen && space && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-            <div className="absolute left-2 right-2 top-11 z-20 rounded-lg bg-ink-900 p-1.5 shadow-xl ring-1 ring-ink-500/50">
+            <div className="anim-pop absolute left-2 right-2 top-11 z-20 rounded-lg bg-ink-900 p-1.5 shadow-xl ring-1 ring-ink-500/50">
               <MenuItem
                 onClick={() => {
                   setMenuOpen(false);

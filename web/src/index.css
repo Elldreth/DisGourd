@@ -52,3 +52,41 @@ body {
 ::selection {
   background: rgba(125, 111, 243, 0.35);
 }
+
+/* --- Motion --------------------------------------------------------------
+   A small, deliberate set of entrance animations. Popovers get a quick
+   rise-and-settle, modals a soft scale-in, banners a slide from the top.
+   Kept short (120–190ms) with an ease-out settle so they feel snappy, not
+   showy. Everything below is disabled under prefers-reduced-motion. */
+@keyframes dg-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dg-pop {
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dg-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dg-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.anim-fade { animation: dg-fade 0.15s ease-out; }
+.anim-pop { animation: dg-pop 0.14s cubic-bezier(0.16, 1, 0.3, 1); transform-origin: top; }
+.anim-scale-in { animation: dg-scale-in 0.16s cubic-bezier(0.16, 1, 0.3, 1); }
+.anim-slide-down { animation: dg-slide-down 0.19s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

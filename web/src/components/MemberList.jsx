@@ -58,7 +58,7 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
                 {m.role === 'admin' && <RoleBadge>Admin</RoleBadge>}
               </button>
               {open && acts.length > 0 && (
-                <div className="mb-1 ml-9 mr-1 overflow-hidden rounded-lg bg-ink-900 shadow-lg ring-1 ring-ink-500/50">
+                <div className="anim-pop mb-1 ml-9 mr-1 overflow-hidden rounded-lg bg-ink-900 shadow-lg ring-1 ring-ink-500/50">
                   {acts.map((a) => (
                     <button
                       key={a.label}

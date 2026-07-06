@@ -24,7 +24,7 @@ export default function Lightbox({ items, index, onClose, onIndex }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/90"
       onClick={onClose}
     >
       {/* Close */}
