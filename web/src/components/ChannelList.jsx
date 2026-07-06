@@ -86,8 +86,8 @@ export default function ChannelList({
   }
 
   return (
-    <div className="flex w-60 flex-col bg-ink-800">
-      <header className="relative flex h-12 items-center gap-2 px-2 shadow-sm shadow-black/20">
+    <div className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
+      <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-sm shadow-black/20">
         {space && (
           <button
             onClick={() => (canManage ? iconInputRef.current?.click() : setMenuOpen((v) => !v))}

@@ -180,7 +180,7 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
         </div>
       )}
 
-      <div className="flex items-end gap-2 rounded-xl bg-ink-600/70 px-3 py-2">
+      <div className="flex items-end gap-2 rounded-xl bg-ink-600/70 px-3 py-2 ring-1 ring-inset ring-transparent transition focus-within:ring-brand/40">
         <button
           onClick={() => fileRef.current?.click()}
           disabled={disabled}
