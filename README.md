@@ -1,4 +1,8 @@
-# DisGourd 🥒
+<p align="center">
+  <img src="web/public/favicon.svg" alt="DisGourd" width="96" height="96" />
+</p>
+
+<h1 align="center">DisGourd</h1>
 
 A self-hostable, Discord-style chat app for you and your friends. Run it on your
 own machine — real-time text channels, servers, file sharing, presence — with
@@ -99,7 +103,7 @@ from the environment — an initial mode, an always-valid shared code, an accoun
 cap, and site admins by username:
 
 ```bash
-REGISTRATION_MODE=code REGISTRATION_CODE="pickles-4-life" \
+REGISTRATION_MODE=code REGISTRATION_CODE="gourds-4-life" \
   MAX_ACCOUNTS=25 SITE_ADMINS="alice" npm start
 ```
 
