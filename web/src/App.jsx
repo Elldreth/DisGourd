@@ -63,6 +63,13 @@ export default function App() {
     api.getAuthInfo().then(setAuthInfo).catch(() => setAuthInfo({ setup: false }));
   }, [token]);
 
+  // If the server ever rejects our token (expired, or the server was reset),
+  // drop it and return to the login/setup screen instead of getting stuck.
+  useEffect(() => {
+    api.setUnauthorizedHandler(() => setToken(''));
+    return () => api.setUnauthorizedHandler(null);
+  }, []);
+
   // Direct messages
   const [view, setView] = useState('server'); // 'server' | 'dm'
   const [dms, setDms] = useState([]); // conversation list

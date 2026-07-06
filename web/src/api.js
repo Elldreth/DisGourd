@@ -25,6 +25,14 @@ export function decodeToken(token = getToken()) {
   }
 }
 
+// Called when an authenticated request comes back 401 — i.e. the stored token
+// is invalid/expired (or the server was reset). The app uses this to log out
+// cleanly instead of getting stuck in an "Unauthorized / Reconnecting…" state.
+let onUnauthorized = null;
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = fn;
+}
+
 async function request(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
   const finalHeaders = { ...headers };
   if (body !== undefined) finalHeaders['Content-Type'] = 'application/json';
@@ -39,6 +47,11 @@ async function request(path, { method = 'GET', body, auth = true, headers = {} }
   });
   const text = await res.text();
   const data = text ? safeJson(text) : null;
+  if (res.status === 401 && auth && getToken()) {
+    // Our token is no longer accepted — drop it and let the app return to login.
+    clearToken();
+    if (onUnauthorized) onUnauthorized();
+  }
   if (!res.ok) {
     const message = (data && data.error) || res.statusText || 'Request failed';
     throw Object.assign(new Error(message), { status: res.status });
