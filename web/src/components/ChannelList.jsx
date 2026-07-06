@@ -92,9 +92,14 @@ export default function ChannelList({
               <span className="flex h-full w-full items-center justify-center text-xs">{initials(space)}</span>
             )}
             {canManage && (
-              <span className="absolute inset-0 hidden items-center justify-center bg-black/50 text-sm group-hover:flex">
-                📷
-              </span>
+              <>
+                {/* Darken on hover to signal it's clickable */}
+                <span className="absolute inset-0 hidden bg-black/40 group-hover:block" />
+                {/* Persistent edit badge so it's obviously changeable */}
+                <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-[9px] leading-none text-white ring-2 ring-ink-800">
+                  ✎
+                </span>
+              </>
             )}
           </button>
         )}
