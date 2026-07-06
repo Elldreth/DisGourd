@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { initials, colorForName } from '../util.js';
+import Icon from './Icon.jsx';
 
 // The far-left rail of server (space) icons, Discord-style, plus create/join.
 export default function ServerRail({
@@ -87,7 +88,7 @@ export default function ServerRail({
               className={`group relative flex h-12 w-12 items-center justify-center overflow-hidden font-semibold text-white transition-all duration-150 hover:rounded-2xl ${
                 active ? 'rounded-2xl' : 'rounded-[26px]'
               } ${dragIndex === i ? 'opacity-40' : ''} ${dropIndex === i && dragIndex !== i ? 'ring-2 ring-white/70' : ''}`}
-              style={{ backgroundColor: s.icon ? undefined : active ? '#5b6ef5' : colorForName(s.name) }}
+              style={{ backgroundColor: s.icon ? undefined : active ? '#7d6ff3' : colorForName(s.name) }}
             >
               <span
                 className={`absolute -left-3 z-10 w-1 rounded-r bg-white transition-all ${
@@ -123,18 +124,18 @@ export default function ServerRail({
           <button
             onClick={() => { setAdding(true); setJoining(false); }}
             title="Create a server"
-            className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-2xl text-online transition-all hover:rounded-2xl hover:bg-online hover:text-white"
+            className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-white"
           >
-            +
+            <Icon name="plus" size={24} />
           </button>
         )}
 
         <button
           onClick={() => { setJoining((v) => !v); setAdding(false); }}
           title="Join a server with an invite"
-          className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-xl text-gray-300 transition-all hover:rounded-2xl hover:bg-brand hover:text-white"
+          className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-gray-300 transition-all hover:rounded-2xl hover:bg-brand hover:text-white"
         >
-          ⤵
+          <Icon name="login" size={20} />
         </button>
       </div>
 

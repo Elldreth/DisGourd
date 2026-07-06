@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import * as api from '../api.js';
 import { attachmentInfo } from '../util.js';
+import Icon from './Icon.jsx';
 
 export default function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [] }) {
   const [text, setText] = useState('');
@@ -117,16 +118,17 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
                   ) : info?.isVideo ? (
                     <video src={info.url} muted preload="metadata" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-gray-400">
-                      📎<br />{p.name}
+                    <div className="flex h-full w-full flex-col items-center justify-center px-1 text-center text-[10px] text-gray-400">
+                      <Icon name="paperclip" size={16} />
+                      <span className="mt-0.5 line-clamp-1 w-full break-all">{p.name}</span>
                     </div>
                   )}
                   <button
                     onClick={() => removePending(p.url)}
                     title="Remove"
-                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-bl bg-black/70 text-xs text-white hover:bg-danger"
+                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-bl bg-black/70 text-white hover:bg-danger"
                   >
-                    ✕
+                    <Icon name="x" size={13} strokeWidth={2.2} />
                   </button>
                 </div>
               );
@@ -142,11 +144,12 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
               <button
                 onClick={() => setSpoilerPending((v) => !v)}
                 title={spoilerPending ? 'Spoiler on — click to turn off' : 'Mark as spoiler'}
-                className={`shrink-0 rounded px-2 py-1 text-xs font-semibold transition ${
+                className={`flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold transition ${
                   spoilerPending ? 'bg-brand text-white' : 'bg-ink-600 text-gray-300 hover:bg-ink-500'
                 }`}
               >
-                {spoilerPending ? '🙈 Spoiler' : 'Mark as spoiler'}
+                <Icon name="eyeOff" size={13} />
+                {spoilerPending ? 'Spoiler' : 'Mark as spoiler'}
               </button>
               <span className="text-xs text-gray-500">
                 {pending.length} file{pending.length > 1 ? 's' : ''}
@@ -182,9 +185,9 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
           onClick={() => fileRef.current?.click()}
           disabled={disabled}
           title="Attach files (images, videos, and more)"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-500 text-lg text-gray-200 transition hover:bg-brand hover:text-white disabled:opacity-50"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-500 text-gray-200 transition hover:bg-brand hover:text-white disabled:opacity-50"
         >
-          +
+          <Icon name="plus" size={18} />
         </button>
         <input ref={fileRef} type="file" multiple hidden onChange={pickFile} />
         <textarea

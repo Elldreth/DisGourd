@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
+import Icon from './Icon.jsx';
 import { formatTime, formatDay } from '../util.js';
 
 // A search palette over all messages the user can see (server channels + DMs).
@@ -41,7 +42,7 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-ink-500/40 p-3">
-          <span className="text-gray-400">🔍</span>
+          <Icon name="search" size={18} className="shrink-0 text-gray-400" />
           <input
             autoFocus
             value={q}

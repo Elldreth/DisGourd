@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
+import Icon from './Icon.jsx';
 import { formatTime, formatDay } from '../util.js';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🔥', '✅'];
@@ -272,7 +273,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
                 title="Add reaction"
                 className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
               >
-                😊
+                <Icon name="smile" size={17} />
               </button>
               {picker && (
                 <>
@@ -301,7 +302,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
               title="Edit"
               className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
             >
-              ✎
+              <Icon name="edit" size={16} />
             </button>
           )}
           {mine && onDelete && (
@@ -312,7 +313,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
               title="Delete"
               className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-danger"
             >
-              🗑
+              <Icon name="trash" size={16} />
             </button>
           )}
         </div>
