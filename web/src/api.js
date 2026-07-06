@@ -76,6 +76,15 @@ export function deleteSpace(space) {
 export function setSpaceIcon(space, icon) {
   return request(`/spaces/${encodeURIComponent(space)}`, { method: 'PATCH', body: { icon } });
 }
+export function setServerPermissions(space, permissions) {
+  return request(`/spaces/${encodeURIComponent(space)}/permissions`, { method: 'PUT', body: { permissions } });
+}
+export function setChannelPermissions(space, channel, view, post) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/permissions`, {
+    method: 'PATCH',
+    body: { view, post },
+  });
+}
 export function createChannel(space, name, type) {
   return request(`/spaces/${encodeURIComponent(space)}/channels`, {
     method: 'POST',

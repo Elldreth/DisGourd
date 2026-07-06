@@ -6,6 +6,7 @@ export default function ChatPanel({
   space,
   channel,
   status,
+  canPost = true,
   messages,
   currentUser,
   typingUsers = [],
@@ -67,14 +68,20 @@ export default function ChatPanel({
         onReact={onReact}
       />
       <TypingIndicator names={typingUsers} />
-      {/* Always enabled: sends during a blip are queued and flushed on reconnect. */}
-      <Composer
-        channel={channel}
-        disabled={false}
-        onSend={onSend}
-        onTyping={onTyping}
-        mentionCandidates={memberNames}
-      />
+      {canPost ? (
+        // Always enabled: sends during a blip are queued and flushed on reconnect.
+        <Composer
+          channel={channel}
+          disabled={false}
+          onSend={onSend}
+          onTyping={onTyping}
+          mentionCandidates={memberNames}
+        />
+      ) : (
+        <div className="mx-4 mb-5 mt-1 rounded-xl bg-ink-800 px-4 py-3 text-center text-sm text-gray-400 ring-1 ring-ink-500/40">
+          🔒 You don’t have permission to post in this channel.
+        </div>
+      )}
     </main>
   );
 }

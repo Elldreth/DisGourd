@@ -184,6 +184,17 @@ function parseMentionUsernames(content) {
   return [...names];
 }
 
+// Per-channel role gates. Unknown channels return true so normal 404 handling
+// applies elsewhere.
+function canViewChannel(spaceName, channelName, role) {
+  const cp = db.getChannelPerms(spaceName, channelName);
+  return !cp || db.roleRank(role) >= (cp.view || 1);
+}
+function canPostChannel(spaceName, channelName, role) {
+  const cp = db.getChannelPerms(spaceName, channelName);
+  return !cp || db.roleRank(role) >= (cp.post || 1);
+}
+
 // Album support: accept a list of attachment URLs (msg.attachments) or a single
 // msg.attachment, keeping only our own uploaded paths and capping the count.
 const MAX_ATTACHMENTS = 10;
@@ -549,7 +560,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
 
     // PATCH /spaces/:name — update server settings (icon). Owner/admin only.
     if (pathSegments.length === 2 && req.method === 'PATCH') {
-      if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change server settings' });
+      if (!db.canDo(space.id, role, 'edit_server')) return sendJson(res, 403, { error: 'You are not allowed to change server settings' });
       const body = await getJsonBody(req);
       if ('icon' in body) {
         const icon = body.icon;
@@ -582,9 +593,9 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       return sendJson(res, 200, { members });
     }
 
-    // PATCH /spaces/:name/members/:username — change a member's role (owner only)
+    // PATCH /spaces/:name/members/:username — change a member's role
     if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'PATCH') {
-      if (role !== 'owner') return sendJson(res, 403, { error: 'Only the owner can change roles' });
+      if (!db.canDo(space.id, role, 'manage_roles')) return sendJson(res, 403, { error: 'You are not allowed to change roles' });
       const target = db.getUserByUsername(pathSegments[3]);
       if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
       if (target.id === space.owner_id) return sendJson(res, 400, { error: "The owner's role can't be changed" });
@@ -598,39 +609,65 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     // DELETE /spaces/:name/members/:username — remove a member (owner: anyone but
     // the owner; admin: members only)
     if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'DELETE') {
+      if (!db.canDo(space.id, role, 'kick')) return sendJson(res, 403, { error: 'You are not allowed to remove members' });
       const target = db.getUserByUsername(pathSegments[3]);
       if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
       if (target.id === userId) return sendJson(res, 400, { error: "You can't remove yourself" });
       const targetRole = db.getMemberRole(space.id, target.id);
-      const allowed = role === 'owner' ? targetRole !== 'owner' : role === 'admin' && targetRole === 'member';
-      if (!allowed) return sendJson(res, 403, { error: 'You cannot remove this member' });
+      // You can only remove someone ranked strictly below you (never the owner).
+      if (db.roleRank(targetRole) >= db.roleRank(role)) return sendJson(res, 403, { error: 'You cannot remove this member' });
       db.removeMember(space.id, target.id);
       deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
       sendToUser(target.id, JSON.stringify({ type: 'space_left', space: spaceName }));
       return sendJson(res, 200, { ok: true });
     }
 
-    // POST /spaces/:name/invites — any member can invite
+    // POST /spaces/:name/invites — gated by the "invite" threshold
     if (pathSegments[2] === 'invites' && pathSegments.length === 3 && req.method === 'POST') {
+      if (!db.canDo(space.id, role, 'invite')) return sendJson(res, 403, { error: 'You are not allowed to invite people here' });
       const code = crypto.randomBytes(6).toString('base64url');
       db.createInvite(code, space.id, userId, null, null);
       return sendJson(res, 201, { code });
     }
 
+    // GET /spaces/:name/permissions — server action thresholds (managers can view)
+    if (pathSegments[2] === 'permissions' && pathSegments.length === 3 && req.method === 'GET') {
+      if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can view permissions' });
+      return sendJson(res, 200, { permissions: db.getSpacePermissions(space.id) });
+    }
+    // PUT /spaces/:name/permissions — change server action thresholds (owner only)
+    if (pathSegments[2] === 'permissions' && pathSegments.length === 3 && req.method === 'PUT') {
+      if (role !== 'owner') return sendJson(res, 403, { error: 'Only the owner can change permissions' });
+      const body = await getJsonBody(req);
+      db.setSpacePermissions(space.id, body.permissions || body);
+      deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+      return sendJson(res, 200, { permissions: db.getSpacePermissions(space.id) });
+    }
+
     // /spaces/:name/channels ...
     if (pathSegments[2] === 'channels') {
       const channelName = pathSegments[3];
-      // GET messages (members only). ?after=<id> backfills only newer messages.
+      // GET messages — must be a member AND allowed to view this channel.
       if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
+        if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
         const after = parseInt(parsedUrl.query.after || '0', 10);
         if (after > 0) return sendJson(res, 200, db.getMessagesAfter(spaceName, channelName, after));
         const limit = parseInt(parsedUrl.query.limit || '50', 10);
         const offset = parseInt(parsedUrl.query.offset || '0', 10);
         return sendJson(res, 200, db.getMessages(spaceName, channelName, limit, offset));
       }
-      // POST create channel (managers only)
+      // PATCH channel permissions — view/post minimum ranks (managers only)
+      if (channelName && pathSegments[4] === 'permissions' && req.method === 'PATCH') {
+        if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel access' });
+        const body = await getJsonBody(req);
+        const ok = db.setChannelPerms(spaceName, channelName, body.view, body.post);
+        if (!ok) return sendJson(res, 404, { error: 'Channel not found' });
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+        return sendJson(res, 200, { ok: true });
+      }
+      // POST create channel — gated by the "create_channel" threshold
       if (!channelName && req.method === 'POST') {
-        if (!canManage) return sendJson(res, 403, { error: 'Only the owner can create channels' });
+        if (!db.canDo(space.id, role, 'create_channel')) return sendJson(res, 403, { error: 'You are not allowed to create channels here' });
         const { name, type } = await getJsonBody(req);
         const invalid = validateChannelName(name);
         if (invalid) return sendJson(res, 400, { error: invalid });
@@ -640,9 +677,9 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_created', space: spaceName, channel, channelType: chType }));
         return sendJson(res, 201, { name: channel, type: chType });
       }
-      // DELETE channel (managers only)
+      // DELETE channel — gated by the "delete_channel" threshold
       if (channelName && pathSegments.length === 4 && req.method === 'DELETE') {
-        if (!canManage) return sendJson(res, 403, { error: 'Only the owner can delete channels' });
+        if (!db.canDo(space.id, role, 'delete_channel')) return sendJson(res, 403, { error: 'You are not allowed to delete channels here' });
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_deleted', space: spaceName, channel: channelName }));
         db.deleteChannel(spaceName, channelName);
         return sendJson(res, 200, { ok: true });
@@ -931,6 +968,9 @@ function handleGatewayMessage(ws, raw) {
     case 'message': {
       const space = db.getSpaceByName(msg.space);
       if (!space || !db.isMember(space.id, userId) || db.channelType(msg.space, msg.channel) !== 'text') return;
+      // Enforce channel view/post role gates.
+      const mrole = db.getMemberRole(space.id, userId);
+      if (!canViewChannel(msg.space, msg.channel, mrole) || !canPostChannel(msg.space, msg.channel, mrole)) return;
       const content = typeof msg.content === 'string' ? msg.content : '';
       const attachments = normalizeAttachments(msg);
       if (!content && attachments.length === 0) return;
@@ -1104,6 +1144,7 @@ function handleGatewayMessage(ws, raw) {
     case 'voice_join': {
       const space = db.getSpaceByName(msg.space);
       if (!space || !db.isMember(space.id, userId) || db.channelType(msg.space, msg.channel) !== 'voice') return;
+      if (!canViewChannel(msg.space, msg.channel, db.getMemberRole(space.id, userId))) return; // no access to this channel
       voiceLeave(ws); // only one voice channel at a time
       const key = voiceKey(msg.space, msg.channel);
       let room = voiceRooms.get(key);

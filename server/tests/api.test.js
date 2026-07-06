@@ -572,3 +572,59 @@ test('file uploads: auth required, no name collisions, type + size validation', 
   res = await fetch(`${base}/uploads?name=big.png`, { method: 'POST', headers, body: 'x'.repeat(1000) });
   expect(res.status).toBe(413);
 });
+
+test('role-based permissions: channel visibility, posting, and action thresholds', async () => {
+  const base = baseUrl();
+  const owner = (await register('perm-owner')).token;
+  const member = (await register('perm-member')).token;
+  await createServer(owner, 'perms');
+  // Extra channels for the visibility/read-only cases.
+  await fetch(`${base}/spaces/perms/channels`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(owner) }, body: JSON.stringify({ name: 'secret' }) });
+  await fetch(`${base}/spaces/perms/channels`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(owner) }, body: JSON.stringify({ name: 'announce' }) });
+  const { code } = await (await fetch(`${base}/spaces/perms/invites`, { method: 'POST', headers: auth(owner) })).json();
+  await fetch(`${base}/invites/${code}`, { method: 'POST', headers: auth(member) });
+
+  const memberChannels = async () => {
+    const spaces = await (await fetch(`${base}/spaces`, { headers: auth(member) })).json();
+    return spaces.find((s) => s.name === 'perms');
+  };
+
+  // By default the member sees every channel.
+  let sp = await memberChannels();
+  expect(sp.channels).toEqual(expect.arrayContaining(['general', 'secret', 'announce']));
+
+  // Restrict 'secret' to admins (view=2). Member should lose access.
+  let res = await fetch(`${base}/spaces/perms/channels/secret/permissions`, { method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(owner) }, body: JSON.stringify({ view: 2, post: 2 }) });
+  expect(res.status).toBe(200);
+  sp = await memberChannels();
+  expect(sp.channels).not.toContain('secret');
+  // ...and can't read its history.
+  res = await fetch(`${base}/spaces/perms/channels/secret/messages`, { headers: auth(member) });
+  expect(res.status).toBe(403);
+
+  // 'announce' read-only: everyone sees, admins post.
+  await fetch(`${base}/spaces/perms/channels/announce/permissions`, { method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(owner) }, body: JSON.stringify({ view: 1, post: 2 }) });
+  sp = await memberChannels();
+  expect(sp.channelMeta.announce).toEqual({ type: 'text', view: 1, post: 2 });
+
+  // A member post to the read-only channel must not be stored.
+  const gm = gateway(member);
+  await gm.ready;
+  gm.send({ op: 'message', space: 'perms', channel: 'announce', content: 'i should be blocked' });
+  await wait(80);
+  gm.close();
+  const announceMsgs = await messages(owner, 'perms', 'announce');
+  expect(announceMsgs.find((m) => m.content === 'i should be blocked')).toBeUndefined();
+
+  // Default create_channel threshold is admin: member is blocked.
+  res = await fetch(`${base}/spaces/perms/channels`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(member) }, body: JSON.stringify({ name: 'nope' }) });
+  expect(res.status).toBe(403);
+  // Members can't change permissions (owner only).
+  res = await fetch(`${base}/spaces/perms/permissions`, { method: 'PUT', headers: { ...JSON_HEADERS, ...auth(member) }, body: JSON.stringify({ permissions: { invite: 3 } }) });
+  expect(res.status).toBe(403);
+  // Owner lowers create_channel to everyone; member can now create.
+  res = await fetch(`${base}/spaces/perms/permissions`, { method: 'PUT', headers: { ...JSON_HEADERS, ...auth(owner) }, body: JSON.stringify({ permissions: { create_channel: 1 } }) });
+  expect(res.status).toBe(200);
+  res = await fetch(`${base}/spaces/perms/channels`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(member) }, body: JSON.stringify({ name: 'allowed' }) });
+  expect(res.status).toBe(201);
+});

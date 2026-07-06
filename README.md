@@ -120,6 +120,24 @@ rail. To bring friends in, open the server menu (click the server name) →
 the code under **Join a server** (the ⤵ button in the rail). You only see
 servers you own or have joined, and only members can read a server's channels.
 
+## Roles & permissions
+
+Every member has a role — **owner > admin > member** — and permissions are just
+a **minimum role** for each thing, which keeps them simple.
+
+- **Server permissions** (owner only): server menu → **🛡 Permissions**. Set the
+  minimum role for each action — create/delete channels, invite, remove members,
+  delete others' messages, edit the server, manage roles. The owner can always
+  do everything.
+- **Channel access** (owner/admin): hover a channel → the **⚙** gear. Choose
+  **who can see** it and **who can post** — e.g. a read-only *announcements*
+  channel (everyone views, admins post), a private *staff* channel (admins only),
+  or owner-only. Restricted channels show a 🔒.
+
+Everything is **enforced on the server**, not just hidden in the UI: channels you
+can't view are filtered out of what your client receives, and posting where you
+lack permission is rejected. Changes apply to everyone live.
+
 ## Voice chat
 
 Owners/admins can create **voice channels** (🔊). Click one to join, and talk

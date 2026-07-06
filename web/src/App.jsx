@@ -3,7 +3,7 @@ import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { createVoiceController } from './voice.js';
 import { getPttEnabled, getPttKey } from './audio.js';
-import { mergeMessages } from './util.js';
+import { mergeMessages, roleRank } from './util.js';
 import Login from './components/Login.jsx';
 import ServerRail from './components/ServerRail.jsx';
 import ChannelList from './components/ChannelList.jsx';
@@ -70,6 +70,10 @@ export default function App() {
   const channels = activeSpace ? activeSpace.channels : [];
   const role = activeSpace ? activeSpace.role : null;
   const canManage = role === 'owner' || role === 'admin';
+  const myRank = roleRank(role);
+  const channelMeta = activeSpace ? activeSpace.channelMeta || {} : {};
+  const currentChannelPost = channelMeta[currentChannel]?.post ?? 1;
+  const canPostCurrent = myRank >= currentChannelPost;
 
   async function loadSpaces() {
     try {
@@ -293,6 +297,15 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceCall.room]);
+
+  // If the current channel becomes hidden to us (permissions changed), fall back
+  // to the first channel we can still see.
+  useEffect(() => {
+    if (view === 'server' && currentChannel && channels.length && !channels.includes(currentChannel)) {
+      setCurrentChannel(channels[0] || '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels, currentChannel, view]);
 
   // Clear the transcript immediately when switching channels.
   useEffect(() => {
@@ -715,6 +728,10 @@ export default function App() {
             hasIcon={!!(activeSpace && activeSpace.icon)}
             onChangeServerIcon={changeServerIcon}
             onRemoveServerIcon={removeServerIcon}
+            role={role}
+            permissions={activeSpace ? activeSpace.permissions : null}
+            channelMeta={channelMeta}
+            onPermsChanged={loadSpaces}
             user={user}
             avatar={profile?.avatar}
             onOpenProfile={() => setProfileOpen(true)}
@@ -729,6 +746,7 @@ export default function App() {
               space={currentSpace}
               channel={currentChannel}
               status={status}
+              canPost={canPostCurrent}
               messages={messages}
               currentUser={user}
               typingUsers={typingNames}
