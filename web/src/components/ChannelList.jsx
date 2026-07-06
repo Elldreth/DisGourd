@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { initials, colorForName } from '../util.js';
 import Avatar from './Avatar.jsx';
 import UserFooter from './UserFooter.jsx';
 import { displayCaptureSupported } from '../audio.js';
@@ -40,6 +41,7 @@ export default function ChannelList({
   isOwner,
   onInvite,
   onDeleteServer,
+  serverIcon,
   hasIcon,
   onChangeServerIcon,
   onRemoveServerIcon,
@@ -76,10 +78,29 @@ export default function ChannelList({
 
   return (
     <div className="flex w-60 flex-col bg-ink-800">
-      <header className="relative flex h-12 items-center shadow-sm shadow-black/20">
+      <header className="relative flex h-12 items-center gap-2 px-2 shadow-sm shadow-black/20">
+        {space && (
+          <button
+            onClick={() => (canManage ? iconInputRef.current?.click() : setMenuOpen((v) => !v))}
+            title={canManage ? 'Change server icon' : space}
+            className="group relative h-8 w-8 shrink-0 overflow-hidden rounded-lg font-semibold text-white"
+            style={{ backgroundColor: serverIcon ? undefined : colorForName(space) }}
+          >
+            {serverIcon ? (
+              <img src={serverIcon} alt={space} className="h-full w-full object-cover" />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-xs">{initials(space)}</span>
+            )}
+            {canManage && (
+              <span className="absolute inset-0 hidden items-center justify-center bg-black/50 text-sm group-hover:flex">
+                📷
+              </span>
+            )}
+          </button>
+        )}
         <button
           onClick={() => space && setMenuOpen((v) => !v)}
-          className="flex h-full w-full items-center justify-between px-4 hover:bg-ink-700/40"
+          className="flex h-full flex-1 items-center justify-between rounded px-2 hover:bg-ink-700/40"
         >
           <h2 className="truncate font-bold">{space || 'No server'}</h2>
           {space && <span className="text-gray-400">{menuOpen ? '✕' : '⌄'}</span>}

@@ -711,6 +711,7 @@ export default function App() {
             isOwner={role === 'owner'}
             onInvite={makeInvite}
             onDeleteServer={deleteServer}
+            serverIcon={activeSpace ? activeSpace.icon : null}
             hasIcon={!!(activeSpace && activeSpace.icon)}
             onChangeServerIcon={changeServerIcon}
             onRemoveServerIcon={removeServerIcon}
