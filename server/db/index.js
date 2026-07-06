@@ -186,6 +186,28 @@ try {
   if (!chanCols.some(c => c.name === 'post_role')) {
     db.exec('ALTER TABLE channels ADD COLUMN post_role INTEGER NOT NULL DEFAULT 1');
   }
+  // Instance ("site") admins who manage registration.
+  if (!db.prepare("PRAGMA table_info(users)").all().some(c => c.name === 'site_admin')) {
+    db.exec('ALTER TABLE users ADD COLUMN site_admin INTEGER NOT NULL DEFAULT 0');
+  }
+  // Registration invite codes + instance settings (e.g. registration mode).
+  db.exec(`CREATE TABLE IF NOT EXISTS reg_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    created_by INTEGER,
+    created_at INTEGER,
+    expires_at INTEGER,
+    max_uses INTEGER,
+    uses INTEGER NOT NULL DEFAULT 0,
+    revoked_at INTEGER
+  )`);
+  db.exec('CREATE TABLE IF NOT EXISTS site_settings (key TEXT PRIMARY KEY, value TEXT)');
+  // Bootstrap: if there are users but none is a site admin, promote the earliest.
+  const anyAdmin = db.prepare('SELECT 1 FROM users WHERE site_admin = 1 LIMIT 1').get();
+  if (!anyAdmin) {
+    const first = db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get();
+    if (first) db.prepare('UPDATE users SET site_admin = 1 WHERE id = ?').run(first.id);
+  }
 } catch (e) {
   console.error('Error migrating messages table:', e);
 }
@@ -789,8 +811,69 @@ function deleteMessage(messageId, authorId) {
 }
 
 function createUser(username, email, passwordHash, salt) {
-  const stmt = db.prepare('INSERT INTO users(username, email, password_hash, salt) VALUES (?, ?, ?, ?)');
-  return stmt.run(username, email, passwordHash, salt).lastInsertRowid;
+  // The very first account becomes the site admin.
+  const first = countUsers() === 0;
+  const stmt = db.prepare('INSERT INTO users(username, email, password_hash, salt, site_admin) VALUES (?, ?, ?, ?, ?)');
+  return stmt.run(username, email, passwordHash, salt, first ? 1 : 0).lastInsertRowid;
+}
+
+function countUsers() {
+  return db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+}
+
+// ---- Site admins ----
+function isSiteAdmin(userId) {
+  const u = db.prepare('SELECT site_admin FROM users WHERE id = ?').get(userId);
+  return !!(u && u.site_admin);
+}
+function setSiteAdmin(userId, on) {
+  db.prepare('UPDATE users SET site_admin = ? WHERE id = ?').run(on ? 1 : 0, userId);
+}
+function setSiteAdminByUsername(username, on) {
+  return db.prepare('UPDATE users SET site_admin = ? WHERE username = ?').run(on ? 1 : 0, username).changes > 0;
+}
+function listSiteAdmins() {
+  return db.prepare('SELECT username FROM users WHERE site_admin = 1 ORDER BY username COLLATE NOCASE').all().map((r) => r.username);
+}
+
+// ---- Instance settings (key/value) ----
+function getSetting(key) {
+  const row = db.prepare('SELECT value FROM site_settings WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+function setSetting(key, value) {
+  db.prepare('INSERT INTO site_settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run(key, String(value));
+}
+
+// ---- Registration invite codes ----
+function addRegCode(code, createdBy, expiresAt = null, maxUses = null) {
+  db.prepare('INSERT INTO reg_codes(code, created_by, created_at, expires_at, max_uses, uses) VALUES (?, ?, ?, ?, ?, 0)')
+    .run(code, createdBy || null, Date.now(), expiresAt, maxUses);
+}
+function listRegCodes() {
+  return db.prepare(`
+    SELECT r.id, r.code, r.created_at AS createdAt, r.expires_at AS expiresAt,
+           r.max_uses AS maxUses, r.uses, r.revoked_at AS revokedAt, u.username AS createdBy
+    FROM reg_codes r LEFT JOIN users u ON r.created_by = u.id
+    ORDER BY r.id DESC
+  `).all();
+}
+// A code is usable if it exists, isn't revoked/expired, and is under its use cap.
+function findUsableRegCode(code) {
+  if (!code) return null;
+  const r = db.prepare('SELECT * FROM reg_codes WHERE code = ?').get(code);
+  if (!r || r.revoked_at) return null;
+  if (r.expires_at && Date.now() > r.expires_at) return null;
+  if (r.max_uses != null && r.uses >= r.max_uses) return null;
+  return r;
+}
+function incrementRegCodeUses(id) {
+  db.prepare('UPDATE reg_codes SET uses = uses + 1 WHERE id = ?').run(id);
+}
+function revokeRegCode(id) {
+  return db.prepare('UPDATE reg_codes SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL')
+    .run(Date.now(), id).changes > 0;
 }
 
 function getUserByUsername(username) {
@@ -896,6 +979,18 @@ module.exports = {
   getDmUnreadCounts,
   searchMessages,
   createUser,
+  countUsers,
+  isSiteAdmin,
+  setSiteAdmin,
+  setSiteAdminByUsername,
+  listSiteAdmins,
+  getSetting,
+  setSetting,
+  addRegCode,
+  listRegCodes,
+  findUsableRegCode,
+  incrementRegCodeUses,
+  revokeRegCode,
   getUserByUsername,
   getUserByEmail,
   getUserById,

@@ -20,6 +20,26 @@ try {
 config.port = parseInt(process.env.PORT, 10) || config.port;
 config.jwtSecret = process.env.JWT_SECRET || config.jwtSecret;
 
+// Registration gating. Modes: 'open' (anyone), 'code' (a shared secret is
+// required), 'closed' (no new accounts). Setting a REGISTRATION_CODE implies
+// 'code' unless a mode is given explicitly. MAX_ACCOUNTS caps total accounts.
+config.registrationCode = process.env.REGISTRATION_CODE || config.registrationCode || '';
+let regMode = (process.env.REGISTRATION_MODE || config.registrationMode || '').toLowerCase();
+if (!['open', 'code', 'closed'].includes(regMode)) regMode = config.registrationCode ? 'code' : 'open';
+config.registrationMode = regMode;
+config.maxAccounts = parseInt(process.env.MAX_ACCOUNTS, 10) || parseInt(config.maxAccounts, 10) || 0;
+config.siteAdmins = String(process.env.SITE_ADMINS || config.siteAdmins || '')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+
+// Seed the registration mode from env/config on first run; the DB is
+// authoritative afterwards so the in-app admin panel can change it. Also apply
+// any env-designated site admins.
+if (!db.getSetting('registration_mode')) db.setSetting('registration_mode', config.registrationMode);
+for (const name of config.siteAdmins) db.setSiteAdminByUsername(name, true);
+function registrationMode() {
+  return db.getSetting('registration_mode') || config.registrationMode || 'open';
+}
+
 // Security: never run with the well-known default secret. Resolve one, in
 // order of preference: an explicit JWT_SECRET / config.json value, a secret
 // generated on a previous run, or a fresh one. The generated secret is written
@@ -134,6 +154,14 @@ function rateLimitOk(key, max, windowMs) {
     for (const [k, v] of rateBuckets) { if (now > v.reset) rateBuckets.delete(k); }
   }
   return bucket.count <= max;
+}
+
+// Constant-time string comparison (avoids leaking the code via timing).
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
 }
 
 function clientIp(req) {
@@ -381,13 +409,43 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     return res.end();
   }
 
+  // Public: lets the login screen know whether to show a registration-code field
+  // or hide sign-up entirely. Never exposes the code itself.
+  if (parsedUrl.pathname === '/auth-info' && req.method === 'GET') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({ registration: registrationMode() }));
+  }
   if (parsedUrl.pathname === '/register' && req.method === 'POST') {
     try {
-      if (!rateLimitOk('register:' + clientIp(req), 10, 15 * 60 * 1000)) {
+      if (!rateLimitOk('register:' + clientIp(req), 5, 15 * 60 * 1000)) {
         res.writeHead(429);
         return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
       }
-      const { username, password, email } = await getJsonBody(req);
+      const { username, password, email, code } = await getJsonBody(req);
+      // The very first account bootstraps the instance (and becomes site admin),
+      // so it's always allowed. After that, honor the registration mode.
+      const firstAccount = db.countUsers() === 0;
+      let usedCode = null;
+      if (!firstAccount) {
+        const mode = registrationMode();
+        if (mode === 'closed') {
+          res.writeHead(403);
+          return res.end(JSON.stringify({ error: 'Registration is closed on this server.' }));
+        }
+        if (mode === 'code') {
+          const provided = code || '';
+          const envOk = config.registrationCode && safeEqual(provided, config.registrationCode);
+          usedCode = envOk ? null : db.findUsableRegCode(provided);
+          if (!envOk && !usedCode) {
+            res.writeHead(403);
+            return res.end(JSON.stringify({ error: 'A valid registration code is required to create an account.' }));
+          }
+        }
+      }
+      if (config.maxAccounts > 0 && db.countUsers() >= config.maxAccounts) {
+        res.writeHead(403);
+        return res.end(JSON.stringify({ error: 'This server has reached its account limit.' }));
+      }
       const invalid = validateRegistration({ username, password, email });
       if (invalid) {
         res.writeHead(400);
@@ -400,6 +458,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       const salt = generateSalt();
       const hash = hashPassword(password, salt);
       const userId = db.createUser(username, email, hash, salt);
+      if (usedCode) db.incrementRegCodeUses(usedCode.id);
       const token = createToken(userId, username);
       res.writeHead(201);
       return res.end(JSON.stringify({ token }));
@@ -445,7 +504,58 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     }
     const u = db.getUserById(userId);
     if (!u) return sendJson(res, 404, { error: 'User not found' });
-    return sendJson(res, 200, { id: u.id, username: u.username, email: u.email, avatar: u.avatar_url || null });
+    return sendJson(res, 200, { id: u.id, username: u.username, email: u.email, avatar: u.avatar_url || null, siteAdmin: !!u.site_admin });
+  }
+  // ---- Instance admin: registration management (site admins only) ----
+  else if (pathSegments[0] === 'admin' && pathSegments[1] === 'registration') {
+    const userId = authUserId(req, parsedUrl);
+    if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+    if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can manage registration' });
+
+    // GET /admin/registration — current mode, codes, and the admin list
+    if (pathSegments.length === 2 && req.method === 'GET') {
+      return sendJson(res, 200, {
+        mode: registrationMode(),
+        maxAccounts: config.maxAccounts,
+        envCodeActive: !!config.registrationCode,
+        codes: db.listRegCodes(),
+        admins: db.listSiteAdmins(),
+      });
+    }
+    // PUT /admin/registration — change the mode
+    if (pathSegments.length === 2 && req.method === 'PUT') {
+      const { mode } = await getJsonBody(req);
+      if (!['open', 'code', 'closed'].includes(mode)) return sendJson(res, 400, { error: 'Invalid mode' });
+      db.setSetting('registration_mode', mode);
+      return sendJson(res, 200, { mode });
+    }
+    // POST /admin/registration/codes — mint a code
+    if (pathSegments[2] === 'codes' && pathSegments.length === 3 && req.method === 'POST') {
+      const body = await getJsonBody(req);
+      const maxUses = parseInt(body.maxUses, 10) > 0 ? parseInt(body.maxUses, 10) : null;
+      const days = parseInt(body.expiresInDays, 10);
+      const expiresAt = days > 0 ? Date.now() + days * 86400000 : null;
+      const code = crypto.randomBytes(6).toString('base64url');
+      db.addRegCode(code, userId, expiresAt, maxUses);
+      return sendJson(res, 201, { code });
+    }
+    // DELETE /admin/registration/codes/:id — revoke a code
+    if (pathSegments[2] === 'codes' && pathSegments[3] && req.method === 'DELETE') {
+      db.revokeRegCode(parseInt(pathSegments[3], 10));
+      return sendJson(res, 200, { ok: true });
+    }
+    // PUT /admin/registration/admins/:username — promote/demote a site admin
+    if (pathSegments[2] === 'admins' && pathSegments[3] && req.method === 'PUT') {
+      const { admin } = await getJsonBody(req);
+      const target = db.getUserByUsername(pathSegments[3]);
+      if (!target) return sendJson(res, 404, { error: 'User not found' });
+      if (!admin && db.listSiteAdmins().length <= 1) {
+        return sendJson(res, 400, { error: 'There must be at least one site admin' });
+      }
+      db.setSiteAdmin(target.id, !!admin);
+      return sendJson(res, 200, { ok: true });
+    }
+    return sendJson(res, 404, { error: 'Not found' });
   }
   // ---- Direct messages ----
   else if (pathSegments[0] === 'dms') {
@@ -1249,6 +1359,9 @@ if (require.main === module) {
     const hasBuild = fs.existsSync(path.join(WEB_DIST, 'index.html'));
     console.log(`\n  DisGourd is running 🥒`);
     console.log(`  → Open http://localhost:${config.port} in your browser\n`);
+    const reg = registrationMode();
+    console.log(`  Registration: ${reg}${reg === 'code' ? ' (a code is required — manage them in Settings)' : ''}${config.maxAccounts ? ` · max ${config.maxAccounts} accounts` : ''}`);
+    console.log('');
     if (!hasBuild) {
       console.log('  Note: the web client is not built yet. Run `npm run build` (or `npm run dev`');
       console.log('  for the hot-reloading dev server) to see the UI.\n');
@@ -1256,4 +1369,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { httpServer, wss, config };
+module.exports = { httpServer, wss, config, db };

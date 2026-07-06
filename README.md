@@ -63,12 +63,58 @@ All settings are optional and provided via environment variables (or
 | `UPLOADS_DIR`      | `uploads/`               | Where uploaded files are stored                    |
 | `MAX_UPLOAD_BYTES` | `26214400` (25 MB)       | Maximum upload size                                |
 | `WEB_DIST`         | `web/dist`               | Location of the built web client                   |
+| `REGISTRATION_MODE`| `open`                   | Initial mode: `open`, `code`, or `closed`. Seeds the setting on first run; after that, site admins change it in-app |
+| `REGISTRATION_CODE`| _(none)_                 | An optional always-valid shared code (in addition to any codes minted in-app) |
+| `MAX_ACCOUNTS`     | `0` (unlimited)          | Cap on the total number of accounts                |
+| `SITE_ADMINS`      | _(none)_                 | Comma-separated usernames to make site admins (e.g. `alice,bob`)   |
 
 Example (Linux/macOS):
 
 ```bash
 PORT=8080 JWT_SECRET="a-long-random-string" npm start
 ```
+
+## Keeping randoms out
+
+Because DisGourd is meant for a known group of friends, lock down who can make
+an account. Two layers, use both:
+
+**1. Gate registration (app level).** The **first account created becomes the
+site admin**. Site admins get a **Registration & access** panel in **Settings**
+where they can, with no config editing:
+
+- switch the mode between **open** / **code required** / **closed**,
+- **mint invite codes** (with optional use limits and expiry), **copy** them to
+  share, and **revoke** them, and
+- **promote/demote other site admins**.
+
+New users then enter a code on the sign-up screen. You can also pre-seed things
+from the environment — an initial mode, an always-valid shared code, an account
+cap, and site admins by username:
+
+```bash
+REGISTRATION_MODE=code REGISTRATION_CODE="pickles-4-life" \
+  MAX_ACCOUNTS=25 SITE_ADMINS="alice" npm start
+```
+
+Registration attempts are rate-limited per IP, and codes are compared in
+constant time and never sent to the browser.
+
+**2. Don't expose it to the whole internet (network level — the strongest).**
+The surest way to keep strangers out is to make sure they can't reach the server
+at all:
+
+- **Tailscale (VPN):** install Tailscale on the host and your friends' devices;
+  share the machine over your tailnet and hand out `http://<machine>:3000`. Only
+  devices on your tailnet can connect — nobody else can even find it. (Tailscale
+  also gives you HTTPS via `tailscale cert` / `tailscale serve`.)
+- **Cloudflare Tunnel + Access:** run `cloudflared tunnel` to publish the app
+  without opening a port or exposing your home IP, and put **Cloudflare Access**
+  in front with an email allowlist or one-time-PIN, so only approved people's
+  requests ever reach DisGourd.
+
+Do the network step and only your people can connect; the registration code is a
+second lock behind it.
 
 ## Development
 

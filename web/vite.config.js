@@ -8,7 +8,7 @@ const wsServer = server.replace(/^http/, 'ws');
 
 // Same-origin paths the frontend calls; each is proxied to the backend in dev
 // so the client can use plain relative URLs and there are no CORS headaches.
-const apiPaths = ['/register', '/login', '/uploads', '/spaces', '/friends', '/admin'];
+const apiPaths = ['/register', '/login', '/auth-info', '/uploads', '/spaces', '/friends', '/admin'];
 
 export default defineConfig({
   plugins: [react()],
