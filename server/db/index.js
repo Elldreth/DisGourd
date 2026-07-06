@@ -168,6 +168,11 @@ try {
   if (!dmHasAttachments) {
     db.exec('ALTER TABLE dm_messages ADD COLUMN attachments TEXT');
   }
+  // Optional server icon image (a /uploads path); falls back to name initials.
+  const hasSpaceIcon = db.prepare("PRAGMA table_info(spaces)").all().some(c => c.name === 'icon_url');
+  if (!hasSpaceIcon) {
+    db.exec('ALTER TABLE spaces ADD COLUMN icon_url TEXT');
+  }
 } catch (e) {
   console.error('Error migrating messages table:', e);
 }
@@ -272,7 +277,7 @@ function isMember(spaceId, userId) {
 // Spaces the user belongs to, each with its channels and the user's role.
 function getUserSpaces(userId) {
   const spaces = db.prepare(`
-    SELECT s.id, s.name, sm.role
+    SELECT s.id, s.name, s.icon_url AS icon, sm.role
     FROM space_members sm
     JOIN spaces s ON sm.space_id = s.id
     WHERE sm.user_id = ?
@@ -283,11 +288,17 @@ function getUserSpaces(userId) {
     const chans = channelStmt.all(s.id);
     return {
       name: s.name,
+      icon: s.icon || null,
       role: s.role,
       channels: chans.filter((c) => c.type !== 'voice').map((c) => c.name),
       voiceChannels: chans.filter((c) => c.type === 'voice').map((c) => c.name),
     };
   });
+}
+
+// Set (or clear, with null) a server's icon image.
+function setSpaceIcon(spaceId, url) {
+  db.prepare('UPDATE spaces SET icon_url = ? WHERE id = ?').run(url || null, spaceId);
 }
 
 function getSpaceMembers(spaceId) {
@@ -757,6 +768,7 @@ module.exports = {
   setMemberRole,
   isMember,
   getUserSpaces,
+  setSpaceIcon,
   getSpaceMembers,
   createInvite,
   getInvite,

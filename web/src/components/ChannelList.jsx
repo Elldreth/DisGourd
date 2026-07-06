@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import UserFooter from './UserFooter.jsx';
 import { displayCaptureSupported } from '../audio.js';
@@ -40,6 +40,9 @@ export default function ChannelList({
   isOwner,
   onInvite,
   onDeleteServer,
+  hasIcon,
+  onChangeServerIcon,
+  onRemoveServerIcon,
   user,
   avatar,
   onOpenProfile,
@@ -51,6 +54,7 @@ export default function ChannelList({
   const [addingVoice, setAddingVoice] = useState(false);
   const [voiceName, setVoiceName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const iconInputRef = useRef(null);
 
   async function submit(e) {
     e.preventDefault();
@@ -93,6 +97,26 @@ export default function ChannelList({
               >
                 <span className="text-brand">＋</span> Invite people
               </MenuItem>
+              {canManage && (
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    iconInputRef.current?.click();
+                  }}
+                >
+                  🖼 {hasIcon ? 'Change icon' : 'Upload icon'}
+                </MenuItem>
+              )}
+              {canManage && hasIcon && (
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onRemoveServerIcon();
+                  }}
+                >
+                  🚫 Remove icon
+                </MenuItem>
+              )}
               {isOwner && (
                 <MenuItem
                   danger
@@ -109,6 +133,17 @@ export default function ChannelList({
             </div>
           </>
         )}
+        <input
+          ref={iconInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) onChangeServerIcon(file);
+          }}
+        />
       </header>
 
       <div className="flex-1 overflow-y-auto px-2 py-3">

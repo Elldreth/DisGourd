@@ -65,17 +65,21 @@ export default function ServerRail({
               key={s.name}
               onClick={() => onSelect(s.name)}
               title={s.name}
-              className={`group relative flex h-12 w-12 items-center justify-center font-semibold text-white transition-all duration-150 hover:rounded-2xl ${
+              className={`group relative flex h-12 w-12 items-center justify-center overflow-hidden font-semibold text-white transition-all duration-150 hover:rounded-2xl ${
                 active ? 'rounded-2xl' : 'rounded-[26px]'
               }`}
-              style={{ backgroundColor: active ? '#5b6ef5' : colorForName(s.name) }}
+              style={{ backgroundColor: s.icon ? undefined : active ? '#5b6ef5' : colorForName(s.name) }}
             >
               <span
-                className={`absolute -left-3 w-1 rounded-r bg-white transition-all ${
+                className={`absolute -left-3 z-10 w-1 rounded-r bg-white transition-all ${
                   active ? 'h-8' : count > 0 ? 'h-3' : 'h-0 group-hover:h-5'
                 }`}
               />
-              {initials(s.name)}
+              {s.icon ? (
+                <img src={s.icon} alt={s.name} className="h-full w-full object-cover" />
+              ) : (
+                initials(s.name)
+              )}
               {mentionCount > 0 && !active && (
                 <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-white">
                   {mentionCount > 99 ? '99+' : mentionCount}

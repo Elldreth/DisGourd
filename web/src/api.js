@@ -73,6 +73,9 @@ export function createSpace(name) {
 export function deleteSpace(space) {
   return request(`/spaces/${encodeURIComponent(space)}`, { method: 'DELETE' });
 }
+export function setSpaceIcon(space, icon) {
+  return request(`/spaces/${encodeURIComponent(space)}`, { method: 'PATCH', body: { icon } });
+}
 export function createChannel(space, name, type) {
   return request(`/spaces/${encodeURIComponent(space)}/channels`, {
     method: 'POST',

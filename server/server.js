@@ -547,6 +547,21 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     if (!role) return sendJson(res, 403, { error: 'You are not a member of this server' });
     const canManage = role === 'owner' || role === 'admin';
 
+    // PATCH /spaces/:name — update server settings (icon). Owner/admin only.
+    if (pathSegments.length === 2 && req.method === 'PATCH') {
+      if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change server settings' });
+      const body = await getJsonBody(req);
+      if ('icon' in body) {
+        const icon = body.icon;
+        if (icon !== '' && (typeof icon !== 'string' || !icon.startsWith('/uploads/'))) {
+          return sendJson(res, 400, { error: 'Invalid icon' });
+        }
+        db.setSpaceIcon(space.id, icon || null);
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+
     // DELETE /spaces/:name — owner only
     if (pathSegments.length === 2 && req.method === 'DELETE') {
       if (role !== 'owner') return sendJson(res, 403, { error: 'Only the owner can delete this server' });

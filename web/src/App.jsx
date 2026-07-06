@@ -193,6 +193,7 @@ export default function App() {
       members_changed: (f) => {
         if (f.space === spaceRef.current) refreshMembers(f.space);
       },
+      space_updated: () => loadSpaces(),
       voice_state: (f) => {
         setVoiceStates((prev) => ({ ...prev, [unreadKey(f.space, f.channel)]: f.participants || [] }));
         voiceRef.current && voiceRef.current.handleState(f);
@@ -565,6 +566,30 @@ export default function App() {
     }
   }
 
+  async function changeServerIcon(file) {
+    if (!currentSpace || !file) return;
+    if (!file.type.startsWith('image/')) {
+      setLoadError('Please choose an image file for the server icon');
+      return;
+    }
+    try {
+      const up = await api.uploadFile(file);
+      await api.setSpaceIcon(currentSpace, up.url);
+      await loadSpaces();
+    } catch (err) {
+      setLoadError(err.message || 'Could not update the server icon');
+    }
+  }
+  async function removeServerIcon() {
+    if (!currentSpace) return;
+    try {
+      await api.setSpaceIcon(currentSpace, '');
+      await loadSpaces();
+    } catch (err) {
+      setLoadError(err.message || 'Could not remove the server icon');
+    }
+  }
+
   const sendMessage = (content, attachments, spoiler) =>
     send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachments, spoiler });
   const editMessage = (id, content) => send({ op: 'edit', id, content });
@@ -686,6 +711,9 @@ export default function App() {
             isOwner={role === 'owner'}
             onInvite={makeInvite}
             onDeleteServer={deleteServer}
+            hasIcon={!!(activeSpace && activeSpace.icon)}
+            onChangeServerIcon={changeServerIcon}
+            onRemoveServerIcon={removeServerIcon}
             user={user}
             avatar={profile?.avatar}
             onOpenProfile={() => setProfileOpen(true)}
