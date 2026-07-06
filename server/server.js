@@ -20,6 +20,15 @@ try {
 config.port = parseInt(process.env.PORT, 10) || config.port;
 config.jwtSecret = process.env.JWT_SECRET || config.jwtSecret;
 
+// Registration gating. Modes: 'open' (anyone), 'code' (a shared secret is
+// required), 'closed' (no new accounts). Setting a REGISTRATION_CODE implies
+// 'code' unless a mode is given explicitly. MAX_ACCOUNTS caps total accounts.
+config.registrationCode = process.env.REGISTRATION_CODE || config.registrationCode || '';
+let regMode = (process.env.REGISTRATION_MODE || config.registrationMode || '').toLowerCase();
+if (!['open', 'code', 'closed'].includes(regMode)) regMode = config.registrationCode ? 'code' : 'open';
+config.registrationMode = regMode;
+config.maxAccounts = parseInt(process.env.MAX_ACCOUNTS, 10) || parseInt(config.maxAccounts, 10) || 0;
+
 // Security: never run with the well-known default secret. Resolve one, in
 // order of preference: an explicit JWT_SECRET / config.json value, a secret
 // generated on a previous run, or a fresh one. The generated secret is written
@@ -134,6 +143,14 @@ function rateLimitOk(key, max, windowMs) {
     for (const [k, v] of rateBuckets) { if (now > v.reset) rateBuckets.delete(k); }
   }
   return bucket.count <= max;
+}
+
+// Constant-time string comparison (avoids leaking the code via timing).
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
 }
 
 function clientIp(req) {
@@ -381,13 +398,34 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     return res.end();
   }
 
+  // Public: lets the login screen know whether to show a registration-code field
+  // or hide sign-up entirely. Never exposes the code itself.
+  if (parsedUrl.pathname === '/auth-info' && req.method === 'GET') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({ registration: config.registrationMode }));
+  }
   if (parsedUrl.pathname === '/register' && req.method === 'POST') {
     try {
-      if (!rateLimitOk('register:' + clientIp(req), 10, 15 * 60 * 1000)) {
+      if (!rateLimitOk('register:' + clientIp(req), 5, 15 * 60 * 1000)) {
         res.writeHead(429);
         return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
       }
-      const { username, password, email } = await getJsonBody(req);
+      // Registration gating.
+      if (config.registrationMode === 'closed') {
+        res.writeHead(403);
+        return res.end(JSON.stringify({ error: 'Registration is closed on this server.' }));
+      }
+      const { username, password, email, code } = await getJsonBody(req);
+      if (config.registrationMode === 'code') {
+        if (!config.registrationCode || !safeEqual(code || '', config.registrationCode)) {
+          res.writeHead(403);
+          return res.end(JSON.stringify({ error: 'A valid registration code is required to create an account.' }));
+        }
+      }
+      if (config.maxAccounts > 0 && db.countUsers() >= config.maxAccounts) {
+        res.writeHead(403);
+        return res.end(JSON.stringify({ error: 'This server has reached its account limit.' }));
+      }
       const invalid = validateRegistration({ username, password, email });
       if (invalid) {
         res.writeHead(400);
@@ -1249,6 +1287,12 @@ if (require.main === module) {
     const hasBuild = fs.existsSync(path.join(WEB_DIST, 'index.html'));
     console.log(`\n  DisGourd is running 🥒`);
     console.log(`  → Open http://localhost:${config.port} in your browser\n`);
+    const reg = config.registrationMode;
+    console.log(`  Registration: ${reg}${reg === 'code' ? ' (a registration code is required)' : ''}${config.maxAccounts ? ` · max ${config.maxAccounts} accounts` : ''}`);
+    if (reg === 'code' && !config.registrationCode) {
+      console.warn('  [warning] REGISTRATION_MODE=code but no REGISTRATION_CODE is set — nobody can register.');
+    }
+    console.log('');
     if (!hasBuild) {
       console.log('  Note: the web client is not built yet. Run `npm run build` (or `npm run dev`');
       console.log('  for the hot-reloading dev server) to see the UI.\n');

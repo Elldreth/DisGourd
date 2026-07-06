@@ -55,11 +55,15 @@ function safeJson(text) {
 }
 
 // ---- Auth ----
-export function register(username, password, email) {
-  return request('/register', { method: 'POST', auth: false, body: { username, password, email } });
+export function register(username, password, email, code) {
+  return request('/register', { method: 'POST', auth: false, body: { username, password, email, code } });
 }
 export function login(username, password) {
   return request('/login', { method: 'POST', auth: false, body: { username, password } });
+}
+// How registration is gated on this server: 'open' | 'code' | 'closed'.
+export function getAuthInfo() {
+  return request('/auth-info', { method: 'GET', auth: false });
 }
 
 // ---- Servers (spaces) / channels ----

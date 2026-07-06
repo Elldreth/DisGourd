@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as api from '../api.js';
 
 export default function Login({ onAuthed }) {
@@ -6,8 +6,14 @@ export default function Login({ onAuthed }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [regMode, setRegMode] = useState('open'); // 'open' | 'code' | 'closed'
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.getAuthInfo().then((r) => setRegMode(r.registration || 'open')).catch(() => {});
+  }, []);
 
   const isRegister = mode === 'register';
 
@@ -17,7 +23,7 @@ export default function Login({ onAuthed }) {
     setBusy(true);
     try {
       const res = isRegister
-        ? await api.register(username.trim(), password, email.trim())
+        ? await api.register(username.trim(), password, email.trim(), code.trim())
         : await api.login(username.trim(), password);
       api.setToken(res.token);
       onAuthed(res.token);
@@ -77,6 +83,17 @@ export default function Login({ onAuthed }) {
             />
           </Field>
 
+          {isRegister && regMode === 'code' && (
+            <Field label="Registration code" hint="Ask the server owner">
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="input"
+                placeholder="Enter the code you were given"
+              />
+            </Field>
+          )}
+
           {error && (
             <div className="rounded-lg bg-danger/15 px-3 py-2 text-sm text-danger">{error}</div>
           )}
@@ -90,18 +107,24 @@ export default function Login({ onAuthed }) {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-400">
-          {isRegister ? 'Already have an account?' : 'Need an account?'}{' '}
-          <button
-            className="font-semibold text-brand hover:underline"
-            onClick={() => {
-              setMode(isRegister ? 'login' : 'register');
-              setError('');
-            }}
-          >
-            {isRegister ? 'Sign in' : 'Register'}
-          </button>
-        </p>
+        {regMode === 'closed' && !isRegister ? (
+          <p className="mt-6 text-center text-sm text-gray-500">
+            This server isn’t accepting new accounts.
+          </p>
+        ) : (
+          <p className="mt-6 text-center text-sm text-gray-400">
+            {isRegister ? 'Already have an account?' : 'Need an account?'}{' '}
+            <button
+              className="font-semibold text-brand hover:underline"
+              onClick={() => {
+                setMode(isRegister ? 'login' : 'register');
+                setError('');
+              }}
+            >
+              {isRegister ? 'Sign in' : 'Register'}
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );

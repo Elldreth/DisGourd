@@ -793,6 +793,10 @@ function createUser(username, email, passwordHash, salt) {
   return stmt.run(username, email, passwordHash, salt).lastInsertRowid;
 }
 
+function countUsers() {
+  return db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+}
+
 function getUserByUsername(username) {
   return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 }
@@ -896,6 +900,7 @@ module.exports = {
   getDmUnreadCounts,
   searchMessages,
   createUser,
+  countUsers,
   getUserByUsername,
   getUserByEmail,
   getUserById,

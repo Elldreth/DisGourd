@@ -63,12 +63,47 @@ All settings are optional and provided via environment variables (or
 | `UPLOADS_DIR`      | `uploads/`               | Where uploaded files are stored                    |
 | `MAX_UPLOAD_BYTES` | `26214400` (25 MB)       | Maximum upload size                                |
 | `WEB_DIST`         | `web/dist`               | Location of the built web client                   |
+| `REGISTRATION_MODE`| `open`                   | `open`, `code` (a shared code is required), or `closed` (no new accounts) |
+| `REGISTRATION_CODE`| _(none)_                 | The shared code friends enter to sign up. Setting it implies `code` mode  |
+| `MAX_ACCOUNTS`     | `0` (unlimited)          | Cap on the total number of accounts                |
 
 Example (Linux/macOS):
 
 ```bash
 PORT=8080 JWT_SECRET="a-long-random-string" npm start
 ```
+
+## Keeping randoms out
+
+Because DisGourd is meant for a known group of friends, lock down who can make
+an account. Two layers, use both:
+
+**1. Gate registration (app level).** Set a shared code so only people you've
+given it to can sign up — no email or SMTP needed:
+
+```bash
+REGISTRATION_MODE=code REGISTRATION_CODE="pickles-4-life" npm start
+```
+
+New users then need that code on the sign-up screen. Once everyone's in, you can
+freeze sign-ups entirely with `REGISTRATION_MODE=closed`, and cap the total with
+`MAX_ACCOUNTS`. Registration attempts are also rate-limited per IP.
+
+**2. Don't expose it to the whole internet (network level — the strongest).**
+The surest way to keep strangers out is to make sure they can't reach the server
+at all:
+
+- **Tailscale (VPN):** install Tailscale on the host and your friends' devices;
+  share the machine over your tailnet and hand out `http://<machine>:3000`. Only
+  devices on your tailnet can connect — nobody else can even find it. (Tailscale
+  also gives you HTTPS via `tailscale cert` / `tailscale serve`.)
+- **Cloudflare Tunnel + Access:** run `cloudflared tunnel` to publish the app
+  without opening a port or exposing your home IP, and put **Cloudflare Access**
+  in front with an email allowlist or one-time-PIN, so only approved people's
+  requests ever reach DisGourd.
+
+Do the network step and only your people can connect; the registration code is a
+second lock behind it.
 
 ## Development
 

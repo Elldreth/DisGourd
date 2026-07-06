@@ -628,3 +628,36 @@ test('role-based permissions: channel visibility, posting, and action thresholds
   res = await fetch(`${base}/spaces/perms/channels`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(member) }, body: JSON.stringify({ name: 'allowed' }) });
   expect(res.status).toBe(201);
 });
+
+test('registration gating: code required, closed mode, and account cap', async () => {
+  const base = baseUrl();
+  const cfg = serverModule.config;
+  const reg = (body) => fetch(`${base}/register`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) });
+  const orig = { mode: cfg.registrationMode, code: cfg.registrationCode, max: cfg.maxAccounts };
+  try {
+    // /auth-info reflects the mode without leaking the code.
+    cfg.registrationMode = 'code';
+    cfg.registrationCode = 'sesame';
+    let info = await (await fetch(`${base}/auth-info`)).json();
+    expect(info.registration).toBe('code');
+    expect(JSON.stringify(info)).not.toContain('sesame');
+
+    // Wrong / missing code is rejected; correct code works.
+    expect((await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'password123' })).status).toBe(403);
+    expect((await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'password123', code: 'nope' })).status).toBe(403);
+    expect((await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'password123', code: 'sesame' })).status).toBe(201);
+
+    // Closed mode blocks everyone, even with a code.
+    cfg.registrationMode = 'closed';
+    expect((await reg({ username: 'gate-b', email: 'gate-b@example.com', password: 'password123', code: 'sesame' })).status).toBe(403);
+
+    // Account cap blocks once reached.
+    cfg.registrationMode = 'open';
+    cfg.maxAccounts = 1; // already well over 1 account exists from earlier tests
+    expect((await reg({ username: 'gate-c', email: 'gate-c@example.com', password: 'password123' })).status).toBe(403);
+  } finally {
+    cfg.registrationMode = orig.mode;
+    cfg.registrationCode = orig.code;
+    cfg.maxAccounts = orig.max;
+  }
+});
