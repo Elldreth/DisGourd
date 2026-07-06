@@ -16,19 +16,25 @@ That's it — no MongoDB, Redis, Docker, or cloud accounts needed.
 
 ## Quick start
 
-```bash
-# 1. Install dependencies and build the web client
-npm run setup
+**Windows (no terminal needed):** double-click **`setup.bat`** once, then
+**`run.bat`** to start it (run.bat also sets itself up on first launch).
 
-# 2. Start the server
-npm start
+**Any OS (terminal):**
+
+```bash
+npm run setup   # install dependencies and build the web client
+npm start       # start the server
 ```
 
-Then open **http://localhost:3000** in your browser, register an account, and
-create your first server. 🎉
+Then open **http://localhost:3000**. The **first time** you visit a brand-new
+server, a short **setup wizard** appears: create the first account — it becomes
+the **owner and site admin** — and optionally name your first community. After
+that, everyone else uses the normal sign-in screen.
 
-On first run the server generates a strong secret key automatically (saved to
-`server/.jwt-secret`) — you don't need to configure anything to get going.
+On first run the server also generates a strong secret key automatically (saved
+to `server/.jwt-secret`), so there's nothing to configure to get going.
+Registration is **open** by default (so you can create that first account); lock
+it down anytime in **Settings → Registration &amp; access**.
 
 ## Running it for your friends
 
