@@ -90,10 +90,12 @@ export default function ChatPanel({
 
 function Empty({ title, body }) {
   return (
-    <main className="flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
-      <Gourd size={72} color="#7d6ff3" className="mb-3" />
-      <h2 className="text-xl font-bold">{title}</h2>
-      <p className="mt-1 max-w-sm text-gray-400">{body}</p>
+    <main className="anim-fade flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
+      <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-brand/10 ring-1 ring-brand/15">
+        <Gourd size={54} color="#8f83f7" />
+      </div>
+      <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+      <p className="mt-1.5 max-w-sm text-gray-400">{body}</p>
     </main>
   );
 }
