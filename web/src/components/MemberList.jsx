@@ -58,7 +58,7 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
                 {m.role === 'admin' && <RoleBadge>Admin</RoleBadge>}
               </button>
               {open && acts.length > 0 && (
-                <div className="mb-1 ml-9 mr-1 overflow-hidden rounded-lg bg-ink-900 shadow-lg ring-1 ring-ink-500/50">
+                <div className="anim-pop mb-1 ml-9 mr-1 overflow-hidden rounded-lg bg-ink-900 shadow-lg ring-1 ring-ink-500/50">
                   {acts.map((a) => (
                     <button
                       key={a.label}
@@ -83,8 +83,8 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
   }
 
   return (
-    <aside className="hidden w-56 flex-col bg-ink-800 lg:flex">
-      <header className="flex h-12 items-center px-4 shadow-sm shadow-black/20">
+    <aside className="hidden w-56 flex-col border-l border-ink-900/50 bg-ink-800 lg:flex">
+      <header className="flex h-12 items-center border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
         <h3 className="text-sm font-semibold text-gray-300">Members — {members.length}</h3>
       </header>
       <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">

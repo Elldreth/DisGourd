@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as api from '../api.js';
+import Icon from './Icon.jsx';
 
 const MODES = [
   { v: 'open', label: 'Open — anyone can sign up' },
@@ -165,7 +166,7 @@ export default function RegistrationAdmin() {
           {data.admins.map((a) => (
             <span key={a} className="flex items-center gap-1 rounded-full bg-ink-700 px-2 py-0.5 text-xs">
               {a}
-              <button onClick={() => removeAdmin(a)} title="Remove" className="text-gray-400 hover:text-danger">✕</button>
+              <button onClick={() => removeAdmin(a)} title="Remove" className="text-gray-400 hover:text-danger"><Icon name="x" size={12} strokeWidth={2.2} /></button>
             </span>
           ))}
         </div>

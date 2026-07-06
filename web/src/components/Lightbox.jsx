@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { attachmentInfo } from '../util.js';
+import Icon from './Icon.jsx';
 
 // Full-screen media viewer. Click the backdrop or ✕ to close (also Esc); the
 // arrows / ← → keys move between items in the album.
@@ -23,16 +24,16 @@ export default function Lightbox({ items, index, onClose, onIndex }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/90"
       onClick={onClose}
     >
       {/* Close */}
       <button
         onClick={onClose}
         title="Close (Esc)"
-        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition hover:bg-white/20"
+        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
       >
-        ✕
+        <Icon name="x" size={22} />
       </button>
 
       {count > 1 && (

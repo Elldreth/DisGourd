@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as api from '../api.js';
+import AuthShell, { Field } from './AuthShell.jsx';
 
 export default function Login({ onAuthed }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
@@ -35,19 +36,11 @@ export default function Login({ onAuthed }) {
   }
 
   return (
-    <div className="flex h-full items-center justify-center bg-ink-900 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-ink-800 p-8 shadow-2xl ring-1 ring-ink-500/40">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-2xl font-bold">
-            🥒
-          </div>
-          <h1 className="text-2xl font-bold">Welcome to DisGourd</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            {isRegister ? 'Create an account to get started' : 'Sign in to continue'}
-          </p>
-        </div>
-
-        <form onSubmit={submit} className="space-y-4">
+    <AuthShell
+      title="Welcome to DisGourd"
+      subtitle={isRegister ? 'Create an account to get started' : 'Sign in to continue'}
+    >
+      <form onSubmit={submit} className="space-y-4">
           <Field label="Username">
             <input
               autoFocus
@@ -101,7 +94,7 @@ export default function Login({ onAuthed }) {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-hover disabled:opacity-60"
+            className="w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-hover active:scale-[.98] disabled:opacity-60 disabled:active:scale-100"
           >
             {busy ? 'Please wait…' : isRegister ? 'Create account' : 'Sign in'}
           </button>
@@ -125,19 +118,6 @@ export default function Login({ onAuthed }) {
             </button>
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, hint, children }) {
-  return (
-    <label className="block">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</span>
-        {hint && <span className="text-xs text-gray-500">{hint}</span>}
-      </div>
-      {children}
-    </label>
+    </AuthShell>
   );
 }

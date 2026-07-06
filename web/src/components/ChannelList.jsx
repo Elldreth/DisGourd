@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { initials, colorForName } from '../util.js';
 import Avatar from './Avatar.jsx';
+import Icon from './Icon.jsx';
 import UserFooter from './UserFooter.jsx';
 import ServerPermissionsDialog from './ServerPermissionsDialog.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
@@ -85,8 +86,8 @@ export default function ChannelList({
   }
 
   return (
-    <div className="flex w-60 flex-col bg-ink-800">
-      <header className="relative flex h-12 items-center gap-2 px-2 shadow-sm shadow-black/20">
+    <div className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
+      <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-sm shadow-black/20">
         {space && (
           <button
             onClick={() => (canManage ? iconInputRef.current?.click() : setMenuOpen((v) => !v))}
@@ -104,8 +105,8 @@ export default function ChannelList({
                 {/* Darken on hover to signal it's clickable */}
                 <span className="absolute inset-0 hidden bg-black/40 group-hover:block" />
                 {/* Persistent edit badge so it's obviously changeable */}
-                <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-[9px] leading-none text-white ring-2 ring-ink-800">
-                  ✎
+                <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-white ring-2 ring-ink-800">
+                  <Icon name="edit" size={9} strokeWidth={2.2} />
                 </span>
               </>
             )}
@@ -116,20 +117,20 @@ export default function ChannelList({
           className="flex h-full flex-1 items-center justify-between rounded px-2 hover:bg-ink-700/40"
         >
           <h2 className="truncate font-bold">{space || 'No server'}</h2>
-          {space && <span className="text-gray-400">{menuOpen ? '✕' : '⌄'}</span>}
+          {space && <Icon name={menuOpen ? 'x' : 'chevronDown'} size={16} className="text-gray-400" />}
         </button>
 
         {menuOpen && space && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-            <div className="absolute left-2 right-2 top-11 z-20 rounded-lg bg-ink-900 p-1.5 shadow-xl ring-1 ring-ink-500/50">
+            <div className="anim-pop absolute left-2 right-2 top-11 z-20 rounded-lg bg-ink-900 p-1.5 shadow-xl ring-1 ring-ink-500/50">
               <MenuItem
                 onClick={() => {
                   setMenuOpen(false);
                   onInvite();
                 }}
               >
-                <span className="text-brand">＋</span> Invite people
+                <Icon name="plus" size={16} className="text-brand" /> Invite people
               </MenuItem>
               {canManage && (
                 <MenuItem
@@ -138,7 +139,7 @@ export default function ChannelList({
                     iconInputRef.current?.click();
                   }}
                 >
-                  🖼 {hasIcon ? 'Change icon' : 'Upload icon'}
+                  <Icon name="image" size={16} /> {hasIcon ? 'Change icon' : 'Upload icon'}
                 </MenuItem>
               )}
               {canManage && hasIcon && (
@@ -148,7 +149,7 @@ export default function ChannelList({
                     onRemoveServerIcon();
                   }}
                 >
-                  🚫 Remove icon
+                  <Icon name="ban" size={16} /> Remove icon
                 </MenuItem>
               )}
               {isOwner && (
@@ -158,7 +159,7 @@ export default function ChannelList({
                     setPermsOpen(true);
                   }}
                 >
-                  🛡 Permissions
+                  <Icon name="shield" size={16} /> Permissions
                 </MenuItem>
               )}
               {isOwner && (
@@ -171,7 +172,7 @@ export default function ChannelList({
                     }
                   }}
                 >
-                  🗑 Delete server
+                  <Icon name="trash" size={16} /> Delete server
                 </MenuItem>
               )}
             </div>
@@ -199,9 +200,9 @@ export default function ChannelList({
             <button
               onClick={() => setAdding((v) => !v)}
               title="Create channel"
-              className="text-lg leading-none text-gray-400 hover:text-white"
+              className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-ink-700 hover:text-white"
             >
-              +
+              <Icon name="plus" size={16} />
             </button>
           )}
         </div>
@@ -236,11 +237,11 @@ export default function ChannelList({
                       : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
                 }`}
               >
-                <span className="text-gray-500">#</span>
+                <Icon name="hash" size={17} className="shrink-0 text-gray-500" />
                 <span className="flex-1 truncate">{c}</span>
-                {restricted && <span title="Restricted access" className="shrink-0 text-xs text-gray-500">🔒</span>}
+                {restricted && <span title="Restricted access" className="shrink-0 text-gray-500"><Icon name="shield" size={13} /></span>}
                 {mentionCount > 0 ? (
-                  <span className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-white">
+                  <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-white tabular-nums">
                     {mentionCount}
                   </span>
                 ) : hasUnread ? (
@@ -251,9 +252,9 @@ export default function ChannelList({
                 <button
                   onClick={() => setChannelSettings(c)}
                   title="Channel settings"
-                  className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded bg-ink-600 p-1 text-xs text-gray-300 hover:text-white group-hover:block"
+                  className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-white group-hover:flex"
                 >
-                  ⚙
+                  <Icon name="settings" size={15} />
                 </button>
               )}
             </div>
@@ -275,9 +276,9 @@ export default function ChannelList({
                 <button
                   onClick={() => setAddingVoice((v) => !v)}
                   title="Create voice channel"
-                  className="text-lg leading-none text-gray-400 hover:text-white"
+                  className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-ink-700 hover:text-white"
                 >
-                  +
+                  <Icon name="plus" size={16} />
                 </button>
               )}
             </div>
@@ -304,7 +305,7 @@ export default function ChannelList({
                       inThis ? 'bg-ink-600 text-white' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
                     }`}
                   >
-                    <span className="text-gray-500">🔊</span>
+                    <Icon name="volume" size={17} className="shrink-0 text-gray-500" />
                     <span className="flex-1 truncate">{vc}</span>
                     {people.length > 0 && <span className="text-xs text-gray-500">{people.length}</span>}
                   </button>
@@ -313,7 +314,7 @@ export default function ChannelList({
                       <div className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
                         <Avatar name={p.username} size={20} src={p.avatar} status="online" speaking={p.speaking} />
                         <span className="min-w-0 flex-1 truncate">{p.username}</span>
-                        {p.muted && <span title="Muted" className="text-xs text-danger">🔇</span>}
+                        {p.muted && <span title="Muted" className="shrink-0 text-danger"><Icon name="micOff" size={14} /></span>}
                       </div>
                       {p.sharing && (
                         <ShareRow
@@ -336,7 +337,7 @@ export default function ChannelList({
       {myVoice && (
         <div className="border-t border-ink-900/60 bg-ink-900/40 px-3 py-2">
           <div className="flex items-center gap-2">
-            <span className={voiceMicError || voiceUnstable ? 'text-idle' : 'text-online'}>🔊</span>
+            <Icon name="volume" size={17} className={voiceMicError || voiceUnstable ? 'text-idle' : 'text-online'} />
             <div className="min-w-0 flex-1">
               <div className={`truncate text-xs font-semibold ${voiceMicError || voiceUnstable ? 'text-idle' : 'text-online'}`}>
                 {voiceStatus === 'connecting'
@@ -360,64 +361,66 @@ export default function ChannelList({
               <button
                 onClick={onToggleMute}
                 title={voiceMuted ? 'Unmute (Ctrl+Shift+M)' : 'Mute (Ctrl+Shift+M)'}
-                className={`rounded px-2 py-1 text-sm ${
+                className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                   voiceMuted ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
                 }`}
               >
-                {voiceMuted ? '🔇' : '🎤'}
+                <Icon name={voiceMuted ? 'micOff' : 'mic'} size={17} />
               </button>
             )}
             <button
               onClick={onToggleDeafen}
               title={voiceDeafened ? 'Undeafen (Ctrl+Shift+D)' : 'Deafen (Ctrl+Shift+D)'}
-              className={`rounded px-2 py-1 text-sm ${
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                 voiceDeafened ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
               }`}
             >
-              {voiceDeafened ? '🔕' : '🎧'}
+              <Icon name={voiceDeafened ? 'headphonesOff' : 'headphones'} size={17} />
             </button>
             <button
               onClick={onToggleCamera}
               title={voiceCameraOn ? 'Turn camera off' : 'Turn camera on'}
-              className={`rounded px-2 py-1 text-sm ${
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                 voiceCameraOn ? 'bg-brand text-white hover:bg-brand-hover' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
               }`}
             >
-              📹
+              <Icon name="video" size={17} />
             </button>
             {displayCaptureSupported() && (
               <button
                 onClick={onToggleScreen}
                 title={voiceScreenOn ? 'Stop sharing your screen' : 'Share your screen'}
-                className={`rounded px-2 py-1 text-sm ${
+                className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                   voiceScreenOn ? 'bg-brand text-white hover:bg-brand-hover' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
                 }`}
               >
-                🖥️
+                <Icon name="screen" size={17} />
               </button>
             )}
           </div>
           {displayCaptureSupported() && (
             <button
               onClick={onToggleShare}
-              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs font-semibold transition ${
+              className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
                 voiceSharing
                   ? 'bg-danger/80 text-white hover:bg-danger'
                   : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
               }`}
             >
-              {voiceSharing ? '⏹ Stop sharing audio' : '🎵 Share app audio'}
+              <Icon name="music" size={15} />
+              {voiceSharing ? 'Stop sharing audio' : 'Share app audio'}
             </button>
           )}
           {voiceShareError && <div className="mt-1 text-[11px] text-idle">{voiceShareError}</div>}
           {voiceVideoError && <div className="mt-1 text-[11px] text-idle">{voiceVideoError}</div>}
           {voicePttEnabled && !voiceMicError && (
-            <div className="mt-1 text-[11px] text-gray-400">🎙 Push-to-talk on — hold your key to speak.</div>
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-400"><Icon name="mic" size={12} className="shrink-0" /> Push-to-talk on — hold your key to speak.</div>
           )}
           {voiceMicError && (
-            <div className="mt-1 text-[11px] text-idle">
-              🎤 No microphone — you can hear others but not speak. This usually means the site
-              isn’t served over HTTPS, or mic access was blocked.
+            <div className="mt-1 flex items-start gap-1.5 text-[11px] text-idle">
+              <Icon name="micOff" size={12} className="mt-0.5 shrink-0" />
+              <span>No microphone — you can hear others but not speak. This usually means the site
+              isn’t served over HTTPS, or mic access was blocked.</span>
             </div>
           )}
         </div>
@@ -459,7 +462,7 @@ function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
   return (
     <div className="flex items-center gap-1.5 py-0.5 pl-14 pr-2 text-xs text-gray-400">
       <span className="-ml-3 select-none text-ink-500">↳</span>
-      <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-ink-700 text-[10px]">🎵</span>
+      <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-ink-700 text-gray-300"><Icon name="music" size={11} /></span>
       <span className="min-w-0 flex-1 truncate">{p.username}’s audio</span>
       {isSelf && <span className="text-[10px] font-semibold uppercase text-gray-500">you</span>}
       {controllable && (
@@ -477,9 +480,9 @@ function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
           <button
             onClick={onToggleMute}
             title={p.shareMutedLocally ? 'Unmute for me' : 'Mute for me'}
-            className={p.shareMutedLocally ? 'text-danger' : 'text-gray-400 hover:text-white'}
+            className={`flex h-6 w-6 items-center justify-center rounded ${p.shareMutedLocally ? 'text-danger' : 'text-gray-400 hover:text-white'}`}
           >
-            {p.shareMutedLocally ? '🔇' : '🔊'}
+            <Icon name={p.shareMutedLocally ? 'volumeOff' : 'volume'} size={14} />
           </button>
         </>
       )}

@@ -1,6 +1,8 @@
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
+import Icon from './Icon.jsx';
+import Gourd from './Gourd.jsx';
 
 export default function ChatPanel({
   space,
@@ -40,20 +42,20 @@ export default function ChatPanel({
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700">
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
-        <span className="text-xl text-gray-500">#</span>
+        <Icon name="hash" size={20} className="text-gray-500" />
         <h2 className="font-bold">{channel}</h2>
         <div className="flex-1" />
         <button
           onClick={onOpenSearch}
           title="Search messages"
-          className="rounded p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-white"
+          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-white"
         >
-          🔍
+          <Icon name="search" size={18} />
         </button>
       </header>
 
       {degraded && (
-        <div className="bg-idle/20 px-4 py-1 text-center text-sm text-idle">
+        <div className="anim-slide-down bg-idle/20 px-4 py-1 text-center text-sm text-idle">
           {status === 'closed' ? 'Disconnected — retrying…' : 'Reconnecting…'} Messages you send will
           be delivered once you’re back online.
         </div>
@@ -78,8 +80,8 @@ export default function ChatPanel({
           mentionCandidates={memberNames}
         />
       ) : (
-        <div className="mx-4 mb-5 mt-1 rounded-xl bg-ink-800 px-4 py-3 text-center text-sm text-gray-400 ring-1 ring-ink-500/40">
-          🔒 You don’t have permission to post in this channel.
+        <div className="mx-4 mb-5 mt-1 flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-3 text-center text-sm text-gray-400 ring-1 ring-ink-500/40">
+          <Icon name="shield" size={15} className="shrink-0" /> You don’t have permission to post in this channel.
         </div>
       )}
     </main>
@@ -88,10 +90,12 @@ export default function ChatPanel({
 
 function Empty({ title, body }) {
   return (
-    <main className="flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
-      <div className="mb-3 text-6xl">🥒</div>
-      <h2 className="text-xl font-bold">{title}</h2>
-      <p className="mt-1 max-w-sm text-gray-400">{body}</p>
+    <main className="anim-fade flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
+      <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-brand/10 ring-1 ring-brand/15">
+        <Gourd size={54} color="#8f83f7" />
+      </div>
+      <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+      <p className="mt-1.5 max-w-sm text-gray-400">{body}</p>
     </main>
   );
 }

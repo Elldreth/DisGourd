@@ -2,6 +2,7 @@ import Avatar from './Avatar.jsx';
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
+import Icon from './Icon.jsx';
 
 // The conversation view in Direct Messages mode.
 export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, onTyping, onOpenSearch }) {
@@ -26,9 +27,9 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
         <button
           onClick={onOpenSearch}
           title="Search messages"
-          className="rounded p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-white"
+          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-white"
         >
-          🔍
+          <Icon name="search" size={18} />
         </button>
       </header>
 

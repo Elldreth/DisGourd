@@ -14,8 +14,8 @@ export default function DmSidebar({
   onLogout,
 }) {
   return (
-    <div className="flex w-60 flex-col bg-ink-800">
-      <header className="flex h-12 items-center px-4 shadow-sm shadow-black/20">
+    <div className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
+      <header className="flex h-12 items-center border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
         <h2 className="font-bold">Direct Messages</h2>
       </header>
 

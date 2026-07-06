@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
+import Icon from './Icon.jsx';
 import { formatTime, formatDay } from '../util.js';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🔥', '✅'];
@@ -113,7 +114,9 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
       <div className="flex min-h-full flex-col justify-end px-4 py-4">
         {messages.length === 0 && (
           <div className="py-10 text-center text-gray-500">
-            <div className="mb-2 text-5xl">{simple ? '💬' : '#'}</div>
+            <div className="mb-3 flex justify-center">
+              {simple ? <span className="text-5xl">💬</span> : <Icon name="hash" size={52} className="text-gray-600" />}
+            </div>
             <p className="text-lg font-semibold text-gray-300">
               {emptyHeading || `Welcome to #${channel}`}
             </p>
@@ -177,7 +180,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
 
   return (
     <div
-      className={`group relative flex gap-3 px-2 hover:bg-ink-600/30 ${grouped ? 'py-0.5' : 'mt-3 py-0.5'} ${
+      className={`group relative flex gap-3 px-2 py-0.5 transition-colors hover:bg-ink-600/40 ${grouped ? '' : 'mt-3'} ${
         mentionsMe ? 'border-l-2 border-idle bg-idle/10' : ''
       }`}
     >
@@ -272,12 +275,12 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
                 title="Add reaction"
                 className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
               >
-                😊
+                <Icon name="smile" size={17} />
               </button>
               {picker && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setPicker(false)} />
-                  <div className="absolute right-0 top-8 z-20 flex gap-1 rounded-lg border border-ink-500/60 bg-ink-900 p-1.5 shadow-xl">
+                  <div className="anim-pop absolute right-0 top-8 z-20 flex gap-1 rounded-lg border border-ink-500/60 bg-ink-900 p-1.5 shadow-xl">
                     {REACTION_EMOJIS.map((e) => (
                       <button
                         key={e}
@@ -301,7 +304,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
               title="Edit"
               className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
             >
-              ✎
+              <Icon name="edit" size={16} />
             </button>
           )}
           {mine && onDelete && (
@@ -312,7 +315,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
               title="Delete"
               className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-danger"
             >
-              🗑
+              <Icon name="trash" size={16} />
             </button>
           )}
         </div>
