@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { initials, colorForName } from '../util.js';
 import Icon from './Icon.jsx';
+import Gourd from './Gourd.jsx';
 
 // The far-left rail of server (space) icons, Discord-style, plus create/join.
 export default function ServerRail({
@@ -57,11 +58,11 @@ export default function ServerRail({
       <button
         onClick={onSelectDms}
         title="Direct Messages"
-        className={`relative mb-1 flex h-12 w-12 items-center justify-center text-2xl text-white transition-all hover:rounded-2xl ${
+        className={`relative mb-1 flex h-12 w-12 items-center justify-center text-white transition-all hover:rounded-2xl ${
           dmActive ? 'rounded-2xl bg-brand' : 'rounded-[26px] bg-ink-700 hover:bg-brand'
         }`}
       >
-        🥒
+        <Gourd size={26} color="#fff" title="Direct Messages" />
         {dmUnread > 0 && !dmActive && (
           <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold">
             {dmUnread > 99 ? '99+' : dmUnread}

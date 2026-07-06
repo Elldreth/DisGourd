@@ -16,6 +16,7 @@ import Login from './components/Login.jsx';
 import SetupWizard from './components/SetupWizard.jsx';
 import ServerRail from './components/ServerRail.jsx';
 import ChannelList from './components/ChannelList.jsx';
+import Gourd from './components/Gourd.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import VideoStage from './components/VideoStage.jsx';
 import MemberList from './components/MemberList.jsx';
@@ -706,7 +707,11 @@ export default function App() {
 
   if (!token) {
     if (!authInfo) {
-      return <div className="flex h-full items-center justify-center bg-ink-900 text-3xl">🥒</div>;
+      return (
+        <div className="flex h-full items-center justify-center bg-ink-900">
+          <Gourd size={44} color="#7d6ff3" className="animate-pulse" />
+        </div>
+      );
     }
     return authInfo.setup ? <SetupWizard onAuthed={setToken} /> : <Login onAuthed={setToken} />;
   }

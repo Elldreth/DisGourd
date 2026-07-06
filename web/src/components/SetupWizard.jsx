@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as api from '../api.js';
+import Gourd from './Gourd.jsx';
 
 // First-run wizard, shown when the server has no accounts yet. The account it
 // creates is the site admin (the server owner). It optionally spins up a first
@@ -35,8 +36,8 @@ export default function SetupWizard({ onAuthed }) {
     <div className="flex h-full items-center justify-center bg-ink-900 p-4">
       <div className="w-full max-w-md rounded-2xl bg-ink-800 p-8 shadow-2xl ring-1 ring-ink-500/40">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-2xl font-bold">
-            🥒
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand">
+            <Gourd size={32} color="#fff" />
           </div>
           <h1 className="text-2xl font-bold">Set up your DisGourd server</h1>
           <p className="mt-1 text-sm text-gray-400">

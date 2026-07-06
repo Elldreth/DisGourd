@@ -2,6 +2,7 @@ import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
+import Gourd from './Gourd.jsx';
 
 export default function ChatPanel({
   space,
@@ -90,7 +91,7 @@ export default function ChatPanel({
 function Empty({ title, body }) {
   return (
     <main className="flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
-      <div className="mb-3 text-6xl">🥒</div>
+      <Gourd size={72} color="#7d6ff3" className="mb-3" />
       <h2 className="text-xl font-bold">{title}</h2>
       <p className="mt-1 max-w-sm text-gray-400">{body}</p>
     </main>
