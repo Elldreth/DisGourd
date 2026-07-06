@@ -532,6 +532,25 @@ function getDmMessagesAfter(userId, otherId, afterId, limit = 200) {
     .all(a, b, afterId, limit);
 }
 
+// The two participants + author of a DM, so we can notify both sides.
+function getDmById(messageId) {
+  return db.prepare('SELECT id, user_a, user_b, author_id FROM dm_messages WHERE id = ?').get(messageId) || null;
+}
+
+// Edit/delete a DM, but only if the requester is its author.
+function editDm(messageId, authorId, content) {
+  const editedAt = Date.now();
+  const changed = db.prepare(
+    'UPDATE dm_messages SET content = ?, edited_at = ? WHERE id = ? AND author_id = ?'
+  ).run(content, editedAt, messageId, authorId).changes;
+  return changed > 0 ? editedAt : null;
+}
+
+function deleteDm(messageId, authorId) {
+  return db.prepare('DELETE FROM dm_messages WHERE id = ? AND author_id = ?')
+    .run(messageId, authorId).changes > 0;
+}
+
 // One row per conversation partner, newest first, with the last message.
 function getDmConversations(userId) {
   return db.prepare(`
@@ -724,6 +743,9 @@ module.exports = {
   storeDm,
   getDmMessages,
   getDmMessagesAfter,
+  getDmById,
+  editDm,
+  deleteDm,
   getDmConversations,
   markDmRead,
   getDmUnreadCounts,

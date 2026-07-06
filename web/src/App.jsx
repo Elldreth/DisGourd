@@ -223,6 +223,14 @@ export default function App() {
         }
         if (viewRef.current === 'dm') loadDms(); // refresh previews/order
       },
+      dm_update: (u) => {
+        setDmMessages((prev) =>
+          prev.map((m) => (m.id === u.id ? { ...m, content: u.content, editedAt: u.editedAt } : m))
+        );
+      },
+      dm_delete: (d) => {
+        setDmMessages((prev) => prev.filter((m) => m.id !== d.id));
+      },
       dm_typing: (t) => {
         if (viewRef.current === 'dm' && dmRef.current === t.from) {
           setDmTyping((prev) => ({ ...prev, [t.from]: Date.now() + 4000 }));
@@ -437,6 +445,8 @@ export default function App() {
   const sendDm = (content, attachment, spoiler) => {
     if (currentDm) send({ op: 'dm', to: currentDm, content, attachment, spoiler });
   };
+  const editDm = (id, content) => send({ op: 'dm_edit', id, content });
+  const deleteDm = (id) => send({ op: 'dm_delete', id });
   const sendDmTyping = () => {
     if (currentDm) send({ op: 'dm_typing', with: currentDm });
   };
@@ -630,6 +640,8 @@ export default function App() {
             currentUser={user}
             typing={dmTypingNames}
             onSend={sendDm}
+            onEdit={editDm}
+            onDelete={deleteDm}
             onTyping={sendDmTyping}
             onOpenSearch={() => setSearchOpen(true)}
           />

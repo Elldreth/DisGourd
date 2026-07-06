@@ -4,7 +4,7 @@ import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 
 // The conversation view in Direct Messages mode.
-export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onTyping, onOpenSearch }) {
+export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, onTyping, onOpenSearch }) {
   if (!username) {
     return (
       <main className="flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
@@ -35,6 +35,8 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
       <MessageList
         messages={messages}
         currentUser={currentUser}
+        onEdit={onEdit}
+        onDelete={onDelete}
         simple
         emptyHeading={`This is the beginning of your conversation with ${username}`}
         emptyBody="Say hi! 👋"

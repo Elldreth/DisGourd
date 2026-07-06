@@ -1022,6 +1022,32 @@ function handleGatewayMessage(ws, raw) {
       sendToUser(to.id, frame);
       return;
     }
+    case 'dm_edit': {
+      const id = parseInt(msg.id, 10);
+      const newContent = typeof msg.content === 'string' ? msg.content.trim() : '';
+      if (!id || !newContent) return;
+      const dm = db.getDmById(id);
+      if (!dm) return;
+      const editedAt = db.editDm(id, userId, newContent); // author-only in DB
+      if (editedAt) {
+        const frame = JSON.stringify({ type: 'dm_update', id, content: newContent, editedAt });
+        sendToUser(dm.user_a, frame);
+        sendToUser(dm.user_b, frame);
+      }
+      return;
+    }
+    case 'dm_delete': {
+      const id = parseInt(msg.id, 10);
+      if (!id) return;
+      const dm = db.getDmById(id);
+      if (!dm) return;
+      if (db.deleteDm(id, userId)) {
+        const frame = JSON.stringify({ type: 'dm_delete', id });
+        sendToUser(dm.user_a, frame);
+        sendToUser(dm.user_b, frame);
+      }
+      return;
+    }
     case 'dm_focus': {
       ws.dmFocus = typeof msg.with === 'string' ? msg.with : null;
       return;

@@ -240,38 +240,42 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
         )}
       </div>
 
-      {/* Hover actions: anyone can react; only the author can edit/delete */}
-      {!editing && !simple && (
+      {/* Hover actions: anyone can react; only the author can edit/delete.
+          Each control shows only when its handler is provided (DMs, for
+          instance, offer edit/delete but not reactions). */}
+      {!editing && (onReact || (mine && (onEdit || onDelete))) && (
         <div className="absolute -top-3 right-3 hidden items-center gap-1 rounded-md border border-ink-500/60 bg-ink-800 px-1 py-0.5 shadow group-hover:flex">
-          <div className="relative">
-            <button
-              onClick={() => setPicker((v) => !v)}
-              title="Add reaction"
-              className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
-            >
-              😊
-            </button>
-            {picker && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setPicker(false)} />
-                <div className="absolute right-0 top-8 z-20 flex gap-1 rounded-lg border border-ink-500/60 bg-ink-900 p-1.5 shadow-xl">
-                  {REACTION_EMOJIS.map((e) => (
-                    <button
-                      key={e}
-                      onClick={() => {
-                        onReact(m.id, e);
-                        setPicker(false);
-                      }}
-                      className="rounded p-1 text-lg hover:bg-ink-600"
-                    >
-                      {e}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-          {mine && (
+          {onReact && (
+            <div className="relative">
+              <button
+                onClick={() => setPicker((v) => !v)}
+                title="Add reaction"
+                className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
+              >
+                😊
+              </button>
+              {picker && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setPicker(false)} />
+                  <div className="absolute right-0 top-8 z-20 flex gap-1 rounded-lg border border-ink-500/60 bg-ink-900 p-1.5 shadow-xl">
+                    {REACTION_EMOJIS.map((e) => (
+                      <button
+                        key={e}
+                        onClick={() => {
+                          onReact(m.id, e);
+                          setPicker(false);
+                        }}
+                        className="rounded p-1 text-lg hover:bg-ink-600"
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {mine && onEdit && (
             <button
               onClick={startEdit}
               title="Edit"
@@ -280,7 +284,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
               ✎
             </button>
           )}
-          {mine && (
+          {mine && onDelete && (
             <button
               onClick={() => {
                 if (window.confirm('Delete this message?')) onDelete(m.id);
