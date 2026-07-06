@@ -17,6 +17,50 @@ export const PERMISSION_ACTIONS = [
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif'];
 const VIDEO_EXT = ['mp4', 'webm', 'mov', 'm4v', 'ogv'];
 
+// Per-user view state (what you were looking at) — survives a browser refresh.
+export function loadViewState(userId) {
+  try {
+    return JSON.parse(localStorage.getItem(`disgourd.view.${userId || 'anon'}`)) || null;
+  } catch {
+    return null;
+  }
+}
+export function saveViewState(userId, state) {
+  try {
+    localStorage.setItem(`disgourd.view.${userId || 'anon'}`, JSON.stringify(state));
+  } catch {
+    /* ignore */
+  }
+}
+
+// Per-user custom ordering of the server rail (an array of server names).
+export function loadServerOrder(userId) {
+  try {
+    return JSON.parse(localStorage.getItem(`disgourd.serverOrder.${userId || 'anon'}`)) || [];
+  } catch {
+    return [];
+  }
+}
+export function saveServerOrder(userId, names) {
+  try {
+    localStorage.setItem(`disgourd.serverOrder.${userId || 'anon'}`, JSON.stringify(names));
+  } catch {
+    /* ignore */
+  }
+}
+// Sort spaces by the saved order; servers not in the order keep their relative
+// position at the end (newly created/joined ones).
+export function applyServerOrder(list, order) {
+  if (!order || !order.length) return list;
+  const rank = new Map(order.map((n, i) => [n, i]));
+  const at = (n) => (rank.has(n) ? rank.get(n) : Infinity);
+  return [...list].sort((a, b) => {
+    const ra = at(a.name);
+    const rb = at(b.name);
+    return ra === rb ? 0 : ra - rb;
+  });
+}
+
 export function attachmentInfo(url) {
   if (!url) return null;
   let name = url;

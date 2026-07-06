@@ -13,11 +13,25 @@ export default function ServerRail({
   onSelect,
   onCreate,
   onJoin,
+  onReorder,
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [joining, setJoining] = useState(false);
   const [code, setCode] = useState('');
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dropIndex, setDropIndex] = useState(null);
+
+  function handleDrop(toIndex) {
+    if (dragIndex !== null && dragIndex !== toIndex && onReorder) {
+      const names = spaces.map((s) => s.name);
+      const [moved] = names.splice(dragIndex, 1);
+      names.splice(toIndex, 0, moved);
+      onReorder(names);
+    }
+    setDragIndex(null);
+    setDropIndex(null);
+  }
 
   async function submitCreate(e) {
     e.preventDefault();
@@ -56,7 +70,7 @@ export default function ServerRail({
       <div className="h-px w-8 bg-ink-500/50" />
 
       <div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto">
-        {spaces.map((s) => {
+        {spaces.map((s, i) => {
           const active = s.name === currentSpace;
           const count = unread[s.name] || 0;
           const mentionCount = mentions[s.name] || 0;
@@ -64,10 +78,15 @@ export default function ServerRail({
             <button
               key={s.name}
               onClick={() => onSelect(s.name)}
-              title={s.name}
+              title={`${s.name} — drag to reorder`}
+              draggable
+              onDragStart={() => setDragIndex(i)}
+              onDragOver={(e) => { e.preventDefault(); if (dropIndex !== i) setDropIndex(i); }}
+              onDrop={() => handleDrop(i)}
+              onDragEnd={() => { setDragIndex(null); setDropIndex(null); }}
               className={`group relative flex h-12 w-12 items-center justify-center overflow-hidden font-semibold text-white transition-all duration-150 hover:rounded-2xl ${
                 active ? 'rounded-2xl' : 'rounded-[26px]'
-              }`}
+              } ${dragIndex === i ? 'opacity-40' : ''} ${dropIndex === i && dragIndex !== i ? 'ring-2 ring-white/70' : ''}`}
               style={{ backgroundColor: s.icon ? undefined : active ? '#5b6ef5' : colorForName(s.name) }}
             >
               <span

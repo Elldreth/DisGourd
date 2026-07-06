@@ -3,7 +3,15 @@ import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { createVoiceController } from './voice.js';
 import { getPttEnabled, getPttKey } from './audio.js';
-import { mergeMessages, roleRank } from './util.js';
+import {
+  mergeMessages,
+  roleRank,
+  loadViewState,
+  saveViewState,
+  loadServerOrder,
+  saveServerOrder,
+  applyServerOrder,
+} from './util.js';
 import Login from './components/Login.jsx';
 import ServerRail from './components/ServerRail.jsx';
 import ChannelList from './components/ChannelList.jsx';
@@ -30,6 +38,7 @@ export default function App() {
   }, [token]);
 
   const [spaces, setSpaces] = useState([]);
+  const [serverOrder, setServerOrder] = useState([]); // user's custom rail order
   const [currentSpace, setCurrentSpace] = useState('');
   const [currentChannel, setCurrentChannel] = useState('');
   const [messages, setMessages] = useState([]);
@@ -66,6 +75,13 @@ export default function App() {
   const userRef = useRef(user);
   userRef.current = user;
 
+  // Apply the user's custom server ordering for the rail.
+  const orderedSpaces = useMemo(() => applyServerOrder(spaces, serverOrder), [spaces, serverOrder]);
+  function reorderServers(names) {
+    setServerOrder(names);
+    saveServerOrder(myId, names);
+  }
+
   const activeSpace = spaces.find((s) => s.name === currentSpace);
   const channels = activeSpace ? activeSpace.channels : [];
   const role = activeSpace ? activeSpace.role : null;
@@ -96,11 +112,26 @@ export default function App() {
     api.getDms().then(setDms).catch(() => {});
   }
 
-  // Initial load after auth.
+  // Initial load after auth. Restore whatever the user was last looking at.
   useEffect(() => {
     if (!token) return;
     loadSpaces().then((next) => {
-      if (next.length && !spaceRef.current) {
+      if (spaceRef.current) return; // already positioned (e.g. arrived via invite)
+      const saved = loadViewState(myId);
+      if (saved && saved.view === 'dm' && saved.dm) {
+        setView('dm');
+        setCurrentDm(saved.dm);
+        return;
+      }
+      if (saved && saved.space) {
+        const s = next.find((x) => x.name === saved.space);
+        if (s) {
+          setCurrentSpace(saved.space);
+          setCurrentChannel(s.channels.includes(saved.channel) ? saved.channel : s.channels[0] || '');
+          return;
+        }
+      }
+      if (next.length) {
         setCurrentSpace(next[0].name);
         setCurrentChannel(next[0].channels[0] || '');
       }
@@ -108,6 +139,18 @@ export default function App() {
     api.getMe().then(setProfile).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // Load the saved rail order once we know who's signed in.
+  useEffect(() => {
+    if (myId) setServerOrder(loadServerOrder(myId));
+  }, [myId]);
+
+  // Persist the current view so a refresh returns you to the same place.
+  useEffect(() => {
+    if (!token || !myId) return;
+    if (view === 'server' && !currentSpace) return; // don't clobber saved state with the empty first render
+    saveViewState(myId, { view, space: currentSpace, channel: currentChannel, dm: currentDm });
+  }, [token, myId, view, currentSpace, currentChannel, currentDm]);
 
   // ---- Gateway (one connection for the whole app) ----
   const handlers = useMemo(
@@ -196,6 +239,9 @@ export default function App() {
       },
       members_changed: (f) => {
         if (f.space === spaceRef.current) refreshMembers(f.space);
+        // A role change may affect *our own* permissions/channel visibility, so
+        // refresh the space list too (updates role, gears, hidden channels).
+        loadSpaces();
       },
       space_updated: () => loadSpaces(),
       voice_state: (f) => {
@@ -648,7 +694,7 @@ export default function App() {
   return (
     <div className="flex h-full w-full overflow-hidden">
       <ServerRail
-        spaces={spaces}
+        spaces={orderedSpaces}
         currentSpace={view === 'server' ? currentSpace : ''}
         unread={spaceUnread}
         mentions={spaceMentions}
@@ -658,6 +704,7 @@ export default function App() {
         onSelect={selectSpace}
         onCreate={createSpace}
         onJoin={joinServer}
+        onReorder={reorderServers}
       />
 
       {view === 'dm' ? (
