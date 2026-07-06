@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+web/dist/
+
+# Runtime data (never commit user data or secrets)
+uploads/
+server/db/*.db
+server/db/*.db-wal
+server/db/*.db-shm
+
+# Local environment / secrets
+.env
+.env.local
+*.local
+server/.jwt-secret
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db

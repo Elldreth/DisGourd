@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none ring-1 ring-ink-500/60 transition placeholder:text-gray-500 focus:ring-2 focus:ring-brand;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  @apply bg-ink-700 text-gray-100 font-sans antialiased;
+}
+
+/* Slim, unobtrusive scrollbars that match the dark theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: theme('colors.ink.500') transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: theme('colors.ink.500');
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}

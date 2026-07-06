@@ -1,5 +1,15 @@
 {
-  "dependencies": {
-    "ws": "^8.18.2"
+  "name": "disgourd",
+  "version": "1.0.0",
+  "description": "A self-hostable, Discord-style chat app for you and your friends (Node + SQLite server, React web client).",
+  "private": true,
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix web install && npm run build",
+    "build": "npm --prefix web run build",
+    "start": "node server/server.js",
+    "server": "node server/server.js",
+    "dev:server": "node server/server.js",
+    "dev:web": "npm --prefix web run dev",
+    "test": "npm --prefix server test"
   }
 }
