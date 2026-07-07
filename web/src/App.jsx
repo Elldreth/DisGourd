@@ -25,6 +25,7 @@ import ProfileDialog from './components/ProfileDialog.jsx';
 import DmSidebar from './components/DmSidebar.jsx';
 import DmPanel from './components/DmPanel.jsx';
 import SearchOverlay from './components/SearchOverlay.jsx';
+import ImageCropper from './components/ImageCropper.jsx';
 
 const unreadKey = (space, channel) => JSON.stringify([space, channel]);
 
@@ -52,6 +53,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [serverIconFile, setServerIconFile] = useState(null);
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
   const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, sharing: false, shareError: '', cameraOn: false, screenOn: false, videoError: '', videos: [], participants: [] });
   const myVoice = voiceCall.room;
@@ -641,16 +643,21 @@ export default function App() {
     }
   }
 
-  async function changeServerIcon(file) {
+  function changeServerIcon(file) {
     if (!currentSpace || !file) return;
     if (!file.type.startsWith('image/')) {
       setLoadError('Please choose an image file for the server icon');
       return;
     }
+    setServerIconFile(file); // frame it before uploading
+  }
+  async function saveServerIcon(cropped) {
+    if (!currentSpace) return;
     try {
-      const up = await api.uploadFile(file);
+      const up = await api.uploadFile(cropped);
       await api.setSpaceIcon(currentSpace, up.url);
       await loadSpaces();
+      setServerIconFile(null);
     } catch (err) {
       setLoadError(err.message || 'Could not update the server icon');
     }
@@ -861,6 +868,15 @@ export default function App() {
           onClose={() => setSearchOpen(false)}
           onOpenChannel={openChannelFromSearch}
           onOpenDm={openDmFromSearch}
+        />
+      )}
+      {serverIconFile && (
+        <ImageCropper
+          file={serverIconFile}
+          shape="square"
+          title="Position the server icon"
+          onCancel={() => setServerIconFile(null)}
+          onSave={saveServerIcon}
         />
       )}
       {loadError && (

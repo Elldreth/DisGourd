@@ -3,14 +3,16 @@ import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
 import AudioSettings from './AudioSettings.jsx';
 import RegistrationAdmin from './RegistrationAdmin.jsx';
+import ImageCropper from './ImageCropper.jsx';
 
 // User settings: avatar/profile and audio devices.
 export default function ProfileDialog({ profile, onClose, onUpdated, onOutputChange, onPttChange, onMicChange, inCall }) {
   const [avatar, setAvatar] = useState(profile?.avatar || null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [cropFile, setCropFile] = useState(null);
 
-  async function pickFile(e) {
+  function pickFile(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -19,12 +21,18 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
       return;
     }
     setError('');
+    setCropFile(file); // frame it before uploading
+  }
+
+  async function saveAvatar(cropped) {
     setBusy(true);
+    setError('');
     try {
-      const up = await api.uploadFile(file);
+      const up = await api.uploadFile(cropped);
       const updated = await api.updateMe({ avatar: up.url });
       setAvatar(updated.avatar);
       onUpdated(updated);
+      setCropFile(null);
     } catch (err) {
       setError(err.message || 'Upload failed');
     } finally {
@@ -116,6 +124,16 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
           )}
         </div>
       </div>
+
+      {cropFile && (
+        <ImageCropper
+          file={cropFile}
+          shape="circle"
+          title="Position your avatar"
+          onCancel={() => setCropFile(null)}
+          onSave={saveAvatar}
+        />
+      )}
     </div>
   );
 }
