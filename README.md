@@ -30,6 +30,25 @@ npm run setup   # install dependencies and build the web client
 npm start       # start the server
 ```
 
+## Updating
+
+New code has to be **rebuilt** — `npm start` only serves the existing build, it
+doesn't recompile the web app. After you pull a new version:
+
+**Windows:** double-click **`update.bat`** (it pulls, installs, and rebuilds),
+then start it again with `run.bat`.
+
+**Any OS (terminal):**
+
+```bash
+git pull
+npm run setup   # or: npm run build
+npm start
+```
+
+Restart the server afterwards so any changes take effect, and hard-refresh your
+browser (Ctrl/Cmd+Shift+R) to drop the old cached bundle.
+
 Then open **http://localhost:3000**. The **first time** you visit a brand-new
 server, a short **setup wizard** appears: create the first account — it becomes
 the **owner and site admin** — and optionally name your first community. After
