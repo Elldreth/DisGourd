@@ -19,10 +19,12 @@ export default function ChatPanel({
   onReact,
   onTyping,
   onOpenSearch,
+  onOpenNav,
 }) {
   if (!space) {
     return (
       <Empty
+        onOpenNav={onOpenNav}
         title="No server selected"
         body="Pick a server on the left, or press + to create one and invite your friends."
       />
@@ -31,6 +33,7 @@ export default function ChatPanel({
   if (!channel) {
     return (
       <Empty
+        onOpenNav={onOpenNav}
         title={`Welcome to ${space}`}
         body="Create a text channel with the + next to “Text channels” to start talking."
       />
@@ -41,7 +44,14 @@ export default function ChatPanel({
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700">
-      <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
+      <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-sm shadow-black/20 md:px-4">
+        <button
+          onClick={onOpenNav}
+          title="Channels"
+          className="-ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-white md:hidden"
+        >
+          <Icon name="menu" size={20} />
+        </button>
         <Icon name="hash" size={20} className="text-gray-500" />
         <h2 className="font-bold">{channel}</h2>
         <div className="flex-1" />
@@ -88,9 +98,18 @@ export default function ChatPanel({
   );
 }
 
-function Empty({ title, body }) {
+function Empty({ title, body, onOpenNav }) {
   return (
-    <main className="anim-fade flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
+    <main className="anim-fade relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
+      {onOpenNav && (
+        <button
+          onClick={onOpenNav}
+          title="Channels"
+          className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-white md:hidden"
+        >
+          <Icon name="menu" size={22} />
+        </button>
+      )}
       <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-brand/10 ring-1 ring-brand/15">
         <Gourd size={54} color="#8f83f7" />
       </div>
