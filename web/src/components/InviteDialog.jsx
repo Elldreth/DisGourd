@@ -1,18 +1,22 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { copyText } from '../util.js';
 
 // Shows a freshly minted invite code with a copy button.
 export default function InviteDialog({ space, code, onClose }) {
   const [copied, setCopied] = useState(false);
+  const codeRef = useRef(null);
 
-  function copy() {
-    if (navigator.clipboard) {
-      navigator.clipboard
-        .writeText(code)
-        .then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        })
-        .catch(() => {});
+  async function copy() {
+    if (await copyText(code)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } else if (codeRef.current) {
+      // Last resort: highlight the code so it can be copied by hand.
+      const range = document.createRange();
+      range.selectNodeContents(codeRef.current);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
     }
   }
 
@@ -31,7 +35,10 @@ export default function InviteDialog({ space, code, onClose }) {
           server” in the left rail.
         </p>
         <div className="mt-4 flex items-center gap-2">
-          <code className="flex-1 select-all truncate rounded-lg bg-ink-900 px-3 py-2 font-mono text-brand ring-1 ring-ink-500/60">
+          <code
+            ref={codeRef}
+            className="flex-1 select-all truncate rounded-lg bg-ink-900 px-3 py-2 font-mono text-brand ring-1 ring-ink-500/60"
+          >
             {code}
           </code>
           <button

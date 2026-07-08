@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as api from '../api.js';
 import Icon from './Icon.jsx';
+import { copyText } from '../util.js';
 
 const MODES = [
   { v: 'open', label: 'Open — anyone can sign up' },
@@ -61,12 +62,9 @@ export default function RegistrationAdmin() {
   }
 
   async function copy(code) {
-    try {
-      await navigator.clipboard.writeText(code);
+    if (await copyText(code)) {
       setCopied(code);
       setTimeout(() => setCopied(''), 1500);
-    } catch {
-      /* clipboard may be blocked */
     }
   }
 
