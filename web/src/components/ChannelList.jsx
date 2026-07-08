@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { initials, colorForName } from '../util.js';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import UserFooter from './UserFooter.jsx';
@@ -44,7 +43,6 @@ export default function ChannelList({
   isOwner,
   onInvite,
   onDeleteServer,
-  serverIcon,
   hasIcon,
   onChangeServerIcon,
   onRemoveServerIcon,
@@ -90,30 +88,8 @@ export default function ChannelList({
   return (
     <div className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
       <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-sm shadow-black/20">
-        {space && (
-          <button
-            onClick={() => (canManage ? iconInputRef.current?.click() : setMenuOpen((v) => !v))}
-            title={canManage ? 'Change server icon' : space}
-            className="group relative h-8 w-8 shrink-0 overflow-hidden rounded-lg font-semibold text-white"
-            style={{ backgroundColor: serverIcon ? undefined : colorForName(space) }}
-          >
-            {serverIcon ? (
-              <img src={serverIcon} alt={space} className="h-full w-full object-cover" />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-xs">{initials(space)}</span>
-            )}
-            {canManage && (
-              <>
-                {/* Darken on hover to signal it's clickable */}
-                <span className="absolute inset-0 hidden bg-black/40 group-hover:block" />
-                {/* Persistent edit badge so it's obviously changeable */}
-                <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-white ring-2 ring-ink-800">
-                  <Icon name="edit" size={9} strokeWidth={2.2} />
-                </span>
-              </>
-            )}
-          </button>
-        )}
+        {/* Server identity + the active highlight live in the left rail; the header
+            just needs the name and its menu (which holds change/reposition icon). */}
         <button
           onClick={() => space && setMenuOpen((v) => !v)}
           className="flex h-full flex-1 items-center justify-between rounded px-2 hover:bg-ink-700/40"
