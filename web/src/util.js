@@ -129,3 +129,34 @@ export function humanSize(bytes) {
   }
   return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
+
+// Copy text to the clipboard, degrading gracefully off a secure context. The
+// async Clipboard API needs HTTPS or localhost, so over a plain-HTTP LAN (e.g.
+// a phone hitting the PC's IP) we fall back to the legacy execCommand path,
+// which still works from a user gesture — including on iOS. Returns true on
+// success so the caller can offer a manual "select & copy" if it fails.
+export async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the legacy path */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    // Keep it in the viewport (offscreen/hidden textareas break copy on iOS).
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
