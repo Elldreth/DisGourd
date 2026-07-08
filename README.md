@@ -79,6 +79,54 @@ Each person can pick their own **microphone and speaker** for voice under
 **Settings** (click your name in the bottom-left) → **Voice & audio**, including
 a mic test — independent of the operating-system default.
 
+## Run with Docker (always-on server / Unraid)
+
+A `Dockerfile` and `docker-compose.yml` are included. From a checkout on the
+server:
+
+```bash
+docker compose up -d --build
+```
+
+Data lives on **mounted volumes**, never in the image, and the DB and uploads
+are split on purpose:
+
+- **DB → fast local storage (SSD/cache).** SQLite wants low-latency, non-network
+  storage — don't put it on a spanning array through a FUSE mount (e.g. Unraid's
+  `/mnt/user/...`); use a direct disk/cache path there.
+- **Uploads → wherever you have space** (that's what grows).
+
+Edit the env and volume paths in `docker-compose.yml`:
+
+```yaml
+environment:
+  - JWT_SECRET=<a long random string>   # openssl rand -hex 48
+  - SITE_ADMINS=<your-username>
+  - REGISTRATION_MODE=closed            # then invite with the in-app codes
+volumes:
+  - /path/on/ssd/disgourd:/config       # DB   (DB_PATH=/config/disgourd.db)
+  - /path/on/big/storage:/uploads       # uploads (UPLOADS_DIR=/uploads)
+```
+
+**Always set `JWT_SECRET`** — otherwise a new one is generated on every rebuild
+and everyone gets logged out. Raise `MAX_UPLOAD_BYTES` if you want to share
+videos bigger than the 25 MB default.
+
+### Behind a reverse proxy (HTTPS — required for voice)
+
+Mic/camera (and the clipboard) only work over a **secure origin**, so put the
+container behind a reverse proxy that terminates HTTPS. **The proxy must forward
+WebSockets** — the realtime gateway (`/gateway`) is a WS connection; without the
+upgrade headers the app loads but never reaches "Connected".
+
+A ready-to-use **SWAG** config is at
+[`deploy/swag/disgourd.subdomain.conf.sample`](deploy/swag/disgourd.subdomain.conf.sample):
+copy it to `<swag-appdata>/nginx/proxy-confs/disgourd.subdomain.conf`, put the
+DisGourd container on the same Docker network as SWAG, and browse to
+`https://chat.<yourdomain>`. (Note: voice audio itself is peer-to-peer WebRTC and
+does **not** flow through the proxy — HTTPS unlocks the mic; a tough NAT may still
+need a TURN server, which you can set via `window.__DISGOURD_ICE__`.)
+
 ## Configuration
 
 All settings are optional and provided via environment variables (or
