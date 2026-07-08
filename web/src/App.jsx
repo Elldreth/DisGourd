@@ -262,6 +262,11 @@ export default function App() {
         loadSpaces();
       },
       space_updated: () => loadSpaces(),
+      space_renamed: (f) => {
+        loadSpaces().then(() => {
+          if (spaceRef.current === f.space) setCurrentSpace(f.newName);
+        });
+      },
       voice_state: (f) => {
         setVoiceStates((prev) => ({ ...prev, [unreadKey(f.space, f.channel)]: f.participants || [] }));
         voiceRef.current && voiceRef.current.handleState(f);
@@ -677,6 +682,25 @@ export default function App() {
       setLoadError(err.message || 'Could not remove the server icon');
     }
   }
+  async function renameServer(newName) {
+    const trimmed = (newName || '').trim();
+    if (!currentSpace || !trimmed || trimmed === currentSpace) return;
+    try {
+      const res = await api.renameSpace(currentSpace, trimmed);
+      const finalName = res?.name || trimmed;
+      // Keep the server in the same spot in the rail across the rename.
+      const order = loadServerOrder(myId);
+      if (order.includes(currentSpace)) {
+        const nextOrder = order.map((n) => (n === currentSpace ? finalName : n));
+        saveServerOrder(myId, nextOrder);
+        setServerOrder(nextOrder);
+      }
+      setCurrentSpace(finalName);
+      await loadSpaces();
+    } catch (err) {
+      setLoadError(err.message || 'Could not rename the server');
+    }
+  }
 
   const sendMessage = (content, attachments, spoiler) =>
     send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachments, spoiler });
@@ -809,6 +833,7 @@ export default function App() {
             isOwner={role === 'owner'}
             onInvite={makeInvite}
             onDeleteServer={deleteServer}
+            onRenameServer={renameServer}
             hasIcon={!!(activeSpace && activeSpace.icon)}
             onChangeServerIcon={changeServerIcon}
             onRemoveServerIcon={removeServerIcon}

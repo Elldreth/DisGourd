@@ -107,6 +107,9 @@ export function createSpace(name) {
 export function deleteSpace(space) {
   return request(`/spaces/${encodeURIComponent(space)}`, { method: 'DELETE' });
 }
+export function renameSpace(space, name) {
+  return request(`/spaces/${encodeURIComponent(space)}`, { method: 'PATCH', body: { name } });
+}
 export function setSpaceIcon(space, icon, iconOriginal = null, iconCrop = null) {
   return request(`/spaces/${encodeURIComponent(space)}`, {
     method: 'PATCH',

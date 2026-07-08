@@ -692,6 +692,19 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         db.setSpaceIcon(space.id, icon || null, body.iconOriginal || null, body.iconCrop || null);
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
       }
+      if ('name' in body) {
+        const newName = typeof body.name === 'string' ? body.name.trim() : '';
+        if (!newName) return sendJson(res, 400, { error: 'Server name cannot be empty' });
+        if (newName.length > 60) return sendJson(res, 400, { error: 'Server name must be 60 characters or fewer' });
+        const result = db.renameSpace(space.id, newName);
+        if (result.error === 'taken') return sendJson(res, 409, { error: 'Another server already uses that name' });
+        if (result.error) return sendJson(res, 400, { error: 'Could not rename the server' });
+        if (result.oldName !== newName) {
+          // Broadcast under the new name — the old one no longer resolves.
+          deliverToSpaceMembers(newName, JSON.stringify({ type: 'space_renamed', space: result.oldName, newName }));
+        }
+        return sendJson(res, 200, { ok: true, name: newName });
+      }
       return sendJson(res, 200, { ok: true });
     }
 

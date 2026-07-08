@@ -349,6 +349,22 @@ function deleteChannel(spaceName, channelName) {
 
 // ---- Spaces: ownership, membership, invites ----
 
+// Rename a space. read_state is keyed by space *name*, so migrate those rows in
+// the same transaction or unread tracking would break. Returns { name } on
+// success, or { error: 'taken' } if another space already uses the new name.
+function renameSpace(spaceId, newName) {
+  const current = db.prepare('SELECT name FROM spaces WHERE id = ?').get(spaceId);
+  if (!current) return { error: 'not_found' };
+  if (current.name === newName) return { name: newName, oldName: current.name };
+  const clash = db.prepare('SELECT 1 FROM spaces WHERE name = ? AND id != ?').get(newName, spaceId);
+  if (clash) return { error: 'taken' };
+  db.transaction(() => {
+    db.prepare('UPDATE read_state SET space = ? WHERE space = ?').run(newName, current.name);
+    db.prepare('UPDATE spaces SET name = ? WHERE id = ?').run(newName, spaceId);
+  })();
+  return { name: newName, oldName: current.name };
+}
+
 function getSpaceByName(name) {
   return db.prepare('SELECT id, name, owner_id FROM spaces WHERE name = ?').get(name);
 }
@@ -948,6 +964,7 @@ module.exports = {
   createChannel,
   deleteSpace,
   deleteChannel,
+  renameSpace,
   getSpaceByName,
   getSpaceById,
   channelType,
