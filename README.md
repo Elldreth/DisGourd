@@ -123,7 +123,7 @@ A ready-to-use **SWAG** config is at
 [`deploy/swag/disgourd.subdomain.conf.sample`](deploy/swag/disgourd.subdomain.conf.sample):
 copy it to `<swag-appdata>/nginx/proxy-confs/disgourd.subdomain.conf`, put the
 DisGourd container on the same Docker network as SWAG, and browse to
-`https://chat.<yourdomain>`. (Note: voice audio itself is peer-to-peer WebRTC and
+`https://disgourd.<yourdomain>`. (Note: voice audio itself is peer-to-peer WebRTC and
 does **not** flow through the proxy — HTTPS unlocks the mic; a tough NAT may still
 need a TURN server, which you can set via `window.__DISGOURD_ICE__`.)
 

@@ -2,18 +2,25 @@
 #
 # Copy to your SWAG config as:
 #   <swag-appdata>/nginx/proxy-confs/disgourd.subdomain.conf
-# then restart SWAG. Serves https://chat.<yourdomain> -> the disgourd container.
+# then restart SWAG (SWAG_AUTORELOAD via inotify may not fire on Unraid's
+# /mnt/user FUSE share, so a restart is the reliable way to load it).
+# Serves https://disgourd.<yourdomain> -> the disgourd container.
 #
 # Requires:
-#   • "chat" covered by your SWAG certificate (SUBDOMAINS env, or a wildcard).
+#   • "disgourd" covered by your SWAG certificate (SUBDOMAINS env, or a wildcard).
 #   • The disgourd container on the same Docker network as SWAG (so the name
 #     "disgourd" resolves). See docker-compose.yml.
+#
+# WebSockets (the /gateway realtime connection) work automatically: SWAG's
+# bundled proxy.conf already sets proxy_http_version and the Upgrade/Connection
+# headers. Do NOT re-add them here — a duplicate proxy_http_version makes
+# `nginx -t` fail and SWAG falls back to its default page.
 
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
 
-    server_name chat.*;
+    server_name disgourd.*;
 
     include /config/nginx/ssl.conf;
 
@@ -27,12 +34,5 @@ server {
         set $upstream_port 3000;
         set $upstream_proto http;
         proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-
-        # WebSocket upgrade for the realtime gateway (/gateway). Without this the
-        # app loads but never reaches "Connected". $connection_upgrade is defined
-        # in SWAG's nginx.conf.
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
     }
 }
