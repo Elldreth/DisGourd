@@ -190,6 +190,18 @@ try {
   if (!db.prepare("PRAGMA table_info(users)").all().some(c => c.name === 'site_admin')) {
     db.exec('ALTER TABLE users ADD COLUMN site_admin INTEGER NOT NULL DEFAULT 0');
   }
+  // Non-destructive framing: keep the original upload plus the crop box
+  // (JSON {zoom,cx,cy}) alongside the displayed square, so an avatar or server
+  // icon can be re-framed later without re-uploading.
+  const addCol = (table, col, type) => {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+    }
+  };
+  addCol('users', 'avatar_original', 'TEXT');
+  addCol('users', 'avatar_crop', 'TEXT');
+  addCol('spaces', 'icon_original', 'TEXT');
+  addCol('spaces', 'icon_crop', 'TEXT');
   // Registration invite codes + instance settings (e.g. registration mode).
   db.exec(`CREATE TABLE IF NOT EXISTS reg_codes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -382,7 +394,7 @@ function isMember(spaceId, userId) {
 // Spaces the user belongs to, each with its channels and the user's role.
 function getUserSpaces(userId) {
   const spaces = db.prepare(`
-    SELECT s.id, s.name, s.icon_url AS icon, sm.role
+    SELECT s.id, s.name, s.icon_url AS icon, s.icon_original AS iconOriginal, s.icon_crop AS iconCrop, sm.role
     FROM space_members sm
     JOIN spaces s ON sm.space_id = s.id
     WHERE sm.user_id = ?
@@ -400,6 +412,8 @@ function getUserSpaces(userId) {
     return {
       name: s.name,
       icon: s.icon || null,
+      iconOriginal: s.iconOriginal || null,
+      iconCrop: s.iconCrop ? JSON.parse(s.iconCrop) : null,
       role: s.role,
       permissions: getSpacePermissions(s.id),
       channels: chans.filter((c) => c.type !== 'voice').map((c) => c.name),
@@ -409,9 +423,11 @@ function getUserSpaces(userId) {
   });
 }
 
-// Set (or clear, with null) a server's icon image.
-function setSpaceIcon(spaceId, url) {
-  db.prepare('UPDATE spaces SET icon_url = ? WHERE id = ?').run(url || null, spaceId);
+// Set (or clear, with null) a server's icon image, keeping the original upload
+// and crop box so it can be re-framed later without re-uploading.
+function setSpaceIcon(spaceId, url, originalUrl = null, crop = null) {
+  db.prepare('UPDATE spaces SET icon_url = ?, icon_original = ?, icon_crop = ? WHERE id = ?')
+    .run(url || null, originalUrl || null, crop ? JSON.stringify(crop) : null, spaceId);
 }
 
 function getSpaceMembers(spaceId) {
@@ -893,9 +909,9 @@ function setUserPassword(userId, passwordHash, salt) {
     .run(passwordHash, salt, userId).changes > 0;
 }
 
-function setUserAvatar(userId, avatarUrl) {
-  return db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?')
-    .run(avatarUrl || null, userId).changes > 0;
+function setUserAvatar(userId, avatarUrl, originalUrl = null, crop = null) {
+  return db.prepare('UPDATE users SET avatar_url = ?, avatar_original = ?, avatar_crop = ? WHERE id = ?')
+    .run(avatarUrl || null, originalUrl || null, crop ? JSON.stringify(crop) : null, userId).changes > 0;
 }
 
 function createFriendRequest(fromId, toId) {

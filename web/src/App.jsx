@@ -53,7 +53,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [serverIconFile, setServerIconFile] = useState(null);
+  const [iconCrop, setIconCrop] = useState(null); // { src: File|url, initialCrop } while framing a server icon
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
   const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, sharing: false, shareError: '', cameraOn: false, screenOn: false, videoError: '', videos: [], participants: [] });
   const myVoice = voiceCall.room;
@@ -649,15 +649,21 @@ export default function App() {
       setLoadError('Please choose an image file for the server icon');
       return;
     }
-    setServerIconFile(file); // frame it before uploading
+    setIconCrop({ src: file, initialCrop: null }); // frame it before uploading
   }
-  async function saveServerIcon(cropped) {
-    if (!currentSpace) return;
+  function reframeServerIcon() {
+    if (!activeSpace?.iconOriginal) return;
+    setIconCrop({ src: activeSpace.iconOriginal, initialCrop: activeSpace.iconCrop || null });
+  }
+  async function saveServerIcon({ blob, crop }) {
+    if (!currentSpace || !iconCrop) return;
     try {
-      const up = await api.uploadFile(cropped);
-      await api.setSpaceIcon(currentSpace, up.url);
+      // Keep the original so the icon can be re-framed later without re-uploading.
+      const original = typeof iconCrop.src === 'string' ? iconCrop.src : (await api.uploadFile(iconCrop.src)).url;
+      const up = await api.uploadFile(blob);
+      await api.setSpaceIcon(currentSpace, up.url, original, crop);
       await loadSpaces();
-      setServerIconFile(null);
+      setIconCrop(null);
     } catch (err) {
       setLoadError(err.message || 'Could not update the server icon');
     }
@@ -807,6 +813,8 @@ export default function App() {
             hasIcon={!!(activeSpace && activeSpace.icon)}
             onChangeServerIcon={changeServerIcon}
             onRemoveServerIcon={removeServerIcon}
+            onReframeServerIcon={reframeServerIcon}
+            canReframeIcon={!!(activeSpace && activeSpace.iconOriginal)}
             role={role}
             permissions={activeSpace ? activeSpace.permissions : null}
             channelMeta={channelMeta}
@@ -870,12 +878,13 @@ export default function App() {
           onOpenDm={openDmFromSearch}
         />
       )}
-      {serverIconFile && (
+      {iconCrop && (
         <ImageCropper
-          file={serverIconFile}
+          src={iconCrop.src}
+          initialCrop={iconCrop.initialCrop}
           shape="square"
           title="Position the server icon"
-          onCancel={() => setServerIconFile(null)}
+          onCancel={() => setIconCrop(null)}
           onSave={saveServerIcon}
         />
       )}

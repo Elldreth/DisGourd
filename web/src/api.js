@@ -107,8 +107,11 @@ export function createSpace(name) {
 export function deleteSpace(space) {
   return request(`/spaces/${encodeURIComponent(space)}`, { method: 'DELETE' });
 }
-export function setSpaceIcon(space, icon) {
-  return request(`/spaces/${encodeURIComponent(space)}`, { method: 'PATCH', body: { icon } });
+export function setSpaceIcon(space, icon, iconOriginal = null, iconCrop = null) {
+  return request(`/spaces/${encodeURIComponent(space)}`, {
+    method: 'PATCH',
+    body: { icon, iconOriginal, iconCrop },
+  });
 }
 export function setServerPermissions(space, permissions) {
   return request(`/spaces/${encodeURIComponent(space)}/permissions`, { method: 'PUT', body: { permissions } });

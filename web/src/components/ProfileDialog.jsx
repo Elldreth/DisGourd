@@ -10,7 +10,7 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
   const [avatar, setAvatar] = useState(profile?.avatar || null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [cropFile, setCropFile] = useState(null);
+  const [crop, setCrop] = useState(null); // { src: File|url, initialCrop } while framing
 
   function pickFile(e) {
     const file = e.target.files?.[0];
@@ -21,18 +21,28 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
       return;
     }
     setError('');
-    setCropFile(file); // frame it before uploading
+    setCrop({ src: file, initialCrop: null }); // frame it before uploading
   }
 
-  async function saveAvatar(cropped) {
+  // Re-open the framing dialog on the original upload, restoring the last crop.
+  function reframe() {
+    if (!profile?.avatarOriginal) return;
+    setError('');
+    setCrop({ src: profile.avatarOriginal, initialCrop: profile.avatarCrop || null });
+  }
+
+  async function saveAvatar({ blob, crop: box }) {
     setBusy(true);
     setError('');
     try {
-      const up = await api.uploadFile(cropped);
-      const updated = await api.updateMe({ avatar: up.url });
+      // Keep the original so it can be re-framed later; on a fresh pick that means
+      // uploading it too, on a re-frame it's already stored.
+      const original = typeof crop.src === 'string' ? crop.src : (await api.uploadFile(crop.src)).url;
+      const up = await api.uploadFile(blob);
+      const updated = await api.updateMe({ avatar: up.url, avatarOriginal: original, avatarCrop: box });
       setAvatar(updated.avatar);
       onUpdated(updated);
-      setCropFile(null);
+      setCrop(null);
     } catch (err) {
       setError(err.message || 'Upload failed');
     } finally {
@@ -90,6 +100,15 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
                 {busy ? 'Saving…' : avatar ? 'Change avatar' : 'Upload avatar'}
                 <input type="file" accept="image/*" hidden onChange={pickFile} disabled={busy} />
               </label>
+              {profile?.avatarOriginal && (
+                <button
+                  onClick={reframe}
+                  disabled={busy}
+                  className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-white"
+                >
+                  Reposition
+                </button>
+              )}
               {avatar && (
                 <button
                   onClick={removeAvatar}
@@ -125,12 +144,13 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
         </div>
       </div>
 
-      {cropFile && (
+      {crop && (
         <ImageCropper
-          file={cropFile}
+          src={crop.src}
+          initialCrop={crop.initialCrop}
           shape="circle"
           title="Position your avatar"
-          onCancel={() => setCropFile(null)}
+          onCancel={() => setCrop(null)}
           onSave={saveAvatar}
         />
       )}
