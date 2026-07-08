@@ -498,15 +498,24 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     const userId = authUserId(req, parsedUrl);
     if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
     if (req.method === 'PATCH') {
-      const { avatar } = await getJsonBody(req);
-      if (avatar != null && (typeof avatar !== 'string' || (avatar && !avatar.startsWith('/uploads/')))) {
+      const { avatar, avatarOriginal, avatarCrop } = await getJsonBody(req);
+      const okUrl = (v) => v == null || v === '' || (typeof v === 'string' && v.startsWith('/uploads/'));
+      if (!okUrl(avatar) || !okUrl(avatarOriginal)) {
         return sendJson(res, 400, { error: 'Avatar must be an uploaded image URL' });
       }
-      db.setUserAvatar(userId, avatar || null);
+      db.setUserAvatar(userId, avatar || null, avatarOriginal || null, avatarCrop || null);
     }
     const u = db.getUserById(userId);
     if (!u) return sendJson(res, 404, { error: 'User not found' });
-    return sendJson(res, 200, { id: u.id, username: u.username, email: u.email, avatar: u.avatar_url || null, siteAdmin: !!u.site_admin });
+    return sendJson(res, 200, {
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      avatar: u.avatar_url || null,
+      avatarOriginal: u.avatar_original || null,
+      avatarCrop: u.avatar_crop ? JSON.parse(u.avatar_crop) : null,
+      siteAdmin: !!u.site_admin,
+    });
   }
   // ---- Instance admin: registration management (site admins only) ----
   else if (pathSegments[0] === 'admin' && pathSegments[1] === 'registration') {
@@ -676,10 +685,11 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       const body = await getJsonBody(req);
       if ('icon' in body) {
         const icon = body.icon;
-        if (icon !== '' && (typeof icon !== 'string' || !icon.startsWith('/uploads/'))) {
+        const okUrl = (v) => v == null || v === '' || (typeof v === 'string' && v.startsWith('/uploads/'));
+        if (!okUrl(icon) || !okUrl(body.iconOriginal)) {
           return sendJson(res, 400, { error: 'Invalid icon' });
         }
-        db.setSpaceIcon(space.id, icon || null);
+        db.setSpaceIcon(space.id, icon || null, body.iconOriginal || null, body.iconCrop || null);
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
       }
       return sendJson(res, 200, { ok: true });

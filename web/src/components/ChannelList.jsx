@@ -48,6 +48,8 @@ export default function ChannelList({
   hasIcon,
   onChangeServerIcon,
   onRemoveServerIcon,
+  onReframeServerIcon,
+  canReframeIcon,
   role,
   permissions,
   channelMeta = {},
@@ -140,6 +142,16 @@ export default function ChannelList({
                   }}
                 >
                   <Icon name="image" size={16} /> {hasIcon ? 'Change icon' : 'Upload icon'}
+                </MenuItem>
+              )}
+              {canManage && canReframeIcon && (
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onReframeServerIcon();
+                  }}
+                >
+                  <Icon name="image" size={16} /> Reposition icon
                 </MenuItem>
               )}
               {canManage && hasIcon && (

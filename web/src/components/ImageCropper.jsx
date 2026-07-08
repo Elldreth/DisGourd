@@ -9,7 +9,9 @@ import Icon from './Icon.jsx';
 const V = 264; // on-screen preview size
 const OUT = 320; // exported image size (square)
 
-export default function ImageCropper({ file, shape = 'circle', title = 'Position your image', onCancel, onSave }) {
+// `src` is a freshly-picked File (new upload) or a URL string pointing at an
+// already-uploaded original (re-framing). `initialCrop` restores a saved framing.
+export default function ImageCropper({ src, shape = 'circle', title = 'Position your image', initialCrop = null, onCancel, onSave }) {
   const [url, setUrl] = useState('');
   const [nat, setNat] = useState(null); // natural { w, h }
   const [zoom, setZoom] = useState(1);
@@ -20,10 +22,14 @@ export default function ImageCropper({ file, shape = 'circle', title = 'Position
   const drag = useRef(null);
 
   useEffect(() => {
-    const u = URL.createObjectURL(file);
+    if (typeof src === 'string') {
+      setUrl(src);
+      return undefined;
+    }
+    const u = URL.createObjectURL(src);
     setUrl(u);
     return () => URL.revokeObjectURL(u);
-  }, [file]);
+  }, [src]);
 
   const baseScale = nat ? Math.max(V / nat.w, V / nat.h) : 1;
   const dispW = nat ? nat.w * baseScale * zoom : V;
@@ -42,8 +48,18 @@ export default function ImageCropper({ file, shape = 'circle', title = 'Position
     const h = e.target.naturalHeight;
     const bs = Math.max(V / w, V / h);
     setNat({ w, h });
-    setZoom(1);
-    setOffset({ x: (V - w * bs) / 2, y: (V - h * bs) / 2 });
+    if (initialCrop && initialCrop.zoom) {
+      // Restore a saved framing: place its center back under the window center.
+      const z = Math.min(3, Math.max(1, initialCrop.zoom));
+      const scale = bs * z;
+      setZoom(z);
+      setOffset(
+        clamp({ x: V / 2 - initialCrop.cx * w * scale, y: V / 2 - initialCrop.cy * h * scale }, w * scale, h * scale)
+      );
+    } else {
+      setZoom(1);
+      setOffset({ x: (V - w * bs) / 2, y: (V - h * bs) / 2 });
+    }
   }
 
   function onPointerDown(e) {
@@ -96,11 +112,16 @@ export default function ImageCropper({ file, shape = 'circle', title = 'Position
       canvas.height = OUT;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(imgRef.current, -offset.x / scale, -offset.y / scale, srcSize, srcSize, 0, 0, OUT, OUT);
-      const keepAlpha = /png|webp|gif|svg/.test(file.type);
+      const name = typeof src === 'string' ? src.split('/').pop() : src.name || 'image';
+      const keepAlpha = /\.(png|webp|gif|svg)/i.test(name) || (typeof src !== 'string' && /png|webp|gif|svg/.test(src.type));
       const type = keepAlpha ? 'image/png' : 'image/jpeg';
       const blob = await new Promise((res) => canvas.toBlob(res, type, 0.9));
-      const base = (file.name || 'image').replace(/\.[^.]+$/, '') || 'image';
-      await onSave(new File([blob], `${base}.${keepAlpha ? 'png' : 'jpg'}`, { type }));
+      const base = name.replace(/\.[^.]+$/, '') || 'image';
+      const out = new File([blob], `${base}.${keepAlpha ? 'png' : 'jpg'}`, { type });
+      // Normalized crop box — the window's center within the original + zoom —
+      // so this exact framing can be restored on a later re-frame.
+      const crop = { zoom, cx: (V / 2 - offset.x) / scale / nat.w, cy: (V / 2 - offset.y) / scale / nat.h };
+      await onSave({ blob: out, crop });
     } finally {
       setBusy(false);
     }
