@@ -43,6 +43,7 @@ export default function ChannelList({
   isOwner,
   onInvite,
   onDeleteServer,
+  onRenameServer,
   hasIcon,
   onChangeServerIcon,
   onRemoveServerIcon,
@@ -65,7 +66,21 @@ export default function ChannelList({
   const [menuOpen, setMenuOpen] = useState(false);
   const [permsOpen, setPermsOpen] = useState(false);
   const [channelSettings, setChannelSettings] = useState(null); // channel name or null
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
   const iconInputRef = useRef(null);
+
+  function startRename() {
+    setRenameValue(space);
+    setRenaming(true);
+    setMenuOpen(false);
+  }
+  function submitRename(e) {
+    e.preventDefault();
+    const next = renameValue.trim();
+    if (next && next !== space) onRenameServer(next);
+    setRenaming(false);
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -90,13 +105,27 @@ export default function ChannelList({
       <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-sm shadow-black/20">
         {/* Server identity + the active highlight live in the left rail; the header
             just needs the name and its menu (which holds change/reposition icon). */}
-        <button
-          onClick={() => space && setMenuOpen((v) => !v)}
-          className="flex h-full flex-1 items-center justify-between rounded px-2 hover:bg-ink-700/40"
-        >
-          <h2 className="truncate font-bold">{space || 'No server'}</h2>
-          {space && <Icon name={menuOpen ? 'x' : 'chevronDown'} size={16} className="text-gray-400" />}
-        </button>
+        {renaming ? (
+          <form onSubmit={submitRename} className="flex-1">
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={() => setRenaming(false)}
+              onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
+              maxLength={60}
+              className="w-full rounded bg-ink-900 px-2 py-1 text-sm font-bold outline-none ring-1 ring-brand"
+            />
+          </form>
+        ) : (
+          <button
+            onClick={() => space && setMenuOpen((v) => !v)}
+            className="flex h-full flex-1 items-center justify-between rounded px-2 hover:bg-ink-700/40"
+          >
+            <h2 className="truncate font-bold">{space || 'No server'}</h2>
+            {space && <Icon name={menuOpen ? 'x' : 'chevronDown'} size={16} className="text-gray-400" />}
+          </button>
+        )}
 
         {menuOpen && space && (
           <>
@@ -110,6 +139,11 @@ export default function ChannelList({
               >
                 <Icon name="plus" size={16} className="text-brand" /> Invite people
               </MenuItem>
+              {canManage && (
+                <MenuItem onClick={startRename}>
+                  <Icon name="edit" size={16} /> Rename server
+                </MenuItem>
+              )}
               {canManage && (
                 <MenuItem
                   onClick={() => {
