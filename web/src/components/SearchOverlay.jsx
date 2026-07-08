@@ -34,7 +34,7 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm }) {
 
   return (
     <div
-      className="anim-fade absolute inset-0 z-30 flex items-start justify-center bg-black/60 p-4 pt-20"
+      className="anim-fade absolute inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-20"
       onClick={onClose}
     >
       <div

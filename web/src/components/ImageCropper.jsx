@@ -131,7 +131,7 @@ export default function ImageCropper({ src, shape = 'circle', title = 'Position 
 
   return (
     <div
-      className="anim-fade absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
+      className="anim-fade absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={(e) => {
         e.stopPropagation();
         onCancel();

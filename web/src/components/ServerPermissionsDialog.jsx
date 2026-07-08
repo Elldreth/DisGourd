@@ -32,7 +32,7 @@ export default function ServerPermissionsDialog({ space, permissions, onClose, o
   }
 
   return (
-    <div className="anim-fade absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="anim-fade absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
         className="anim-scale-in flex max-h-[85vh] w-full max-w-md flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
         onClick={(e) => e.stopPropagation()}

@@ -934,7 +934,7 @@ export default function App() {
         />
       )}
       {loadError && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-danger px-4 py-2 text-sm text-white shadow-lg">
+        <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-danger px-4 py-2 text-sm text-white shadow-lg">
           {loadError}
         </div>
       )}
