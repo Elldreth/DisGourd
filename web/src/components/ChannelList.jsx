@@ -311,16 +311,29 @@ export default function ChannelList({
               const people = inThis ? activeVoiceParticipants : voiceParticipants[vc] || [];
               return (
                 <div key={vc} className="mb-0.5">
-                  <button
-                    onClick={() => onJoinVoice(space, vc)}
-                    className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
-                      inThis ? 'bg-ink-600 text-white' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
-                    }`}
-                  >
-                    <Icon name="volume" size={17} className="shrink-0 text-gray-500" />
-                    <span className="flex-1 truncate">{vc}</span>
-                    {people.length > 0 && <span className="text-xs text-gray-500">{people.length}</span>}
-                  </button>
+                  <div className="group relative">
+                    <button
+                      onClick={() => onJoinVoice(space, vc)}
+                      className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
+                        inThis ? 'bg-ink-600 text-white' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
+                      }`}
+                    >
+                      <Icon name="volume" size={17} className="shrink-0 text-gray-500" />
+                      <span className="flex-1 truncate">{vc}</span>
+                      {people.length > 0 && (
+                        <span className="text-xs text-gray-500 group-hover:hidden">{people.length}</span>
+                      )}
+                    </button>
+                    {canManage && (
+                      <button
+                        onClick={() => setChannelSettings(vc)}
+                        title="Channel settings"
+                        className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-white group-hover:flex"
+                      >
+                        <Icon name="settings" size={15} />
+                      </button>
+                    )}
+                  </div>
                   {people.map((p) => (
                     <div key={p.username}>
                       <div className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
