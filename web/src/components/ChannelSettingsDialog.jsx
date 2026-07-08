@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as api from '../api.js';
+import Icon from './Icon.jsx';
 
 const LEVELS = [
   { v: 1, label: 'Everyone' },
@@ -13,6 +14,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
   const [post, setPost] = useState(meta?.post ?? 1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // You can't post somewhere you can't see, so keep post >= view.
   function chooseView(v) {
@@ -29,6 +31,19 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
       onClose();
     } catch (err) {
       setError(err.message || 'Could not save channel settings');
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.deleteChannel(space, channel);
+      onSaved(); // refresh the sidebar now; the gateway also switches you off it
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Could not delete the channel');
       setBusy(false);
     }
   }
@@ -61,6 +76,40 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
             </span>
           </label>
           {error && <div className="text-sm text-danger">{error}</div>}
+        </div>
+
+        <div className="border-t border-ink-500/40 px-6 py-4">
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-2 text-sm font-medium text-danger transition hover:underline"
+            >
+              <Icon name="trash" size={15} /> Delete channel
+            </button>
+          ) : (
+            <div className="rounded-lg bg-danger/10 p-3 ring-1 ring-danger/30">
+              <p className="text-sm text-gray-200">
+                Delete <span className="font-semibold">#{channel}</span>? This permanently removes the
+                channel and every message in it. This can’t be undone.
+              </p>
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={busy}
+                  className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={remove}
+                  disabled={busy}
+                  className="rounded-lg bg-danger px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95 disabled:opacity-60 disabled:active:scale-100"
+                >
+                  {busy ? 'Deleting…' : 'Delete channel'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-ink-500/40 px-6 py-3">
