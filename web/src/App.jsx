@@ -53,6 +53,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false); // mobile nav drawer (rail + sidebar)
   const [iconCrop, setIconCrop] = useState(null); // { src: File|url, initialCrop } while framing a server icon
   const [voiceStates, setVoiceStates] = useState({}); // "space channel" -> participants[]
   const [voiceCall, setVoiceCall] = useState({ room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false, unstable: false, sharing: false, shareError: '', cameraOn: false, screenOn: false, videoError: '', videos: [], participants: [] });
@@ -754,48 +755,42 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
-      <ServerRail
-        spaces={orderedSpaces}
-        currentSpace={view === 'server' ? currentSpace : ''}
-        unread={spaceUnread}
-        mentions={spaceMentions}
-        dmActive={view === 'dm'}
-        dmUnread={totalDmUnread}
-        onSelectDms={openDms}
-        onSelect={selectSpace}
-        onCreate={createSpace}
-        onJoin={joinServer}
-        onReorder={reorderServers}
-      />
-
-      {view === 'dm' ? (
-        <>
+    <div className="relative flex h-full w-full overflow-hidden">
+      {/* Left navigation: static columns on desktop, a slide-in drawer on phones. */}
+      <div
+        className={`fixed inset-y-0 left-0 z-40 flex shadow-2xl transition-transform duration-200 md:static md:z-auto md:translate-x-0 md:shadow-none md:transition-none ${
+          navOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <ServerRail
+          spaces={orderedSpaces}
+          currentSpace={view === 'server' ? currentSpace : ''}
+          unread={spaceUnread}
+          mentions={spaceMentions}
+          dmActive={view === 'dm'}
+          dmUnread={totalDmUnread}
+          onSelectDms={openDms}
+          onSelect={selectSpace}
+          onCreate={createSpace}
+          onJoin={joinServer}
+          onReorder={reorderServers}
+        />
+        {view === 'dm' ? (
           <DmSidebar
             conversations={dms}
             currentDm={currentDm}
             unread={dmUnread}
-            onSelect={selectDm}
+            onSelect={(u) => {
+              selectDm(u);
+              setNavOpen(false);
+            }}
             user={user}
             avatar={profile?.avatar}
             status={status}
             onOpenProfile={() => setProfileOpen(true)}
             onLogout={logout}
           />
-          <DmPanel
-            username={currentDm}
-            messages={dmMessages}
-            currentUser={user}
-            typing={dmTypingNames}
-            onSend={sendDm}
-            onEdit={editDm}
-            onDelete={deleteDm}
-            onTyping={sendDmTyping}
-            onOpenSearch={() => setSearchOpen(true)}
-          />
-        </>
-      ) : (
-        <>
+        ) : (
           <ChannelList
             space={currentSpace}
             channels={channels}
@@ -827,7 +822,10 @@ export default function App() {
             onToggleCamera={toggleCamera}
             onToggleScreen={toggleScreenShare}
             selfId={myId}
-            onSelect={setCurrentChannel}
+            onSelect={(c) => {
+              setCurrentChannel(c);
+              setNavOpen(false);
+            }}
             onCreateChannel={createChannel}
             canManage={canManage}
             isOwner={role === 'owner'}
@@ -849,10 +847,32 @@ export default function App() {
             status={status}
             onLogout={logout}
           />
+        )}
+      </div>
+
+      {/* Tap-to-close backdrop behind the open drawer (phones only). */}
+      {navOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setNavOpen(false)} />
+      )}
+
+      {/* Main content — full width on phones, alongside the nav on desktop. */}
+      {view === 'dm' ? (
+        <DmPanel
+          username={currentDm}
+          messages={dmMessages}
+          currentUser={user}
+          typing={dmTypingNames}
+          onSend={sendDm}
+          onEdit={editDm}
+          onDelete={deleteDm}
+          onTyping={sendDmTyping}
+          onOpenSearch={() => setSearchOpen(true)}
+          onOpenNav={() => setNavOpen(true)}
+        />
+      ) : (
+        <>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {voiceCall.room && voiceCall.videos.length > 0 && (
-              <VideoStage videos={voiceCall.videos} />
-            )}
+            {voiceCall.room && voiceCall.videos.length > 0 && <VideoStage videos={voiceCall.videos} />}
             <ChatPanel
               space={currentSpace}
               channel={currentChannel}
@@ -868,6 +888,7 @@ export default function App() {
               onReact={reactToMessage}
               onTyping={sendTyping}
               onOpenSearch={() => setSearchOpen(true)}
+              onOpenNav={() => setNavOpen(true)}
             />
           </div>
           <MemberList

@@ -5,10 +5,19 @@ import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
 
 // The conversation view in Direct Messages mode.
-export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, onTyping, onOpenSearch }) {
+export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, onTyping, onOpenSearch, onOpenNav }) {
   if (!username) {
     return (
-      <main className="flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
+      <main className="relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
+        {onOpenNav && (
+          <button
+            onClick={onOpenNav}
+            title="Conversations"
+            className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-white md:hidden"
+          >
+            <Icon name="menu" size={22} />
+          </button>
+        )}
         <div className="mb-3 text-6xl">💬</div>
         <h2 className="text-xl font-bold">Your messages</h2>
         <p className="mt-1 max-w-sm text-gray-400">
@@ -20,7 +29,14 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700">
-      <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
+      <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-sm shadow-black/20 md:px-4">
+        <button
+          onClick={onOpenNav}
+          title="Conversations"
+          className="-ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-white md:hidden"
+        >
+          <Icon name="menu" size={20} />
+        </button>
         <Avatar name={username} size={24} />
         <h2 className="font-bold">{username}</h2>
         <div className="flex-1" />
