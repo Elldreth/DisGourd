@@ -1,0 +1,17 @@
+# Keep the build context small and never bake in host state or secrets.
+**/node_modules
+web/dist
+.git
+.github
+.claude
+data
+uploads
+*.log
+npm-debug.log*
+server/.jwt-secret
+server/config.json
+server/db/*.db
+server/db/*.db-*
+setup.bat
+run.bat
+update.bat

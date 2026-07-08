@@ -1,0 +1,38 @@
+# DisGourd reverse-proxy config for SWAG.
+#
+# Copy to your SWAG config as:
+#   <swag-appdata>/nginx/proxy-confs/disgourd.subdomain.conf
+# then restart SWAG. Serves https://chat.<yourdomain> -> the disgourd container.
+#
+# Requires:
+#   • "chat" covered by your SWAG certificate (SUBDOMAINS env, or a wildcard).
+#   • The disgourd container on the same Docker network as SWAG (so the name
+#     "disgourd" resolves). See docker-compose.yml.
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name chat.*;
+
+    include /config/nginx/ssl.conf;
+
+    # DisGourd streams file uploads (images/videos) — don't let nginx cap them.
+    client_max_body_size 0;
+
+    location / {
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+        set $upstream_app disgourd;
+        set $upstream_port 3000;
+        set $upstream_proto http;
+        proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+
+        # WebSocket upgrade for the realtime gateway (/gateway). Without this the
+        # app loads but never reaches "Connected". $connection_upgrade is defined
+        # in SWAG's nginx.conf.
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}

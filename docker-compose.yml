@@ -1,0 +1,42 @@
+# DisGourd on Unraid, proxied by SWAG. Clone this repo somewhere on the server
+# and run:  docker compose up -d --build
+#
+# Storage is split on purpose:
+#   • DB  -> the SSD/cache (small, and SQLite wants fast, non-FUSE storage)
+#   • uploads -> the array (that's where the images/videos pile up)
+
+services:
+  disgourd:
+    build: .
+    image: disgourd:latest
+    container_name: disgourd
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - DB_PATH=/config/disgourd.db
+      - UPLOADS_DIR=/uploads
+      # Set a long random value — otherwise everyone is logged out on each
+      # rebuild. Generate one with:  openssl rand -hex 48
+      - JWT_SECRET=CHANGE_ME_TO_A_LONG_RANDOM_STRING
+      # Your admin username(s), comma-separated (becomes a site admin).
+      - SITE_ADMINS=elldreth
+      # open | code | closed  (closed = no new signups; use the in-app invites)
+      - REGISTRATION_MODE=closed
+    volumes:
+      # DB on the SSD. If your appdata share isn't cache-only, use the direct
+      # cache path (e.g. /mnt/cache/appdata/disgourd) to keep SQLite off FUSE.
+      - /mnt/user/appdata/disgourd:/config
+      # Uploads on the big array.
+      - /mnt/user/bigboi/media/images:/uploads
+    # Optional: expose on the LAN for direct testing. SWAG reaches it over the
+    # shared Docker network below, so this isn't required for the proxy.
+    ports:
+      - "3000:3000"
+    networks:
+      - swag
+
+# Join the same Docker network SWAG is on so it can resolve "disgourd" by name.
+networks:
+  swag:
+    external: true
+    name: proxynet
