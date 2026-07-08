@@ -18,7 +18,7 @@ export default function InviteDialog({ space, code, onClose }) {
 
   return (
     <div
-      className="anim-fade absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-4"
+      className="anim-fade absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
