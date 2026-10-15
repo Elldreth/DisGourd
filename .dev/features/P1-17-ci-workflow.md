@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — Ops
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#48)
 - **Effort:** S
 - **Depends on:** none (P1-19 later adds `npm --prefix web test` as a step)
 - **Serialize with:** none (new file)
