@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (vertical slice 1 of rank 6; P2-10 is slice 2)
 - **Phase:** 2, rank 6
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#51)
 - **Effort:** M
 - **Depends on:** P1-01 (migrations), P1-05 (gateway/chat.js), P3-05 (Reply action in the MessageActions menu)
 - **Serialize with:** db/index.js, MessageList/MessageActions and Composer units
