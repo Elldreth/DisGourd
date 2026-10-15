@@ -615,13 +615,19 @@ function markRead(userId, space, channel, lastReadId) {
   `).run(userId, space, channel, lastReadId || 0);
 }
 
-// Unread message counts per channel across all of the user's servers.
+// SQL twin of roleRank() for a space_members alias, so queries can apply the
+// per-channel view threshold (channels.view_role) themselves.
+const memberRankSql = (alias) =>
+  `(CASE ${alias}.role WHEN 'owner' THEN 3 WHEN 'admin' THEN 2 WHEN 'member' THEN 1 ELSE 0 END)`;
+
+// Unread message counts per channel across all of the user's servers
+// (only channels the user is allowed to view).
 function getUnreadCounts(userId) {
   return db.prepare(`
     SELECT s.name AS space, c.name AS channel, COUNT(m.id) AS count
     FROM space_members sm
     JOIN spaces s ON sm.space_id = s.id
-    JOIN channels c ON c.space_id = s.id
+    JOIN channels c ON c.space_id = s.id AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN read_state rs ON rs.user_id = sm.user_id AND rs.space = s.name AND rs.channel = c.name
     LEFT JOIN messages m ON m.channel_id = c.id AND m.id > COALESCE(rs.last_read_id, 0)
     WHERE sm.user_id = ?
@@ -658,6 +664,8 @@ function getMentionCounts(userId) {
     JOIN messages m ON mn.message_id = m.id
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
+    JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = mn.user_id
+      AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN read_state rs ON rs.user_id = ? AND rs.space = s.name AND rs.channel = c.name
     WHERE mn.user_id = ? AND m.id > COALESCE(rs.last_read_id, 0)
     GROUP BY s.name, c.name
@@ -796,6 +804,7 @@ function searchMessages(userId, query, limit = 40) {
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
     JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = ?
+      AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN users u ON m.author_id = u.id
     WHERE m.content LIKE ? ESCAPE '\\'
     ORDER BY m.id DESC

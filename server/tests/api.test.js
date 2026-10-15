@@ -758,3 +758,64 @@ test('0.2 short or placeholder JWT secrets are refused', () => {
     fs.rmSync(file, { force: true });
   }
 });
+
+test('0.3 private channel events, unread, mentions and search never reach non-viewers', async () => {
+  const base = baseUrl();
+  const owner = (await register('priv-owner')).token;
+  const member = (await register('priv-member')).token;
+  await createServer(owner, 'priv');
+  const ownerHeaders = { ...JSON_HEADERS, ...auth(owner) };
+  await fetch(`${base}/spaces/priv/channels`, { method: 'POST', headers: ownerHeaders, body: JSON.stringify({ name: 'secret' }) });
+  await fetch(`${base}/spaces/priv/channels`, { method: 'POST', headers: ownerHeaders, body: JSON.stringify({ name: 'vault', type: 'voice' }) });
+  for (const ch of ['secret', 'vault']) {
+    await fetch(`${base}/spaces/priv/channels/${ch}/permissions`, { method: 'PATCH', headers: ownerHeaders, body: JSON.stringify({ view: 2, post: 2 }) });
+  }
+  const { code } = await (await fetch(`${base}/spaces/priv/invites`, { method: 'POST', headers: auth(owner) })).json();
+  await fetch(`${base}/invites/${code}`, { method: 'POST', headers: auth(member) });
+
+  const go = gateway(owner);
+  const gm = gateway(member);
+  await Promise.all([go.ready, gm.ready]);
+  gm.send({ op: 'focus', space: 'priv', channel: 'secret' }); // even if a client claims focus
+  go.send({ op: 'message', space: 'priv', channel: 'secret', content: 'classified plans @priv-member' });
+  await wait(100);
+  const secretMsg = go.frames.find((f) => f.type === 'message' && f.channel === 'secret');
+  expect(secretMsg).toBeTruthy();
+  go.send({ op: 'edit', id: secretMsg.id, content: 'classified plans v2 @priv-member' });
+  go.send({ op: 'react', id: secretMsg.id, emoji: '🔒' });
+  go.send({ op: 'focus', space: 'priv', channel: 'secret' });
+  go.send({ op: 'typing', space: 'priv', channel: 'secret' });
+  go.send({ op: 'voice_join', space: 'priv', channel: 'vault' });
+  await wait(100);
+  // The member may not react to (or type in) a channel they can't see either.
+  gm.send({ op: 'react', id: secretMsg.id, emoji: '👀' });
+  gm.send({ op: 'typing', space: 'priv', channel: 'secret' });
+  await wait(80);
+  go.send({ op: 'delete', id: secretMsg.id });
+  // A visible message is still delivered, as a positive control.
+  go.send({ op: 'message', space: 'priv', channel: 'general', content: 'hello all' });
+  await wait(100);
+
+  const leaked = gm.frames.filter((f) => f.channel === 'secret' || f.channel === 'vault');
+  expect(leaked).toEqual([]);
+  expect(gm.frames.some((f) => f.type === 'message' && f.content === 'hello all')).toBe(true);
+  expect(go.frames.some((f) => f.type === 'reaction' && f.emoji === '👀')).toBe(false);
+  expect(go.frames.some((f) => f.type === 'typing' && f.user === 'priv-member')).toBe(false);
+
+  // Unread + mention counts and search exclude the private channel.
+  go.send({ op: 'message', space: 'priv', channel: 'secret', content: 'more secrets @priv-member' });
+  await wait(80);
+  go.close();
+  gm.close();
+  const gm2 = gateway(member);
+  await gm2.ready;
+  await wait(100);
+  gm2.close();
+  const unread = gm2.frames.find((f) => f.type === 'unread');
+  expect(unread.counts.filter((c) => c.space === 'priv' && c.channel === 'secret')).toEqual([]);
+  expect(unread.mentions.filter((c) => c.space === 'priv' && c.channel === 'secret')).toEqual([]);
+  const found = await (await fetch(`${base}/search?q=secrets`, { headers: auth(member) })).json();
+  expect(found.channels).toEqual([]);
+  const ownerFound = await (await fetch(`${base}/search?q=secrets`, { headers: auth(owner) })).json();
+  expect(ownerFound.channels.length).toBe(1);
+});

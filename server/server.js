@@ -838,6 +838,7 @@ async function handleHttp(req, res) {
       // PATCH channel permissions — view/post minimum ranks (managers only)
       if (channelName && pathSegments[4] === 'permissions' && req.method === 'PATCH') {
         if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel access' });
+        if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
         const body = await getJsonBody(req);
         const ok = db.setChannelPerms(spaceName, channelName, body.view, body.post);
         if (!ok) return sendJson(res, 404, { error: 'Channel not found' });
@@ -859,7 +860,7 @@ async function handleHttp(req, res) {
       // DELETE channel — gated by the "delete_channel" threshold
       if (channelName && pathSegments.length === 4 && req.method === 'DELETE') {
         if (!db.canDo(space.id, role, 'delete_channel')) return sendJson(res, 403, { error: 'You are not allowed to delete channels here' });
-        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_deleted', space: spaceName, channel: channelName }));
+        deliverToChannelViewers(spaceName, channelName, JSON.stringify({ type: 'channel_deleted', space: spaceName, channel: channelName }));
         db.deleteChannel(spaceName, channelName);
         return sendJson(res, 200, { ok: true });
       }
@@ -1082,6 +1083,25 @@ function deliverToSpaceMembers(spaceName, frameStr) {
   for (const m of db.getSpaceMembers(space.id)) sendToUser(m.userId, frameStr);
 }
 
+// Whether a user may see a channel: a member of its server whose role meets the
+// channel's view threshold. Every channel-scoped event goes through this (or
+// deliverToChannelViewers) so private channels never leak.
+function canView(spaceName, channelName, userId) {
+  const space = db.getSpaceByName(spaceName);
+  if (!space) return false;
+  const role = db.getMemberRole(space.id, userId);
+  return !!role && canViewChannel(spaceName, channelName, role);
+}
+
+// Deliver a channel-scoped frame only to members allowed to view that channel.
+function deliverToChannelViewers(spaceName, channelName, frameStr) {
+  const space = db.getSpaceByName(spaceName);
+  if (!space) return;
+  for (const m of db.getSpaceMembers(space.id)) {
+    if (canViewChannel(spaceName, channelName, m.role)) sendToUser(m.userId, frameStr);
+  }
+}
+
 // Announce a user's online/offline transition to everyone who shares a server
 // (or friendship) with them, so member lists update live.
 function broadcastPresence(userId, status) {
@@ -1117,7 +1137,7 @@ function voiceParticipants(room) {
 
 // Tell every server member who is currently in this voice channel.
 function broadcastVoiceState(room) {
-  deliverToSpaceMembers(room.space, JSON.stringify({
+  deliverToChannelViewers(room.space, room.channel, JSON.stringify({
     type: 'voice_state', space: room.space, channel: room.channel, participants: voiceParticipants(room),
   }));
 }
@@ -1186,7 +1206,7 @@ function handleGatewayMessage(ws, raw) {
         const names = parseMentionUsernames(content);
         if (names.length) mentions = db.addMentions(stored.id, space.id, names);
       }
-      deliverToSpaceMembers(msg.space, JSON.stringify({
+      deliverToChannelViewers(msg.space, msg.channel, JSON.stringify({
         type: 'message',
         id: stored ? stored.id : undefined,
         space: msg.space,
@@ -1208,10 +1228,10 @@ function handleGatewayMessage(ws, raw) {
       const newContent = typeof msg.content === 'string' ? msg.content.trim() : '';
       if (!id || !newContent) return;
       const loc = db.getMessageLocation(id);
-      if (!loc) return;
+      if (!loc || !canView(loc.space, loc.channel, userId)) return;
       const editedAt = db.editMessage(id, userId, newContent); // author-only in DB
       if (editedAt) {
-        deliverToSpaceMembers(loc.space, JSON.stringify({
+        deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
           type: 'message_update', id, space: loc.space, channel: loc.channel, content: newContent, editedAt,
         }));
       }
@@ -1223,7 +1243,7 @@ function handleGatewayMessage(ws, raw) {
       const loc = db.getMessageLocation(id);
       if (!loc) return;
       if (db.deleteMessage(id, userId)) {
-        deliverToSpaceMembers(loc.space, JSON.stringify({
+        deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
           type: 'message_delete', id, space: loc.space, channel: loc.channel,
         }));
       }
@@ -1234,25 +1254,24 @@ function handleGatewayMessage(ws, raw) {
       const emoji = typeof msg.emoji === 'string' ? msg.emoji.trim().slice(0, 16) : '';
       if (!id || !emoji) return;
       const loc = db.getMessageLocation(id);
-      if (!loc) return;
-      const space = db.getSpaceByName(loc.space);
-      if (!space || !db.isMember(space.id, userId)) return;
+      if (!loc || !canView(loc.space, loc.channel, userId)) return;
       db.toggleReaction(id, userId, emoji);
       const agg = db.getReaction(id, emoji);
-      deliverToSpaceMembers(loc.space, JSON.stringify({
+      deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
         type: 'reaction', id, emoji, count: agg.count, users: agg.users, space: loc.space, channel: loc.channel,
       }));
       return;
     }
     case 'typing': {
       const space = db.getSpaceByName(msg.space);
-      if (!space || !db.isMember(space.id, userId)) return;
+      if (!space || !canView(msg.space, msg.channel, userId)) return;
       const user = db.getUserById(userId);
       const frame = JSON.stringify({
         type: 'typing', user: user ? user.username : String(userId), space: msg.space, channel: msg.channel,
       });
       // Relay only to members currently viewing this channel (excluding sender).
       for (const m of db.getSpaceMembers(space.id)) {
+        if (!canViewChannel(msg.space, msg.channel, m.role)) continue;
         const socks = userClients[m.userId];
         if (!socks) continue;
         socks.forEach((s) => {
