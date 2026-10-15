@@ -10,7 +10,7 @@ const testUploadsDir = path.join(os.tmpdir(), `disgourd-test-uploads-${process.p
 
 beforeAll(done => {
   process.env.PORT = 0;
-  process.env.JWT_SECRET = 'testsecret';
+  process.env.JWT_SECRET = 'disgourd-test-secret-0123456789abcdef';
   process.env.DB_PATH = ':memory:';
   process.env.UPLOADS_DIR = testUploadsDir;
   process.env.MAX_UPLOAD_BYTES = '256'; // small so the oversize path is testable
@@ -64,6 +64,7 @@ function gateway(token) {
     frames,
     ready,
     send: (obj) => ws.send(JSON.stringify(obj)),
+    raw: (str) => ws.send(str),
     close: () => ws.close(),
   };
 }
@@ -673,5 +674,308 @@ test('registration gating: code required, closed mode, and account cap', async (
     setMode(orig.mode || 'open');
     cfg.registrationCode = orig.code;
     cfg.maxAccounts = orig.max;
+  }
+});
+
+// ---- Phase 0 hardening regressions ----
+
+const alive = async () => (await fetch(`${baseUrl()}/auth-info`)).status === 200;
+
+test('0.1 malformed HTTP input returns 4xx instead of crashing the server', async () => {
+  const base = baseUrl();
+  const { token } = await register('crashy');
+  await createServer(token, 'crashy');
+  const post = (path, body) => fetch(`${base}${path}`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(token) }, body });
+
+  // Malformed / non-object JSON bodies on endpoints that previously had no try/catch.
+  expect((await fetch(`${base}/me`, { method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(token) }, body: '{not json' })).status).toBe(400);
+  expect((await post('/spaces', 'null')).status).toBe(400);
+  expect((await post('/friends/request', '[1,2]')).status).toBe(400);
+  expect((await post('/friends/request', '{"username": {"x": 1}}')).status).toBe(404);
+  expect(await alive()).toBe(true);
+
+  // Garbage numeric query params fall back to defaults.
+  let res = await fetch(`${base}/spaces/crashy/channels/general/messages?limit=abc&offset=xyz`, { headers: auth(token) });
+  expect(res.status).toBe(200);
+  expect(Array.isArray(await res.json())).toBe(true);
+  res = await fetch(`${base}/dms/crashy/messages?limit=abc`, { headers: auth(token) });
+  expect(res.status).toBe(200);
+  res = await fetch(`${base}/search?q=a&q=b`, { headers: auth(token) });
+  expect(res.status).toBe(200);
+  expect(await alive()).toBe(true);
+});
+
+test('0.1 malformed gateway frames are dropped instead of crashing the server', async () => {
+  const { token } = await register('crashws');
+  await createServer(token, 'crashws');
+  const gw = gateway(token);
+  await gw.ready;
+  for (const frame of [
+    'null', '5', '"str"', '[]', '{"op": {"x": 1}}',
+    JSON.stringify({ op: 'message', space: { a: 1 }, channel: 'general', content: 'x' }),
+    JSON.stringify({ op: 'message', space: 'crashws', channel: ['general'], content: 'x' }),
+    JSON.stringify({ op: 'typing', space: 'crashws', channel: { a: 1 } }),
+    JSON.stringify({ op: 'dm', to: { a: 1 }, content: 'x' }),
+    JSON.stringify({ op: 'dm_typing', with: 7 }),
+    JSON.stringify({ op: 'voice_join', space: 'crashws', channel: { a: 1 } }),
+    JSON.stringify({ op: 'react', id: 1, emoji: { a: 1 } }),
+  ]) {
+    gw.raw(frame);
+  }
+  await wait(100);
+  // The same socket still works afterwards, and so does HTTP.
+  gw.send({ op: 'message', space: 'crashws', channel: 'general', content: 'still alive' });
+  await wait(80);
+  gw.close();
+  expect(await alive()).toBe(true);
+  const msgs = await messages(token, 'crashws', 'general');
+  expect(msgs.map((m) => m.content)).toEqual(['still alive']);
+});
+
+test('0.2 short or placeholder JWT secrets are refused', () => {
+  const { isWeakSecret, resolveJwtSecret, config } = serverModule;
+  for (const weak of ['', 'changeme', 'testsecret', 'CHANGE_ME_TO_A_LONG_RANDOM_STRING',
+    'change-me-please-to-something-long-and-random', 'x'.repeat(31), null, undefined, 42]) {
+    expect(isWeakSecret(weak)).toBe(true);
+  }
+  expect(isWeakSecret('a'.repeat(32))).toBe(false);
+  expect(config.jwtSecret).toBe('disgourd-test-secret-0123456789abcdef');
+
+  // A placeholder falls back to a generated secret persisted to the secret file,
+  // and that same secret is reused on the next start.
+  const file = path.join(os.tmpdir(), `disgourd-test-secret-${process.pid}`);
+  try {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const first = resolveJwtSecret('CHANGE_ME_TO_A_LONG_RANDOM_STRING', file);
+    expect(first).not.toBe('CHANGE_ME_TO_A_LONG_RANDOM_STRING');
+    expect(isWeakSecret(first)).toBe(false);
+    expect(resolveJwtSecret('changeme', file)).toBe(first);
+    warn.mockRestore();
+    // A strong explicit secret wins.
+    const strong = 'f'.repeat(64);
+    expect(resolveJwtSecret(strong, file)).toBe(strong);
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+});
+
+test('0.3 private channel events, unread, mentions and search never reach non-viewers', async () => {
+  const base = baseUrl();
+  const owner = (await register('priv-owner')).token;
+  const member = (await register('priv-member')).token;
+  await createServer(owner, 'priv');
+  const ownerHeaders = { ...JSON_HEADERS, ...auth(owner) };
+  await fetch(`${base}/spaces/priv/channels`, { method: 'POST', headers: ownerHeaders, body: JSON.stringify({ name: 'secret' }) });
+  await fetch(`${base}/spaces/priv/channels`, { method: 'POST', headers: ownerHeaders, body: JSON.stringify({ name: 'vault', type: 'voice' }) });
+  for (const ch of ['secret', 'vault']) {
+    await fetch(`${base}/spaces/priv/channels/${ch}/permissions`, { method: 'PATCH', headers: ownerHeaders, body: JSON.stringify({ view: 2, post: 2 }) });
+  }
+  const { code } = await (await fetch(`${base}/spaces/priv/invites`, { method: 'POST', headers: auth(owner) })).json();
+  await fetch(`${base}/invites/${code}`, { method: 'POST', headers: auth(member) });
+
+  const go = gateway(owner);
+  const gm = gateway(member);
+  await Promise.all([go.ready, gm.ready]);
+  gm.send({ op: 'focus', space: 'priv', channel: 'secret' }); // even if a client claims focus
+  go.send({ op: 'message', space: 'priv', channel: 'secret', content: 'classified plans @priv-member' });
+  await wait(100);
+  const secretMsg = go.frames.find((f) => f.type === 'message' && f.channel === 'secret');
+  expect(secretMsg).toBeTruthy();
+  go.send({ op: 'edit', id: secretMsg.id, content: 'classified plans v2 @priv-member' });
+  go.send({ op: 'react', id: secretMsg.id, emoji: '🔒' });
+  go.send({ op: 'focus', space: 'priv', channel: 'secret' });
+  go.send({ op: 'typing', space: 'priv', channel: 'secret' });
+  go.send({ op: 'voice_join', space: 'priv', channel: 'vault' });
+  await wait(100);
+  // The member may not react to (or type in) a channel they can't see either.
+  gm.send({ op: 'react', id: secretMsg.id, emoji: '👀' });
+  gm.send({ op: 'typing', space: 'priv', channel: 'secret' });
+  await wait(80);
+  go.send({ op: 'delete', id: secretMsg.id });
+  // A visible message is still delivered, as a positive control.
+  go.send({ op: 'message', space: 'priv', channel: 'general', content: 'hello all' });
+  await wait(100);
+
+  const leaked = gm.frames.filter((f) => f.channel === 'secret' || f.channel === 'vault');
+  expect(leaked).toEqual([]);
+  expect(gm.frames.some((f) => f.type === 'message' && f.content === 'hello all')).toBe(true);
+  expect(go.frames.some((f) => f.type === 'reaction' && f.emoji === '👀')).toBe(false);
+  expect(go.frames.some((f) => f.type === 'typing' && f.user === 'priv-member')).toBe(false);
+
+  // Unread + mention counts and search exclude the private channel.
+  go.send({ op: 'message', space: 'priv', channel: 'secret', content: 'more secrets @priv-member' });
+  await wait(80);
+  go.close();
+  gm.close();
+  const gm2 = gateway(member);
+  await gm2.ready;
+  await wait(100);
+  gm2.close();
+  const unread = gm2.frames.find((f) => f.type === 'unread');
+  expect(unread.counts.filter((c) => c.space === 'priv' && c.channel === 'secret')).toEqual([]);
+  expect(unread.mentions.filter((c) => c.space === 'priv' && c.channel === 'secret')).toEqual([]);
+  const found = await (await fetch(`${base}/search?q=secrets`, { headers: auth(member) })).json();
+  expect(found.channels).toEqual([]);
+  const ownerFound = await (await fetch(`${base}/search?q=secrets`, { headers: auth(owner) })).json();
+  expect(ownerFound.channels.length).toBe(1);
+});
+
+test('0.4 X-Forwarded-For only counts behind a trusted proxy, and only its last hop', async () => {
+  const { clientIp, config } = serverModule;
+  const fakeReq = (xff) => ({ headers: xff ? { 'x-forwarded-for': xff } : {}, socket: { remoteAddress: '10.0.0.5' } });
+  const origTrust = config.trustProxy;
+  try {
+    config.trustProxy = false;
+    expect(clientIp(fakeReq('1.2.3.4'))).toBe('10.0.0.5');
+    config.trustProxy = true;
+    expect(clientIp(fakeReq('1.2.3.4, 203.0.113.9'))).toBe('203.0.113.9');
+    expect(clientIp(fakeReq())).toBe('10.0.0.5');
+  } finally {
+    config.trustProxy = origTrust;
+  }
+
+  // End to end: rotating a spoofed header no longer resets the login limit.
+  const origLimit = config.rateLimit;
+  config.rateLimit = true;
+  try {
+    const statuses = [];
+    for (let i = 0; i < 16; i++) {
+      const res = await fetch(`${baseUrl()}/login`, {
+        method: 'POST',
+        headers: { ...JSON_HEADERS, 'X-Forwarded-For': `198.51.100.${i}` },
+        body: JSON.stringify({ username: 'nobody-here', password: 'password123' }),
+      });
+      statuses.push(res.status);
+    }
+    expect(statuses.slice(0, 15).every((s) => s === 401)).toBe(true);
+    expect(statuses[15]).toBe(429);
+  } finally {
+    config.rateLimit = origLimit;
+  }
+});
+
+test('0.4 password hashing does not block the event loop', async () => {
+  // While a login's scrypt runs, a timer should still fire promptly.
+  const start = Date.now();
+  let timerDelay = null;
+  const timer = new Promise((r) => setTimeout(() => { timerDelay = Date.now() - start; r(); }, 1));
+  const login = fetch(`${baseUrl()}/login`, {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ username: 'carol', password: 'password123' }),
+  });
+  await Promise.all([timer, login]);
+  expect((await login).status).toBe(200);
+  expect(timerDelay).toBeLessThan(40);
+});
+
+test('0.5 oversized bodies, frames, messages and crop boxes are refused', async () => {
+  const base = baseUrl();
+  const { token } = await register('biggie');
+  await createServer(token, 'biggie');
+
+  // JSON bodies are capped.
+  const huge = JSON.stringify({ name: 'x'.repeat(200 * 1024) });
+  const res = await fetch(`${base}/spaces`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(token) }, body: huge });
+  expect(res.status).toBe(413);
+  expect(await alive()).toBe(true);
+
+  // avatarCrop is reduced to a sane { zoom, cx, cy } box (or dropped).
+  const patchMe = (body) => fetch(`${base}/me`, { method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(token) }, body: JSON.stringify(body) })
+    .then((r) => r.json());
+  let me = await patchMe({ avatar: '/uploads/a/b.png', avatarCrop: { zoom: 2, cx: 0.5, cy: 0.25, junk: 'y'.repeat(1000) } });
+  expect(me.avatarCrop).toEqual({ zoom: 2, cx: 0.5, cy: 0.25 });
+  me = await patchMe({ avatar: '/uploads/a/b.png', avatarCrop: 'z'.repeat(1000) });
+  expect(me.avatarCrop).toBeNull();
+
+  // Message length is capped; the sender is told why.
+  const gw = gateway(token);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'biggie', channel: 'general', content: 'a'.repeat(4001) });
+  gw.send({ op: 'message', space: 'biggie', channel: 'general', content: 'b'.repeat(4000) });
+  gw.send({ op: 'dm', to: 'carol', content: 'c'.repeat(4001) });
+  await wait(100);
+  expect(gw.frames.filter((f) => f.type === 'error').length).toBe(2);
+  const stored = await messages(token, 'biggie', 'general');
+  expect(stored.map((m) => m.content.length)).toEqual([4000]);
+  gw.close();
+
+  // Frames past the WS maxPayload close that socket, not the server.
+  const ws = new WebSocket(`ws://localhost:${port}/gateway?token=${token}`);
+  await new Promise((r) => ws.on('open', r));
+  const closed = new Promise((r) => ws.on('close', (code) => r(code)));
+  ws.send('x'.repeat(512 * 1024));
+  expect(await closed).toBe(1009);
+  expect(await alive()).toBe(true);
+});
+
+test('0.6 friends: accepting needs a pending request, and self-requests are refused', async () => {
+  const base = baseUrl();
+  const a = (await register('fr-a')).token;
+  const b = (await register('fr-b')).token;
+  const post = (token, action, username) => fetch(`${base}/friends/${action}`, {
+    method: 'POST', headers: { ...JSON_HEADERS, ...auth(token) }, body: JSON.stringify({ username }),
+  });
+  const friendsOf = async (token) => (await (await fetch(`${base}/friends`, { headers: auth(token) })).json()).friends;
+
+  // Accepting without a request from that user does nothing.
+  expect((await post(a, 'accept', 'fr-b')).status).toBe(404);
+  expect(await friendsOf(a)).toEqual([]);
+  expect(await friendsOf(b)).toEqual([]);
+
+  // Self-requests are rejected.
+  expect((await post(a, 'request', 'fr-a')).status).toBe(400);
+
+  // The real flow still works, once.
+  expect((await post(a, 'request', 'fr-b')).status).toBe(201);
+  expect((await post(a, 'accept', 'fr-b')).status).toBe(404); // the sender can't accept their own request
+  expect((await post(b, 'accept', 'fr-a')).status).toBe(200);
+  expect(await friendsOf(a)).toEqual([{ username: 'fr-b' }]);
+  expect((await post(b, 'accept', 'fr-a')).status).toBe(404); // consumed
+});
+
+test('0.7 foreign keys are enforced: deletes cascade and orphans are cleaned up', async () => {
+  const db = serverModule.db;
+  const raw = db.raw;
+  expect(raw.pragma('foreign_keys', { simple: true })).toBe(1);
+  const count = (sql, ...args) => raw.prepare(sql).get(...args).n;
+
+  // Deleting a server cascades to its channels, messages, reactions, members and invites.
+  const base = baseUrl();
+  const { token } = await register('fk-owner');
+  await createServer(token, 'doomed');
+  await fetch(`${base}/spaces/doomed/invites`, { method: 'POST', headers: auth(token) });
+  const gw = gateway(token);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'doomed', channel: 'general', content: 'soon gone' });
+  await wait(80);
+  const msgId = gw.frames.find((f) => f.type === 'message').id;
+  gw.send({ op: 'react', id: msgId, emoji: '💥' });
+  await wait(80);
+  gw.close();
+  const spaceId = db.getSpaceByName('doomed').id;
+  expect(count('SELECT COUNT(*) AS n FROM reactions WHERE message_id = ?', msgId)).toBe(1);
+  expect((await fetch(`${base}/spaces/doomed`, { method: 'DELETE', headers: auth(token) })).status).toBe(200);
+  expect(count('SELECT COUNT(*) AS n FROM channels WHERE space_id = ?', spaceId)).toBe(0);
+  expect(count('SELECT COUNT(*) AS n FROM messages WHERE id = ?', msgId)).toBe(0);
+  expect(count('SELECT COUNT(*) AS n FROM reactions WHERE message_id = ?', msgId)).toBe(0);
+  expect(count('SELECT COUNT(*) AS n FROM space_members WHERE space_id = ?', spaceId)).toBe(0);
+  expect(count('SELECT COUNT(*) AS n FROM invites WHERE space_id = ?', spaceId)).toBe(0);
+
+  // Inserting a row that points at nothing is now refused.
+  expect(() => raw.prepare('INSERT INTO friends(user_id, friend_id) VALUES (?, ?)').run(999991, 999992)).toThrow();
+
+  // Orphans left by older versions are removed by the one-time cleanup.
+  raw.pragma('foreign_keys = OFF');
+  try {
+    raw.prepare('INSERT INTO channels(space_id, name) VALUES (?, ?)').run(999990, 'ghost');
+    const ghostChannel = raw.prepare("SELECT id FROM channels WHERE name = 'ghost'").get().id;
+    raw.prepare('INSERT INTO messages(channel_id, content) VALUES (?, ?)').run(ghostChannel, 'ghost msg');
+    raw.prepare('INSERT INTO friends(user_id, friend_id) VALUES (?, ?)').run(999991, 999992);
+    raw.prepare('INSERT INTO reactions(message_id, user_id, emoji) VALUES (?, ?, ?)').run(999993, 1, 'x');
+    expect(raw.pragma('foreign_key_check').length).toBeGreaterThan(0);
+    expect(db.cleanupOrphans()).toBeGreaterThanOrEqual(4);
+    expect(raw.pragma('foreign_key_check')).toEqual([]);
+    expect(count("SELECT COUNT(*) AS n FROM messages WHERE content = 'ghost msg'")).toBe(0);
+  } finally {
+    raw.pragma('foreign_keys = ON');
   }
 });

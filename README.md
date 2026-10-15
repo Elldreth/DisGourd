@@ -108,8 +108,10 @@ volumes:
   - /path/on/big/storage:/uploads       # uploads (UPLOADS_DIR=/uploads)
 ```
 
-**Always set `JWT_SECRET`** — otherwise a new one is generated on every rebuild
-and everyone gets logged out. Raise `MAX_UPLOAD_BYTES` if you want to share
+**Always set `JWT_SECRET`** to 32+ random characters. Short or placeholder
+values are ignored; the server then generates one and keeps it in a
+`.jwt-secret` file next to the database (`/config` above), so mount that
+volume or everyone gets logged out on rebuild. Raise `MAX_UPLOAD_BYTES` if you want to share
 videos bigger than the 25 MB default.
 
 ### Behind a reverse proxy (HTTPS — required for voice)
@@ -135,7 +137,7 @@ All settings are optional and provided via environment variables (or
 | Variable           | Default                  | Description                                        |
 | ------------------ | ------------------------ | -------------------------------------------------- |
 | `PORT`             | `3000`                   | Port the server listens on                         |
-| `JWT_SECRET`       | auto-generated           | Secret used to sign login tokens                   |
+| `JWT_SECRET`       | auto-generated           | Secret used to sign login tokens (32+ characters; placeholders are rejected) |
 | `DB_PATH`          | `server/db/disgourd.db`  | SQLite database file location                      |
 | `UPLOADS_DIR`      | `uploads/`               | Where uploaded files are stored                    |
 | `MAX_UPLOAD_BYTES` | `26214400` (25 MB)       | Maximum upload size                                |
@@ -144,11 +146,12 @@ All settings are optional and provided via environment variables (or
 | `REGISTRATION_CODE`| _(none)_                 | An optional always-valid shared code (in addition to any codes minted in-app) |
 | `MAX_ACCOUNTS`     | `0` (unlimited)          | Cap on the total number of accounts                |
 | `SITE_ADMINS`      | _(none)_                 | Comma-separated usernames to make site admins (e.g. `alice,bob`)   |
+| `TRUST_PROXY`      | _(off)_                  | Set to `1` behind a reverse proxy so rate limits use the client IP from `X-Forwarded-For` (last hop). Leave off when clients connect directly |
 
 Example (Linux/macOS):
 
 ```bash
-PORT=8080 JWT_SECRET="a-long-random-string" npm start
+PORT=8080 JWT_SECRET="$(openssl rand -hex 48)" npm start
 ```
 
 ## Keeping randoms out

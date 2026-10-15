@@ -224,6 +224,44 @@ try {
   console.error('Error migrating messages table:', e);
 }
 
+// ---- Referential integrity ----
+// The schema declares foreign keys, but SQLite only enforces them when
+// `PRAGMA foreign_keys` is on for the connection, which it never was: the
+// ON DELETE cascades never ran, so deleting a server left its channels,
+// messages, members and invites behind. Remove any orphans that accumulated
+// (children before grandchildren), then turn enforcement on.
+const NOT_A_USER = (col) => `${col} NOT IN (SELECT id FROM users)`;
+const ORPHAN_CLEANUP = [
+  'DELETE FROM channels WHERE space_id NOT IN (SELECT id FROM spaces)',
+  'DELETE FROM messages WHERE channel_id NOT IN (SELECT id FROM channels)',
+  `UPDATE messages SET author_id = NULL WHERE author_id IS NOT NULL AND ${NOT_A_USER('author_id')}`,
+  `DELETE FROM reactions WHERE message_id NOT IN (SELECT id FROM messages) OR ${NOT_A_USER('user_id')}`,
+  `DELETE FROM mentions WHERE message_id NOT IN (SELECT id FROM messages) OR ${NOT_A_USER('user_id')}`,
+  `DELETE FROM space_members WHERE space_id NOT IN (SELECT id FROM spaces) OR ${NOT_A_USER('user_id')}`,
+  'DELETE FROM invites WHERE space_id NOT IN (SELECT id FROM spaces)',
+  `UPDATE invites SET created_by = NULL WHERE created_by IS NOT NULL AND ${NOT_A_USER('created_by')}`,
+  `DELETE FROM friend_requests WHERE ${NOT_A_USER('from_user')} OR ${NOT_A_USER('to_user')}`,
+  `DELETE FROM friends WHERE ${NOT_A_USER('user_id')} OR ${NOT_A_USER('friend_id')}`,
+  `DELETE FROM dm_messages WHERE ${NOT_A_USER('user_a')} OR ${NOT_A_USER('user_b')}`,
+];
+
+// Returns the number of rows removed or detached.
+function cleanupOrphans() {
+  let changed = 0;
+  db.transaction(() => {
+    for (const sql of ORPHAN_CLEANUP) changed += db.prepare(sql).run().changes;
+  })();
+  return changed;
+}
+
+// foreign_key_check is empty on a healthy database, so the cleanup effectively
+// runs once (on the first start after upgrading) and is a no-op afterwards.
+if (db.pragma('foreign_key_check').length > 0) {
+  const changed = cleanupOrphans();
+  console.warn(`[db] Cleaned up ${changed} orphaned row(s) before enabling foreign keys`);
+}
+db.pragma('foreign_keys = ON');
+
 // ---- Role-based permissions ----
 const ROLE_RANK = { member: 1, admin: 2, owner: 3 };
 function roleRank(role) {
@@ -366,6 +404,7 @@ function renameSpace(spaceId, newName) {
 }
 
 function getSpaceByName(name) {
+  if (typeof name !== 'string') return undefined;
   return db.prepare('SELECT id, name, owner_id FROM spaces WHERE name = ?').get(name);
 }
 
@@ -614,13 +653,19 @@ function markRead(userId, space, channel, lastReadId) {
   `).run(userId, space, channel, lastReadId || 0);
 }
 
-// Unread message counts per channel across all of the user's servers.
+// SQL twin of roleRank() for a space_members alias, so queries can apply the
+// per-channel view threshold (channels.view_role) themselves.
+const memberRankSql = (alias) =>
+  `(CASE ${alias}.role WHEN 'owner' THEN 3 WHEN 'admin' THEN 2 WHEN 'member' THEN 1 ELSE 0 END)`;
+
+// Unread message counts per channel across all of the user's servers
+// (only channels the user is allowed to view).
 function getUnreadCounts(userId) {
   return db.prepare(`
     SELECT s.name AS space, c.name AS channel, COUNT(m.id) AS count
     FROM space_members sm
     JOIN spaces s ON sm.space_id = s.id
-    JOIN channels c ON c.space_id = s.id
+    JOIN channels c ON c.space_id = s.id AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN read_state rs ON rs.user_id = sm.user_id AND rs.space = s.name AND rs.channel = c.name
     LEFT JOIN messages m ON m.channel_id = c.id AND m.id > COALESCE(rs.last_read_id, 0)
     WHERE sm.user_id = ?
@@ -657,6 +702,8 @@ function getMentionCounts(userId) {
     JOIN messages m ON mn.message_id = m.id
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
+    JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = mn.user_id
+      AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN read_state rs ON rs.user_id = ? AND rs.space = s.name AND rs.channel = c.name
     WHERE mn.user_id = ? AND m.id > COALESCE(rs.last_read_id, 0)
     GROUP BY s.name, c.name
@@ -795,6 +842,7 @@ function searchMessages(userId, query, limit = 40) {
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
     JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = ?
+      AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN users u ON m.author_id = u.id
     WHERE m.content LIKE ? ESCAPE '\\'
     ORDER BY m.id DESC
@@ -908,11 +956,16 @@ function revokeRegCode(id) {
     .run(Date.now(), id).changes > 0;
 }
 
+// Lookups by name take untrusted input straight from request bodies and
+// gateway frames; anything that isn't a string simply matches nothing (rather
+// than making SQLite throw on an unbindable value).
 function getUserByUsername(username) {
+  if (typeof username !== 'string') return undefined;
   return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 }
 
 function getUserByEmail(email) {
+  if (typeof email !== 'string') return undefined;
   return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 }
 
@@ -937,6 +990,10 @@ function createFriendRequest(fromId, toId) {
 
 function getIncomingFriendRequests(userId) {
   return db.prepare('SELECT from_user FROM friend_requests WHERE to_user = ?').all(userId);
+}
+
+function hasFriendRequest(fromId, toId) {
+  return !!db.prepare('SELECT 1 FROM friend_requests WHERE from_user = ? AND to_user = ?').get(fromId, toId);
 }
 
 function removeFriendRequest(fromId, toId) {
@@ -1031,8 +1088,11 @@ module.exports = {
   setUserAvatar,
   createFriendRequest,
   getIncomingFriendRequests,
+  hasFriendRequest,
   removeFriendRequest,
   addFriends,
   removeFriend,
   getFriends,
+  cleanupOrphans,
+  raw: db, // the underlying connection, for tests and maintenance scripts
 };

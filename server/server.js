@@ -7,7 +7,13 @@ const crypto = require('crypto');
 require('dotenv').config({ quiet: true });
 const db = require('./db');
 
-const SECRET_FILE = path.join(__dirname, '.jwt-secret');
+// Where a generated JWT secret is persisted. With an explicit DB_PATH (e.g. the
+// Docker /config volume) it lives next to the database so it survives image
+// rebuilds; otherwise it sits in the (gitignored) server directory.
+const SECRET_FILE = process.env.JWT_SECRET_FILE
+  || (process.env.DB_PATH && process.env.DB_PATH !== ':memory:'
+    ? path.join(path.dirname(path.resolve(process.env.DB_PATH)), '.jwt-secret')
+    : path.join(__dirname, '.jwt-secret'));
 
 let config = { port: 3000, jwtSecret: 'changeme' };
 try {
@@ -30,6 +36,11 @@ config.registrationMode = regMode;
 config.maxAccounts = parseInt(process.env.MAX_ACCOUNTS, 10) || parseInt(config.maxAccounts, 10) || 0;
 config.siteAdmins = String(process.env.SITE_ADMINS || config.siteAdmins || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
+// Only trust X-Forwarded-For when a reverse proxy (e.g. SWAG/nginx) sits in
+// front; otherwise any client could spoof it to dodge the auth rate limits.
+config.trustProxy = /^(1|true|yes|on)$/i.test(String(process.env.TRUST_PROXY || config.trustProxy || ''));
+// Tests share one IP and register many users, so they run unthrottled.
+config.rateLimit = process.env.NODE_ENV !== 'test';
 
 // Seed the registration mode from env/config on first run; the DB is
 // authoritative afterwards so the in-app admin panel can change it. Also apply
@@ -40,28 +51,42 @@ function registrationMode() {
   return db.getSetting('registration_mode') || config.registrationMode || 'open';
 }
 
-// Security: never run with the well-known default secret. Resolve one, in
-// order of preference: an explicit JWT_SECRET / config.json value, a secret
-// generated on a previous run, or a fresh one. The generated secret is written
-// to a gitignored file so tokens survive restarts without ever committing a
-// secret into a tracked file.
-if (!config.jwtSecret || config.jwtSecret === 'changeme') {
+// Security: never sign tokens with a guessable secret. Anything shorter than
+// 32 characters, or a known placeholder (the docker-compose sample value,
+// "changeme", "secret", ...), is refused.
+const MIN_JWT_SECRET_LENGTH = 32;
+const PLACEHOLDER_SECRET = /change[\s_-]*me|placeholder|your[\s_-]*secret|^(secret|password|jwt[\s_-]*secret|test(secret)?)$/i;
+function isWeakSecret(secret) {
+  if (typeof secret !== 'string') return true;
+  const s = secret.trim();
+  return s.length < MIN_JWT_SECRET_LENGTH || PLACEHOLDER_SECRET.test(s);
+}
+
+// Resolve the secret, in order of preference: an explicit JWT_SECRET /
+// config.json value (if strong), a secret generated on a previous run, or a
+// fresh one. The generated secret is written to a gitignored file so tokens
+// survive restarts without ever committing a secret into a tracked file.
+function resolveJwtSecret(candidate, secretFile) {
+  if (!isWeakSecret(candidate)) return candidate.trim();
+  if (candidate && candidate !== 'changeme') {
+    console.warn(`[security] Ignoring JWT_SECRET: it must be at least ${MIN_JWT_SECRET_LENGTH} characters and not a placeholder. Generate one with: openssl rand -hex 48`);
+  }
   try {
-    const saved = fs.readFileSync(SECRET_FILE, 'utf8').trim();
-    if (saved) config.jwtSecret = saved;
+    const saved = fs.readFileSync(secretFile, 'utf8').trim();
+    if (!isWeakSecret(saved)) return saved;
   } catch (e) {
     /* no previously generated secret; fall through to create one */
   }
-}
-if (!config.jwtSecret || config.jwtSecret === 'changeme') {
-  config.jwtSecret = crypto.randomBytes(48).toString('hex');
+  const generated = crypto.randomBytes(48).toString('hex');
   try {
-    fs.writeFileSync(SECRET_FILE, config.jwtSecret, { mode: 0o600 });
-    console.warn('[security] Generated a new JWT secret and saved it to server/.jwt-secret');
+    fs.writeFileSync(secretFile, generated, { mode: 0o600 });
+    console.warn(`[security] Generated a new JWT secret and saved it to ${secretFile}`);
   } catch (e) {
     console.warn('[security] Generated an ephemeral JWT secret (could not persist):', e.message);
   }
+  return generated;
 }
+config.jwtSecret = resolveJwtSecret(config.jwtSecret, SECRET_FILE);
 
 // ---- Password hashing (scrypt) ----
 // scrypt ships with Node's crypto module, so there is no native dependency to
@@ -75,9 +100,19 @@ function generateSalt() {
   return crypto.randomBytes(16).toString('hex');
 }
 
-function hashPassword(password, salt) {
-  const derived = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, SCRYPT_OPTS).toString('hex');
-  return SCRYPT_PREFIX + derived;
+// Async scrypt: the synchronous variant blocked the event loop (and with it
+// every chat socket) for each login attempt.
+function scryptHex(password, salt) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(String(password), salt, SCRYPT_KEYLEN, SCRYPT_OPTS, (err, key) => {
+      if (err) reject(err);
+      else resolve(key.toString('hex'));
+    });
+  });
+}
+
+async function hashPassword(password, salt) {
+  return SCRYPT_PREFIX + (await scryptHex(password, salt));
 }
 
 function hashPasswordLegacy(password, salt) {
@@ -92,13 +127,19 @@ function timingSafeEqualHex(a, b) {
 }
 
 // Verify a password against a stored user record.
-// Returns { ok, needsUpgrade } — needsUpgrade is true for legacy HMAC accounts
+// Resolves { ok, needsUpgrade } — needsUpgrade is true for legacy HMAC accounts
 // that should be re-hashed with scrypt after a successful login.
-function verifyPassword(password, user) {
-  if (!user || !user.password_hash) return { ok: false, needsUpgrade: false };
+const DUMMY_SALT = generateSalt();
+async function verifyPassword(password, user) {
+  if (!user || !user.password_hash) {
+    // Spend the same time as a real check so response timing doesn't reveal
+    // which usernames exist.
+    await scryptHex(password, DUMMY_SALT);
+    return { ok: false, needsUpgrade: false };
+  }
   if (user.password_hash.startsWith(SCRYPT_PREFIX)) {
     const stored = user.password_hash.slice(SCRYPT_PREFIX.length);
-    const computed = crypto.scryptSync(password, user.salt, SCRYPT_KEYLEN, SCRYPT_OPTS).toString('hex');
+    const computed = await scryptHex(password, user.salt);
     return { ok: timingSafeEqualHex(computed, stored), needsUpgrade: false };
   }
   const computed = hashPasswordLegacy(password, user.salt);
@@ -141,8 +182,7 @@ function verifyToken(token) {
 // ---- Rate limiting & validation for auth endpoints ----
 const rateBuckets = new Map();
 function rateLimitOk(key, max, windowMs) {
-  // Tests share one IP and register many users; don't throttle them.
-  if (process.env.NODE_ENV === 'test') return true;
+  if (!config.rateLimit) return true;
   const now = Date.now();
   let bucket = rateBuckets.get(key);
   if (!bucket || now > bucket.reset) {
@@ -164,10 +204,15 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
+// The address used for rate limiting. Behind a trusted proxy we take the LAST
+// X-Forwarded-For hop: that's the one the proxy itself appended, while
+// everything to its left is whatever the client chose to send.
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (fwd) return String(fwd).split(',')[0].trim();
-  return (req.socket && req.socket.remoteAddress) || 'unknown';
+  const direct = (req.socket && req.socket.remoteAddress) || 'unknown';
+  if (!config.trustProxy) return direct;
+  const hops = String(req.headers['x-forwarded-for'] || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  return hops.length ? hops[hops.length - 1] : direct;
 }
 
 // URL path segments arrive percent-encoded; names in the database are stored
@@ -184,6 +229,77 @@ function safeDecode(segment) {
 function sendJson(res, code, obj) {
   res.writeHead(code);
   res.end(JSON.stringify(obj));
+}
+
+// An Error carrying the HTTP status the top-level handler should answer with.
+function httpError(status, message) {
+  const e = new Error(message);
+  e.status = status;
+  return e;
+}
+
+// Parse an integer query parameter, falling back to `def` on garbage
+// (?limit=abc) and clamping into [min, max] so SQLite never sees NaN.
+function intParam(value, def, min, max) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
+function isPlainObject(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+// Avatar / server-icon framing box: { zoom, cx, cy }. Anything else (huge
+// blobs, strings, nested objects) is dropped rather than stored verbatim.
+function sanitizeCrop(crop) {
+  if (!isPlainObject(crop)) return null;
+  const num = (v, min, max) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null);
+  const zoom = num(crop.zoom, 1, 10);
+  const cx = num(crop.cx, 0, 1);
+  const cy = num(crop.cy, 0, 1);
+  if (zoom === null || cx === null || cy === null) return null;
+  return { zoom, cx, cy };
+}
+
+// Size limits. JSON bodies only ever carry small settings objects; uploads use
+// their own streaming path and MAX_UPLOAD_BYTES.
+const MAX_JSON_BYTES = 64 * 1024;
+const MAX_WS_PAYLOAD_BYTES = 256 * 1024; // generous for WebRTC SDP offers
+const MAX_MESSAGE_LENGTH = 4000;
+
+// Read and parse a JSON request body. Rejects with a 400 for malformed JSON or
+// a non-object payload (`null`, `5`, `[]`) so handlers can destructure safely,
+// and with a 413 once the body passes MAX_JSON_BYTES.
+function readJsonBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    let size = 0;
+    let tooLarge = false;
+    request.on('data', (chunk) => {
+      if (tooLarge) return; // keep draining, but stop buffering
+      size += chunk.length;
+      if (size > MAX_JSON_BYTES) {
+        tooLarge = true;
+        body = '';
+        reject(httpError(413, 'Request body is too large'));
+        return;
+      }
+      body += chunk;
+    });
+    request.on('end', () => {
+      if (tooLarge) return;
+      let parsed;
+      try {
+        parsed = JSON.parse(body || '{}');
+      } catch {
+        return reject(httpError(400, 'Invalid JSON'));
+      }
+      if (!isPlainObject(parsed)) return reject(httpError(400, 'JSON body must be an object'));
+      resolve(parsed);
+    });
+    request.on('error', (err) => reject(httpError(400, err.message)));
+  });
 }
 
 function validateSpaceName(name) {
@@ -378,27 +494,12 @@ const userClients = {};
 const isTest = process.env.NODE_ENV === 'test';
 function logInfo(...args) { if (!isTest) console.log(...args); }
 
-// Create HTTP server
-const httpServer = http.createServer(async (req, res) => { // Made async for potential await with body parsing
+// HTTP request handler. Any throw or rejection inside is caught by the wrapper
+// below and turned into an error response instead of crashing the process.
+async function handleHttp(req, res) {
   const parsedUrl = url.parse(req.url, true);
   const pathSegments = parsedUrl.pathname.split('/').filter(Boolean).map(safeDecode); // decoded, e.g. ['spaces', 'My Server', 'channels']
-
-  // Helper to parse JSON body
-  const getJsonBody = (request) => {
-    return new Promise((resolve, reject) => {
-      let body = '';
-      request.on('data', chunk => (body += chunk));
-      request.on('end', () => {
-        try {
-          resolve(JSON.parse(body || '{}'));
-        }
-        catch (e) {
-          reject(new Error('Invalid JSON'));
-        }
-      });
-      request.on('error', (err) => reject(err));
-    });
-  };
+  const getJsonBody = readJsonBody;
 
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -458,7 +559,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         return res.end(JSON.stringify({ error: 'User already exists' }));
       }
       const salt = generateSalt();
-      const hash = hashPassword(password, salt);
+      const hash = await hashPassword(password, salt);
       const userId = db.createUser(username, email, hash, salt);
       if (usedCode) db.incrementRegCodeUses(usedCode.id);
       const token = createToken(userId, username);
@@ -476,15 +577,18 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
       }
       const { username, password } = await getJsonBody(req);
+      if (typeof username !== 'string' || typeof password !== 'string' || password.length > 200) {
+        return sendJson(res, 401, { error: 'Invalid credentials' });
+      }
       const user = db.getUserByUsername(username);
-      const check = verifyPassword(password, user);
+      const check = await verifyPassword(password, user);
       if (!user || !check.ok) {
         res.writeHead(401);
         return res.end(JSON.stringify({ error: 'Invalid credentials' }));
       }
       if (check.needsUpgrade) {
         const newSalt = generateSalt();
-        db.setUserPassword(user.id, hashPassword(password, newSalt), newSalt);
+        db.setUserPassword(user.id, await hashPassword(password, newSalt), newSalt);
       }
       const token = createToken(user.id, user.username);
       res.writeHead(200);
@@ -503,7 +607,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       if (!okUrl(avatar) || !okUrl(avatarOriginal)) {
         return sendJson(res, 400, { error: 'Avatar must be an uploaded image URL' });
       }
-      db.setUserAvatar(userId, avatar || null, avatarOriginal || null, avatarCrop || null);
+      db.setUserAvatar(userId, avatar || null, avatarOriginal || null, sanitizeCrop(avatarCrop));
     }
     const u = db.getUserById(userId);
     if (!u) return sendJson(res, 404, { error: 'User not found' });
@@ -584,9 +688,9 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     if (pathSegments[2] === 'messages' && req.method === 'GET') {
       const other = db.getUserByUsername(pathSegments[1]);
       if (!other) return sendJson(res, 404, { error: 'User not found' });
-      const after = parseInt(parsedUrl.query.after || '0', 10);
+      const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
       if (after > 0) return sendJson(res, 200, db.getDmMessagesAfter(userId, other.id, after));
-      const limit = parseInt(parsedUrl.query.limit || '50', 10);
+      const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
       return sendJson(res, 200, db.getDmMessages(userId, other.id, limit, 0));
     }
     return sendJson(res, 404, { error: 'Not found' });
@@ -595,7 +699,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
   else if (pathSegments[0] === 'search' && req.method === 'GET') {
     const userId = authUserId(req, parsedUrl);
     if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
-    const q = String(parsedUrl.query.q || '').trim();
+    const q = typeof parsedUrl.query.q === 'string' ? parsedUrl.query.q.trim().slice(0, 200) : '';
     if (q.length < 2) return sendJson(res, 200, { channels: [], dms: [] });
     return sendJson(res, 200, db.searchMessages(userId, q, 40));
   }
@@ -619,6 +723,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     const { username } = await getJsonBody(req);
     const to = db.getUserByUsername(username);
     if (!to) { res.writeHead(404); return res.end(JSON.stringify({ error: 'User not found' })); }
+    if (to.id === fromId) return sendJson(res, 400, { error: "You can't send a friend request to yourself" });
     db.createFriendRequest(fromId, to.id);
     res.writeHead(201);
     return res.end(JSON.stringify({ message: 'Request sent' }));
@@ -629,6 +734,10 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     const { username } = await getJsonBody(req);
     const fromUser = db.getUserByUsername(username);
     if (!fromUser) { res.writeHead(404); return res.end(JSON.stringify({ error: 'User not found' })); }
+    // Only an actual pending request from that user can be accepted.
+    if (!db.hasFriendRequest(fromUser.id, userId)) {
+      return sendJson(res, 404, { error: 'No pending friend request from that user' });
+    }
     db.removeFriendRequest(fromUser.id, userId);
     db.addFriends(userId, fromUser.id);
     res.writeHead(200);
@@ -689,7 +798,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
         if (!okUrl(icon) || !okUrl(body.iconOriginal)) {
           return sendJson(res, 400, { error: 'Invalid icon' });
         }
-        db.setSpaceIcon(space.id, icon || null, body.iconOriginal || null, body.iconCrop || null);
+        db.setSpaceIcon(space.id, icon || null, body.iconOriginal || null, sanitizeCrop(body.iconCrop));
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
       }
       if ('name' in body) {
@@ -785,15 +894,16 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       // GET messages — must be a member AND allowed to view this channel.
       if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
         if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
-        const after = parseInt(parsedUrl.query.after || '0', 10);
+        const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
         if (after > 0) return sendJson(res, 200, db.getMessagesAfter(spaceName, channelName, after));
-        const limit = parseInt(parsedUrl.query.limit || '50', 10);
-        const offset = parseInt(parsedUrl.query.offset || '0', 10);
+        const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
+        const offset = intParam(parsedUrl.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
         return sendJson(res, 200, db.getMessages(spaceName, channelName, limit, offset));
       }
       // PATCH channel permissions — view/post minimum ranks (managers only)
       if (channelName && pathSegments[4] === 'permissions' && req.method === 'PATCH') {
         if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel access' });
+        if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
         const body = await getJsonBody(req);
         const ok = db.setChannelPerms(spaceName, channelName, body.view, body.post);
         if (!ok) return sendJson(res, 404, { error: 'Channel not found' });
@@ -815,7 +925,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       // DELETE channel — gated by the "delete_channel" threshold
       if (channelName && pathSegments.length === 4 && req.method === 'DELETE') {
         if (!db.canDo(space.id, role, 'delete_channel')) return sendJson(res, 403, { error: 'You are not allowed to delete channels here' });
-        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_deleted', space: spaceName, channel: channelName }));
+        deliverToChannelViewers(spaceName, channelName, JSON.stringify({ type: 'channel_deleted', space: spaceName, channel: channelName }));
         db.deleteChannel(spaceName, channelName);
         return sendJson(res, 200, { ok: true });
       }
@@ -865,7 +975,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       res.writeHead(401);
       return res.end(JSON.stringify({ error: 'Unauthorized' }));
     }
-    if (!parsedUrl.query.name) {
+    if (!parsedUrl.query.name || typeof parsedUrl.query.name !== 'string') {
       res.writeHead(400);
       return res.end(JSON.stringify({ error: 'Missing filename' }));
     }
@@ -876,7 +986,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       return res.end(JSON.stringify({ error: 'That file type is not allowed' }));
     }
     // Reject early if the client already tells us it is too big.
-    const declared = parseInt(req.headers['content-length'] || '0', 10);
+    const declared = intParam(req.headers['content-length'], 0, 0, Number.MAX_SAFE_INTEGER);
     if (declared && declared > MAX_UPLOAD_BYTES) {
       res.writeHead(413);
       return res.end(JSON.stringify({ error: uploadTooLargeError() }));
@@ -981,10 +1091,30 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not Found' }));
   }
+}
+
+function handleHttpError(res, err) {
+  const status = err && Number.isInteger(err.status) ? err.status : 500;
+  if (status >= 500) console.error('[http] Unhandled error:', err);
+  if (res.headersSent) {
+    res.destroy();
+    return;
+  }
+  const headers = { 'Content-Type': 'application/json' };
+  if (status === 413) headers.Connection = 'close'; // don't keep reading an oversized body
+  res.writeHead(status, headers);
+  res.end(JSON.stringify({ error: status >= 500 ? 'Internal server error' : err.message }));
+}
+
+// Create HTTP server
+const httpServer = http.createServer((req, res) => {
+  handleHttp(req, res).catch((err) => handleHttpError(res, err));
 });
 
 // Create WebSocket server and attach it to the HTTP server
-const wss = new WebSocket.Server({ noServer: true }); // noServer: true allows us to use existing HTTP server for handshake
+// noServer: the HTTP server above performs the handshake. maxPayload replaces
+// ws's 100 MiB default; oversized frames close the socket (code 1009).
+const wss = new WebSocket.Server({ noServer: true, maxPayload: MAX_WS_PAYLOAD_BYTES });
 
 // ---- Heartbeat ----
 // Ping every client periodically; any socket that fails to answer with a pong
@@ -1022,6 +1152,25 @@ function deliverToSpaceMembers(spaceName, frameStr) {
   for (const m of db.getSpaceMembers(space.id)) sendToUser(m.userId, frameStr);
 }
 
+// Whether a user may see a channel: a member of its server whose role meets the
+// channel's view threshold. Every channel-scoped event goes through this (or
+// deliverToChannelViewers) so private channels never leak.
+function canView(spaceName, channelName, userId) {
+  const space = db.getSpaceByName(spaceName);
+  if (!space) return false;
+  const role = db.getMemberRole(space.id, userId);
+  return !!role && canViewChannel(spaceName, channelName, role);
+}
+
+// Deliver a channel-scoped frame only to members allowed to view that channel.
+function deliverToChannelViewers(spaceName, channelName, frameStr) {
+  const space = db.getSpaceByName(spaceName);
+  if (!space) return;
+  for (const m of db.getSpaceMembers(space.id)) {
+    if (canViewChannel(spaceName, channelName, m.role)) sendToUser(m.userId, frameStr);
+  }
+}
+
 // Announce a user's online/offline transition to everyone who shares a server
 // (or friendship) with them, so member lists update live.
 function broadcastPresence(userId, status) {
@@ -1057,7 +1206,7 @@ function voiceParticipants(room) {
 
 // Tell every server member who is currently in this voice channel.
 function broadcastVoiceState(room) {
-  deliverToSpaceMembers(room.space, JSON.stringify({
+  deliverToChannelViewers(room.space, room.channel, JSON.stringify({
     type: 'voice_state', space: room.space, channel: room.channel, participants: voiceParticipants(room),
   }));
 }
@@ -1080,9 +1229,23 @@ function voiceLeave(ws) {
   broadcastVoiceState(room);
 }
 
+// Fields that are always strings when present; a frame carrying an object or
+// number in one of them is malformed and dropped whole.
+const GATEWAY_STRING_FIELDS = ['op', 'space', 'channel', 'with', 'content', 'emoji'];
+
+// Tell the sender why a frame was refused (clients may ignore this).
+function rejectFrame(ws, op, error) {
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'error', op, error }));
+}
+const TOO_LONG = `Messages can be at most ${MAX_MESSAGE_LENGTH} characters`;
+
 function handleGatewayMessage(ws, raw) {
   let msg;
   try { msg = JSON.parse(raw.toString()); } catch { return; }
+  if (!isPlainObject(msg)) return;
+  for (const key of GATEWAY_STRING_FIELDS) {
+    if (msg[key] !== undefined && typeof msg[key] !== 'string') return;
+  }
   const userId = ws.userId;
 
   switch (msg.op) {
@@ -1107,6 +1270,7 @@ function handleGatewayMessage(ws, raw) {
       const mrole = db.getMemberRole(space.id, userId);
       if (!canViewChannel(msg.space, msg.channel, mrole) || !canPostChannel(msg.space, msg.channel, mrole)) return;
       const content = typeof msg.content === 'string' ? msg.content : '';
+      if (content.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
       const attachments = normalizeAttachments(msg);
       if (!content && attachments.length === 0) return;
       const spoiler = !!msg.spoiler && attachments.length > 0;
@@ -1118,7 +1282,7 @@ function handleGatewayMessage(ws, raw) {
         const names = parseMentionUsernames(content);
         if (names.length) mentions = db.addMentions(stored.id, space.id, names);
       }
-      deliverToSpaceMembers(msg.space, JSON.stringify({
+      deliverToChannelViewers(msg.space, msg.channel, JSON.stringify({
         type: 'message',
         id: stored ? stored.id : undefined,
         space: msg.space,
@@ -1139,11 +1303,12 @@ function handleGatewayMessage(ws, raw) {
       const id = parseInt(msg.id, 10);
       const newContent = typeof msg.content === 'string' ? msg.content.trim() : '';
       if (!id || !newContent) return;
+      if (newContent.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
       const loc = db.getMessageLocation(id);
-      if (!loc) return;
+      if (!loc || !canView(loc.space, loc.channel, userId)) return;
       const editedAt = db.editMessage(id, userId, newContent); // author-only in DB
       if (editedAt) {
-        deliverToSpaceMembers(loc.space, JSON.stringify({
+        deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
           type: 'message_update', id, space: loc.space, channel: loc.channel, content: newContent, editedAt,
         }));
       }
@@ -1155,7 +1320,7 @@ function handleGatewayMessage(ws, raw) {
       const loc = db.getMessageLocation(id);
       if (!loc) return;
       if (db.deleteMessage(id, userId)) {
-        deliverToSpaceMembers(loc.space, JSON.stringify({
+        deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
           type: 'message_delete', id, space: loc.space, channel: loc.channel,
         }));
       }
@@ -1166,25 +1331,24 @@ function handleGatewayMessage(ws, raw) {
       const emoji = typeof msg.emoji === 'string' ? msg.emoji.trim().slice(0, 16) : '';
       if (!id || !emoji) return;
       const loc = db.getMessageLocation(id);
-      if (!loc) return;
-      const space = db.getSpaceByName(loc.space);
-      if (!space || !db.isMember(space.id, userId)) return;
+      if (!loc || !canView(loc.space, loc.channel, userId)) return;
       db.toggleReaction(id, userId, emoji);
       const agg = db.getReaction(id, emoji);
-      deliverToSpaceMembers(loc.space, JSON.stringify({
+      deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
         type: 'reaction', id, emoji, count: agg.count, users: agg.users, space: loc.space, channel: loc.channel,
       }));
       return;
     }
     case 'typing': {
       const space = db.getSpaceByName(msg.space);
-      if (!space || !db.isMember(space.id, userId)) return;
+      if (!space || !canView(msg.space, msg.channel, userId)) return;
       const user = db.getUserById(userId);
       const frame = JSON.stringify({
         type: 'typing', user: user ? user.username : String(userId), space: msg.space, channel: msg.channel,
       });
       // Relay only to members currently viewing this channel (excluding sender).
       for (const m of db.getSpaceMembers(space.id)) {
+        if (!canViewChannel(msg.space, msg.channel, m.role)) continue;
         const socks = userClients[m.userId];
         if (!socks) continue;
         socks.forEach((s) => {
@@ -1199,13 +1363,16 @@ function handleGatewayMessage(ws, raw) {
 
     // ---- Direct messages ----
     case 'dm': {
+      if (typeof msg.to !== 'string') return;
       const to = db.getUserByUsername(msg.to);
       if (!to || to.id === userId) return;
       const content = typeof msg.content === 'string' ? msg.content : '';
+      if (content.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
       const attachments = normalizeAttachments(msg);
       if (!content && attachments.length === 0) return;
       const spoiler = !!msg.spoiler && attachments.length > 0;
       const from = db.getUserById(userId);
+      if (!from) return;
       const stored = db.storeDm(userId, to.id, content, attachments, spoiler);
       db.markDmRead(userId, to.id, stored.id); // sender has read their own message
       const frame = JSON.stringify({
@@ -1230,6 +1397,7 @@ function handleGatewayMessage(ws, raw) {
       const id = parseInt(msg.id, 10);
       const newContent = typeof msg.content === 'string' ? msg.content.trim() : '';
       if (!id || !newContent) return;
+      if (newContent.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
       const dm = db.getDmById(id);
       if (!dm) return;
       const editedAt = db.editDm(id, userId, newContent); // author-only in DB
@@ -1265,6 +1433,7 @@ function handleGatewayMessage(ws, raw) {
       const to = db.getUserByUsername(msg.with);
       if (!to) return;
       const from = db.getUserById(userId);
+      if (!from) return;
       const frame = JSON.stringify({ type: 'dm_typing', from: from.username });
       const socks = userClients[to.id];
       if (socks) {
@@ -1288,6 +1457,7 @@ function handleGatewayMessage(ws, raw) {
         voiceRooms.set(key, room);
       }
       const user = db.getUserById(userId);
+      if (!user) return;
       const existing = [...room.members.values()].map((p) => ({
         userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
       }));
@@ -1373,7 +1543,14 @@ httpServer.on('upgrade', (request, socket, head) => {
     ws.send(JSON.stringify({ type: 'unread', counts: db.getUnreadCounts(ws.userId), mentions: db.getMentionCounts(ws.userId) }));
     ws.send(JSON.stringify({ type: 'dm_unread', counts: db.getDmUnreadCounts(ws.userId) }));
 
-    ws.on('message', (raw) => handleGatewayMessage(ws, raw));
+    ws.on('message', (raw) => {
+      // A bad frame must never take the whole server down.
+      try {
+        handleGatewayMessage(ws, raw);
+      } catch (err) {
+        console.error('[gateway] Error handling frame:', err);
+      }
+    });
     ws.on('close', () => detachGateway(ws));
     ws.on('error', () => detachGateway(ws));
   });
@@ -1394,4 +1571,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { httpServer, wss, config, db };
+module.exports = { httpServer, wss, config, db, isWeakSecret, resolveJwtSecret, clientIp };
