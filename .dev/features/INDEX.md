@@ -27,7 +27,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-07 | Cursor pagination API (`before`) | 1 | COMPLETE | S | none (soft P1-01) | db/index.js, server.js (2 handlers) |
 | P1-08 | Load older messages UI | 1 | PLANNED | M | P1-07, P1-12 | MessageList.jsx, api.js, state hooks |
 | P1-09 | Reconnect resync | 1 | PLANNED | S–M | P1-05, P1-08, P1-14 | gateway/index.js, state hooks, useSocket.js |
-| P1-10 | Moderation: delete_others_messages | 1 | REVIEW | S | P3-05 (soft P1-05) | permissions.js, db/index.js, gateway/chat.js, MessageActions.jsx |
+| P1-10 | Moderation: delete_others_messages | 1 | COMPLETE | S | P3-05 (soft P1-05) | permissions.js, db/index.js, gateway/chat.js, MessageActions.jsx |
 | P1-11 | Fix dm_unread key mismatch | 1 | COMPLETE | S | none | server.js (1 line) |
 | P1-12 | App split 1/3: channel-message hook | 1 | READY | M | none (after P1-11) | App.jsx, state/useChannelMessages.js |
 | P1-13 | App split 2/3: DM hook | 1 | PLANNED | S–M | P1-12 | App.jsx, state/useDms.js |
@@ -45,7 +45,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-06 | Emoji picker in composer | 2 | READY | S–M | none | EmojiPicker.jsx (new), emoji.js (new), Composer.jsx, web/package.json |
 | P2-07 | Any emoji as reaction | 2 | PLANNED | S | P2-06, P3-05 | MessageActions.jsx |
 | P2-08 | Drag-drop + paste upload | 2 | READY | S | none | Composer.jsx, ChatPanel.jsx, DmPanel.jsx |
-| P2-09 | Replies in channels | 2 | PLANNED | M | P1-01, P1-05, P3-05 | migrations.js, db/index.js, gateway/chat.js, Composer/MessageList |
+| P2-09 | Replies in channels | 2 | REVIEW | M | P1-01, P1-05, P3-05 | migrations.js, db/index.js, gateway/chat.js, Composer/MessageList |
 | P2-10 | Replies in DMs + jump (`around`) | 2 | PLANNED | S–M | P2-09, P1-08, P1-13 | db/index.js, gateway/dm.js, routes, MessageList |
 | P2-11 | SSRF-safe fetcher + OG parser | 2 | READY | M | none | net/safeFetch.js (new), integrations/unfurl.js (new) |
 | P2-12 | Link previews end-to-end | 2 | PLANNED | M | P2-11, P1-01, P1-05 (soft P2-01) | linkPreviews.js (new), migrations.js, gateway, Embed.jsx (new) |

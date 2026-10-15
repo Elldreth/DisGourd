@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Moderation"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#50)
 - **Effort:** S
 - **Depends on:** P3-05 (the message action menu, so "Delete" for moderators lands in the new accessible menu instead of the hover-only toolbar)
 - **Soft-depends on:** P1-05 (`gateway/chat.js`); otherwise edit the `case 'delete'` branch in `server.js`
