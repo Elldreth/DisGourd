@@ -25,17 +25,13 @@ const routes = [
         });
       }
       if (req.method === 'POST') {
-        if (invite.expires_at && Date.now() > invite.expires_at) {
-          return sendJson(res, 410, { error: 'This invite has expired' });
-        }
-        if (invite.max_uses && invite.uses >= invite.max_uses) {
-          return sendJson(res, 410, { error: 'This invite has been fully used' });
-        }
-        const wasMember = db.isMember(space.id, userId);
-        db.addMember(space.id, userId, 'member');
-        if (!wasMember) {
-          db.markSpaceRead(userId, space.name); // start with a clean slate, not a wall of unread
-          db.incrementInviteUses(pathSegments[1]);
+        // Expiry, remaining uses and membership are re-checked inside one
+        // transaction, so concurrent joiners can't overrun max_uses.
+        const result = db.redeemInvite(pathSegments[1], userId);
+        if (result === 'invalid') return sendJson(res, 404, { error: 'This invite is invalid or has expired' });
+        if (result === 'expired') return sendJson(res, 410, { error: 'This invite has expired' });
+        if (result === 'exhausted') return sendJson(res, 410, { error: 'This invite has been fully used' });
+        if (result === 'joined') {
           deliverToSpaceMembers(space.name, JSON.stringify({ type: 'members_changed', space: space.name }));
         }
         return sendJson(res, 200, { name: space.name });

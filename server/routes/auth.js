@@ -66,8 +66,18 @@ const routes = [
         }
         const salt = generateSalt();
         const hash = await hashPassword(password, salt);
-        const userId = db.createUser(username, email, hash, salt);
-        if (usedCode) db.incrementRegCodeUses(usedCode.id);
+        // The checks above ran before the (slow, async) hash. Re-check the account
+        // cap, claim the code and insert the user atomically so concurrent
+        // sign-ups can't overrun a limit or trip the UNIQUE constraint.
+        const created = db.createUserRedeemingCode({
+          username, email, passwordHash: hash, salt,
+          regCodeId: usedCode ? usedCode.id : null,
+          maxAccounts: config.maxAccounts,
+        });
+        if (created.error === 'limit') return sendJson(res, 403, { error: 'This server has reached its account limit.' });
+        if (created.error === 'code') return sendJson(res, 403, { error: 'A valid registration code is required to create an account.' });
+        if (created.error === 'exists') return sendJson(res, 409, { error: 'User already exists' });
+        const userId = created.userId;
         const token = createToken(userId, username);
         res.writeHead(201);
         return res.end(JSON.stringify({ token }));

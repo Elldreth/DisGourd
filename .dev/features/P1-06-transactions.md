@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Wrap multi-step writes in transactions"
-- **State:** PLANNED (needs the split to finish first)
+- **State:** REVIEW (PR open)
 - **Effort:** S–M
 - **Depends on:** P1-03 (register), P1-04 (spaces, invites), P1-05 (gateway message)
 - **Serialize with:** db/index.js units (P1-07, P1-10, P2-05)
@@ -24,12 +24,12 @@ New db functions, each wrapped in `db.transaction`:
 Swap the call sites in `routes/auth.js`, `routes/spaces.js`, `routes/invites.js` and `gateway/chat.js`.
 
 ## Acceptance criteria
-- [ ] New `server/tests/transactions.test.js` passes:
-  - [ ] If `createChannel` is forced to throw (via jest spy), no space row is left behind.
-  - [ ] An invite with `max_uses = 1` and 2 joiners gives exactly one success and one 410.
-  - [ ] A reg code with `max_uses = 1` and 2 *concurrent* `/register` calls (`Promise.all`) gives exactly one 201.
-  - [ ] Two concurrent registrations with the same username give one 201 and one 409, with no SQLite text in the body.
-- [ ] `api.test.js` still passes.
+- [x] New `server/tests/transactions.test.js` passes:
+  - [x] If `createChannel` is forced to throw (via jest spy), no space row is left behind.
+  - [x] An invite with `max_uses = 1` and 2 joiners gives exactly one success and one 410.
+  - [x] A reg code with `max_uses = 1` and 2 *concurrent* `/register` calls (`Promise.all`) gives exactly one 201.
+  - [x] Two concurrent registrations with the same username give one 201 and one 409, with no SQLite text in the body.
+- [x] `api.test.js` still passes.
 
 ## Expected Areas of Change
 - `server/db/index.js` (+4 functions; the old ones stay exported for compatibility)
@@ -38,3 +38,23 @@ Swap the call sites in `routes/auth.js`, `routes/spaces.js`, `routes/invites.js`
 
 ## Working Set / Blast Radius
 The 4 handlers plus `db/index.js` lines 353-530. Blast radius is limited to the four write paths.
+
+## Activation
+- Activated 2026-10-15 on branch `claude/p1-06-transactions`, cut from main @ 89ccd4c (split + P1-07 merged).
+- Baseline: 39/39 server tests passing (3 suites).
+
+## Implementation notes
+- `storeMessageWithMentions(space, channel, content, authorId, attachments, spoiler, spaceId, mentionNames)` takes the already-parsed mention names, so `db/` doesn't depend on `validate.js`.
+- Registration still does its fast pre-checks before hashing (so bad requests stay cheap). After the hash, `createUserRedeemingCode` re-checks the cap, **conditionally** claims the code (`UPDATE … WHERE uses < max_uses AND not revoked AND not expired`) and inserts the user, all in one transaction. A UNIQUE violation maps to `{ error: 'exists' }` and then a 409.
+- `redeemInvite` keeps the old check order (expired, then exhausted, then already-member) so existing responses are unchanged. It adds a conditional `uses + 1`.
+- **AC wording deviation:** the "space create is atomic" test forces a failure with a duplicate default channel name (a UNIQUE violation part-way through the transaction), not a jest spy. A spy on the exported `createChannel` can't intercept the call inside the db module. The property checked is the same: no space row is left behind.
+
+## Verification (AC → evidence)
+| AC | Evidence |
+|---|---|
+| Atomic space create | `createSpaceWithDefaults('Boom', …, [general, general])` throws, and `getSpaceByName('Boom')` is undefined. The normal path makes the owner and `#general`. A taken name gives `null`. |
+| Invite max_uses=1, 2 joiners | Concurrent `Promise.all` → statuses `[200, 410]`, `uses = 1`. |
+| Reg code max_uses=1, concurrent sign-ups | 3 concurrent `/register` → `[201, 403, 403]`. **This failed on the old route code** (checked by restoring the old `routes/auth.js`). |
+| Same username, concurrent | `[201, 409]`. The body is `{"error":"User already exists"}` with no SQLite text. **This also failed on the old code.** |
+| `api.test.js` passes | Full run: 4 suites, 44/44. ESLint: clean. |
+| (extra) sandbox | `POST /spaces` → 201 with `["general"]`, a duplicate name → 409, invite join → 200 (and 200 again for an existing member), duplicate sign-up → 409. |

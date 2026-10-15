@@ -1034,6 +1034,85 @@ function getFriends(userId) {
   return rows.map(r => getUserById(r.friend_id)).filter(Boolean);
 }
 
+// ---- Multi-step writes (each runs in one transaction) ----
+
+// Create a server, make its creator the owner, and add its starting channels.
+// Any failure part-way (e.g. a duplicate channel name) rolls the whole thing
+// back. Returns the new space id, or null if the name is already taken.
+const createSpaceWithDefaults = db.transaction((name, ownerId, channels = [{ name: 'general', type: 'text' }]) => {
+  const spaceId = createSpaceOwned(name, ownerId);
+  if (!spaceId) return null;
+  const insert = db.prepare('INSERT INTO channels(space_id, name, type) VALUES (?, ?, ?)');
+  for (const ch of channels) insert.run(spaceId, ch.name, ch.type === 'voice' ? 'voice' : 'text');
+  return spaceId;
+});
+
+// Store a channel message, mark it read for its author, and record which of
+// the @mentioned usernames are members. Returns { id, timestamp, mentions }, or
+// null if the channel doesn't exist.
+const storeMessageWithMentions = db.transaction(
+  (spaceName, channelName, content, authorId, attachments, spoiler, spaceId, mentionNames = []) => {
+    const stored = storeMessage(spaceName, channelName, content, authorId, attachments, spoiler);
+    if (!stored) return null;
+    markRead(authorId, spaceName, channelName, stored.id);
+    const mentions = content && mentionNames.length ? addMentions(stored.id, spaceId, mentionNames) : [];
+    return { ...stored, mentions };
+  }
+);
+
+// Join a server through an invite. The use count only goes up if the invite
+// still has room, so concurrent joiners can't overrun max_uses.
+// Returns 'joined' | 'already' | 'expired' | 'exhausted' | 'invalid'.
+const redeemInvite = db.transaction((code, userId) => {
+  const invite = getInvite(code);
+  if (!invite) return 'invalid';
+  if (invite.expires_at && Date.now() > invite.expires_at) return 'expired';
+  if (invite.max_uses && invite.uses >= invite.max_uses) return 'exhausted';
+  if (isMember(invite.space_id, userId)) return 'already';
+  const claimed = db.prepare(
+    'UPDATE invites SET uses = uses + 1 WHERE code = ? AND (max_uses IS NULL OR uses < max_uses)'
+  ).run(code).changes;
+  if (!claimed) return 'exhausted';
+  addMember(invite.space_id, userId, 'member');
+  const space = getSpaceById(invite.space_id);
+  if (space) markSpaceRead(userId, space.name); // start with a clean slate, not a wall of unread
+  return 'joined';
+});
+
+class RegistrationRefused extends Error {
+  constructor(reason) {
+    super(reason);
+    this.reason = reason;
+  }
+}
+
+// Create an account, re-checking the account cap and claiming one use of the
+// registration code (if any) in the same transaction, so concurrent sign-ups
+// can't overrun either limit. The password must already be hashed.
+// Returns { userId } or { error: 'limit' | 'code' | 'exists' }.
+const insertUserTx = db.transaction(({ username, email, passwordHash, salt, regCodeId, maxAccounts }) => {
+  if (maxAccounts > 0 && countUsers() >= maxAccounts) throw new RegistrationRefused('limit');
+  if (regCodeId != null) {
+    const claimed = db.prepare(`
+      UPDATE reg_codes SET uses = uses + 1
+      WHERE id = ? AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ?)
+        AND (max_uses IS NULL OR uses < max_uses)
+    `).run(regCodeId, Date.now()).changes;
+    if (!claimed) throw new RegistrationRefused('code');
+  }
+  return createUser(username, email, passwordHash, salt);
+});
+function createUserRedeemingCode(fields) {
+  try {
+    return { userId: insertUserTx(fields) };
+  } catch (e) {
+    if (e instanceof RegistrationRefused) return { error: e.reason };
+    if (e && e.code === 'SQLITE_CONSTRAINT_UNIQUE') return { error: 'exists' };
+    throw e;
+  }
+}
+
 module.exports = {
   createSpace,
   createChannel,
@@ -1066,6 +1145,10 @@ module.exports = {
   deleteMessage,
   getMessages,
   getMessagesAfter,
+  createSpaceWithDefaults,
+  storeMessageWithMentions,
+  redeemInvite,
+  createUserRedeemingCode,
   getMessagesBefore,
   toggleReaction,
   getReaction,

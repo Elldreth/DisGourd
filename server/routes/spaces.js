@@ -27,9 +27,8 @@ const routes = [
         const { name } = await getJsonBody(req);
         const invalid = validateSpaceName(name);
         if (invalid) return sendJson(res, 400, { error: invalid });
-        const spaceId = db.createSpaceOwned(name.trim(), userId);
+        const spaceId = db.createSpaceWithDefaults(name.trim(), userId);
         if (!spaceId) return sendJson(res, 409, { error: 'A server with that name already exists' });
-        db.createChannel(name.trim(), 'general');
         return sendJson(res, 201, { name: name.trim(), role: 'owner', channels: ['general'] });
       }
 
