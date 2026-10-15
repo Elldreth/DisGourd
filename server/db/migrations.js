@@ -235,6 +235,18 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 3,
+    name: 'message replies',
+    up(db) {
+      // The message being replied to. A plain id, not a foreign key, so that
+      // when the original is deleted the reply can still say "deleted" instead
+      // of silently losing its quote (ids are AUTOINCREMENT, never reused).
+      // dm_messages gets it now too, for DM replies (P2-10).
+      db.exec('ALTER TABLE messages ADD COLUMN reply_to INTEGER');
+      db.exec('ALTER TABLE dm_messages ADD COLUMN reply_to INTEGER');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -35,10 +35,17 @@ const ops = {
     if (!content && attachments.length === 0) return;
     const spoiler = !!msg.spoiler && attachments.length > 0;
     const user = db.getUserById(userId);
-    // Message, the author's read marker and mentions are written in one transaction.
+    // A reply quotes a message from this same channel; anything else is ignored.
+    const replyId = parseInt(msg.replyTo, 10);
+    const replyTo = replyId > 0 ? db.getReplyTarget(msg.space, msg.channel, replyId) : null;
+    // Message, the author's read marker and mentions are written in one
+    // transaction. Replying mentions the original's author (unless it's you).
     const mentionNames = content ? parseMentionUsernames(content) : [];
+    if (replyTo && replyTo.authorId && replyTo.authorId !== userId && !mentionNames.includes(replyTo.author)) {
+      mentionNames.push(replyTo.author);
+    }
     const stored = db.storeMessageWithMentions(
-      msg.space, msg.channel, content, userId, attachments, spoiler, space.id, mentionNames
+      msg.space, msg.channel, content, userId, attachments, spoiler, space.id, mentionNames, replyTo ? replyTo.id : null
     );
     const mentions = stored ? stored.mentions : [];
     deliverToChannelViewers(msg.space, msg.channel, JSON.stringify({
@@ -54,6 +61,7 @@ const ops = {
       attachments,
       spoiler,
       mentions,
+      replyTo,
       timestamp: stored ? stored.timestamp : Date.now(),
     }));
     return;

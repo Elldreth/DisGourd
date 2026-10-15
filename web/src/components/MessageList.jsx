@@ -68,7 +68,8 @@ function renderRich(content, me, withMentions) {
 // single block, and inserts day dividers — the familiar chat reading rhythm.
 // `canModerate(author)` (optional) says whether you may delete that author's
 // messages as a moderator.
-export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, canModerate, simple = false, emptyHeading, emptyBody }) {
+// `onReply(message)` (optional) adds a Reply action.
+export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, simple = false, emptyHeading, emptyBody }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // When a channel is first opened (or the transcript was cleared on switch /
@@ -77,6 +78,25 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
   // Roving tabindex: the list is one tab stop, and the arrow keys move between
   // messages. `activeId` is the row Tab lands on (defaults to the newest).
   const [activeId, setActiveId] = useState(null);
+  // Briefly highlighted message after jumping to a reply's original, and a
+  // short note when the original isn't loaded.
+  const [flashId, setFlashId] = useState(null);
+  const [jumpNote, setJumpNote] = useState('');
+  const timers = useRef([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+  function jumpTo(id) {
+    const el = containerRef.current?.querySelector(`[data-msg-id="${id}"]`);
+    if (!el) {
+      setJumpNote('The original message is further up in the history.');
+      timers.current.push(setTimeout(() => setJumpNote(''), 3000));
+      return;
+    }
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.focus({ preventScroll: true });
+    setFlashId(id);
+    timers.current.push(setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 2000));
+  }
 
   useEffect(() => {
     const el = containerRef.current;
@@ -124,14 +144,20 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
       lastDay = day;
       lastAuthor = null;
     }
-    const grouped = m.author === lastAuthor && m.timestamp - lastTs < 5 * 60 * 1000;
+    // A reply always starts a new block, so its quote line sits under a header.
+    const grouped = !m.replyTo && m.author === lastAuthor && m.timestamp - lastTs < 5 * 60 * 1000;
     rows.push({ kind: 'msg', key: m.id, m, grouped });
     lastAuthor = m.author;
     lastTs = m.timestamp;
   });
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto">
+    <div ref={containerRef} className="relative flex-1 overflow-y-auto">
+      {jumpNote && (
+        <div role="status" className="anim-pop sticky top-2 z-30 mx-auto w-fit rounded-full bg-ink-900 px-4 py-1.5 text-sm text-gray-200 shadow-lg ring-1 ring-ink-500/60">
+          {jumpNote}
+        </div>
+      )}
       <div
         role="log"
         aria-label={simple ? 'Messages' : `Messages in #${channel}`}
@@ -167,6 +193,9 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
               onDelete={onDelete}
               canDelete={!!onDelete && (row.m.author === currentUser || !!canModerate?.(row.m.author))}
               onReact={onReact}
+              onReply={onReply}
+              onJumpTo={jumpTo}
+              flash={row.m.id === flashId}
               simple={simple}
               tabIndex={row.m.id === tabStopId ? 0 : -1}
               onFocusRow={() => setActiveId(row.m.id)}
@@ -180,7 +209,7 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
   );
 }
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, simple, tabIndex, onFocusRow, onNavigate }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content || '');
   // Which popup is open: null | 'menu' | 'react'. `sheet` shows it as a touch
@@ -259,6 +288,20 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
   // delete. Each item shows only when its handler is provided (DMs offer
   // edit/delete but not reactions).
   const actions = [
+    onReply && {
+      id: 'reply', label: 'Reply', icon: 'reply', quick: true,
+      onSelect: () => {
+        setPopup(null);
+        onReply(m);
+      },
+    },
+    m.replyTo && !m.replyTo.deleted && {
+      id: 'jump', label: 'Jump to original', icon: 'reply',
+      onSelect: () => {
+        setPopup(null);
+        onJumpTo(m.replyTo.id);
+      },
+    },
     onReact && {
       id: 'react', label: 'Add reaction', icon: 'smile', quick: true,
       // From the touch sheet, the emoji choices open as a sheet too.
@@ -294,6 +337,9 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
     } else if (e.key === 'Enter' && actions.length) {
       e.preventDefault();
       openPopup('menu', false);
+    } else if ((e.key === 'r' || e.key === 'R') && onReply) {
+      e.preventDefault();
+      onReply(m);
     } else if ((e.key === 'e' || e.key === 'E') && mine && onEdit) {
       e.preventDefault();
       startEdit();
@@ -352,12 +398,14 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
   }
 
   const hasAttachment = m.attachments?.length || m.attachment;
-  const label = `${m.author || 'Unknown'}, ${formatTime(m.timestamp)}, ${m.content || (hasAttachment ? 'attachment' : '')}`;
+  const replyLabel = m.replyTo ? (m.replyTo.deleted ? 'replying to a deleted message, ' : `replying to ${m.replyTo.author}, `) : '';
+  const label = `${m.author || 'Unknown'}, ${formatTime(m.timestamp)}, ${replyLabel}${m.content || (hasAttachment ? 'attachment' : '')}`;
 
   return (
     <div
       ref={rowRef}
       data-msg-row
+      data-msg-id={m.id}
       role="article"
       aria-label={label}
       tabIndex={tabIndex}
@@ -372,7 +420,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
       onContextMenu={onContextMenu}
       className={`group relative flex gap-3 px-2 py-0.5 outline-none transition-colors hover:bg-ink-600/40 focus-visible:bg-ink-600/40 focus-visible:ring-1 focus-visible:ring-brand-hi [-webkit-touch-callout:none] [@media(hover:none)]:select-none ${
         grouped ? '' : 'mt-3'
-      } ${mentionsMe ? 'border-l-2 border-pink bg-pink/10' : ''}`}
+      } ${mentionsMe ? 'border-l-2 border-pink bg-pink/10' : ''} ${flash ? '!bg-brand/20 ring-1 ring-brand-hi/60' : ''}`}
     >
       <div className="w-10 shrink-0">
         {grouped ? (
@@ -385,6 +433,26 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
       </div>
 
       <div className="min-w-0 flex-1">
+        {m.replyTo && (
+          m.replyTo.deleted ? (
+            <div className="mb-0.5 flex items-center gap-1.5 text-xs italic text-gray-500">
+              <Icon name="reply" size={12} className="shrink-0" />
+              Original message was deleted
+            </div>
+          ) : (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => onJumpTo(m.replyTo.id)}
+              title="Jump to the original message"
+              className="mb-0.5 flex max-w-full items-center gap-1.5 text-left text-xs text-gray-400 hover:text-gray-200"
+            >
+              <Icon name="reply" size={12} className="shrink-0" />
+              <span className="shrink-0 font-semibold text-brand-hi">@{m.replyTo.author}</span>
+              <span className="truncate">{m.replyTo.snippet}</span>
+            </button>
+          )
+        )}
         {!grouped && (
           <div className="flex items-baseline gap-2">
             <span className="font-semibold text-gray-100">{m.author || 'Unknown'}</span>

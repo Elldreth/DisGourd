@@ -310,7 +310,7 @@ function incrementInviteUses(code) {
   db.prepare('UPDATE invites SET uses = uses + 1 WHERE code = ?').run(code);
 }
 
-function storeMessage(spaceName, channelName, content, authorId, attachments = [], spoiler = false) {
+function storeMessage(spaceName, channelName, content, authorId, attachments = [], spoiler = false, replyTo = null) {
   createChannel(spaceName, channelName);
   const channel = db.prepare(`
     SELECT c.id FROM channels c
@@ -323,8 +323,8 @@ function storeMessage(spaceName, channelName, content, authorId, attachments = [
   const json = list.length ? JSON.stringify(list) : null;
   const createdAt = Date.now();
   const info = db.prepare(
-    'INSERT INTO messages(channel_id, content, author_id, attachment_url, attachments, attachment_spoiler, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(channel.id, content, authorId || null, first, json, spoiler ? 1 : 0, createdAt);
+    'INSERT INTO messages(channel_id, content, author_id, attachment_url, attachments, attachment_spoiler, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(channel.id, content, authorId || null, first, json, spoiler ? 1 : 0, createdAt, replyTo || null);
   return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 
@@ -340,12 +340,67 @@ const MESSAGE_SELECT = `
          m.edited_at AS editedAt,
          m.author_id AS authorId,
          u.username AS author,
-         u.avatar_url AS authorAvatar
+         u.avatar_url AS authorAvatar,
+         m.reply_to AS replyToId,
+         p.id AS replyFoundId,
+         p.content AS replyContent,
+         p.attachment_url AS replyAttachment,
+         p.attachments AS replyAttachments,
+         p.author_id AS replyAuthorId,
+         pu.username AS replyAuthor
   FROM messages m
   JOIN channels c ON m.channel_id = c.id
   JOIN spaces s ON c.space_id = s.id
   LEFT JOIN users u ON m.author_id = u.id
+  LEFT JOIN messages p ON p.id = m.reply_to
+  LEFT JOIN users pu ON pu.id = p.author_id
 `;
+
+// The short quote shown above a reply: the first 100 characters with
+// ||spoilers|| hidden, or "Attachment" for an attachment-only message.
+function replySnippet(content, hasAttachment) {
+  const text = String(content || '').replace(/\|\|[\s\S]+?\|\|/g, '(spoiler)').replace(/\s+/g, ' ').trim();
+  if (text) return text.slice(0, 100);
+  return hasAttachment ? 'Attachment' : '';
+}
+
+// Turn the reply_* columns into `replyTo`: null (not a reply), { id, deleted }
+// (original gone), or { id, authorId, author, snippet }.
+const REPLY_COLUMNS = ['replyToId', 'replyFoundId', 'replyContent', 'replyAttachment', 'replyAttachments', 'replyAuthorId', 'replyAuthor'];
+function hydrateReply(row) {
+  if (!row) return row;
+  const r = {};
+  for (const k of REPLY_COLUMNS) {
+    r[k] = row[k];
+    delete row[k];
+  }
+  if (r.replyToId == null) row.replyTo = null;
+  else if (r.replyFoundId == null) row.replyTo = { id: r.replyToId, deleted: true };
+  else {
+    row.replyTo = {
+      id: r.replyFoundId,
+      authorId: r.replyAuthorId,
+      author: r.replyAuthor || 'Unknown',
+      snippet: replySnippet(r.replyContent, !!(r.replyAttachment || r.replyAttachments)),
+    };
+  }
+  return row;
+}
+const hydrateMessage = (row) => hydrateReply(hydrateAttachments(row));
+
+// The quote for a new reply, if `messageId` is in that same channel (so a
+// reply can never reveal a message from another, possibly private, channel).
+function getReplyTarget(spaceName, channelName, messageId) {
+  const row = db.prepare(`${MESSAGE_SELECT} WHERE s.name = ? AND c.name = ? AND m.id = ?`)
+    .get(spaceName, channelName, messageId);
+  if (!row) return null;
+  return {
+    id: row.id,
+    authorId: row.authorId,
+    author: row.author || 'Unknown',
+    snippet: replySnippet(row.content, !!(row.attachment || row.attachments)),
+  };
+}
 
 function getMessages(spaceName, channelName, limit = 20, offset = 0) {
   const rows = db.prepare(`${MESSAGE_SELECT}
@@ -353,7 +408,7 @@ function getMessages(spaceName, channelName, limit = 20, offset = 0) {
     ORDER BY m.id DESC
     LIMIT ? OFFSET ?
   `).all(spaceName, channelName, limit, offset).reverse();
-  return attachReactions(rows.map(hydrateAttachments));
+  return attachReactions(rows.map(hydrateMessage));
 }
 
 // The page of messages just older than `beforeId`, returned oldest-first — used
@@ -364,7 +419,7 @@ function getMessagesBefore(spaceName, channelName, beforeId, limit = 50) {
     ORDER BY m.id DESC
     LIMIT ?
   `).all(spaceName, channelName, beforeId, limit).reverse();
-  return attachReactions(rows.map(hydrateAttachments));
+  return attachReactions(rows.map(hydrateMessage));
 }
 
 // Messages newer than a given id, oldest-first — used to backfill gaps after a
@@ -375,7 +430,7 @@ function getMessagesAfter(spaceName, channelName, afterId, limit = 200) {
     ORDER BY m.id ASC
     LIMIT ?
   `).all(spaceName, channelName, afterId, limit);
-  return attachReactions(rows.map(hydrateAttachments));
+  return attachReactions(rows.map(hydrateMessage));
 }
 
 // ---- Reactions ----
@@ -856,11 +911,11 @@ const createSpaceWithDefaults = db.transaction((name, ownerId, channels = [{ nam
 // the @mentioned usernames are members. Returns { id, timestamp, mentions }, or
 // null if the channel doesn't exist.
 const storeMessageWithMentions = db.transaction(
-  (spaceName, channelName, content, authorId, attachments, spoiler, spaceId, mentionNames = []) => {
-    const stored = storeMessage(spaceName, channelName, content, authorId, attachments, spoiler);
+  (spaceName, channelName, content, authorId, attachments, spoiler, spaceId, mentionNames = [], replyTo = null) => {
+    const stored = storeMessage(spaceName, channelName, content, authorId, attachments, spoiler, replyTo);
     if (!stored) return null;
     markRead(authorId, spaceName, channelName, stored.id);
-    const mentions = content && mentionNames.length ? addMentions(stored.id, spaceId, mentionNames) : [];
+    const mentions = mentionNames.length ? addMentions(stored.id, spaceId, mentionNames) : [];
     return { ...stored, mentions };
   }
 );
@@ -959,6 +1014,7 @@ module.exports = {
   getReaction,
   isMessageInChannel,
   getMessageLocation,
+  getReplyTarget,
   deleteMessageById,
   getCoMemberIds,
   markRead,

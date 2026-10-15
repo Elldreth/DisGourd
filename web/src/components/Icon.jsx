@@ -155,6 +155,12 @@ const ICONS = {
       <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </>
   ),
+  reply: (
+    <>
+      <polyline points="9 14 4 9 9 4" />
+      <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+    </>
+  ),
   copy: (
     <>
       <rect x="9" y="9" width="13" height="13" rx="2" />
