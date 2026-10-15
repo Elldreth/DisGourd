@@ -954,6 +954,10 @@ function getIncomingFriendRequests(userId) {
   return db.prepare('SELECT from_user FROM friend_requests WHERE to_user = ?').all(userId);
 }
 
+function hasFriendRequest(fromId, toId) {
+  return !!db.prepare('SELECT 1 FROM friend_requests WHERE from_user = ? AND to_user = ?').get(fromId, toId);
+}
+
 function removeFriendRequest(fromId, toId) {
   db.prepare('DELETE FROM friend_requests WHERE from_user = ? AND to_user = ?').run(fromId, toId);
 }
@@ -1046,6 +1050,7 @@ module.exports = {
   setUserAvatar,
   createFriendRequest,
   getIncomingFriendRequests,
+  hasFriendRequest,
   removeFriendRequest,
   addFriends,
   removeFriend,

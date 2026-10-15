@@ -906,3 +906,28 @@ test('0.5 oversized bodies, frames, messages and crop boxes are refused', async 
   expect(await closed).toBe(1009);
   expect(await alive()).toBe(true);
 });
+
+test('0.6 friends: accepting needs a pending request, and self-requests are refused', async () => {
+  const base = baseUrl();
+  const a = (await register('fr-a')).token;
+  const b = (await register('fr-b')).token;
+  const post = (token, action, username) => fetch(`${base}/friends/${action}`, {
+    method: 'POST', headers: { ...JSON_HEADERS, ...auth(token) }, body: JSON.stringify({ username }),
+  });
+  const friendsOf = async (token) => (await (await fetch(`${base}/friends`, { headers: auth(token) })).json()).friends;
+
+  // Accepting without a request from that user does nothing.
+  expect((await post(a, 'accept', 'fr-b')).status).toBe(404);
+  expect(await friendsOf(a)).toEqual([]);
+  expect(await friendsOf(b)).toEqual([]);
+
+  // Self-requests are rejected.
+  expect((await post(a, 'request', 'fr-a')).status).toBe(400);
+
+  // The real flow still works, once.
+  expect((await post(a, 'request', 'fr-b')).status).toBe(201);
+  expect((await post(a, 'accept', 'fr-b')).status).toBe(404); // the sender can't accept their own request
+  expect((await post(b, 'accept', 'fr-a')).status).toBe(200);
+  expect(await friendsOf(a)).toEqual([{ username: 'fr-b' }]);
+  expect((await post(b, 'accept', 'fr-a')).status).toBe(404); // consumed
+});

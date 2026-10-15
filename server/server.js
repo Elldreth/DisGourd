@@ -723,6 +723,7 @@ async function handleHttp(req, res) {
     const { username } = await getJsonBody(req);
     const to = db.getUserByUsername(username);
     if (!to) { res.writeHead(404); return res.end(JSON.stringify({ error: 'User not found' })); }
+    if (to.id === fromId) return sendJson(res, 400, { error: "You can't send a friend request to yourself" });
     db.createFriendRequest(fromId, to.id);
     res.writeHead(201);
     return res.end(JSON.stringify({ message: 'Request sent' }));
@@ -733,6 +734,10 @@ async function handleHttp(req, res) {
     const { username } = await getJsonBody(req);
     const fromUser = db.getUserByUsername(username);
     if (!fromUser) { res.writeHead(404); return res.end(JSON.stringify({ error: 'User not found' })); }
+    // Only an actual pending request from that user can be accepted.
+    if (!db.hasFriendRequest(fromUser.id, userId)) {
+      return sendJson(res, 404, { error: 'No pending friend request from that user' });
+    }
     db.removeFriendRequest(fromUser.id, userId);
     db.addFriends(userId, fromUser.id);
     res.writeHead(200);
