@@ -1541,7 +1541,9 @@ httpServer.on('upgrade', (request, socket, head) => {
 
     ws.send(JSON.stringify({ type: 'ready' }));
     ws.send(JSON.stringify({ type: 'unread', counts: db.getUnreadCounts(ws.userId), mentions: db.getMentionCounts(ws.userId) }));
-    ws.send(JSON.stringify({ type: 'dm_unread', counts: db.getDmUnreadCounts(ws.userId) }));
+    // Keyed by `with`, like the other DM ops (getDmUnreadCounts names it `other`).
+    const dmCounts = db.getDmUnreadCounts(ws.userId).map((c) => ({ with: c.other, count: c.count }));
+    ws.send(JSON.stringify({ type: 'dm_unread', counts: dmCounts }));
 
     ws.on('message', (raw) => {
       // A bad frame must never take the whole server down.
