@@ -250,13 +250,45 @@ function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+// Avatar / server-icon framing box: { zoom, cx, cy }. Anything else (huge
+// blobs, strings, nested objects) is dropped rather than stored verbatim.
+function sanitizeCrop(crop) {
+  if (!isPlainObject(crop)) return null;
+  const num = (v, min, max) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null);
+  const zoom = num(crop.zoom, 1, 10);
+  const cx = num(crop.cx, 0, 1);
+  const cy = num(crop.cy, 0, 1);
+  if (zoom === null || cx === null || cy === null) return null;
+  return { zoom, cx, cy };
+}
+
+// Size limits. JSON bodies only ever carry small settings objects; uploads use
+// their own streaming path and MAX_UPLOAD_BYTES.
+const MAX_JSON_BYTES = 64 * 1024;
+const MAX_WS_PAYLOAD_BYTES = 256 * 1024; // generous for WebRTC SDP offers
+const MAX_MESSAGE_LENGTH = 4000;
+
 // Read and parse a JSON request body. Rejects with a 400 for malformed JSON or
-// a non-object payload (`null`, `5`, `[]`) so handlers can destructure safely.
+// a non-object payload (`null`, `5`, `[]`) so handlers can destructure safely,
+// and with a 413 once the body passes MAX_JSON_BYTES.
 function readJsonBody(request) {
   return new Promise((resolve, reject) => {
     let body = '';
-    request.on('data', (chunk) => (body += chunk));
+    let size = 0;
+    let tooLarge = false;
+    request.on('data', (chunk) => {
+      if (tooLarge) return; // keep draining, but stop buffering
+      size += chunk.length;
+      if (size > MAX_JSON_BYTES) {
+        tooLarge = true;
+        body = '';
+        reject(httpError(413, 'Request body is too large'));
+        return;
+      }
+      body += chunk;
+    });
     request.on('end', () => {
+      if (tooLarge) return;
       let parsed;
       try {
         parsed = JSON.parse(body || '{}');
@@ -575,7 +607,7 @@ async function handleHttp(req, res) {
       if (!okUrl(avatar) || !okUrl(avatarOriginal)) {
         return sendJson(res, 400, { error: 'Avatar must be an uploaded image URL' });
       }
-      db.setUserAvatar(userId, avatar || null, avatarOriginal || null, avatarCrop || null);
+      db.setUserAvatar(userId, avatar || null, avatarOriginal || null, sanitizeCrop(avatarCrop));
     }
     const u = db.getUserById(userId);
     if (!u) return sendJson(res, 404, { error: 'User not found' });
@@ -761,7 +793,7 @@ async function handleHttp(req, res) {
         if (!okUrl(icon) || !okUrl(body.iconOriginal)) {
           return sendJson(res, 400, { error: 'Invalid icon' });
         }
-        db.setSpaceIcon(space.id, icon || null, body.iconOriginal || null, body.iconCrop || null);
+        db.setSpaceIcon(space.id, icon || null, body.iconOriginal || null, sanitizeCrop(body.iconCrop));
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
       }
       if ('name' in body) {
@@ -1063,7 +1095,9 @@ function handleHttpError(res, err) {
     res.destroy();
     return;
   }
-  res.writeHead(status, { 'Content-Type': 'application/json' });
+  const headers = { 'Content-Type': 'application/json' };
+  if (status === 413) headers.Connection = 'close'; // don't keep reading an oversized body
+  res.writeHead(status, headers);
   res.end(JSON.stringify({ error: status >= 500 ? 'Internal server error' : err.message }));
 }
 
@@ -1073,7 +1107,9 @@ const httpServer = http.createServer((req, res) => {
 });
 
 // Create WebSocket server and attach it to the HTTP server
-const wss = new WebSocket.Server({ noServer: true }); // noServer: true allows us to use existing HTTP server for handshake
+// noServer: the HTTP server above performs the handshake. maxPayload replaces
+// ws's 100 MiB default; oversized frames close the socket (code 1009).
+const wss = new WebSocket.Server({ noServer: true, maxPayload: MAX_WS_PAYLOAD_BYTES });
 
 // ---- Heartbeat ----
 // Ping every client periodically; any socket that fails to answer with a pong
@@ -1192,6 +1228,12 @@ function voiceLeave(ws) {
 // number in one of them is malformed and dropped whole.
 const GATEWAY_STRING_FIELDS = ['op', 'space', 'channel', 'with', 'content', 'emoji'];
 
+// Tell the sender why a frame was refused (clients may ignore this).
+function rejectFrame(ws, op, error) {
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'error', op, error }));
+}
+const TOO_LONG = `Messages can be at most ${MAX_MESSAGE_LENGTH} characters`;
+
 function handleGatewayMessage(ws, raw) {
   let msg;
   try { msg = JSON.parse(raw.toString()); } catch { return; }
@@ -1223,6 +1265,7 @@ function handleGatewayMessage(ws, raw) {
       const mrole = db.getMemberRole(space.id, userId);
       if (!canViewChannel(msg.space, msg.channel, mrole) || !canPostChannel(msg.space, msg.channel, mrole)) return;
       const content = typeof msg.content === 'string' ? msg.content : '';
+      if (content.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
       const attachments = normalizeAttachments(msg);
       if (!content && attachments.length === 0) return;
       const spoiler = !!msg.spoiler && attachments.length > 0;
@@ -1255,6 +1298,7 @@ function handleGatewayMessage(ws, raw) {
       const id = parseInt(msg.id, 10);
       const newContent = typeof msg.content === 'string' ? msg.content.trim() : '';
       if (!id || !newContent) return;
+      if (newContent.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
       const loc = db.getMessageLocation(id);
       if (!loc || !canView(loc.space, loc.channel, userId)) return;
       const editedAt = db.editMessage(id, userId, newContent); // author-only in DB
@@ -1318,6 +1362,7 @@ function handleGatewayMessage(ws, raw) {
       const to = db.getUserByUsername(msg.to);
       if (!to || to.id === userId) return;
       const content = typeof msg.content === 'string' ? msg.content : '';
+      if (content.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
       const attachments = normalizeAttachments(msg);
       if (!content && attachments.length === 0) return;
       const spoiler = !!msg.spoiler && attachments.length > 0;
@@ -1347,6 +1392,7 @@ function handleGatewayMessage(ws, raw) {
       const id = parseInt(msg.id, 10);
       const newContent = typeof msg.content === 'string' ? msg.content.trim() : '';
       if (!id || !newContent) return;
+      if (newContent.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
       const dm = db.getDmById(id);
       if (!dm) return;
       const editedAt = db.editDm(id, userId, newContent); // author-only in DB

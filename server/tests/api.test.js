@@ -866,3 +866,43 @@ test('0.4 password hashing does not block the event loop', async () => {
   expect((await login).status).toBe(200);
   expect(timerDelay).toBeLessThan(40);
 });
+
+test('0.5 oversized bodies, frames, messages and crop boxes are refused', async () => {
+  const base = baseUrl();
+  const { token } = await register('biggie');
+  await createServer(token, 'biggie');
+
+  // JSON bodies are capped.
+  const huge = JSON.stringify({ name: 'x'.repeat(200 * 1024) });
+  const res = await fetch(`${base}/spaces`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(token) }, body: huge });
+  expect(res.status).toBe(413);
+  expect(await alive()).toBe(true);
+
+  // avatarCrop is reduced to a sane { zoom, cx, cy } box (or dropped).
+  const patchMe = (body) => fetch(`${base}/me`, { method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(token) }, body: JSON.stringify(body) })
+    .then((r) => r.json());
+  let me = await patchMe({ avatar: '/uploads/a/b.png', avatarCrop: { zoom: 2, cx: 0.5, cy: 0.25, junk: 'y'.repeat(1000) } });
+  expect(me.avatarCrop).toEqual({ zoom: 2, cx: 0.5, cy: 0.25 });
+  me = await patchMe({ avatar: '/uploads/a/b.png', avatarCrop: 'z'.repeat(1000) });
+  expect(me.avatarCrop).toBeNull();
+
+  // Message length is capped; the sender is told why.
+  const gw = gateway(token);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'biggie', channel: 'general', content: 'a'.repeat(4001) });
+  gw.send({ op: 'message', space: 'biggie', channel: 'general', content: 'b'.repeat(4000) });
+  gw.send({ op: 'dm', to: 'carol', content: 'c'.repeat(4001) });
+  await wait(100);
+  expect(gw.frames.filter((f) => f.type === 'error').length).toBe(2);
+  const stored = await messages(token, 'biggie', 'general');
+  expect(stored.map((m) => m.content.length)).toEqual([4000]);
+  gw.close();
+
+  // Frames past the WS maxPayload close that socket, not the server.
+  const ws = new WebSocket(`ws://localhost:${port}/gateway?token=${token}`);
+  await new Promise((r) => ws.on('open', r));
+  const closed = new Promise((r) => ws.on('close', (code) => r(code)));
+  ws.send('x'.repeat(512 * 1024));
+  expect(await closed).toBe(1009);
+  expect(await alive()).toBe(true);
+});
