@@ -108,7 +108,7 @@ export default function Login({ onAuthed }) {
           <p className="mt-6 text-center text-sm text-gray-400">
             {isRegister ? 'Already have an account?' : 'Need an account?'}{' '}
             <button
-              className="font-semibold text-brand hover:underline"
+              className="font-semibold text-brand-hi hover:underline"
               onClick={() => {
                 setMode(isRegister ? 'login' : 'register');
                 setError('');

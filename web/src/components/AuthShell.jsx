@@ -1,20 +1,19 @@
-import Gourd from './Gourd.jsx';
+import Gourd, { GOURD_VIOLET } from './Gourd.jsx';
 
 // The framing for the logged-out screens (sign in, register, first-run setup).
-// A single soft brand glow lifts the card off the page and one large gourd
-// bleeds off the corner as a quiet watermark — enough atmosphere to feel
+// Flat on purpose: a solid card on the deepest surface, with one large gourd
+// bleeding off the corner as a quiet watermark — enough atmosphere to feel
 // finished, restrained enough to stay out of the form's way.
 export default function AuthShell({ title, subtitle, children }) {
   return (
     <div className="relative flex h-full items-center justify-center overflow-hidden bg-ink-900 p-4">
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-1/2 h-[460px] w-[460px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/10 blur-[120px]" />
-        <Gourd size={560} color="#9466FF" className="absolute -bottom-40 -right-28 opacity-[0.06]" />
+        <Gourd size={560} color={GOURD_VIOLET} className="absolute -bottom-40 -right-28 opacity-[0.06]" />
       </div>
 
-      <div className="anim-scale-in relative z-10 w-full max-w-md rounded-2xl bg-ink-800/90 p-8 shadow-2xl ring-1 ring-ink-500/40 backdrop-blur-sm">
+      <div className="anim-scale-in relative z-10 w-full max-w-md rounded-2xl bg-ink-800 p-8 ring-1 ring-ink-500">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-[#0E0B1A] shadow-lg shadow-brand/30 ring-1 ring-brand/30">
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-ink-900 ring-1 ring-ink-500">
             <Gourd size={56} />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>

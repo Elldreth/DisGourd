@@ -46,7 +46,7 @@ export default function DmSidebar({
                 {preview && <div className="truncate text-xs text-gray-500">{preview}</div>}
               </div>
               {hasUnread && (
-                <span className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-white">
+                <span className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-ink-900">
                   {count}
                 </span>
               )}

@@ -110,7 +110,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
                 <button
                   onClick={remove}
                   disabled={busy}
-                  className="rounded-lg bg-danger px-3 py-1.5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95 disabled:opacity-60 disabled:active:scale-100"
+                  className="rounded-lg bg-danger px-3 py-1.5 text-sm font-semibold text-ink-900 transition hover:brightness-110 active:scale-95 disabled:opacity-60 disabled:active:scale-100"
                 >
                   {busy ? 'Deleting…' : 'Delete channel'}
                 </button>

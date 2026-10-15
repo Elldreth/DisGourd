@@ -37,7 +37,7 @@ export default function InviteDialog({ space, code, onClose }) {
         <div className="mt-4 flex items-center gap-2">
           <code
             ref={codeRef}
-            className="flex-1 select-all truncate rounded-lg bg-ink-900 px-3 py-2 font-mono text-brand ring-1 ring-ink-500/60"
+            className="flex-1 select-all truncate rounded-lg bg-ink-900 px-3 py-2 font-mono text-brand-hi ring-1 ring-ink-500/60"
           >
             {code}
           </code>
