@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (bug fix found during revalidation, not in IMPROVEMENT-PLAN.md)
 - **Phase:** 1
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#39)
 - **Effort:** S (minutes)
 - **Depends on:** none
 - **Serialize with:** App.jsx units. Land this *before* P1-12.
