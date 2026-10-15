@@ -35,13 +35,12 @@ const ops = {
     if (!content && attachments.length === 0) return;
     const spoiler = !!msg.spoiler && attachments.length > 0;
     const user = db.getUserById(userId);
-    const stored = db.storeMessage(msg.space, msg.channel, content, userId, attachments, spoiler);
-    if (stored) db.markRead(userId, msg.space, msg.channel, stored.id); // author has read their own message
-    let mentions = [];
-    if (stored && content) {
-      const names = parseMentionUsernames(content);
-      if (names.length) mentions = db.addMentions(stored.id, space.id, names);
-    }
+    // Message, the author's read marker and mentions are written in one transaction.
+    const mentionNames = content ? parseMentionUsernames(content) : [];
+    const stored = db.storeMessageWithMentions(
+      msg.space, msg.channel, content, userId, attachments, spoiler, space.id, mentionNames
+    );
+    const mentions = stored ? stored.mentions : [];
     deliverToChannelViewers(msg.space, msg.channel, JSON.stringify({
       type: 'message',
       id: stored ? stored.id : undefined,

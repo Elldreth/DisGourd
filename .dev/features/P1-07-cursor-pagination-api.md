@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Cursor pagination"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#44)
 - **Effort:** S
 - **Depends on:** none (soft: P1-01's `idx_messages_channel` / `idx_dm_pair` make it fast)
 - **Serialize with:** P1-02..P1-05. It edits two small handler blocks. If it runs before the split, edit the inline handlers in `server.js` and the split carries them along. Don't run it *concurrently* with a split unit.
