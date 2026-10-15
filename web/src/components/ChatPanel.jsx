@@ -111,7 +111,7 @@ function Empty({ title, body, onOpenNav }) {
         </button>
       )}
       <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-brand/10 ring-1 ring-brand/15">
-        <Gourd size={54} color="#8f83f7" />
+        <Gourd size={58} />
       </div>
       <h2 className="text-xl font-bold tracking-tight">{title}</h2>
       <p className="mt-1.5 max-w-sm text-gray-400">{body}</p>

@@ -747,7 +747,7 @@ export default function App() {
     if (!authInfo) {
       return (
         <div className="flex h-full items-center justify-center bg-ink-900">
-          <Gourd size={44} color="#7d6ff3" className="animate-pulse" />
+          <Gourd size={56} className="animate-pulse" title="Loading DisGourd" />
         </div>
       );
     }

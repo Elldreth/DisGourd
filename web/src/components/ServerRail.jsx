@@ -62,7 +62,7 @@ export default function ServerRail({
           dmActive ? 'rounded-2xl bg-brand' : 'rounded-[26px] bg-ink-700 hover:bg-brand'
         }`}
       >
-        <Gourd size={26} color="#fff" title="Direct Messages" />
+        <Gourd size={34} color="#fff" title="Direct Messages" />
         {dmUnread > 0 && !dmActive && (
           <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold">
             {dmUnread > 99 ? '99+' : dmUnread}
