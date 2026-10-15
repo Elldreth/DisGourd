@@ -23,7 +23,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-03 | Server split 2/4: auth/admin/social routes | 1 | COMPLETE | M | P1-02 | server.js, routes/{index,auth,admin,social}.js |
 | P1-04 | Server split 3/4: spaces/invites/uploads/static | 1 | COMPLETE | M | P1-03 | server.js, routes/{spaces,invites,uploads}.js, static.js, http/handler.js |
 | P1-05 | Server split 4/4: gateway | 1 | COMPLETE | M | P1-04 | server.js, gateway/{index,router,chat,dm,voice}.js |
-| P1-06 | Transactions (space create, msg+mentions, invite, registration) | 1 | REVIEW | S–M | P1-03, P1-04, P1-05 | db/index.js, routes/*, gateway/chat.js |
+| P1-06 | Transactions (space create, msg+mentions, invite, registration) | 1 | COMPLETE | S–M | P1-03, P1-04, P1-05 | db/index.js, routes/*, gateway/chat.js |
 | P1-07 | Cursor pagination API (`before`) | 1 | COMPLETE | S | none (soft P1-01) | db/index.js, server.js (2 handlers) |
 | P1-08 | Load older messages UI | 1 | PLANNED | M | P1-07, P1-12 | MessageList.jsx, api.js, state hooks |
 | P1-09 | Reconnect resync | 1 | PLANNED | S–M | P1-05, P1-08, P1-14 | gateway/index.js, state hooks, useSocket.js |
@@ -33,7 +33,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-13 | App split 2/3: DM hook | 1 | PLANNED | S–M | P1-12 | App.jsx, state/useDms.js |
 | P1-14 | App split 3/3: spaces + voice hooks | 1 | PLANNED | M | P1-13 | App.jsx, state/useSpaces.js, state/useVoiceCall.js |
 | P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | READY | S | none | Dockerfile, docker-compose.yml, README.md |
-| P1-16 | Nightly VACUUM INTO backups | 1 | READY | S | none | backup.js (new), server.js (boot), README.md |
+| P1-16 | Nightly VACUUM INTO backups | 1 | REVIEW | S | none | backup.js (new), server.js (boot), README.md |
 | P1-17 | GitHub Actions CI | 1 | READY | S | none | .github/workflows/ci.yml |
 | P1-18 | Bump Vite | 1 | READY | S | none | web/package.json, vite.config.js |
 | P1-19 | Web test harness (Vitest) | 1 | PLANNED | S | P1-18 | web/package.json, vite.config.js |

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Wrap multi-step writes in transactions"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#45)
 - **Effort:** S–M
 - **Depends on:** P1-03 (register), P1-04 (spaces, invites), P1-05 (gateway message)
 - **Serialize with:** db/index.js units (P1-07, P1-10, P2-05)
