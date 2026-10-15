@@ -29,6 +29,8 @@ services:
     volumes:
       # DB on the SSD. If your appdata share isn't cache-only, use the direct
       # cache path (e.g. /mnt/cache/appdata/disgourd) to keep SQLite off FUSE.
+      # Nightly database backups land in /config/backups (the newest 7 are
+      # kept; see BACKUP_* in the README).
       - /mnt/user/appdata/disgourd:/config
       # Uploads on the big array.
       - /mnt/user/bigboi/media/images:/uploads

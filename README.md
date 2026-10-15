@@ -147,6 +147,9 @@ All settings are optional and provided via environment variables (or
 | `MAX_ACCOUNTS`     | `0` (unlimited)          | Cap on the total number of accounts                |
 | `SITE_ADMINS`      | _(none)_                 | Comma-separated usernames to make site admins (e.g. `alice,bob`)   |
 | `TRUST_PROXY`      | _(off)_                  | Set to `1` behind a reverse proxy so rate limits use the client IP from `X-Forwarded-For` (last hop). Leave off when clients connect directly |
+| `BACKUP_DIR`       | `backups/` next to the database | Where automatic database backups go. Set to `off` to disable them |
+| `BACKUP_INTERVAL_HOURS` | `24`                | How often to take a backup                         |
+| `BACKUP_KEEP`      | `7`                      | How many backups to keep (oldest are deleted)      |
 
 Example (Linux/macOS):
 
@@ -218,7 +221,26 @@ Everything your community creates lives in two places:
 - **`server/db/disgourd.db`** — accounts, servers, channels, messages, friends
 - **`uploads/`** — uploaded images and files
 
-To back up, stop the server and copy both. To reset, delete them.
+**Automatic backups.** While it runs, the server saves a copy of the database
+every 24 hours (and on startup if the last one is older than that) into a
+`backups/` folder next to the database — `server/db/backups/` by default, or
+`/config/backups/` in Docker. Files are named `disgourd-YYYYMMDD-HHMMSS.db`
+(UTC) and the newest 7 are kept. The copies are made with SQLite's
+`VACUUM INTO`, so they're consistent even while people are chatting. Change
+this with `BACKUP_DIR`, `BACKUP_INTERVAL_HOURS` and `BACKUP_KEEP` (see
+[Configuration](#configuration)).
+
+Uploads aren't included — back up the `uploads/` folder (or your uploads
+volume) with your normal file backups.
+
+**Restoring a backup:**
+
+1. Stop the server (or the container).
+2. Delete `disgourd.db-wal` and `disgourd.db-shm` next to the database, if present.
+3. Replace `disgourd.db` with the backup file, renamed to `disgourd.db`.
+4. Start the server again.
+
+To reset everything, stop the server and delete the database and uploads.
 
 ## Security notes
 

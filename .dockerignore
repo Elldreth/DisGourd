@@ -12,6 +12,7 @@ server/.jwt-secret
 server/config.json
 server/db/*.db
 server/db/*.db-*
+server/db/backups
 setup.bat
 run.bat
 update.bat

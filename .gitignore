@@ -9,6 +9,7 @@ uploads/
 server/db/*.db
 server/db/*.db-wal
 server/db/*.db-shm
+server/db/backups/
 
 # Local environment / secrets
 .env

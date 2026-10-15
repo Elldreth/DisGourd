@@ -10,6 +10,7 @@ const { MAX_WS_PAYLOAD_BYTES } = require('./http/util');
 const { handleHttp, handleHttpError } = require('./http/handler');
 const { WEB_DIST } = require('./static');
 const { attachGateway } = require('./gateway');
+const { backupSettings, startBackupSchedule } = require('./backup');
 
 // Create HTTP server
 const httpServer = http.createServer((req, res) => {
@@ -34,6 +35,12 @@ if (require.main === module) {
     if (!hasBuild) {
       console.log('  Note: the web client is not built yet. Run `npm run build` (or `npm run dev`');
       console.log('  for the hot-reloading dev server) to see the UI.\n');
+    }
+    // Only when run directly, so tests never start the backup timer.
+    const backups = backupSettings();
+    if (backups) {
+      console.log(`  Backups: every ${backups.intervalHours}h to ${backups.dir} (keeping ${backups.keep})\n`);
+      startBackupSchedule({ db: db.raw, ...backups });
     }
   });
 }
