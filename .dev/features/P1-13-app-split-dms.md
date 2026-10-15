@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Split up App.jsx"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#54)
 - **Effort:** S–M
 - **Depends on:** P1-12 (handler registry pattern)
 - **Serialize with:** App.jsx units

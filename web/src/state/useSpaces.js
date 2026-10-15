@@ -1,0 +1,306 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as api from '../api.js';
+import {
+  roleRank,
+  loadViewState,
+  saveViewState,
+  loadServerOrder,
+  saveServerOrder,
+  applyServerOrder,
+} from '../util.js';
+
+// Servers ("spaces") and navigation: the server list and rail order, the open
+// server and channel, its members, permissions derived from your role, the
+// server/channel/member actions, the gateway handlers that keep them current,
+// and saving/restoring what you were looking at.
+//   view / dmCurrent: what's showing, for save/restore
+//   onRestoreDm(name): reopen a saved DM after sign-in
+export function useSpaces({ token, myId, status, view, dmCurrent, onRestoreDm }) {
+  const [spaces, setSpaces] = useState([]);
+  const [serverOrder, setServerOrder] = useState([]); // user's custom rail order
+  const [currentSpace, setCurrentSpace] = useState('');
+  const [currentChannel, setCurrentChannel] = useState('');
+  const [members, setMembers] = useState([]);
+  const [error, setError] = useState('');
+  const [inviteCode, setInviteCode] = useState(null);
+  const [iconCrop, setIconCrop] = useState(null); // { src: File|url, initialCrop } while framing a server icon
+
+  // Handlers run outside render, so they read the latest selection from refs.
+  const spaceRef = useRef(currentSpace);
+  spaceRef.current = currentSpace;
+  const channelRef = useRef(currentChannel);
+  channelRef.current = currentChannel;
+
+  // ---- Derived ----
+  const orderedSpaces = useMemo(() => applyServerOrder(spaces, serverOrder), [spaces, serverOrder]);
+  const activeSpace = spaces.find((s) => s.name === currentSpace);
+  const channels = activeSpace ? activeSpace.channels : [];
+  const voiceChannels = activeSpace ? activeSpace.voiceChannels || [] : [];
+  const role = activeSpace ? activeSpace.role : null;
+  const canManage = role === 'owner' || role === 'admin';
+  const myRank = roleRank(role);
+  const channelMeta = activeSpace ? activeSpace.channelMeta || {} : {};
+  const canPostCurrent = myRank >= (channelMeta[currentChannel]?.post ?? 1);
+  // Whether I may delete someone else's message: my role meets the server's
+  // "delete others' messages" threshold and the author ranks below me (people
+  // who left rank 0). Mirrors the server check, which has the final say.
+  const moderationThreshold = activeSpace?.permissions?.delete_others_messages ?? 2;
+  const canModerate = myRank >= moderationThreshold
+    ? (author) => roleRank(members.find((mb) => mb.username === author)?.role) < myRank
+    : null;
+
+  async function loadSpaces() {
+    try {
+      const next = await api.getSpaces();
+      setSpaces(next);
+      setError('');
+      return next;
+    } catch (err) {
+      setError(err.message || 'Could not reach the server');
+      return [];
+    }
+  }
+
+  function refreshMembers(space) {
+    if (!space) return;
+    api.getMembers(space).then((r) => setMembers(r.members || [])).catch(() => {});
+  }
+
+  // Open a server at a channel (default: its first).
+  function goTo(name, list, channel) {
+    const s = list.find((x) => x.name === name);
+    setCurrentSpace(name);
+    setCurrentChannel(channel ?? (s && s.channels[0] ? s.channels[0] : ''));
+  }
+  const goToFirst = (list) => {
+    const first = list[0];
+    setCurrentSpace(first ? first.name : '');
+    setCurrentChannel(first && first.channels[0] ? first.channels[0] : '');
+  };
+
+  // Initial load after auth. Restore whatever the user was last looking at.
+  useEffect(() => {
+    if (!token) return;
+    loadSpaces().then((next) => {
+      if (spaceRef.current) return; // already positioned (e.g. arrived via invite)
+      const saved = loadViewState(myId);
+      if (saved && saved.view === 'dm' && saved.dm) {
+        onRestoreDm(saved.dm);
+        return;
+      }
+      if (saved && saved.space) {
+        const s = next.find((x) => x.name === saved.space);
+        if (s) {
+          goTo(saved.space, next, s.channels.includes(saved.channel) ? saved.channel : undefined);
+          return;
+        }
+      }
+      if (next.length) goToFirst(next);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // Load the saved rail order once we know who's signed in.
+  useEffect(() => {
+    if (myId) setServerOrder(loadServerOrder(myId));
+  }, [myId]);
+
+  // Persist the current view so a refresh returns you to the same place.
+  useEffect(() => {
+    if (!token || !myId) return;
+    if (view === 'server' && !currentSpace) return; // don't clobber saved state with the empty first render
+    saveViewState(myId, { view, space: currentSpace, channel: currentChannel, dm: dmCurrent });
+  }, [token, myId, view, currentSpace, currentChannel, dmCurrent]);
+
+  // If the current channel becomes hidden to us (permissions changed), fall back
+  // to the first channel we can still see.
+  useEffect(() => {
+    if (view === 'server' && currentChannel && channels.length && !channels.includes(currentChannel)) {
+      setCurrentChannel(channels[0] || '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels, currentChannel, view]);
+
+  // Load members on server switch and when the gateway (re)connects.
+  useEffect(() => {
+    if (!currentSpace) {
+      setMembers([]);
+      return;
+    }
+    refreshMembers(currentSpace);
+  }, [currentSpace, status]);
+
+  const handlers = {
+    presence: (p) => {
+      setMembers((prev) => prev.map((m) => (m.username === p.user ? { ...m, online: p.status === 'online' } : m)));
+    },
+    channel_created: () => loadSpaces(),
+    channel_deleted: (f) => {
+      loadSpaces().then((next) => {
+        if (spaceRef.current === f.space && channelRef.current === f.channel) {
+          const s = next.find((x) => x.name === f.space);
+          setCurrentChannel(s && s.channels[0] ? s.channels[0] : '');
+        }
+      });
+    },
+    space_deleted: (f) => {
+      loadSpaces().then((next) => {
+        if (spaceRef.current === f.space) goToFirst(next);
+      });
+    },
+    space_left: (f) => {
+      // You were removed from a server, or left it.
+      loadSpaces().then((next) => {
+        if (spaceRef.current === f.space) goToFirst(next);
+      });
+    },
+    members_changed: (f) => {
+      if (f.space === spaceRef.current) refreshMembers(f.space);
+      // A role change may affect *our own* permissions/channel visibility, so
+      // refresh the space list too (updates role, gears, hidden channels).
+      loadSpaces();
+    },
+    space_updated: () => loadSpaces(),
+    space_renamed: (f) => {
+      loadSpaces().then(() => {
+        if (spaceRef.current === f.space) setCurrentSpace(f.newName);
+      });
+    },
+  };
+
+  // Run an API action, showing `failure` (or the server's message) on error.
+  const attempt = (failure, fn) => async (...args) => {
+    try {
+      await fn(...args);
+    } catch (err) {
+      setError(err.message || failure);
+    }
+  };
+
+  const actions = {
+    selectSpace: (name) => goTo(name, spaces),
+    selectChannel: setCurrentChannel,
+    openChannel: (space, channel) => {
+      setCurrentSpace(space);
+      setCurrentChannel(channel);
+    },
+    reorder: (names) => {
+      setServerOrder(names);
+      saveServerOrder(myId, names);
+    },
+    createSpace: attempt('Could not create server', async (name) => {
+      await api.createSpace(name);
+      await loadSpaces();
+      setCurrentSpace(name);
+      setCurrentChannel('general');
+    }),
+    joinServer: attempt('Could not join server', async (code) => {
+      const res = await api.joinInvite(code.trim());
+      const next = await loadSpaces();
+      const s = next.find((x) => x.name === res.name);
+      goTo(res.name, next, s && s.channels[0] ? s.channels[0] : 'general');
+    }),
+    createChannel: attempt('Could not create channel', async (name, type = 'text') => {
+      if (!currentSpace) return;
+      const created = await api.createChannel(currentSpace, name, type);
+      const next = await loadSpaces();
+      const s = next.find((x) => x.name === currentSpace);
+      if (type === 'text' && s && created.name && s.channels.includes(created.name)) {
+        setCurrentChannel(created.name);
+      }
+    }),
+    makeInvite: attempt('Could not create invite', async () => {
+      const res = await api.createInvite(currentSpace);
+      setInviteCode(res.code);
+    }),
+    closeInvite: () => setInviteCode(null),
+    changeMemberRole: attempt('Could not change role', async (username, newRole) => {
+      await api.setMemberRole(currentSpace, username, newRole);
+      refreshMembers(currentSpace);
+    }),
+    kickMember: attempt('Could not remove member', async (username) => {
+      await api.kickMember(currentSpace, username);
+      refreshMembers(currentSpace);
+    }),
+    deleteServer: attempt('Could not delete server', async () => {
+      if (!currentSpace) return;
+      await api.deleteSpace(currentSpace);
+      // The gateway also broadcasts space_deleted; refresh proactively.
+      goToFirst(await loadSpaces());
+    }),
+    changeServerIcon: (file) => {
+      if (!currentSpace || !file) return;
+      if (!file.type.startsWith('image/')) {
+        setError('Please choose an image file for the server icon');
+        return;
+      }
+      setIconCrop({ src: file, initialCrop: null }); // frame it before uploading
+    },
+    reframeServerIcon: () => {
+      if (!activeSpace?.iconOriginal) return;
+      setIconCrop({ src: activeSpace.iconOriginal, initialCrop: activeSpace.iconCrop || null });
+    },
+    cancelIconCrop: () => setIconCrop(null),
+    saveServerIcon: attempt('Could not update the server icon', async ({ blob, crop }) => {
+      if (!currentSpace || !iconCrop) return;
+      // Keep the original so the icon can be re-framed later without re-uploading.
+      const original = typeof iconCrop.src === 'string' ? iconCrop.src : (await api.uploadFile(iconCrop.src)).url;
+      const up = await api.uploadFile(blob);
+      await api.setSpaceIcon(currentSpace, up.url, original, crop);
+      await loadSpaces();
+      setIconCrop(null);
+    }),
+    removeServerIcon: attempt('Could not remove the server icon', async () => {
+      if (!currentSpace) return;
+      await api.setSpaceIcon(currentSpace, '');
+      await loadSpaces();
+    }),
+    renameServer: attempt('Could not rename the server', async (newName) => {
+      const trimmed = (newName || '').trim();
+      if (!currentSpace || !trimmed || trimmed === currentSpace) return;
+      const res = await api.renameSpace(currentSpace, trimmed);
+      const finalName = res?.name || trimmed;
+      // Keep the server in the same spot in the rail across the rename.
+      const order = loadServerOrder(myId);
+      if (order.includes(currentSpace)) {
+        const nextOrder = order.map((n) => (n === currentSpace ? finalName : n));
+        saveServerOrder(myId, nextOrder);
+        setServerOrder(nextOrder);
+      }
+      setCurrentSpace(finalName);
+      await loadSpaces();
+    }),
+    reloadSpaces: loadSpaces,
+  };
+
+  // Forget everything (on logout).
+  function reset() {
+    setSpaces([]);
+    setCurrentSpace('');
+    setCurrentChannel('');
+    setMembers([]);
+  }
+
+  return {
+    spaces,
+    orderedSpaces,
+    currentSpace,
+    currentChannel,
+    activeSpace,
+    channels,
+    voiceChannels,
+    channelMeta,
+    role,
+    canManage,
+    canPostCurrent,
+    canModerate,
+    members,
+    memberNames: members.map((m) => m.username),
+    error,
+    inviteCode,
+    iconCrop,
+    handlers,
+    reset,
+    ...actions,
+  };
+}
