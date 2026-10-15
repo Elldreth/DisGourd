@@ -64,7 +64,7 @@ export default function ServerRail({
       >
         <Gourd size={34} color="#fff" title="Direct Messages" />
         {dmUnread > 0 && !dmActive && (
-          <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold">
+          <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
             {dmUnread > 99 ? '99+' : dmUnread}
           </span>
         )}
@@ -88,8 +88,8 @@ export default function ServerRail({
               onDragEnd={() => { setDragIndex(null); setDropIndex(null); }}
               className={`group relative flex h-12 w-12 items-center justify-center overflow-hidden font-semibold text-white transition-all duration-150 hover:rounded-2xl active:scale-90 ${
                 active ? 'rounded-2xl' : 'rounded-[26px]'
-              } ${dragIndex === i ? 'opacity-40' : ''} ${dropIndex === i && dragIndex !== i ? 'ring-2 ring-white/70' : ''}`}
-              style={{ backgroundColor: s.icon ? undefined : active ? '#7d6ff3' : colorForName(s.name) }}
+              } ${!s.icon && active ? 'bg-brand' : ''} ${dragIndex === i ? 'opacity-40' : ''} ${dropIndex === i && dragIndex !== i ? 'ring-2 ring-white/70' : ''}`}
+              style={{ backgroundColor: s.icon || active ? undefined : colorForName(s.name) }}
             >
               <span
                 className={`absolute -left-3 z-10 w-1 rounded-r bg-white transition-all ${
@@ -102,7 +102,7 @@ export default function ServerRail({
                 initials(s.name)
               )}
               {mentionCount > 0 && !active && (
-                <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-white">
+                <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
                   {mentionCount > 99 ? '99+' : mentionCount}
                 </span>
               )}
@@ -118,14 +118,14 @@ export default function ServerRail({
               onChange={(e) => setName(e.target.value)}
               onBlur={() => !name && setAdding(false)}
               placeholder="name"
-              className="w-14 rounded-lg bg-ink-700 px-1 py-1 text-center text-xs outline-none ring-1 ring-ink-500 focus:ring-brand"
+              className="w-14 rounded-lg bg-ink-700 px-1 py-1 text-center text-xs outline-none ring-1 ring-ink-500 focus:ring-brand-hi"
             />
           </form>
         ) : (
           <button
             onClick={() => { setAdding(true); setJoining(false); }}
             title="Create a server"
-            className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-white active:scale-90"
+            className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-ink-900 active:scale-90"
           >
             <Icon name="plus" size={24} />
           </button>

@@ -126,7 +126,7 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
                   <button
                     onClick={() => removePending(p.url)}
                     title="Remove"
-                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-bl bg-black/70 text-white hover:bg-danger"
+                    className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-bl bg-black/70 text-white hover:bg-danger hover:text-ink-900"
                   >
                     <Icon name="x" size={13} strokeWidth={2.2} />
                   </button>
@@ -173,7 +173,7 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
                 i === 0 ? 'bg-ink-600/60' : 'hover:bg-ink-600'
               }`}
             >
-              <span className="text-brand">@</span>
+              <span className="text-brand-hi">@</span>
               {n}
             </button>
           ))}

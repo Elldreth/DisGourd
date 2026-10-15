@@ -98,7 +98,7 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
 
 function RoleBadge({ children }) {
   return (
-    <span className="shrink-0 rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand">
+    <span className="shrink-0 rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-hi">
       {children}
     </span>
   );

@@ -16,7 +16,7 @@ function renderMentions(content, me) {
       return (
         <span
           key={i}
-          className={`rounded px-0.5 font-medium ${isMe ? 'bg-brand/40 text-white' : 'bg-brand/15 text-brand'}`}
+          className={`rounded px-0.5 font-medium ${isMe ? 'bg-brand/40 text-white' : 'bg-brand/15 text-brand-hi'}`}
         >
           {part}
         </span>
@@ -181,7 +181,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
   return (
     <div
       className={`group relative flex gap-3 px-2 py-0.5 transition-colors hover:bg-ink-600/40 ${grouped ? '' : 'mt-3'} ${
-        mentionsMe ? 'border-l-2 border-idle bg-idle/10' : ''
+        mentionsMe ? 'border-l-2 border-pink bg-pink/10' : ''
       }`}
     >
       <div className="w-10 shrink-0">
@@ -210,15 +210,15 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onKeyDown}
               rows={1}
-              className="w-full resize-none rounded-lg bg-ink-800 px-3 py-2 text-gray-100 outline-none ring-1 ring-ink-500 focus:ring-brand"
+              className="w-full resize-none rounded-lg bg-ink-800 px-3 py-2 text-gray-100 outline-none ring-1 ring-ink-500 focus:ring-brand-hi"
             />
             <div className="mt-1 text-xs text-gray-500">
               escape to{' '}
-              <button className="text-brand hover:underline" onClick={() => setEditing(false)}>
+              <button className="text-brand-hi hover:underline" onClick={() => setEditing(false)}>
                 cancel
               </button>{' '}
               · enter to{' '}
-              <button className="text-brand hover:underline" onClick={saveEdit}>
+              <button className="text-brand-hi hover:underline" onClick={saveEdit}>
                 save
               </button>
             </div>
@@ -248,8 +248,8 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
                       title={(r.users || []).join(', ')}
                       className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition ${
                         mineReacted
-                          ? 'bg-brand/25 text-white ring-brand'
-                          : 'bg-ink-600/60 text-gray-200 ring-ink-500/60 hover:ring-brand'
+                          ? 'bg-brand/25 text-white ring-brand-hi'
+                          : 'bg-ink-600/60 text-gray-200 ring-ink-500/60 hover:ring-brand-hi'
                       }`}
                     >
                       <span>{r.emoji}</span>

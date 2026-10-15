@@ -180,7 +180,7 @@ export default function AudioSettings({ onOutputChange, onPttChange, onMicChange
           <button
             onClick={() => (testing ? stopTest() : startTest())}
             className={`rounded px-2 py-1 text-xs font-semibold ${
-              testing ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+              testing ? 'bg-danger/80 text-ink-900 hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
             }`}
           >
             {testing ? 'Stop' : 'Test'}
