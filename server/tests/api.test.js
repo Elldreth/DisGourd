@@ -819,3 +819,50 @@ test('0.3 private channel events, unread, mentions and search never reach non-vi
   const ownerFound = await (await fetch(`${base}/search?q=secrets`, { headers: auth(owner) })).json();
   expect(ownerFound.channels.length).toBe(1);
 });
+
+test('0.4 X-Forwarded-For only counts behind a trusted proxy, and only its last hop', async () => {
+  const { clientIp, config } = serverModule;
+  const fakeReq = (xff) => ({ headers: xff ? { 'x-forwarded-for': xff } : {}, socket: { remoteAddress: '10.0.0.5' } });
+  const origTrust = config.trustProxy;
+  try {
+    config.trustProxy = false;
+    expect(clientIp(fakeReq('1.2.3.4'))).toBe('10.0.0.5');
+    config.trustProxy = true;
+    expect(clientIp(fakeReq('1.2.3.4, 203.0.113.9'))).toBe('203.0.113.9');
+    expect(clientIp(fakeReq())).toBe('10.0.0.5');
+  } finally {
+    config.trustProxy = origTrust;
+  }
+
+  // End to end: rotating a spoofed header no longer resets the login limit.
+  const origLimit = config.rateLimit;
+  config.rateLimit = true;
+  try {
+    const statuses = [];
+    for (let i = 0; i < 16; i++) {
+      const res = await fetch(`${baseUrl()}/login`, {
+        method: 'POST',
+        headers: { ...JSON_HEADERS, 'X-Forwarded-For': `198.51.100.${i}` },
+        body: JSON.stringify({ username: 'nobody-here', password: 'password123' }),
+      });
+      statuses.push(res.status);
+    }
+    expect(statuses.slice(0, 15).every((s) => s === 401)).toBe(true);
+    expect(statuses[15]).toBe(429);
+  } finally {
+    config.rateLimit = origLimit;
+  }
+});
+
+test('0.4 password hashing does not block the event loop', async () => {
+  // While a login's scrypt runs, a timer should still fire promptly.
+  const start = Date.now();
+  let timerDelay = null;
+  const timer = new Promise((r) => setTimeout(() => { timerDelay = Date.now() - start; r(); }, 1));
+  const login = fetch(`${baseUrl()}/login`, {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ username: 'carol', password: 'password123' }),
+  });
+  await Promise.all([timer, login]);
+  expect((await login).status).toBe(200);
+  expect(timerDelay).toBeLessThan(40);
+});

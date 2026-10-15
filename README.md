@@ -146,6 +146,7 @@ All settings are optional and provided via environment variables (or
 | `REGISTRATION_CODE`| _(none)_                 | An optional always-valid shared code (in addition to any codes minted in-app) |
 | `MAX_ACCOUNTS`     | `0` (unlimited)          | Cap on the total number of accounts                |
 | `SITE_ADMINS`      | _(none)_                 | Comma-separated usernames to make site admins (e.g. `alice,bob`)   |
+| `TRUST_PROXY`      | _(off)_                  | Set to `1` behind a reverse proxy so rate limits use the client IP from `X-Forwarded-For` (last hop). Leave off when clients connect directly |
 
 Example (Linux/macOS):
 

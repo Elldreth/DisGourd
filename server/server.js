@@ -36,6 +36,11 @@ config.registrationMode = regMode;
 config.maxAccounts = parseInt(process.env.MAX_ACCOUNTS, 10) || parseInt(config.maxAccounts, 10) || 0;
 config.siteAdmins = String(process.env.SITE_ADMINS || config.siteAdmins || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
+// Only trust X-Forwarded-For when a reverse proxy (e.g. SWAG/nginx) sits in
+// front; otherwise any client could spoof it to dodge the auth rate limits.
+config.trustProxy = /^(1|true|yes|on)$/i.test(String(process.env.TRUST_PROXY || config.trustProxy || ''));
+// Tests share one IP and register many users, so they run unthrottled.
+config.rateLimit = process.env.NODE_ENV !== 'test';
 
 // Seed the registration mode from env/config on first run; the DB is
 // authoritative afterwards so the in-app admin panel can change it. Also apply
@@ -95,9 +100,19 @@ function generateSalt() {
   return crypto.randomBytes(16).toString('hex');
 }
 
-function hashPassword(password, salt) {
-  const derived = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, SCRYPT_OPTS).toString('hex');
-  return SCRYPT_PREFIX + derived;
+// Async scrypt: the synchronous variant blocked the event loop (and with it
+// every chat socket) for each login attempt.
+function scryptHex(password, salt) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(String(password), salt, SCRYPT_KEYLEN, SCRYPT_OPTS, (err, key) => {
+      if (err) reject(err);
+      else resolve(key.toString('hex'));
+    });
+  });
+}
+
+async function hashPassword(password, salt) {
+  return SCRYPT_PREFIX + (await scryptHex(password, salt));
 }
 
 function hashPasswordLegacy(password, salt) {
@@ -112,13 +127,19 @@ function timingSafeEqualHex(a, b) {
 }
 
 // Verify a password against a stored user record.
-// Returns { ok, needsUpgrade } — needsUpgrade is true for legacy HMAC accounts
+// Resolves { ok, needsUpgrade } — needsUpgrade is true for legacy HMAC accounts
 // that should be re-hashed with scrypt after a successful login.
-function verifyPassword(password, user) {
-  if (!user || !user.password_hash) return { ok: false, needsUpgrade: false };
+const DUMMY_SALT = generateSalt();
+async function verifyPassword(password, user) {
+  if (!user || !user.password_hash) {
+    // Spend the same time as a real check so response timing doesn't reveal
+    // which usernames exist.
+    await scryptHex(password, DUMMY_SALT);
+    return { ok: false, needsUpgrade: false };
+  }
   if (user.password_hash.startsWith(SCRYPT_PREFIX)) {
     const stored = user.password_hash.slice(SCRYPT_PREFIX.length);
-    const computed = crypto.scryptSync(password, user.salt, SCRYPT_KEYLEN, SCRYPT_OPTS).toString('hex');
+    const computed = await scryptHex(password, user.salt);
     return { ok: timingSafeEqualHex(computed, stored), needsUpgrade: false };
   }
   const computed = hashPasswordLegacy(password, user.salt);
@@ -161,8 +182,7 @@ function verifyToken(token) {
 // ---- Rate limiting & validation for auth endpoints ----
 const rateBuckets = new Map();
 function rateLimitOk(key, max, windowMs) {
-  // Tests share one IP and register many users; don't throttle them.
-  if (process.env.NODE_ENV === 'test') return true;
+  if (!config.rateLimit) return true;
   const now = Date.now();
   let bucket = rateBuckets.get(key);
   if (!bucket || now > bucket.reset) {
@@ -184,10 +204,15 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
+// The address used for rate limiting. Behind a trusted proxy we take the LAST
+// X-Forwarded-For hop: that's the one the proxy itself appended, while
+// everything to its left is whatever the client chose to send.
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (fwd) return String(fwd).split(',')[0].trim();
-  return (req.socket && req.socket.remoteAddress) || 'unknown';
+  const direct = (req.socket && req.socket.remoteAddress) || 'unknown';
+  if (!config.trustProxy) return direct;
+  const hops = String(req.headers['x-forwarded-for'] || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  return hops.length ? hops[hops.length - 1] : direct;
 }
 
 // URL path segments arrive percent-encoded; names in the database are stored
@@ -502,7 +527,7 @@ async function handleHttp(req, res) {
         return res.end(JSON.stringify({ error: 'User already exists' }));
       }
       const salt = generateSalt();
-      const hash = hashPassword(password, salt);
+      const hash = await hashPassword(password, salt);
       const userId = db.createUser(username, email, hash, salt);
       if (usedCode) db.incrementRegCodeUses(usedCode.id);
       const token = createToken(userId, username);
@@ -520,15 +545,18 @@ async function handleHttp(req, res) {
         return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
       }
       const { username, password } = await getJsonBody(req);
+      if (typeof username !== 'string' || typeof password !== 'string' || password.length > 200) {
+        return sendJson(res, 401, { error: 'Invalid credentials' });
+      }
       const user = db.getUserByUsername(username);
-      const check = verifyPassword(password, user);
+      const check = await verifyPassword(password, user);
       if (!user || !check.ok) {
         res.writeHead(401);
         return res.end(JSON.stringify({ error: 'Invalid credentials' }));
       }
       if (check.needsUpgrade) {
         const newSalt = generateSalt();
-        db.setUserPassword(user.id, hashPassword(password, newSalt), newSalt);
+        db.setUserPassword(user.id, await hashPassword(password, newSalt), newSalt);
       }
       const token = createToken(user.id, user.username);
       res.writeHead(200);
@@ -1492,4 +1520,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { httpServer, wss, config, db, isWeakSecret, resolveJwtSecret };
+module.exports = { httpServer, wss, config, db, isWeakSecret, resolveJwtSecret, clientIp };
