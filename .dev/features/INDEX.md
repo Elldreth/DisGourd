@@ -34,7 +34,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-14 | App split 3/3: spaces + voice hooks | 1 | PLANNED | M | P1-13 | App.jsx, state/useSpaces.js, state/useVoiceCall.js |
 | P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | READY | S | none | Dockerfile, docker-compose.yml, README.md |
 | P1-16 | Nightly VACUUM INTO backups | 1 | COMPLETE | S | none | backup.js (new), server.js (boot), README.md |
-| P1-17 | GitHub Actions CI | 1 | REVIEW | S | none | .github/workflows/ci.yml |
+| P1-17 | GitHub Actions CI | 1 | COMPLETE | S | none | .github/workflows/ci.yml |
 | P1-18 | Bump Vite | 1 | READY | S | none | web/package.json, vite.config.js |
 | P1-19 | Web test harness (Vitest) | 1 | PLANNED | S | P1-18 | web/package.json, vite.config.js |
 | P2-01 | Markdown core | 2 | PLANNED | S–M | P1-19 | markdown.jsx (new), MessageList.jsx, index.css |
@@ -63,7 +63,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-02 | Remaining overlays → Modal | 3 | PLANNED | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
 | P3-03 | Icon-button labels sweep | 3 | PLANNED | S–M | P3-02, P3-05 | IconButton.jsx (new), ~12 components (exclusive) |
 | P3-04 | Create/Join server dialog | 3 | PLANNED | S | P3-01 | CreateServerDialog.jsx (new), ServerRail.jsx, App.jsx |
-| P3-05 | Accessible message actions | 3 | READY | M | none | MessageList.jsx, MessageActions.jsx (new) |
+| P3-05 | Accessible message actions | 3 | REVIEW | M | none | MessageList.jsx, MessageActions.jsx (new) |
 | P3-06 | Server icon + templates at creation | 3 | PLANNED | S–M | P3-04, P1-06 | routes/spaces.js, CreateServerDialog.jsx |
 | P3-07 | Setup wizard improvements | 3 | READY | S | none | SetupWizard.jsx |
 | P3-08 | In-app confirm (kick, delete server) | 3 | PLANNED | S | P3-01 | ConfirmDialog.jsx (new), MemberList.jsx, ChannelList.jsx |
