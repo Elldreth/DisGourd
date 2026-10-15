@@ -123,7 +123,7 @@ export default function RegistrationAdmin() {
               const st = codeStatus(c);
               return (
                 <div key={c.id} className="flex items-center gap-2 rounded bg-ink-800 px-2 py-1.5 text-sm">
-                  <code className="font-mono text-brand">{c.code}</code>
+                  <code className="font-mono text-brand-hi">{c.code}</code>
                   <span className="text-xs text-gray-500">
                     {c.uses}/{c.maxUses ?? '∞'} used{c.expiresAt ? ` · exp ${new Date(c.expiresAt).toLocaleDateString()}` : ''}
                   </span>

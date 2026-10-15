@@ -1,14 +1,18 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/space-grotesk';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: dark;
+  accent-color: theme('colors.brand.DEFAULT'); /* native checkboxes, ranges */
 }
 
 @layer components {
   .input {
-    @apply w-full rounded-lg bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none ring-1 ring-ink-500/60 transition placeholder:text-gray-500 focus:ring-2 focus:ring-brand;
+    @apply w-full rounded-lg bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none ring-1 ring-ink-500/60 transition placeholder:text-gray-500 focus:ring-2 focus:ring-brand-hi;
   }
 }
 
@@ -21,6 +25,13 @@ body,
 body {
   margin: 0;
   @apply bg-ink-700 text-gray-100 font-sans antialiased;
+}
+
+/* Space Grotesk for headings; Inter (the body default) for everything else. */
+h1,
+h2,
+h3 {
+  @apply font-display;
 }
 
 /* Slim, unobtrusive scrollbars that match the dark theme. */
@@ -40,17 +51,17 @@ body {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background-color: #3d4152;
+  background-color: theme('colors.gray.700');
 }
 
 /* Visible keyboard focus everywhere; mouse clicks stay clean. */
 :focus-visible {
-  outline: 2px solid #8f83f7;
+  outline: 2px solid theme('colors.brand.hi');
   outline-offset: 2px;
 }
 
 ::selection {
-  background: rgba(125, 111, 243, 0.35);
+  background: theme('colors.brand.DEFAULT / 45%');
 }
 
 /* --- Motion --------------------------------------------------------------

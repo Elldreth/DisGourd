@@ -114,7 +114,7 @@ export default function ChannelList({
               onBlur={() => setRenaming(false)}
               onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
               maxLength={60}
-              className="w-full rounded bg-ink-900 px-2 py-1 text-sm font-bold outline-none ring-1 ring-brand"
+              className="w-full rounded bg-ink-900 px-2 py-1 text-sm font-bold outline-none ring-1 ring-brand-hi"
             />
           </form>
         ) : (
@@ -137,7 +137,7 @@ export default function ChannelList({
                   onInvite();
                 }}
               >
-                <Icon name="plus" size={16} className="text-brand" /> Invite people
+                <Icon name="plus" size={16} className="text-brand-hi" /> Invite people
               </MenuItem>
               {canManage && (
                 <MenuItem onClick={startRename}>
@@ -237,7 +237,7 @@ export default function ChannelList({
               onChange={(e) => setName(e.target.value)}
               onBlur={() => !name && setAdding(false)}
               placeholder="new-channel"
-              className="w-full rounded bg-ink-900 px-2 py-1 text-sm outline-none ring-1 ring-ink-500 focus:ring-brand"
+              className="w-full rounded bg-ink-900 px-2 py-1 text-sm outline-none ring-1 ring-ink-500 focus:ring-brand-hi"
             />
           </form>
         )}
@@ -263,7 +263,7 @@ export default function ChannelList({
                 <span className="flex-1 truncate">{c}</span>
                 {restricted && <span title="Restricted access" className="shrink-0 text-gray-500"><Icon name="shield" size={13} /></span>}
                 {mentionCount > 0 ? (
-                  <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-white tabular-nums">
+                  <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-ink-900 tabular-nums">
                     {mentionCount}
                   </span>
                 ) : hasUnread ? (
@@ -312,7 +312,7 @@ export default function ChannelList({
                   onChange={(e) => setVoiceName(e.target.value)}
                   onBlur={() => !voiceName && setAddingVoice(false)}
                   placeholder="voice-channel"
-                  className="w-full rounded bg-ink-900 px-2 py-1 text-sm outline-none ring-1 ring-ink-500 focus:ring-brand"
+                  className="w-full rounded bg-ink-900 px-2 py-1 text-sm outline-none ring-1 ring-ink-500 focus:ring-brand-hi"
                 />
               </form>
             )}
@@ -386,7 +386,7 @@ export default function ChannelList({
             <button
               onClick={onLeaveVoice}
               title="Disconnect"
-              className="rounded bg-danger/80 px-2 py-1 text-xs font-semibold text-white hover:bg-danger"
+              className="rounded bg-danger/80 px-2 py-1 text-xs font-semibold text-ink-900 hover:bg-danger"
             >
               Leave
             </button>
@@ -397,7 +397,7 @@ export default function ChannelList({
                 onClick={onToggleMute}
                 title={voiceMuted ? 'Unmute (Ctrl+Shift+M)' : 'Mute (Ctrl+Shift+M)'}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
-                  voiceMuted ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+                  voiceMuted ? 'bg-danger/80 text-ink-900 hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
                 }`}
               >
                 <Icon name={voiceMuted ? 'micOff' : 'mic'} size={17} />
@@ -407,7 +407,7 @@ export default function ChannelList({
               onClick={onToggleDeafen}
               title={voiceDeafened ? 'Undeafen (Ctrl+Shift+D)' : 'Deafen (Ctrl+Shift+D)'}
               className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
-                voiceDeafened ? 'bg-danger/80 text-white hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
+                voiceDeafened ? 'bg-danger/80 text-ink-900 hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
               }`}
             >
               <Icon name={voiceDeafened ? 'headphonesOff' : 'headphones'} size={17} />
@@ -438,7 +438,7 @@ export default function ChannelList({
               onClick={onToggleShare}
               className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
                 voiceSharing
-                  ? 'bg-danger/80 text-white hover:bg-danger'
+                  ? 'bg-danger/80 text-ink-900 hover:bg-danger'
                   : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
               }`}
             >
