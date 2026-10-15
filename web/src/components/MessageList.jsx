@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
 import Icon from './Icon.jsx';
@@ -68,8 +68,9 @@ function renderRich(content, me, withMentions) {
 // single block, and inserts day dividers — the familiar chat reading rhythm.
 // `canModerate(author)` (optional) says whether you may delete that author's
 // messages as a moderator.
-// `onReply(message)` (optional) adds a Reply action.
-export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, simple = false, emptyHeading, emptyBody }) {
+// `onReply(message)` (optional) adds a Reply action. `onLoadOlder` (optional)
+// is called when you scroll near the top while `hasMore`.
+export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, simple = false, emptyHeading, emptyBody }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // When a channel is first opened (or the transcript was cleared on switch /
@@ -98,10 +99,44 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
     timers.current.push(setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 2000));
   }
 
+  // Loading older messages: a sentinel at the top asks for the next page, and
+  // the scroll position is restored after the prepend so the view doesn't jump.
+  const topSentinel = useRef(null);
+  const prependAnchor = useRef(null); // { height, top } captured before a load
+  const firstIdRef = useRef(null);
+  const loadOlderRef = useRef(null);
+  loadOlderRef.current = hasMore && !loadingOlder && onLoadOlder ? onLoadOlder : null;
+
   useEffect(() => {
     const el = containerRef.current;
+    const sentinel = topSentinel.current;
+    if (!el || !sentinel || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting) || !loadOlderRef.current) return;
+        prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop };
+        loadOlderRef.current();
+      },
+      { root: el, rootMargin: '300px 0px 0px 0px' }
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [hasMore, loadingOlder]);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
     if (!el) return;
+    const firstId = messages[0]?.id;
+    const prepended = prependAnchor.current && firstIdRef.current != null && firstId !== firstIdRef.current;
+    firstIdRef.current = firstId ?? null;
+    if (prepended) {
+      // Older messages were added above: keep what you were looking at in place.
+      el.scrollTop = prependAnchor.current.top + (el.scrollHeight - prependAnchor.current.height);
+      prependAnchor.current = null;
+      return;
+    }
     if (messages.length === 0) {
+      prependAnchor.current = null;
       pendingInitialScroll.current = true; // empty transcript → next load lands at the bottom
       return;
     }
@@ -163,7 +198,16 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
         aria-label={simple ? 'Messages' : `Messages in #${channel}`}
         className="flex min-h-full flex-col justify-end px-4 py-4"
       >
-        {messages.length === 0 && (
+        <div ref={topSentinel} aria-hidden="true" />
+        {loadingOlder && (
+          <div role="status" className="flex items-center justify-center gap-2 py-3 text-sm text-gray-500">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-500 border-t-transparent" aria-hidden="true" />
+            Loading older messages…
+          </div>
+        )}
+        {/* The start of the conversation: shown when empty, or once you've
+            scrolled back to the very first message. */}
+        {!hasMore && !loadingOlder && (
           <div className="py-10 text-center text-gray-500">
             <div className="mb-3 flex justify-center">
               {simple ? <span className="text-5xl">💬</span> : <Icon name="hash" size={52} className="text-gray-600" />}

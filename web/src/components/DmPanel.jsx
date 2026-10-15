@@ -5,7 +5,7 @@ import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
 
 // The conversation view in Direct Messages mode.
-export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, onTyping, onOpenSearch, onOpenNav }) {
+export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, onTyping, onOpenSearch, onOpenNav }) {
   if (!username) {
     return (
       <main className="relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
@@ -54,6 +54,9 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
         currentUser={currentUser}
         onEdit={onEdit}
         onDelete={onDelete}
+        hasMore={hasMore}
+        loadingOlder={loadingOlder}
+        onLoadOlder={onLoadOlder}
         simple
         emptyHeading={`This is the beginning of your conversation with ${username}`}
         emptyBody="Say hi! 👋"
