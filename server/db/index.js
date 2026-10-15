@@ -556,6 +556,17 @@ function getMessages(spaceName, channelName, limit = 20, offset = 0) {
   return attachReactions(rows.map(hydrateAttachments));
 }
 
+// The page of messages just older than `beforeId`, returned oldest-first — used
+// to scroll back through history.
+function getMessagesBefore(spaceName, channelName, beforeId, limit = 50) {
+  const rows = db.prepare(`${MESSAGE_SELECT}
+    WHERE s.name = ? AND c.name = ? AND m.id < ?
+    ORDER BY m.id DESC
+    LIMIT ?
+  `).all(spaceName, channelName, beforeId, limit).reverse();
+  return attachReactions(rows.map(hydrateAttachments));
+}
+
 // Messages newer than a given id, oldest-first — used to backfill gaps after a
 // client reconnects so no messages are missed during a network blip.
 function getMessagesAfter(spaceName, channelName, afterId, limit = 200) {
@@ -763,6 +774,13 @@ function getDmMessages(userId, otherId, limit = 50, offset = 0) {
   const [a, b] = dmPair(userId, otherId);
   return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? ORDER BY m.id DESC LIMIT ? OFFSET ?`)
     .all(a, b, limit, offset).reverse().map(hydrateAttachments);
+}
+
+// The page of DMs just older than `beforeId`, oldest-first.
+function getDmMessagesBefore(userId, otherId, beforeId, limit = 50) {
+  const [a, b] = dmPair(userId, otherId);
+  return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id < ? ORDER BY m.id DESC LIMIT ?`)
+    .all(a, b, beforeId, limit).reverse().map(hydrateAttachments);
 }
 
 function getDmMessagesAfter(userId, otherId, afterId, limit = 200) {
@@ -1048,6 +1066,7 @@ module.exports = {
   deleteMessage,
   getMessages,
   getMessagesAfter,
+  getMessagesBefore,
   toggleReaction,
   getReaction,
   isMessageInChannel,
@@ -1061,6 +1080,7 @@ module.exports = {
   storeDm,
   getDmMessages,
   getDmMessagesAfter,
+  getDmMessagesBefore,
   getDmById,
   editDm,
   deleteDm,

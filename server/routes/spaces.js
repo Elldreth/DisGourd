@@ -144,11 +144,15 @@ const routes = [
       if (pathSegments[2] === 'channels') {
         const channelName = pathSegments[3];
         // GET messages — must be a member AND allowed to view this channel.
+        // Latest page by default; ?before=<id> pages back, ?after=<id> backfills
+        // (after > before > offset).
         if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
           if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
           if (after > 0) return sendJson(res, 200, db.getMessagesAfter(spaceName, channelName, after));
           const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
+          const before = intParam(parsedUrl.query.before, 0, 0, Number.MAX_SAFE_INTEGER);
+          if (before > 0) return sendJson(res, 200, db.getMessagesBefore(spaceName, channelName, before, limit));
           const offset = intParam(parsedUrl.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
           return sendJson(res, 200, db.getMessages(spaceName, channelName, limit, offset));
         }

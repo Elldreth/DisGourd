@@ -21,13 +21,15 @@ const routes = [
         const convos = db.getDmConversations(userId).map((c) => ({ ...c, unread: unread[c.username] || 0 }));
         return sendJson(res, 200, convos);
       }
-      // GET /dms/:username/messages — history (optionally ?after=<id>)
+      // GET /dms/:username/messages — latest history; ?before=<id> pages back, ?after=<id> backfills
       if (pathSegments[2] === 'messages' && req.method === 'GET') {
         const other = db.getUserByUsername(pathSegments[1]);
         if (!other) return sendJson(res, 404, { error: 'User not found' });
         const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
         if (after > 0) return sendJson(res, 200, db.getDmMessagesAfter(userId, other.id, after));
         const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
+        const before = intParam(parsedUrl.query.before, 0, 0, Number.MAX_SAFE_INTEGER);
+        if (before > 0) return sendJson(res, 200, db.getDmMessagesBefore(userId, other.id, before, limit));
         return sendJson(res, 200, db.getDmMessages(userId, other.id, limit, 0));
       }
       return sendJson(res, 404, { error: 'Not found' });
