@@ -29,7 +29,7 @@ const indexNames = (raw) =>
 
 test('a fresh database ends at the latest version with the hot-path indexes', () => {
   const db = bootDb(':memory:');
-  expect(LATEST_VERSION).toBe(2);
+  expect(LATEST_VERSION).toBe(MIGRATIONS[MIGRATIONS.length - 1].version);
   expect(db.raw.pragma('user_version', { simple: true })).toBe(LATEST_VERSION);
   expect(indexNames(db.raw).sort()).toEqual(['idx_dm_pair', 'idx_mentions_user', 'idx_messages_channel']);
 });
@@ -102,7 +102,9 @@ test('a failing migration aborts with a clear error and leaves the version uncha
       },
     },
   ];
-  expect(() => runMigrations(raw, broken)).toThrow(/migration 3 \(broken on purpose\) failed: boom/i);
+  expect(() => runMigrations(raw, broken)).toThrow(
+    new RegExp(`migration ${LATEST_VERSION + 1} \\(broken on purpose\\) failed: boom`, 'i')
+  );
   expect(raw.pragma('user_version', { simple: true })).toBe(LATEST_VERSION);
   // Rolled back: the table created before the throw is gone.
   expect(raw.prepare("SELECT name FROM sqlite_master WHERE name = 'half_done'").get()).toBeUndefined();

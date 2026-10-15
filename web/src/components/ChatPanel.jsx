@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
@@ -22,6 +23,10 @@ export default function ChatPanel({
   onOpenSearch,
   onOpenNav,
 }) {
+  // The message being replied to ({ id, author }), shown above the composer.
+  const [replyingTo, setReplyingTo] = useState(null);
+  useEffect(() => setReplyingTo(null), [space, channel]);
+
   if (!space) {
     return (
       <Empty
@@ -80,6 +85,7 @@ export default function ChatPanel({
         onDelete={onDelete}
         canModerate={canModerate}
         onReact={onReact}
+        onReply={canPost ? (m) => setReplyingTo({ id: m.id, author: m.author }) : null}
       />
       <TypingIndicator names={typingUsers} />
       {canPost ? (
@@ -87,9 +93,14 @@ export default function ChatPanel({
         <Composer
           channel={channel}
           disabled={false}
-          onSend={onSend}
+          onSend={(content, attachments, spoiler) => {
+            onSend(content, attachments, spoiler, replyingTo ? replyingTo.id : undefined);
+            setReplyingTo(null);
+          }}
           onTyping={onTyping}
           mentionCandidates={memberNames}
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
         />
       ) : (
         <div className="mx-4 mb-5 mt-1 flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-3 text-center text-sm text-gray-400 ring-1 ring-ink-500/40">

@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as api from '../api.js';
 import { attachmentInfo } from '../util.js';
 import Icon from './Icon.jsx';
 
-export default function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [] }) {
+export default function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], replyingTo, onCancelReply }) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState([]); // [{ url, name, size }] — an album
   const [spoilerPending, setSpoilerPending] = useState(false);
@@ -15,6 +15,11 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
   const lastTypingRef = useRef(0);
 
   const MAX_ATTACHMENTS = 10;
+
+  // Starting a reply puts the cursor in the message box.
+  useEffect(() => {
+    if (replyingTo) taRef.current?.focus();
+  }, [replyingTo]);
 
   function pickMention(name) {
     setText((prev) => prev.replace(/@([A-Za-z0-9_.-]*)$/, `@${name} `));
@@ -68,6 +73,11 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
     }
     if (e.key === 'Escape' && mentionMatch) {
       setMentionMatch(null);
+      return;
+    }
+    if (e.key === 'Escape' && replyingTo) {
+      e.preventDefault();
+      onCancelReply?.();
       return;
     }
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -180,7 +190,28 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
         </div>
       )}
 
-      <div className="flex items-end gap-2 rounded-xl bg-ink-600/70 px-3 py-2 ring-1 ring-inset ring-transparent transition focus-within:ring-brand/40">
+      {replyingTo && (
+        <div className="flex items-center gap-2 rounded-t-xl bg-ink-800 px-3 py-1.5 text-sm text-gray-400 ring-1 ring-ink-500/40">
+          <Icon name="reply" size={14} className="shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            Replying to <span className="font-semibold text-gray-200">@{replyingTo.author || 'Unknown'}</span>
+          </span>
+          <span className="hidden text-xs text-gray-500 sm:inline">esc to cancel</span>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            title="Cancel reply"
+            aria-label="Cancel reply"
+            className="rounded p-0.5 text-gray-400 hover:bg-ink-600 hover:text-white"
+          >
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+      )}
+
+      <div className={`flex items-end gap-2 bg-ink-600/70 px-3 py-2 ring-1 ring-inset ring-transparent transition focus-within:ring-brand/40 ${
+        replyingTo ? 'rounded-b-xl' : 'rounded-xl'
+      }`}>
         <button
           onClick={() => fileRef.current?.click()}
           disabled={disabled}

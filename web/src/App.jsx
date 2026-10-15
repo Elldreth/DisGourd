@@ -710,8 +710,8 @@ export default function App() {
     }
   }
 
-  const sendMessage = (content, attachments, spoiler) =>
-    send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachments, spoiler });
+  const sendMessage = (content, attachments, spoiler, replyTo) =>
+    send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachments, spoiler, replyTo });
   const editMessage = (id, content) => send({ op: 'edit', id, content });
   const deleteMessage = (id) => send({ op: 'delete', id });
   const reactToMessage = (id, emoji) => send({ op: 'react', id, emoji });
