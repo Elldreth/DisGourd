@@ -1,6 +1,14 @@
-// HTTP route modules, tried in order before the remaining inline routes in
-// server.js. Each exports `handle(ctx)`, which resolves true if it answered.
-const modules = [require('./auth'), require('./admin'), require('./social')];
+// HTTP route modules, tried in order. Each exports `handle(ctx)`, which
+// resolves true if it answered; unmatched requests fall through to the
+// web-client / 404 handling in http/handler.js.
+const modules = [
+  require('./auth'),
+  require('./admin'),
+  require('./social'),
+  require('./spaces'),
+  require('./invites'),
+  require('./uploads'),
+];
 
 async function dispatch(ctx) {
   for (const m of modules) {

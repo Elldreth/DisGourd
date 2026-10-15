@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Split server.js"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#41)
 - **Effort:** M
 - **Depends on:** P1-02
 - **Serialize with:** P1-04, P1-05, P1-07, P1-16 (all edit `server.js`)

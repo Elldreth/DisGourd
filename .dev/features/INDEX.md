@@ -20,8 +20,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 |---|---|---|---|---|---|---|
 | P1-01 | Versioned migrations + pragmas + indexes | 1 | READY | M | none | db/index.js, db/migrations.js (new) |
 | P1-02 | Server split 1/4: core modules | 1 | COMPLETE | M | none | server.js, config.js, auth/*, http/util.js, validate.js, permissions.js, gateway/delivery.js |
-| P1-03 | Server split 2/4: auth/admin/social routes | 1 | REVIEW | M | P1-02 | server.js, routes/{index,auth,admin,social}.js |
-| P1-04 | Server split 3/4: spaces/invites/uploads/static | 1 | PLANNED | M | P1-03 | server.js, routes/{spaces,invites,uploads}.js, static.js, http/handler.js |
+| P1-03 | Server split 2/4: auth/admin/social routes | 1 | COMPLETE | M | P1-02 | server.js, routes/{index,auth,admin,social}.js |
+| P1-04 | Server split 3/4: spaces/invites/uploads/static | 1 | REVIEW | M | P1-03 | server.js, routes/{spaces,invites,uploads}.js, static.js, http/handler.js |
 | P1-05 | Server split 4/4: gateway | 1 | PLANNED | M | P1-04 | server.js, gateway/{index,router,chat,dm,voice}.js |
 | P1-06 | Transactions (space create, msg+mentions, invite, registration) | 1 | PLANNED | S–M | P1-03, P1-04, P1-05 | db/index.js, routes/*, gateway/chat.js |
 | P1-07 | Cursor pagination API (`before`) | 1 | READY | S | none (soft P1-01) | db/index.js, server.js (2 handlers) |
