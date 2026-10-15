@@ -2,12 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { useHandlerTable } from './state/gatewayHandlers.js';
-import { useChannelMessages, unreadKey, badgeCounts, pruneExpired } from './state/useChannelMessages.js';
-import { useHistoryPaging } from './state/useHistoryPaging.js';
+import { useChannelMessages, unreadKey, badgeCounts } from './state/useChannelMessages.js';
+import { useDms } from './state/useDms.js';
 import { createVoiceController } from './voice.js';
 import { getPttEnabled, getPttKey } from './audio.js';
 import {
-  mergeMessages,
   roleRank,
   loadViewState,
   saveViewState,
@@ -73,24 +72,12 @@ export default function App() {
 
   // Direct messages
   const [view, setView] = useState('server'); // 'server' | 'dm'
-  const [dms, setDms] = useState([]); // conversation list
-  const [currentDm, setCurrentDm] = useState(''); // partner username
-  const [dmMessages, setDmMessages] = useState([]);
-  const [dmUnread, setDmUnread] = useState({}); // username -> count
-  const [dmTyping, setDmTyping] = useState({}); // username -> expires-at ms
-  const dmPaging = useHistoryPaging(`dm:${currentDm}`);
 
   // Refs so gateway handlers (created once) can read the latest selection.
   const spaceRef = useRef(currentSpace);
   spaceRef.current = currentSpace;
   const channelRef = useRef(currentChannel);
   channelRef.current = currentChannel;
-  const viewRef = useRef(view);
-  viewRef.current = view;
-  const dmRef = useRef(currentDm);
-  dmRef.current = currentDm;
-  const userRef = useRef(user);
-  userRef.current = user;
 
   // Apply the user's custom server ordering for the rail.
   const orderedSpaces = useMemo(() => applyServerOrder(spaces, serverOrder), [spaces, serverOrder]);
@@ -132,10 +119,6 @@ export default function App() {
     api.getMembers(space).then((r) => setMembers(r.members || [])).catch(() => {});
   }
 
-  function loadDms() {
-    api.getDms().then(setDms).catch(() => {});
-  }
-
   // Initial load after auth. Restore whatever the user was last looking at.
   useEffect(() => {
     if (!token) return;
@@ -144,7 +127,7 @@ export default function App() {
       const saved = loadViewState(myId);
       if (saved && saved.view === 'dm' && saved.dm) {
         setView('dm');
-        setCurrentDm(saved.dm);
+        dm.select(saved.dm);
         return;
       }
       if (saved && saved.space) {
@@ -169,13 +152,6 @@ export default function App() {
     if (myId) setServerOrder(loadServerOrder(myId));
   }, [myId]);
 
-  // Persist the current view so a refresh returns you to the same place.
-  useEffect(() => {
-    if (!token || !myId) return;
-    if (view === 'server' && !currentSpace) return; // don't clobber saved state with the empty first render
-    saveViewState(myId, { view, space: currentSpace, channel: currentChannel, dm: currentDm });
-  }, [token, myId, view, currentSpace, currentChannel, currentDm]);
-
   // ---- Gateway (one connection for the whole app) ----
   // Feature hooks add their frame handlers to this table (filled below).
   const gatewayTable = useHandlerTable();
@@ -188,6 +164,14 @@ export default function App() {
     send,
     status,
   });
+  const dm = useDms({ active: view === 'dm', user, send, status });
+
+  // Persist the current view so a refresh returns you to the same place.
+  useEffect(() => {
+    if (!token || !myId) return;
+    if (view === 'server' && !currentSpace) return; // don't clobber saved state with the empty first render
+    saveViewState(myId, { view, space: currentSpace, channel: currentChannel, dm: dm.current });
+  }, [token, myId, view, currentSpace, currentChannel, dm.current]);
 
   const handlers = useMemo(
     () => ({
@@ -244,52 +228,11 @@ export default function App() {
       voice_peer_joined: (f) => voiceRef.current && voiceRef.current.handlePeerJoined(f.peer),
       voice_peer_left: (f) => voiceRef.current && voiceRef.current.handlePeerLeft(f.userId),
       voice_signal: (f) => voiceRef.current && voiceRef.current.handleSignal(f.from, f.data),
-      dm: (m) => {
-        const me = userRef.current;
-        const partner = m.from === me ? m.to : m.from;
-        const viewing = viewRef.current === 'dm' && dmRef.current === partner;
-        if (viewing) {
-          // Normalize the live frame to the shared message shape (author/authorAvatar).
-          const normalized = {
-            id: m.id,
-            author: m.from,
-            authorAvatar: m.fromAvatar,
-            content: m.content,
-            attachment: m.attachment,
-            attachments: m.attachments,
-            spoiler: m.spoiler,
-            timestamp: m.timestamp,
-          };
-          setDmMessages((prev) => mergeMessages(prev, [normalized]));
-          if (m.id) send({ op: 'dm_read', with: partner, lastId: m.id });
-        } else if (m.from !== me) {
-          setDmUnread((prev) => ({ ...prev, [partner]: (prev[partner] || 0) + 1 }));
-        }
-        if (viewRef.current === 'dm') loadDms(); // refresh previews/order
-      },
-      dm_update: (u) => {
-        setDmMessages((prev) =>
-          prev.map((m) => (m.id === u.id ? { ...m, content: u.content, editedAt: u.editedAt } : m))
-        );
-      },
-      dm_delete: (d) => {
-        setDmMessages((prev) => prev.filter((m) => m.id !== d.id));
-      },
-      dm_typing: (t) => {
-        if (viewRef.current === 'dm' && dmRef.current === t.from) {
-          setDmTyping((prev) => ({ ...prev, [t.from]: Date.now() + 4000 }));
-        }
-      },
-      dm_unread: (f) => {
-        const map = {};
-        for (const c of f.counts || []) map[c.with] = c.count;
-        setDmUnread(map);
-      },
     }),
     []
   );
 
-  gatewayTable.fill(handlers, chat.handlers);
+  gatewayTable.fill(handlers, chat.handlers, dm.handlers);
 
   // Voice controller (WebRTC mesh). Recreated per session; tears down its call
   // when the user (or the session) changes.
@@ -345,37 +288,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels, currentChannel, view]);
 
-  // Focus + load a DM conversation (also on reconnect).
-  useEffect(() => {
-    if (view !== 'dm' || !currentDm) {
-      setDmMessages([]);
-      setDmTyping({});
-      return undefined;
-    }
-    send({ op: 'focus' }); // clear any channel focus
-    send({ op: 'dm_focus', with: currentDm });
-    let cancelled = false;
-    api
-      .getDmMessages(currentDm)
-      .then((msgs) => {
-        if (cancelled) return;
-        setDmMessages(msgs);
-        dmPaging.pageLoaded(`dm:${currentDm}`, msgs.length);
-        const maxId = msgs.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
-        send({ op: 'dm_read', with: currentDm, lastId: maxId });
-        setDmUnread((prev) => {
-          if (!prev[currentDm]) return prev;
-          const next = { ...prev };
-          delete next[currentDm];
-          return next;
-        });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [view, currentDm, status, send]);
-
   // Load members on server switch and when the gateway (re)connects.
   useEffect(() => {
     if (!currentSpace) {
@@ -384,12 +296,6 @@ export default function App() {
     }
     refreshMembers(currentSpace);
   }, [currentSpace, status]);
-
-  // Expire DM typing indicators a few seconds after the last keystroke event.
-  useEffect(() => {
-    const iv = setInterval(() => setDmTyping(pruneExpired), 1000);
-    return () => clearInterval(iv);
-  }, []);
 
   // ---- Actions ----
   function logout() {
@@ -404,10 +310,7 @@ export default function App() {
     setMembers([]);
     setProfile(null);
     setView('server');
-    setDms([]);
-    setCurrentDm('');
-    setDmMessages([]);
-    setDmUnread({});
+    dm.reset();
   }
 
   function selectSpace(name) {
@@ -419,19 +322,18 @@ export default function App() {
 
   function openDms() {
     setView('dm');
-    loadDms();
+    dm.loadConversations();
   }
 
   function selectDm(username) {
     setView('dm');
-    setCurrentDm(username);
+    dm.select(username);
   }
 
   function startDm(username) {
     if (!username || username === user) return;
     setView('dm');
-    setCurrentDm(username);
-    setDms((prev) => (prev.find((d) => d.username === username) ? prev : [{ username, unread: 0 }, ...prev]));
+    dm.open(username);
   }
 
   function openChannelFromSearch(space, channel) {
@@ -444,24 +346,6 @@ export default function App() {
     setSearchOpen(false);
     startDm(username);
   }
-
-  const sendDm = (content, attachments, spoiler) => {
-    if (currentDm) send({ op: 'dm', to: currentDm, content, attachments, spoiler });
-  };
-  const editDm = (id, content) => send({ op: 'dm_edit', id, content });
-  const loadOlderDms = () => {
-    const oldest = dmMessages[0]?.id;
-    if (!currentDm || !oldest) return;
-    const partner = currentDm;
-    dmPaging.loadOlder(
-      (limit) => api.getDmMessages(partner, { limit, before: oldest }),
-      (rows) => setDmMessages((prev) => mergeMessages(prev, rows))
-    );
-  };
-  const deleteDm = (id) => send({ op: 'dm_delete', id });
-  const sendDmTyping = () => {
-    if (currentDm) send({ op: 'dm_typing', with: currentDm });
-  };
 
   async function createSpace(name) {
     try {
@@ -635,8 +519,6 @@ export default function App() {
     unread: chat.unread, mentions: chat.mentions, spaces, currentSpace, channels,
   });
   const memberNames = members.map((m) => m.username);
-  const totalDmUnread = Object.values(dmUnread).reduce((a, b) => a + b, 0);
-  const dmTypingNames = Object.keys(dmTyping);
 
   const voiceChannels = activeSpace ? activeSpace.voiceChannels || [] : [];
   const voiceParticipantsByChannel = {};
@@ -669,7 +551,7 @@ export default function App() {
           unread={spaceUnread}
           mentions={spaceMentions}
           dmActive={view === 'dm'}
-          dmUnread={totalDmUnread}
+          dmUnread={dm.totalUnread}
           onSelectDms={openDms}
           onSelect={selectSpace}
           onCreate={createSpace}
@@ -678,9 +560,9 @@ export default function App() {
         />
         {view === 'dm' ? (
           <DmSidebar
-            conversations={dms}
-            currentDm={currentDm}
-            unread={dmUnread}
+            conversations={dm.conversations}
+            currentDm={dm.current}
+            unread={dm.unread}
             onSelect={(u) => {
               selectDm(u);
               setNavOpen(false);
@@ -759,17 +641,17 @@ export default function App() {
       {/* Main content — full width on phones, alongside the nav on desktop. */}
       {view === 'dm' ? (
         <DmPanel
-          username={currentDm}
-          messages={dmMessages}
+          username={dm.current}
+          messages={dm.messages}
           currentUser={user}
-          typing={dmTypingNames}
-          onSend={sendDm}
-          onEdit={editDm}
-          onDelete={deleteDm}
-          hasMore={dmPaging.hasMore}
-          loadingOlder={dmPaging.loadingOlder}
-          onLoadOlder={loadOlderDms}
-          onTyping={sendDmTyping}
+          typing={dm.typingNames}
+          onSend={dm.send}
+          onEdit={dm.edit}
+          onDelete={dm.remove}
+          hasMore={dm.hasMore}
+          loadingOlder={dm.loadingOlder}
+          onLoadOlder={dm.loadOlder}
+          onTyping={dm.sendTyping}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenNav={() => setNavOpen(true)}
         />
