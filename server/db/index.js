@@ -366,6 +366,7 @@ function renameSpace(spaceId, newName) {
 }
 
 function getSpaceByName(name) {
+  if (typeof name !== 'string') return undefined;
   return db.prepare('SELECT id, name, owner_id FROM spaces WHERE name = ?').get(name);
 }
 
@@ -908,11 +909,16 @@ function revokeRegCode(id) {
     .run(Date.now(), id).changes > 0;
 }
 
+// Lookups by name take untrusted input straight from request bodies and
+// gateway frames; anything that isn't a string simply matches nothing (rather
+// than making SQLite throw on an unbindable value).
 function getUserByUsername(username) {
+  if (typeof username !== 'string') return undefined;
   return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 }
 
 function getUserByEmail(email) {
+  if (typeof email !== 'string') return undefined;
   return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 }
 

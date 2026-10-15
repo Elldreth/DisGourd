@@ -64,6 +64,7 @@ function gateway(token) {
     frames,
     ready,
     send: (obj) => ws.send(JSON.stringify(obj)),
+    raw: (str) => ws.send(str),
     close: () => ws.close(),
   };
 }
@@ -674,4 +675,59 @@ test('registration gating: code required, closed mode, and account cap', async (
     cfg.registrationCode = orig.code;
     cfg.maxAccounts = orig.max;
   }
+});
+
+// ---- Phase 0 hardening regressions ----
+
+const alive = async () => (await fetch(`${baseUrl()}/auth-info`)).status === 200;
+
+test('0.1 malformed HTTP input returns 4xx instead of crashing the server', async () => {
+  const base = baseUrl();
+  const { token } = await register('crashy');
+  await createServer(token, 'crashy');
+  const post = (path, body) => fetch(`${base}${path}`, { method: 'POST', headers: { ...JSON_HEADERS, ...auth(token) }, body });
+
+  // Malformed / non-object JSON bodies on endpoints that previously had no try/catch.
+  expect((await fetch(`${base}/me`, { method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(token) }, body: '{not json' })).status).toBe(400);
+  expect((await post('/spaces', 'null')).status).toBe(400);
+  expect((await post('/friends/request', '[1,2]')).status).toBe(400);
+  expect((await post('/friends/request', '{"username": {"x": 1}}')).status).toBe(404);
+  expect(await alive()).toBe(true);
+
+  // Garbage numeric query params fall back to defaults.
+  let res = await fetch(`${base}/spaces/crashy/channels/general/messages?limit=abc&offset=xyz`, { headers: auth(token) });
+  expect(res.status).toBe(200);
+  expect(Array.isArray(await res.json())).toBe(true);
+  res = await fetch(`${base}/dms/crashy/messages?limit=abc`, { headers: auth(token) });
+  expect(res.status).toBe(200);
+  res = await fetch(`${base}/search?q=a&q=b`, { headers: auth(token) });
+  expect(res.status).toBe(200);
+  expect(await alive()).toBe(true);
+});
+
+test('0.1 malformed gateway frames are dropped instead of crashing the server', async () => {
+  const { token } = await register('crashws');
+  await createServer(token, 'crashws');
+  const gw = gateway(token);
+  await gw.ready;
+  for (const frame of [
+    'null', '5', '"str"', '[]', '{"op": {"x": 1}}',
+    JSON.stringify({ op: 'message', space: { a: 1 }, channel: 'general', content: 'x' }),
+    JSON.stringify({ op: 'message', space: 'crashws', channel: ['general'], content: 'x' }),
+    JSON.stringify({ op: 'typing', space: 'crashws', channel: { a: 1 } }),
+    JSON.stringify({ op: 'dm', to: { a: 1 }, content: 'x' }),
+    JSON.stringify({ op: 'dm_typing', with: 7 }),
+    JSON.stringify({ op: 'voice_join', space: 'crashws', channel: { a: 1 } }),
+    JSON.stringify({ op: 'react', id: 1, emoji: { a: 1 } }),
+  ]) {
+    gw.raw(frame);
+  }
+  await wait(100);
+  // The same socket still works afterwards, and so does HTTP.
+  gw.send({ op: 'message', space: 'crashws', channel: 'general', content: 'still alive' });
+  await wait(80);
+  gw.close();
+  expect(await alive()).toBe(true);
+  const msgs = await messages(token, 'crashws', 'general');
+  expect(msgs.map((m) => m.content)).toEqual(['still alive']);
 });

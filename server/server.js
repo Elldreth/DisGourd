@@ -186,6 +186,45 @@ function sendJson(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
+// An Error carrying the HTTP status the top-level handler should answer with.
+function httpError(status, message) {
+  const e = new Error(message);
+  e.status = status;
+  return e;
+}
+
+// Parse an integer query parameter, falling back to `def` on garbage
+// (?limit=abc) and clamping into [min, max] so SQLite never sees NaN.
+function intParam(value, def, min, max) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
+function isPlainObject(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+// Read and parse a JSON request body. Rejects with a 400 for malformed JSON or
+// a non-object payload (`null`, `5`, `[]`) so handlers can destructure safely.
+function readJsonBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    request.on('data', (chunk) => (body += chunk));
+    request.on('end', () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(body || '{}');
+      } catch {
+        return reject(httpError(400, 'Invalid JSON'));
+      }
+      if (!isPlainObject(parsed)) return reject(httpError(400, 'JSON body must be an object'));
+      resolve(parsed);
+    });
+    request.on('error', (err) => reject(httpError(400, err.message)));
+  });
+}
+
 function validateSpaceName(name) {
   if (typeof name !== 'string' || !name.trim()) return 'A server name is required';
   if (name.trim().length > 60) return 'Server name must be 60 characters or fewer';
@@ -378,27 +417,12 @@ const userClients = {};
 const isTest = process.env.NODE_ENV === 'test';
 function logInfo(...args) { if (!isTest) console.log(...args); }
 
-// Create HTTP server
-const httpServer = http.createServer(async (req, res) => { // Made async for potential await with body parsing
+// HTTP request handler. Any throw or rejection inside is caught by the wrapper
+// below and turned into an error response instead of crashing the process.
+async function handleHttp(req, res) {
   const parsedUrl = url.parse(req.url, true);
   const pathSegments = parsedUrl.pathname.split('/').filter(Boolean).map(safeDecode); // decoded, e.g. ['spaces', 'My Server', 'channels']
-
-  // Helper to parse JSON body
-  const getJsonBody = (request) => {
-    return new Promise((resolve, reject) => {
-      let body = '';
-      request.on('data', chunk => (body += chunk));
-      request.on('end', () => {
-        try {
-          resolve(JSON.parse(body || '{}'));
-        }
-        catch (e) {
-          reject(new Error('Invalid JSON'));
-        }
-      });
-      request.on('error', (err) => reject(err));
-    });
-  };
+  const getJsonBody = readJsonBody;
 
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -584,9 +608,9 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     if (pathSegments[2] === 'messages' && req.method === 'GET') {
       const other = db.getUserByUsername(pathSegments[1]);
       if (!other) return sendJson(res, 404, { error: 'User not found' });
-      const after = parseInt(parsedUrl.query.after || '0', 10);
+      const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
       if (after > 0) return sendJson(res, 200, db.getDmMessagesAfter(userId, other.id, after));
-      const limit = parseInt(parsedUrl.query.limit || '50', 10);
+      const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
       return sendJson(res, 200, db.getDmMessages(userId, other.id, limit, 0));
     }
     return sendJson(res, 404, { error: 'Not found' });
@@ -595,7 +619,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
   else if (pathSegments[0] === 'search' && req.method === 'GET') {
     const userId = authUserId(req, parsedUrl);
     if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
-    const q = String(parsedUrl.query.q || '').trim();
+    const q = typeof parsedUrl.query.q === 'string' ? parsedUrl.query.q.trim().slice(0, 200) : '';
     if (q.length < 2) return sendJson(res, 200, { channels: [], dms: [] });
     return sendJson(res, 200, db.searchMessages(userId, q, 40));
   }
@@ -785,10 +809,10 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       // GET messages — must be a member AND allowed to view this channel.
       if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
         if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
-        const after = parseInt(parsedUrl.query.after || '0', 10);
+        const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
         if (after > 0) return sendJson(res, 200, db.getMessagesAfter(spaceName, channelName, after));
-        const limit = parseInt(parsedUrl.query.limit || '50', 10);
-        const offset = parseInt(parsedUrl.query.offset || '0', 10);
+        const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
+        const offset = intParam(parsedUrl.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
         return sendJson(res, 200, db.getMessages(spaceName, channelName, limit, offset));
       }
       // PATCH channel permissions — view/post minimum ranks (managers only)
@@ -865,7 +889,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       res.writeHead(401);
       return res.end(JSON.stringify({ error: 'Unauthorized' }));
     }
-    if (!parsedUrl.query.name) {
+    if (!parsedUrl.query.name || typeof parsedUrl.query.name !== 'string') {
       res.writeHead(400);
       return res.end(JSON.stringify({ error: 'Missing filename' }));
     }
@@ -876,7 +900,7 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
       return res.end(JSON.stringify({ error: 'That file type is not allowed' }));
     }
     // Reject early if the client already tells us it is too big.
-    const declared = parseInt(req.headers['content-length'] || '0', 10);
+    const declared = intParam(req.headers['content-length'], 0, 0, Number.MAX_SAFE_INTEGER);
     if (declared && declared > MAX_UPLOAD_BYTES) {
       res.writeHead(413);
       return res.end(JSON.stringify({ error: uploadTooLargeError() }));
@@ -981,6 +1005,22 @@ const httpServer = http.createServer(async (req, res) => { // Made async for pot
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not Found' }));
   }
+}
+
+function handleHttpError(res, err) {
+  const status = err && Number.isInteger(err.status) ? err.status : 500;
+  if (status >= 500) console.error('[http] Unhandled error:', err);
+  if (res.headersSent) {
+    res.destroy();
+    return;
+  }
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: status >= 500 ? 'Internal server error' : err.message }));
+}
+
+// Create HTTP server
+const httpServer = http.createServer((req, res) => {
+  handleHttp(req, res).catch((err) => handleHttpError(res, err));
 });
 
 // Create WebSocket server and attach it to the HTTP server
@@ -1080,9 +1120,17 @@ function voiceLeave(ws) {
   broadcastVoiceState(room);
 }
 
+// Fields that are always strings when present; a frame carrying an object or
+// number in one of them is malformed and dropped whole.
+const GATEWAY_STRING_FIELDS = ['op', 'space', 'channel', 'with', 'content', 'emoji'];
+
 function handleGatewayMessage(ws, raw) {
   let msg;
   try { msg = JSON.parse(raw.toString()); } catch { return; }
+  if (!isPlainObject(msg)) return;
+  for (const key of GATEWAY_STRING_FIELDS) {
+    if (msg[key] !== undefined && typeof msg[key] !== 'string') return;
+  }
   const userId = ws.userId;
 
   switch (msg.op) {
@@ -1199,6 +1247,7 @@ function handleGatewayMessage(ws, raw) {
 
     // ---- Direct messages ----
     case 'dm': {
+      if (typeof msg.to !== 'string') return;
       const to = db.getUserByUsername(msg.to);
       if (!to || to.id === userId) return;
       const content = typeof msg.content === 'string' ? msg.content : '';
@@ -1206,6 +1255,7 @@ function handleGatewayMessage(ws, raw) {
       if (!content && attachments.length === 0) return;
       const spoiler = !!msg.spoiler && attachments.length > 0;
       const from = db.getUserById(userId);
+      if (!from) return;
       const stored = db.storeDm(userId, to.id, content, attachments, spoiler);
       db.markDmRead(userId, to.id, stored.id); // sender has read their own message
       const frame = JSON.stringify({
@@ -1265,6 +1315,7 @@ function handleGatewayMessage(ws, raw) {
       const to = db.getUserByUsername(msg.with);
       if (!to) return;
       const from = db.getUserById(userId);
+      if (!from) return;
       const frame = JSON.stringify({ type: 'dm_typing', from: from.username });
       const socks = userClients[to.id];
       if (socks) {
@@ -1288,6 +1339,7 @@ function handleGatewayMessage(ws, raw) {
         voiceRooms.set(key, room);
       }
       const user = db.getUserById(userId);
+      if (!user) return;
       const existing = [...room.members.values()].map((p) => ({
         userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
       }));
@@ -1373,7 +1425,14 @@ httpServer.on('upgrade', (request, socket, head) => {
     ws.send(JSON.stringify({ type: 'unread', counts: db.getUnreadCounts(ws.userId), mentions: db.getMentionCounts(ws.userId) }));
     ws.send(JSON.stringify({ type: 'dm_unread', counts: db.getDmUnreadCounts(ws.userId) }));
 
-    ws.on('message', (raw) => handleGatewayMessage(ws, raw));
+    ws.on('message', (raw) => {
+      // A bad frame must never take the whole server down.
+      try {
+        handleGatewayMessage(ws, raw);
+      } catch (err) {
+        console.error('[gateway] Error handling frame:', err);
+      }
+    });
     ws.on('close', () => detachGateway(ws));
     ws.on('error', () => detachGateway(ws));
   });
