@@ -24,3 +24,6 @@
 
 ## Assumptions
 - ASSUMPTION: Vitest is acceptable. It's the natural fit for Vite. Flag for human.
+
+## Suggested addition (from P1-13, 2026-10-15)
+P1-13 hit a crash that `vite build` and CI both missed: a hook result was read before it was declared, which blanked the app on load. Consider adding an App render smoke test here, rendering `<App/>` with the API and WebSocket stubbed and failing on any thrown error. Not yet part of this packet's acceptance criteria; decide when activating.
