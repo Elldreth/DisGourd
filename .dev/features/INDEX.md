@@ -18,7 +18,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
-| P1-01 | Versioned migrations + pragmas + indexes | 1 | READY | M | none | db/index.js, db/migrations.js (new) |
+| P1-01 | Versioned migrations + pragmas + indexes | 1 | REVIEW | M | none | db/index.js, db/migrations.js (new) |
 | P1-02 | Server split 1/4: core modules | 1 | COMPLETE | M | none | server.js, config.js, auth/*, http/util.js, validate.js, permissions.js, gateway/delivery.js |
 | P1-03 | Server split 2/4: auth/admin/social routes | 1 | COMPLETE | M | P1-02 | server.js, routes/{index,auth,admin,social}.js |
 | P1-04 | Server split 3/4: spaces/invites/uploads/static | 1 | COMPLETE | M | P1-03 | server.js, routes/{spaces,invites,uploads}.js, static.js, http/handler.js |
@@ -33,7 +33,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-13 | App split 2/3: DM hook | 1 | PLANNED | S–M | P1-12 | App.jsx, state/useDms.js |
 | P1-14 | App split 3/3: spaces + voice hooks | 1 | PLANNED | M | P1-13 | App.jsx, state/useSpaces.js, state/useVoiceCall.js |
 | P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | READY | S | none | Dockerfile, docker-compose.yml, README.md |
-| P1-16 | Nightly VACUUM INTO backups | 1 | REVIEW | S | none | backup.js (new), server.js (boot), README.md |
+| P1-16 | Nightly VACUUM INTO backups | 1 | COMPLETE | S | none | backup.js (new), server.js (boot), README.md |
 | P1-17 | GitHub Actions CI | 1 | READY | S | none | .github/workflows/ci.yml |
 | P1-18 | Bump Vite | 1 | READY | S | none | web/package.json, vite.config.js |
 | P1-19 | Web test harness (Vitest) | 1 | PLANNED | S | P1-18 | web/package.json, vite.config.js |
