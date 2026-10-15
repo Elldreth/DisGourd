@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Split server.js" (`gateway/{router,voice}`)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#43)
 - **Effort:** M
 - **Depends on:** P1-04
 - **Serialize with:** P1-07, P1-16, and any later unit editing `server/gateway/*`
