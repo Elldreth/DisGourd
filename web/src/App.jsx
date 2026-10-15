@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
 import { useGateway } from './useSocket.js';
+import { useHandlerTable } from './state/gatewayHandlers.js';
+import { useChannelMessages, unreadKey, badgeCounts, pruneExpired } from './state/useChannelMessages.js';
 import { createVoiceController } from './voice.js';
 import { getPttEnabled, getPttKey } from './audio.js';
 import {
@@ -27,8 +29,6 @@ import DmPanel from './components/DmPanel.jsx';
 import SearchOverlay from './components/SearchOverlay.jsx';
 import ImageCropper from './components/ImageCropper.jsx';
 
-const unreadKey = (space, channel) => JSON.stringify([space, channel]);
-
 export default function App() {
   const [token, setToken] = useState(api.getToken());
   const user = useMemo(() => {
@@ -44,12 +44,8 @@ export default function App() {
   const [serverOrder, setServerOrder] = useState([]); // user's custom rail order
   const [currentSpace, setCurrentSpace] = useState('');
   const [currentChannel, setCurrentChannel] = useState('');
-  const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [inviteCode, setInviteCode] = useState(null);
-  const [typingUsers, setTypingUsers] = useState({});
-  const [unread, setUnread] = useState({}); // "space channel" -> count
-  const [mentions, setMentions] = useState({}); // "space channel" -> mention count
   const [profile, setProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -179,57 +175,20 @@ export default function App() {
   }, [token, myId, view, currentSpace, currentChannel, currentDm]);
 
   // ---- Gateway (one connection for the whole app) ----
+  // Feature hooks add their frame handlers to this table (filled below).
+  const gatewayTable = useHandlerTable();
+  const { status, send } = useGateway({ token, handlers: gatewayTable.handlers });
+  const chat = useChannelMessages({
+    space: currentSpace,
+    channel: currentChannel,
+    active: view === 'server',
+    user,
+    send,
+    status,
+  });
+
   const handlers = useMemo(
     () => ({
-      message: (m) => {
-        const focused = m.space === spaceRef.current && m.channel === channelRef.current;
-        if (focused) {
-          setMessages((prev) => mergeMessages(prev, [m]));
-          if (m.id) send({ op: 'read', space: m.space, channel: m.channel, lastId: m.id });
-        } else {
-          const k = unreadKey(m.space, m.channel);
-          setUnread((prev) => ({ ...prev, [k]: (prev[k] || 0) + 1 }));
-          if (m.mentions && m.mentions.includes(userRef.current)) {
-            setMentions((prev) => ({ ...prev, [k]: (prev[k] || 0) + 1 }));
-          }
-        }
-      },
-      unread: (f) => {
-        const map = {};
-        for (const c of f.counts || []) map[unreadKey(c.space, c.channel)] = c.count;
-        setUnread(map);
-        const mmap = {};
-        for (const c of f.mentions || []) mmap[unreadKey(c.space, c.channel)] = c.count;
-        setMentions(mmap);
-      },
-      message_update: (u) => {
-        if (u.space === spaceRef.current && u.channel === channelRef.current) {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === u.id ? { ...m, content: u.content, editedAt: u.editedAt } : m))
-          );
-        }
-      },
-      message_delete: (d) => {
-        if (d.space === spaceRef.current && d.channel === channelRef.current) {
-          setMessages((prev) => prev.filter((m) => m.id !== d.id));
-        }
-      },
-      reaction: (r) => {
-        if (r.space !== spaceRef.current || r.channel !== channelRef.current) return;
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== r.id) return m;
-            const others = (m.reactions || []).filter((x) => x.emoji !== r.emoji);
-            const next = r.count > 0 ? [...others, { emoji: r.emoji, count: r.count, users: r.users }] : others;
-            return { ...m, reactions: next };
-          })
-        );
-      },
-      typing: (t) => {
-        if (t.space === spaceRef.current && t.channel === channelRef.current) {
-          setTypingUsers((prev) => ({ ...prev, [t.user]: Date.now() + 4000 }));
-        }
-      },
       presence: (p) => {
         setMembers((prev) =>
           prev.map((m) => (m.username === p.user ? { ...m, online: p.status === 'online' } : m))
@@ -328,7 +287,7 @@ export default function App() {
     []
   );
 
-  const { status, send } = useGateway({ token, handlers });
+  gatewayTable.fill(handlers, chat.handlers);
 
   // Voice controller (WebRTC mesh). Recreated per session; tears down its call
   // when the user (or the session) changes.
@@ -384,42 +343,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels, currentChannel, view]);
 
-  // Clear the transcript immediately when switching channels.
-  useEffect(() => {
-    setMessages([]);
-    setTypingUsers({});
-  }, [currentSpace, currentChannel]);
-
-  // Focus the active channel and (re)load its history — also on reconnect.
-  useEffect(() => {
-    if (view !== 'server' || !currentSpace || !currentChannel) return undefined;
-    send({ op: 'focus', space: currentSpace, channel: currentChannel });
-    let cancelled = false;
-    api
-      .getMessages(currentSpace, currentChannel)
-      .then((msgs) => {
-        if (cancelled) return;
-        setMessages(msgs);
-        // This channel is now read up to its latest message.
-        const maxId = msgs.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
-        send({ op: 'read', space: currentSpace, channel: currentChannel, lastId: maxId });
-        const k = unreadKey(currentSpace, currentChannel);
-        const clearKey = (setter) =>
-          setter((prev) => {
-            if (!prev[k]) return prev;
-            const next = { ...prev };
-            delete next[k];
-            return next;
-          });
-        clearKey(setUnread);
-        clearKey(setMentions);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [view, currentSpace, currentChannel, status, send]);
-
   // Focus + load a DM conversation (also on reconnect).
   useEffect(() => {
     if (view !== 'dm' || !currentDm) {
@@ -459,22 +382,9 @@ export default function App() {
     refreshMembers(currentSpace);
   }, [currentSpace, status]);
 
-  // Expire typing indicators a few seconds after the last keystroke event.
+  // Expire DM typing indicators a few seconds after the last keystroke event.
   useEffect(() => {
-    const prune = (prev) => {
-      const now = Date.now();
-      const next = {};
-      let changed = false;
-      for (const [u, exp] of Object.entries(prev)) {
-        if (exp > now) next[u] = exp;
-        else changed = true;
-      }
-      return changed ? next : prev;
-    };
-    const iv = setInterval(() => {
-      setTypingUsers(prune);
-      setDmTyping(prune);
-    }, 1000);
+    const iv = setInterval(() => setDmTyping(pruneExpired), 1000);
     return () => clearInterval(iv);
   }, []);
 
@@ -487,11 +397,9 @@ export default function App() {
     setSpaces([]);
     setCurrentSpace('');
     setCurrentChannel('');
-    setMessages([]);
+    chat.reset();
     setMembers([]);
     setProfile(null);
-    setUnread({});
-    setMentions({});
     setView('server');
     setDms([]);
     setCurrentDm('');
@@ -710,36 +618,10 @@ export default function App() {
     }
   }
 
-  const sendMessage = (content, attachments, spoiler, replyTo) =>
-    send({ op: 'message', space: currentSpace, channel: currentChannel, content, attachments, spoiler, replyTo });
-  const editMessage = (id, content) => send({ op: 'edit', id, content });
-  const deleteMessage = (id) => send({ op: 'delete', id });
-  const reactToMessage = (id, emoji) => send({ op: 'react', id, emoji });
-  const sendTyping = () => send({ op: 'typing', space: currentSpace, channel: currentChannel });
-
-  const typingNames = Object.keys(typingUsers).filter((u) => u !== user);
-
   // Unread + mention badges: per-channel (for the current server) and per-server totals.
-  const channelUnread = {};
-  const channelMentions = {};
-  for (const c of channels) {
-    const n = unread[unreadKey(currentSpace, c)];
-    if (n) channelUnread[c] = n;
-    const mn = mentions[unreadKey(currentSpace, c)];
-    if (mn) channelMentions[c] = mn;
-  }
-  const spaceUnread = {};
-  const spaceMentions = {};
-  for (const s of spaces) {
-    let total = 0;
-    let mtotal = 0;
-    for (const c of s.channels) {
-      total += unread[unreadKey(s.name, c)] || 0;
-      mtotal += mentions[unreadKey(s.name, c)] || 0;
-    }
-    if (total) spaceUnread[s.name] = total;
-    if (mtotal) spaceMentions[s.name] = mtotal;
-  }
+  const { channelUnread, channelMentions, spaceUnread, spaceMentions } = badgeCounts({
+    unread: chat.unread, mentions: chat.mentions, spaces, currentSpace, channels,
+  });
   const memberNames = members.map((m) => m.username);
   const totalDmUnread = Object.values(dmUnread).reduce((a, b) => a + b, 0);
   const dmTypingNames = Object.keys(dmTyping);
@@ -885,16 +767,16 @@ export default function App() {
               channel={currentChannel}
               status={status}
               canPost={canPostCurrent}
-              messages={messages}
+              messages={chat.messages}
               currentUser={user}
-              typingUsers={typingNames}
+              typingUsers={chat.typingNames}
               memberNames={memberNames}
-              onSend={sendMessage}
-              onEdit={editMessage}
-              onDelete={deleteMessage}
+              onSend={chat.sendMessage}
+              onEdit={chat.editMessage}
+              onDelete={chat.deleteMessage}
               canModerate={canModerate}
-              onReact={reactToMessage}
-              onTyping={sendTyping}
+              onReact={chat.react}
+              onTyping={chat.sendTyping}
               onOpenSearch={() => setSearchOpen(true)}
               onOpenNav={() => setNavOpen(true)}
             />

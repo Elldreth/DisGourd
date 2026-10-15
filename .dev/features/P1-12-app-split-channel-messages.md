@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of "Split up App.jsx": P1-12 → P1-13 → P1-14)
 - **Phase:** 1 — "Split up App.jsx (943 lines, about 30 useStates) using a reducer or a small store"
-- **State:** READY
+- **State:** REVIEW (PR open)
 - **Effort:** M
 - **Depends on:** none (land P1-11 first if it's pending; both touch App.jsx)
 - **Serialize with:** every unit editing `web/src/App.jsx`
@@ -17,10 +17,10 @@ Use per-domain hooks with `useReducer`, and add no new dependency (no zustand or
 3. App.jsx consumes the hook. The unread/mention badge aggregation moves into a selector helper in the same file.
 
 ## Acceptance criteria
-- [ ] App.jsx shrinks by ≥ 150 lines. No user-visible behaviour change.
-- [ ] Manual two-browser smoke test: send, edit, delete, react, typing indicator, unread badge on another channel, mention badge, channel switch clears transcript, reconnect reloads the channel.
-- [ ] `npm --prefix web run build` passes with no new warnings.
-- [ ] The reducer is a pure exported function (no React imports inside it).
+- [~] App.jsx shrinks by ≥ 150 lines. No user-visible behaviour change.
+- [x] Manual two-browser smoke test: send, edit, delete, react, typing indicator, unread badge on another channel, mention badge, channel switch clears transcript, reconnect reloads the channel.
+- [x] `npm --prefix web run build` passes with no new warnings.
+- [x] The reducer is a pure exported function (no React imports inside it).
 
 ## Expected Areas of Change
 `web/src/App.jsx`, new `web/src/state/useChannelMessages.js`, new `web/src/state/gatewayHandlers.js`.
@@ -29,4 +29,26 @@ Use per-domain hooks with `useReducer`, and add no new dependency (no zustand or
 App.jsx (943 lines), `useSocket.js`, `util.js` (`mergeMessages`). Blast radius: all channel chat on the client.
 
 ## Assumptions
-- ASSUMPTION: hooks + useReducer is preferred over adding a store library. Flag for human.
+- ASSUMPTION (kept): hooks + useReducer, with no store library.
+
+## Activation
+- Activated 2026-10-15 on branch `claude/p1-12-channel-messages-hook`, cut from main @ de24417.
+- Baseline: App.jsx 951 lines; web build clean.
+
+## Implementation notes
+- **Handler composition (`state/gatewayHandlers.js`):** `useHandlerTable()` returns one stable `handlers` object that App passes to `useGateway` *before* the feature hooks run. The hooks receive the real `send`/`status`, and App calls `table.fill(appHandlers, chat.handlers)` each render. `useGateway` looks handlers up per frame, so this avoids the send↔handlers cycle with no wrapper or extra render. (A first attempt used a late-bound `send` plus a mirrored status state. That cost an extra render and delivered `status` one render late, so it was replaced.)
+- **`state/useChannelMessages.js`:**
+  - **State:** `messages` (via `useReducer`), `typingUsers`, `unread`, `mentions`.
+  - **Effects:** clear-on-switch, focus+load (reruns on `status`, so it reloads after reconnect), typing pruning.
+  - **Handlers:** `message`, `unread`, `message_update`, `message_delete`, `reaction`, `typing`.
+  - **Actions:** `sendMessage` (with `replyTo`), `editMessage`, `deleteMessage`, `react`, `sendTyping`, and `reset()` for logout.
+- **Pure exports in the same file:** `messagesReducer` (no React inside), `pruneExpired`, `badgeCounts`, `unreadKey`. App uses `badgeCounts` and `unreadKey` (voice state), and `pruneExpired` for DM typing.
+
+## Verification (AC → evidence)
+| AC | Evidence |
+|---|---|
+| App.jsx −150 lines | **Partly met: 951 → 833 (−118).** Everything in this unit's scope moved. The remaining bulk is DM state (P1-13) and spaces/voice (P1-14), so I didn't pad the number by moving out-of-scope code early. |
+| No behaviour change: two-client smoke | Sandbox, browser as sandy plus a scripted second client as bob. Each happened live with no reload: bob's message appeared; his edit showed "(edited)"; his 🔥 reaction showed "🔥 1"; "bob is typing" appeared and expired within 5s; his delete removed the message. A post in #random set #random bold with a pink mention badge "1" for "@sandy". Opening #random swapped the transcript and cleared the badge. A plain post in #general set #general's unread dot. |
+| Reconnect reloads the channel | With the app open in a tab the restart didn't touch: stop the server, insert a message straight into the sandbox DB, start the server. The same document (no page reload) reconnected and showed the inserted message. |
+| Build passes, no new warnings | `vite build`: clean. |
+| Reducer is pure | `messagesReducer` sits at the top of `useChannelMessages.js` and uses only `mergeMessages`. The React imports are used only by the hook. |
