@@ -224,6 +224,44 @@ try {
   console.error('Error migrating messages table:', e);
 }
 
+// ---- Referential integrity ----
+// The schema declares foreign keys, but SQLite only enforces them when
+// `PRAGMA foreign_keys` is on for the connection, which it never was: the
+// ON DELETE cascades never ran, so deleting a server left its channels,
+// messages, members and invites behind. Remove any orphans that accumulated
+// (children before grandchildren), then turn enforcement on.
+const NOT_A_USER = (col) => `${col} NOT IN (SELECT id FROM users)`;
+const ORPHAN_CLEANUP = [
+  'DELETE FROM channels WHERE space_id NOT IN (SELECT id FROM spaces)',
+  'DELETE FROM messages WHERE channel_id NOT IN (SELECT id FROM channels)',
+  `UPDATE messages SET author_id = NULL WHERE author_id IS NOT NULL AND ${NOT_A_USER('author_id')}`,
+  `DELETE FROM reactions WHERE message_id NOT IN (SELECT id FROM messages) OR ${NOT_A_USER('user_id')}`,
+  `DELETE FROM mentions WHERE message_id NOT IN (SELECT id FROM messages) OR ${NOT_A_USER('user_id')}`,
+  `DELETE FROM space_members WHERE space_id NOT IN (SELECT id FROM spaces) OR ${NOT_A_USER('user_id')}`,
+  'DELETE FROM invites WHERE space_id NOT IN (SELECT id FROM spaces)',
+  `UPDATE invites SET created_by = NULL WHERE created_by IS NOT NULL AND ${NOT_A_USER('created_by')}`,
+  `DELETE FROM friend_requests WHERE ${NOT_A_USER('from_user')} OR ${NOT_A_USER('to_user')}`,
+  `DELETE FROM friends WHERE ${NOT_A_USER('user_id')} OR ${NOT_A_USER('friend_id')}`,
+  `DELETE FROM dm_messages WHERE ${NOT_A_USER('user_a')} OR ${NOT_A_USER('user_b')}`,
+];
+
+// Returns the number of rows removed or detached.
+function cleanupOrphans() {
+  let changed = 0;
+  db.transaction(() => {
+    for (const sql of ORPHAN_CLEANUP) changed += db.prepare(sql).run().changes;
+  })();
+  return changed;
+}
+
+// foreign_key_check is empty on a healthy database, so the cleanup effectively
+// runs once (on the first start after upgrading) and is a no-op afterwards.
+if (db.pragma('foreign_key_check').length > 0) {
+  const changed = cleanupOrphans();
+  console.warn(`[db] Cleaned up ${changed} orphaned row(s) before enabling foreign keys`);
+}
+db.pragma('foreign_keys = ON');
+
 // ---- Role-based permissions ----
 const ROLE_RANK = { member: 1, admin: 2, owner: 3 };
 function roleRank(role) {
@@ -1055,4 +1093,6 @@ module.exports = {
   addFriends,
   removeFriend,
   getFriends,
+  cleanupOrphans,
+  raw: db, // the underlying connection, for tests and maintenance scripts
 };

@@ -931,3 +931,51 @@ test('0.6 friends: accepting needs a pending request, and self-requests are refu
   expect(await friendsOf(a)).toEqual([{ username: 'fr-b' }]);
   expect((await post(b, 'accept', 'fr-a')).status).toBe(404); // consumed
 });
+
+test('0.7 foreign keys are enforced: deletes cascade and orphans are cleaned up', async () => {
+  const db = serverModule.db;
+  const raw = db.raw;
+  expect(raw.pragma('foreign_keys', { simple: true })).toBe(1);
+  const count = (sql, ...args) => raw.prepare(sql).get(...args).n;
+
+  // Deleting a server cascades to its channels, messages, reactions, members and invites.
+  const base = baseUrl();
+  const { token } = await register('fk-owner');
+  await createServer(token, 'doomed');
+  await fetch(`${base}/spaces/doomed/invites`, { method: 'POST', headers: auth(token) });
+  const gw = gateway(token);
+  await gw.ready;
+  gw.send({ op: 'message', space: 'doomed', channel: 'general', content: 'soon gone' });
+  await wait(80);
+  const msgId = gw.frames.find((f) => f.type === 'message').id;
+  gw.send({ op: 'react', id: msgId, emoji: '💥' });
+  await wait(80);
+  gw.close();
+  const spaceId = db.getSpaceByName('doomed').id;
+  expect(count('SELECT COUNT(*) AS n FROM reactions WHERE message_id = ?', msgId)).toBe(1);
+  expect((await fetch(`${base}/spaces/doomed`, { method: 'DELETE', headers: auth(token) })).status).toBe(200);
+  expect(count('SELECT COUNT(*) AS n FROM channels WHERE space_id = ?', spaceId)).toBe(0);
+  expect(count('SELECT COUNT(*) AS n FROM messages WHERE id = ?', msgId)).toBe(0);
+  expect(count('SELECT COUNT(*) AS n FROM reactions WHERE message_id = ?', msgId)).toBe(0);
+  expect(count('SELECT COUNT(*) AS n FROM space_members WHERE space_id = ?', spaceId)).toBe(0);
+  expect(count('SELECT COUNT(*) AS n FROM invites WHERE space_id = ?', spaceId)).toBe(0);
+
+  // Inserting a row that points at nothing is now refused.
+  expect(() => raw.prepare('INSERT INTO friends(user_id, friend_id) VALUES (?, ?)').run(999991, 999992)).toThrow();
+
+  // Orphans left by older versions are removed by the one-time cleanup.
+  raw.pragma('foreign_keys = OFF');
+  try {
+    raw.prepare('INSERT INTO channels(space_id, name) VALUES (?, ?)').run(999990, 'ghost');
+    const ghostChannel = raw.prepare("SELECT id FROM channels WHERE name = 'ghost'").get().id;
+    raw.prepare('INSERT INTO messages(channel_id, content) VALUES (?, ?)').run(ghostChannel, 'ghost msg');
+    raw.prepare('INSERT INTO friends(user_id, friend_id) VALUES (?, ?)').run(999991, 999992);
+    raw.prepare('INSERT INTO reactions(message_id, user_id, emoji) VALUES (?, ?, ?)').run(999993, 1, 'x');
+    expect(raw.pragma('foreign_key_check').length).toBeGreaterThan(0);
+    expect(db.cleanupOrphans()).toBeGreaterThanOrEqual(4);
+    expect(raw.pragma('foreign_key_check')).toEqual([]);
+    expect(count("SELECT COUNT(*) AS n FROM messages WHERE content = 'ghost msg'")).toBe(0);
+  } finally {
+    raw.pragma('foreign_keys = ON');
+  }
+});
