@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of "Split up App.jsx": P1-12 → P1-13 → P1-14)
 - **Phase:** 1 — "Split up App.jsx (943 lines, about 30 useStates) using a reducer or a small store"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#52)
 - **Effort:** M
 - **Depends on:** none (land P1-11 first if it's pending; both touch App.jsx)
 - **Serialize with:** every unit editing `web/src/App.jsx`

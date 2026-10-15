@@ -19,6 +19,9 @@ export default function ChatPanel({
   onDelete,
   canModerate,
   onReact,
+  hasMore,
+  loadingOlder,
+  onLoadOlder,
   onTyping,
   onOpenSearch,
   onOpenNav,
@@ -86,6 +89,9 @@ export default function ChatPanel({
         canModerate={canModerate}
         onReact={onReact}
         onReply={canPost ? (m) => setReplyingTo({ id: m.id, author: m.author }) : null}
+        hasMore={hasMore}
+        loadingOlder={loadingOlder}
+        onLoadOlder={onLoadOlder}
       />
       <TypingIndicator names={typingUsers} />
       {canPost ? (

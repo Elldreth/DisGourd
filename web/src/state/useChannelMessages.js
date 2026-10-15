@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import * as api from '../api.js';
 import { mergeMessages } from '../util.js';
+import { useHistoryPaging } from './useHistoryPaging.js';
 
 // Key for per-channel maps (unread, mentions, voice state).
 export const unreadKey = (space, channel) => JSON.stringify([space, channel]);
@@ -89,6 +90,7 @@ export function useChannelMessages({ space, channel, active, user, send, status 
   const [typingUsers, setTypingUsers] = useState({}); // username -> expires-at ms
   const [unread, setUnread] = useState({}); // unreadKey -> count
   const [mentions, setMentions] = useState({}); // unreadKey -> mention count
+  const paging = useHistoryPaging(unreadKey(space, channel));
 
   // Handlers run outside render, so they read the latest selection from refs.
   const spaceRef = useRef(space);
@@ -150,6 +152,7 @@ export function useChannelMessages({ space, channel, active, user, send, status 
       .then((msgs) => {
         if (cancelled) return;
         dispatch({ type: 'reset', messages: msgs });
+        paging.pageLoaded(unreadKey(space, channel), msgs.length);
         // This channel is now read up to its latest message.
         const maxId = msgs.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
         send({ op: 'read', space, channel, lastId: maxId });
@@ -177,8 +180,21 @@ export function useChannelMessages({ space, channel, active, user, send, status 
     setMentions({});
   }
 
+  // Fetch the page just older than the oldest message shown.
+  function loadOlder() {
+    const oldest = messages[0]?.id;
+    if (!oldest) return;
+    paging.loadOlder(
+      (limit) => api.getMessages(space, channel, { limit, before: oldest }),
+      (rows) => dispatch({ type: 'merged', messages: rows })
+    );
+  }
+
   return {
     messages,
+    hasMore: paging.hasMore,
+    loadingOlder: paging.loadingOlder,
+    loadOlder,
     typingNames: Object.keys(typingUsers).filter((u) => u !== user),
     unread,
     mentions,

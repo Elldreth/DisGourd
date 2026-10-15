@@ -3,6 +3,7 @@ import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { useHandlerTable } from './state/gatewayHandlers.js';
 import { useChannelMessages, unreadKey, badgeCounts, pruneExpired } from './state/useChannelMessages.js';
+import { useHistoryPaging } from './state/useHistoryPaging.js';
 import { createVoiceController } from './voice.js';
 import { getPttEnabled, getPttKey } from './audio.js';
 import {
@@ -77,6 +78,7 @@ export default function App() {
   const [dmMessages, setDmMessages] = useState([]);
   const [dmUnread, setDmUnread] = useState({}); // username -> count
   const [dmTyping, setDmTyping] = useState({}); // username -> expires-at ms
+  const dmPaging = useHistoryPaging(`dm:${currentDm}`);
 
   // Refs so gateway handlers (created once) can read the latest selection.
   const spaceRef = useRef(currentSpace);
@@ -358,6 +360,7 @@ export default function App() {
       .then((msgs) => {
         if (cancelled) return;
         setDmMessages(msgs);
+        dmPaging.pageLoaded(`dm:${currentDm}`, msgs.length);
         const maxId = msgs.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
         send({ op: 'dm_read', with: currentDm, lastId: maxId });
         setDmUnread((prev) => {
@@ -446,6 +449,15 @@ export default function App() {
     if (currentDm) send({ op: 'dm', to: currentDm, content, attachments, spoiler });
   };
   const editDm = (id, content) => send({ op: 'dm_edit', id, content });
+  const loadOlderDms = () => {
+    const oldest = dmMessages[0]?.id;
+    if (!currentDm || !oldest) return;
+    const partner = currentDm;
+    dmPaging.loadOlder(
+      (limit) => api.getDmMessages(partner, { limit, before: oldest }),
+      (rows) => setDmMessages((prev) => mergeMessages(prev, rows))
+    );
+  };
   const deleteDm = (id) => send({ op: 'dm_delete', id });
   const sendDmTyping = () => {
     if (currentDm) send({ op: 'dm_typing', with: currentDm });
@@ -754,6 +766,9 @@ export default function App() {
           onSend={sendDm}
           onEdit={editDm}
           onDelete={deleteDm}
+          hasMore={dmPaging.hasMore}
+          loadingOlder={dmPaging.loadingOlder}
+          onLoadOlder={loadOlderDms}
           onTyping={sendDmTyping}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenNav={() => setNavOpen(true)}
@@ -776,6 +791,9 @@ export default function App() {
               onDelete={chat.deleteMessage}
               canModerate={canModerate}
               onReact={chat.react}
+              hasMore={chat.hasMore}
+              loadingOlder={chat.loadingOlder}
+              onLoadOlder={chat.loadOlder}
               onTyping={chat.sendTyping}
               onOpenSearch={() => setSearchOpen(true)}
               onOpenNav={() => setNavOpen(true)}
