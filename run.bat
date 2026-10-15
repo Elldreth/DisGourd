@@ -12,7 +12,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "web\dist\index.html" (
+REM Server dependencies live in server\node_modules (the repo root has none), so
+REM run setup if they're missing too, not only when the web build is.
+set NEEDS_SETUP=
+if not exist "web\dist\index.html" set NEEDS_SETUP=1
+if not exist "server\node_modules\ws" set NEEDS_SETUP=1
+if defined NEEDS_SETUP (
   echo.
   echo   First run — installing dependencies and building the app...
   echo.
