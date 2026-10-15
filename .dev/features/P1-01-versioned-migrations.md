@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 (Foundations) — IMPROVEMENT-PLAN.md "Versioned migrations", "Indexes", "More pragmas"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#47)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with (shared files):** any unit editing `server/db/index.js` (P1-06, P1-07, P1-10, P2-05)

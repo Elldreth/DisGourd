@@ -4,6 +4,10 @@
 
 <h1 align="center">DisGourd</h1>
 
+<p align="center">
+  <a href="https://github.com/Elldreth/DisGourd/actions/workflows/ci.yml"><img src="https://github.com/Elldreth/DisGourd/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+</p>
+
 A self-hostable, Discord-style chat app for you and your friends. Run it on your
 own machine — real-time text channels, servers, file sharing, presence — with
 **no external services to install**. Data lives in a single SQLite file.
