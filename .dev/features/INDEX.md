@@ -19,8 +19,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
 | P1-01 | Versioned migrations + pragmas + indexes | 1 | READY | M | none | db/index.js, db/migrations.js (new) |
-| P1-02 | Server split 1/4: core modules | 1 | READY | M | none | server.js, config.js, auth/*, http/util.js, validate.js, permissions.js, gateway/delivery.js |
-| P1-03 | Server split 2/4: auth/admin/social routes | 1 | PLANNED | M | P1-02 | server.js, routes/{index,auth,admin,social}.js |
+| P1-02 | Server split 1/4: core modules | 1 | COMPLETE | M | none | server.js, config.js, auth/*, http/util.js, validate.js, permissions.js, gateway/delivery.js |
+| P1-03 | Server split 2/4: auth/admin/social routes | 1 | REVIEW | M | P1-02 | server.js, routes/{index,auth,admin,social}.js |
 | P1-04 | Server split 3/4: spaces/invites/uploads/static | 1 | PLANNED | M | P1-03 | server.js, routes/{spaces,invites,uploads}.js, static.js, http/handler.js |
 | P1-05 | Server split 4/4: gateway | 1 | PLANNED | M | P1-04 | server.js, gateway/{index,router,chat,dm,voice}.js |
 | P1-06 | Transactions (space create, msg+mentions, invite, registration) | 1 | PLANNED | S–M | P1-03, P1-04, P1-05 | db/index.js, routes/*, gateway/chat.js |
@@ -28,7 +28,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-08 | Load older messages UI | 1 | PLANNED | M | P1-07, P1-12 | MessageList.jsx, api.js, state hooks |
 | P1-09 | Reconnect resync | 1 | PLANNED | S–M | P1-05, P1-08, P1-14 | gateway/index.js, state hooks, useSocket.js |
 | P1-10 | Moderation: delete_others_messages | 1 | PLANNED | S | P3-05 (soft P1-05) | permissions.js, db/index.js, gateway/chat.js, MessageActions.jsx |
-| P1-11 | Fix dm_unread key mismatch | 1 | READY | S | none | server.js (1 line) |
+| P1-11 | Fix dm_unread key mismatch | 1 | COMPLETE | S | none | server.js (1 line) |
 | P1-12 | App split 1/3: channel-message hook | 1 | READY | M | none (after P1-11) | App.jsx, state/useChannelMessages.js |
 | P1-13 | App split 2/3: DM hook | 1 | PLANNED | S–M | P1-12 | App.jsx, state/useDms.js |
 | P1-14 | App split 3/3: spaces + voice hooks | 1 | PLANNED | M | P1-13 | App.jsx, state/useSpaces.js, state/useVoiceCall.js |
