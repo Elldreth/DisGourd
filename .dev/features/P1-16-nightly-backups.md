@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — Ops
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#46)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P1-02..P1-05 (one wiring line in the `server.js` boot block), P1-15 (README/compose)
