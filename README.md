@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="web/public/favicon.svg" alt="DisGourd" width="96" height="96" />
+  <img src="design/brand/disgourd-app-icon.svg" alt="DisGourd" width="96" height="96" />
 </p>
 
 <h1 align="center">DisGourd</h1>
