@@ -15,8 +15,9 @@ services:
       - PORT=3000
       - DB_PATH=/config/disgourd.db
       - UPLOADS_DIR=/uploads
-      # Set a long random value — otherwise everyone is logged out on each
-      # rebuild. Generate one with:  openssl rand -hex 48
+      # Set a long random value (32+ characters). The placeholder below is
+      # rejected; the server then generates a secret and keeps it in
+      # /config/.jwt-secret. Generate one with:  openssl rand -hex 48
       - JWT_SECRET=CHANGE_ME_TO_A_LONG_RANDOM_STRING
       # Your admin username(s), comma-separated (becomes a site admin).
       - SITE_ADMINS=elldreth

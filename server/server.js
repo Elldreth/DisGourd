@@ -7,7 +7,13 @@ const crypto = require('crypto');
 require('dotenv').config({ quiet: true });
 const db = require('./db');
 
-const SECRET_FILE = path.join(__dirname, '.jwt-secret');
+// Where a generated JWT secret is persisted. With an explicit DB_PATH (e.g. the
+// Docker /config volume) it lives next to the database so it survives image
+// rebuilds; otherwise it sits in the (gitignored) server directory.
+const SECRET_FILE = process.env.JWT_SECRET_FILE
+  || (process.env.DB_PATH && process.env.DB_PATH !== ':memory:'
+    ? path.join(path.dirname(path.resolve(process.env.DB_PATH)), '.jwt-secret')
+    : path.join(__dirname, '.jwt-secret'));
 
 let config = { port: 3000, jwtSecret: 'changeme' };
 try {
@@ -40,28 +46,42 @@ function registrationMode() {
   return db.getSetting('registration_mode') || config.registrationMode || 'open';
 }
 
-// Security: never run with the well-known default secret. Resolve one, in
-// order of preference: an explicit JWT_SECRET / config.json value, a secret
-// generated on a previous run, or a fresh one. The generated secret is written
-// to a gitignored file so tokens survive restarts without ever committing a
-// secret into a tracked file.
-if (!config.jwtSecret || config.jwtSecret === 'changeme') {
+// Security: never sign tokens with a guessable secret. Anything shorter than
+// 32 characters, or a known placeholder (the docker-compose sample value,
+// "changeme", "secret", ...), is refused.
+const MIN_JWT_SECRET_LENGTH = 32;
+const PLACEHOLDER_SECRET = /change[\s_-]*me|placeholder|your[\s_-]*secret|^(secret|password|jwt[\s_-]*secret|test(secret)?)$/i;
+function isWeakSecret(secret) {
+  if (typeof secret !== 'string') return true;
+  const s = secret.trim();
+  return s.length < MIN_JWT_SECRET_LENGTH || PLACEHOLDER_SECRET.test(s);
+}
+
+// Resolve the secret, in order of preference: an explicit JWT_SECRET /
+// config.json value (if strong), a secret generated on a previous run, or a
+// fresh one. The generated secret is written to a gitignored file so tokens
+// survive restarts without ever committing a secret into a tracked file.
+function resolveJwtSecret(candidate, secretFile) {
+  if (!isWeakSecret(candidate)) return candidate.trim();
+  if (candidate && candidate !== 'changeme') {
+    console.warn(`[security] Ignoring JWT_SECRET: it must be at least ${MIN_JWT_SECRET_LENGTH} characters and not a placeholder. Generate one with: openssl rand -hex 48`);
+  }
   try {
-    const saved = fs.readFileSync(SECRET_FILE, 'utf8').trim();
-    if (saved) config.jwtSecret = saved;
+    const saved = fs.readFileSync(secretFile, 'utf8').trim();
+    if (!isWeakSecret(saved)) return saved;
   } catch (e) {
     /* no previously generated secret; fall through to create one */
   }
-}
-if (!config.jwtSecret || config.jwtSecret === 'changeme') {
-  config.jwtSecret = crypto.randomBytes(48).toString('hex');
+  const generated = crypto.randomBytes(48).toString('hex');
   try {
-    fs.writeFileSync(SECRET_FILE, config.jwtSecret, { mode: 0o600 });
-    console.warn('[security] Generated a new JWT secret and saved it to server/.jwt-secret');
+    fs.writeFileSync(secretFile, generated, { mode: 0o600 });
+    console.warn(`[security] Generated a new JWT secret and saved it to ${secretFile}`);
   } catch (e) {
     console.warn('[security] Generated an ephemeral JWT secret (could not persist):', e.message);
   }
+  return generated;
 }
+config.jwtSecret = resolveJwtSecret(config.jwtSecret, SECRET_FILE);
 
 // ---- Password hashing (scrypt) ----
 // scrypt ships with Node's crypto module, so there is no native dependency to
@@ -1453,4 +1473,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { httpServer, wss, config, db };
+module.exports = { httpServer, wss, config, db, isWeakSecret, resolveJwtSecret };

@@ -10,7 +10,7 @@ const testUploadsDir = path.join(os.tmpdir(), `disgourd-test-uploads-${process.p
 
 beforeAll(done => {
   process.env.PORT = 0;
-  process.env.JWT_SECRET = 'testsecret';
+  process.env.JWT_SECRET = 'disgourd-test-secret-0123456789abcdef';
   process.env.DB_PATH = ':memory:';
   process.env.UPLOADS_DIR = testUploadsDir;
   process.env.MAX_UPLOAD_BYTES = '256'; // small so the oversize path is testable
@@ -730,4 +730,31 @@ test('0.1 malformed gateway frames are dropped instead of crashing the server', 
   expect(await alive()).toBe(true);
   const msgs = await messages(token, 'crashws', 'general');
   expect(msgs.map((m) => m.content)).toEqual(['still alive']);
+});
+
+test('0.2 short or placeholder JWT secrets are refused', () => {
+  const { isWeakSecret, resolveJwtSecret, config } = serverModule;
+  for (const weak of ['', 'changeme', 'testsecret', 'CHANGE_ME_TO_A_LONG_RANDOM_STRING',
+    'change-me-please-to-something-long-and-random', 'x'.repeat(31), null, undefined, 42]) {
+    expect(isWeakSecret(weak)).toBe(true);
+  }
+  expect(isWeakSecret('a'.repeat(32))).toBe(false);
+  expect(config.jwtSecret).toBe('disgourd-test-secret-0123456789abcdef');
+
+  // A placeholder falls back to a generated secret persisted to the secret file,
+  // and that same secret is reused on the next start.
+  const file = path.join(os.tmpdir(), `disgourd-test-secret-${process.pid}`);
+  try {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const first = resolveJwtSecret('CHANGE_ME_TO_A_LONG_RANDOM_STRING', file);
+    expect(first).not.toBe('CHANGE_ME_TO_A_LONG_RANDOM_STRING');
+    expect(isWeakSecret(first)).toBe(false);
+    expect(resolveJwtSecret('changeme', file)).toBe(first);
+    warn.mockRestore();
+    // A strong explicit secret wins.
+    const strong = 'f'.repeat(64);
+    expect(resolveJwtSecret(strong, file)).toBe(strong);
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
 });
