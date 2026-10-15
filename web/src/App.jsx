@@ -109,6 +109,13 @@ export default function App() {
   const channelMeta = activeSpace ? activeSpace.channelMeta || {} : {};
   const currentChannelPost = channelMeta[currentChannel]?.post ?? 1;
   const canPostCurrent = myRank >= currentChannelPost;
+  // Whether I may delete someone else's message: my role meets the server's
+  // "delete others' messages" threshold and the author ranks below me (people
+  // who left rank 0). Mirrors the server check, which has the final say.
+  const moderationThreshold = activeSpace?.permissions?.delete_others_messages ?? 2;
+  const canModerate = myRank >= moderationThreshold
+    ? (author) => roleRank(members.find((mb) => mb.username === author)?.role) < myRank
+    : null;
 
   async function loadSpaces() {
     try {
@@ -885,6 +892,7 @@ export default function App() {
               onSend={sendMessage}
               onEdit={editMessage}
               onDelete={deleteMessage}
+              canModerate={canModerate}
               onReact={reactToMessage}
               onTyping={sendTyping}
               onOpenSearch={() => setSearchOpen(true)}

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "Message actions only appear on hover" (`MessageList.jsx:270`)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#49)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** MessageList.jsx units. **Do this early**: P1-10, P2-07, P2-09, P2-13, P3-09 and P3-12 all add items to the menu it creates.

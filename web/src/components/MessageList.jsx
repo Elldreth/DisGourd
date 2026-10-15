@@ -66,7 +66,9 @@ function renderRich(content, me, withMentions) {
 
 // Groups consecutive messages from the same author (within 5 minutes) into a
 // single block, and inserts day dividers — the familiar chat reading rhythm.
-export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, simple = false, emptyHeading, emptyBody }) {
+// `canModerate(author)` (optional) says whether you may delete that author's
+// messages as a moderator.
+export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, canModerate, simple = false, emptyHeading, emptyBody }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // When a channel is first opened (or the transcript was cleared on switch /
@@ -163,6 +165,7 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
               currentUser={currentUser}
               onEdit={onEdit}
               onDelete={onDelete}
+              canDelete={!!onDelete && (row.m.author === currentUser || !!canModerate?.(row.m.author))}
               onReact={onReact}
               simple={simple}
               tabIndex={row.m.id === tabStopId ? 0 : -1}
@@ -177,7 +180,7 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
   );
 }
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, simple, tabIndex, onFocusRow, onNavigate }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, simple, tabIndex, onFocusRow, onNavigate }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content || '');
   // Which popup is open: null | 'menu' | 'react'. `sheet` shows it as a touch
@@ -241,7 +244,8 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
 
   function confirmDelete() {
     setPopup(null);
-    if (window.confirm('Delete this message?')) onDelete(m.id);
+    const question = mine ? 'Delete this message?' : `Delete this message from ${m.author || 'this user'}?`;
+    if (window.confirm(question)) onDelete(m.id);
     else focusRow();
   }
 
@@ -251,8 +255,9 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
   }
 
   // One list drives the toolbar, the "…" menu, right-click and the touch sheet.
-  // Anyone can react; only the author can edit or delete. Each item shows only
-  // when its handler is provided (DMs offer edit/delete but not reactions).
+  // Anyone can react; only the author can edit; the author or a moderator can
+  // delete. Each item shows only when its handler is provided (DMs offer
+  // edit/delete but not reactions).
   const actions = [
     onReact && {
       id: 'react', label: 'Add reaction', icon: 'smile', quick: true,
@@ -267,7 +272,8 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
         closePopup();
       },
     },
-    mine && onDelete && { id: 'delete', label: 'Delete message', icon: 'trash', danger: true, quick: true, onSelect: confirmDelete },
+    // Your own messages, or others' when you can moderate them.
+    canDelete && { id: 'delete', label: 'Delete message', icon: 'trash', danger: true, quick: true, onSelect: confirmDelete },
   ].filter(Boolean);
 
   function onEditKeyDown(e) {
@@ -291,7 +297,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, onReact, 
     } else if ((e.key === 'e' || e.key === 'E') && mine && onEdit) {
       e.preventDefault();
       startEdit();
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && mine && onDelete) {
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && canDelete) {
       e.preventDefault();
       confirmDelete();
     }

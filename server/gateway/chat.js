@@ -3,7 +3,7 @@
 const WebSocket = require('ws');
 const db = require('../db');
 const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments } = require('../validate');
-const { canViewChannel, canPostChannel, canView } = require('../permissions');
+const { canViewChannel, canPostChannel, canView, canModerateMessage } = require('../permissions');
 const { userClients, deliverToChannelViewers } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
 
@@ -78,7 +78,11 @@ const ops = {
     if (!id) return;
     const loc = db.getMessageLocation(id);
     if (!loc) return;
-    if (db.deleteMessage(id, userId)) {
+    // Authors delete their own; moderators delete others' within their rank.
+    const deleted = Number(loc.authorId) === Number(userId)
+      ? db.deleteMessage(id, userId)
+      : canModerateMessage(loc.space, loc.channel, userId, loc.authorId) && db.deleteMessageById(id);
+    if (deleted) {
       deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
         type: 'message_delete', id, space: loc.space, channel: loc.channel,
       }));

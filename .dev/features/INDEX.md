@@ -27,7 +27,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-07 | Cursor pagination API (`before`) | 1 | COMPLETE | S | none (soft P1-01) | db/index.js, server.js (2 handlers) |
 | P1-08 | Load older messages UI | 1 | PLANNED | M | P1-07, P1-12 | MessageList.jsx, api.js, state hooks |
 | P1-09 | Reconnect resync | 1 | PLANNED | S–M | P1-05, P1-08, P1-14 | gateway/index.js, state hooks, useSocket.js |
-| P1-10 | Moderation: delete_others_messages | 1 | PLANNED | S | P3-05 (soft P1-05) | permissions.js, db/index.js, gateway/chat.js, MessageActions.jsx |
+| P1-10 | Moderation: delete_others_messages | 1 | REVIEW | S | P3-05 (soft P1-05) | permissions.js, db/index.js, gateway/chat.js, MessageActions.jsx |
 | P1-11 | Fix dm_unread key mismatch | 1 | COMPLETE | S | none | server.js (1 line) |
 | P1-12 | App split 1/3: channel-message hook | 1 | READY | M | none (after P1-11) | App.jsx, state/useChannelMessages.js |
 | P1-13 | App split 2/3: DM hook | 1 | PLANNED | S–M | P1-12 | App.jsx, state/useDms.js |
@@ -63,7 +63,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-02 | Remaining overlays → Modal | 3 | PLANNED | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
 | P3-03 | Icon-button labels sweep | 3 | PLANNED | S–M | P3-02, P3-05 | IconButton.jsx (new), ~12 components (exclusive) |
 | P3-04 | Create/Join server dialog | 3 | PLANNED | S | P3-01 | CreateServerDialog.jsx (new), ServerRail.jsx, App.jsx |
-| P3-05 | Accessible message actions | 3 | REVIEW | M | none | MessageList.jsx, MessageActions.jsx (new) |
+| P3-05 | Accessible message actions | 3 | COMPLETE | M | none | MessageList.jsx, MessageActions.jsx (new) |
 | P3-06 | Server icon + templates at creation | 3 | PLANNED | S–M | P3-04, P1-06 | routes/spaces.js, CreateServerDialog.jsx |
 | P3-07 | Setup wizard improvements | 3 | READY | S | none | SetupWizard.jsx |
 | P3-08 | In-app confirm (kick, delete server) | 3 | PLANNED | S | P3-01 | ConfirmDialog.jsx (new), MemberList.jsx, ChannelList.jsx |

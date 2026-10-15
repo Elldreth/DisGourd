@@ -444,7 +444,7 @@ function isMessageInChannel(messageId, spaceName, channelName) {
 // events from the single gateway socket to the right server's members.
 function getMessageLocation(messageId) {
   return db.prepare(`
-    SELECT s.name AS space, c.name AS channel
+    SELECT s.name AS space, c.name AS channel, m.author_id AS authorId
     FROM messages m
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
@@ -708,6 +708,11 @@ function deleteMessage(messageId, authorId) {
     .run(messageId, authorId).changes > 0;
 }
 
+// Unconditional delete; the caller has already checked moderation rights.
+function deleteMessageById(messageId) {
+  return db.prepare('DELETE FROM messages WHERE id = ?').run(messageId).changes > 0;
+}
+
 function createUser(username, email, passwordHash, salt) {
   // The very first account becomes the site admin.
   const first = countUsers() === 0;
@@ -954,6 +959,7 @@ module.exports = {
   getReaction,
   isMessageInChannel,
   getMessageLocation,
+  deleteMessageById,
   getCoMemberIds,
   markRead,
   getUnreadCounts,

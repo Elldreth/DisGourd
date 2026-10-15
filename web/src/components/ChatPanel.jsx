@@ -16,6 +16,7 @@ export default function ChatPanel({
   onSend,
   onEdit,
   onDelete,
+  canModerate,
   onReact,
   onTyping,
   onOpenSearch,
@@ -77,6 +78,7 @@ export default function ChatPanel({
         currentUser={currentUser}
         onEdit={onEdit}
         onDelete={onDelete}
+        canModerate={canModerate}
         onReact={onReact}
       />
       <TypingIndicator names={typingUsers} />
