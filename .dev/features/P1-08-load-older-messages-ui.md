@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Cursor pagination, plus load older messages in the UI"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#53)
 - **Effort:** M
 - **Depends on:** P1-07 (API), P1-12 (channel message state lives in a hook; avoids editing the 950-line App.jsx)
 - **Serialize with:** MessageList.jsx units (P3-05, P2-01, P2-05, P2-07, P2-09, P1-10, P3-09, P3-12); App.jsx units
