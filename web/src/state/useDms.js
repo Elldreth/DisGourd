@@ -22,7 +22,8 @@ function dmFrameToMessage(m) {
 // live, and the actions that send.
 //   active: the DM view is showing (not a server)
 //   send:   gateway send; status: the gateway status
-export function useDms({ active, user, send, status }) {
+//   onIncoming(frame): told about every incoming DM (notifications, sounds)
+export function useDms({ active, user, send, status, onIncoming }) {
   const [conversations, setConversations] = useState([]);
   const [current, setCurrent] = useState(''); // partner username
   const [messages, dispatch] = useReducer(messagesReducer, []);
@@ -44,6 +45,7 @@ export function useDms({ active, user, send, status }) {
 
   const handlers = {
     dm: (m) => {
+      onIncoming?.({ kind: 'dm', ...m });
       const me = userRef.current;
       const partner = m.from === me ? m.to : m.from;
       const viewing = activeRef.current && currentRef.current === partner;

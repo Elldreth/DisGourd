@@ -113,3 +113,24 @@ export function describeMicError(err) {
       return `Could not access the microphone${err && err.name ? ` (${err.name})` : ''}. Check your browser and Windows microphone permissions.`;
   }
 }
+
+// Desktop notifications: 'off' (default) | 'mentions' (mentions and DMs) |
+// 'all' (every message). Only takes effect once the browser grants permission.
+const NOTIFY_KEY = 'disgourd.notifyLevel';
+const LEVELS = ['off', 'mentions', 'all'];
+export const getNotifyLevel = () => {
+  const v = localStorage.getItem(NOTIFY_KEY);
+  return LEVELS.includes(v) ? v : 'off';
+};
+export function setNotifyLevel(level) {
+  if (level && level !== 'off' && LEVELS.includes(level)) localStorage.setItem(NOTIFY_KEY, level);
+  else localStorage.removeItem(NOTIFY_KEY);
+}
+
+// Message sounds (mentions/DMs, and other messages at the "all" level). Off by default.
+const MSG_SND_KEY = 'disgourd.messageSounds';
+export const getMessageSounds = () => localStorage.getItem(MSG_SND_KEY) === '1';
+export function setMessageSounds(on) {
+  if (on) localStorage.setItem(MSG_SND_KEY, '1');
+  else localStorage.removeItem(MSG_SND_KEY);
+}

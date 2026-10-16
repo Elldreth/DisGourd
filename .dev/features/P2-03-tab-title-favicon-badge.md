@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 2 (part 1 of "Browser notifications, unread count in the tab title and favicon, message sound")
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #59)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** App.jsx units. It adds one hook call; if P1-12..14 are in flight, add the call after they land.
