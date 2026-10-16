@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 1 (second half)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#58)
 - **Effort:** S
 - **Depends on:** P2-01
 - **Serialize with:** web/package.json units, index.css units
