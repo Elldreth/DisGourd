@@ -12,8 +12,19 @@
 //   \*            backslash escapes
 // Not supported on purpose: masked links [text](url) (phishing), headings,
 // lists, tables, raw HTML.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { copyText } from './util.js';
+import { hastToReact } from './hastToReact.jsx';
+
+// Languages (and aliases) the lazily-loaded highlighter knows. Checked before
+// loading it, so a block with an unknown or no language never pulls it in.
+const HIGHLIGHT_LANGS = new Set([
+  'bash', 'sh', 'shell', 'zsh', 'console', 'c', 'cpp', 'c++', 'hpp', 'cc', 'cxx', 'csharp', 'cs', 'c#', 'css',
+  'diff', 'go', 'golang', 'java', 'javascript', 'js', 'jsx', 'mjs', 'cjs', 'json', 'python', 'py', 'rust', 'rs',
+  'sql', 'typescript', 'ts', 'tsx', 'xml', 'html', 'svg', 'xhtml', 'yaml', 'yml',
+]);
+let highlighter = null; // the highlight.js module promise, shared by all blocks
+const loadHighlighter = () => (highlighter ||= import('./highlight.js'));
 
 const ESCAPABLE = new Set(['\\', '*', '_', '~', '|', '`', '>', '@', '[', ']', '(', ')', '#', '-']);
 const isWordChar = (c) => !!c && /[A-Za-z0-9]/.test(c);
@@ -79,6 +90,22 @@ function Spoiler({ children }) {
 
 function CodeBlock({ code, lang }) {
   const [label, setLabel] = useState('Copy');
+  // Plain text first; swapped for highlighted tokens once the highlighter loads.
+  const [tokens, setTokens] = useState(null);
+  useEffect(() => {
+    const name = String(lang || '').toLowerCase();
+    if (!HIGHLIGHT_LANGS.has(name)) return undefined;
+    let live = true;
+    loadHighlighter()
+      .then((m) => {
+        const tree = m.highlight(code, name);
+        if (live && tree) setTokens(hastToReact(tree));
+      })
+      .catch(() => {}); // stay plain if it can't load
+    return () => {
+      live = false;
+    };
+  }, [code, lang]);
   async function copy() {
     setLabel((await copyText(code)) ? 'Copied' : "Couldn't copy");
     setTimeout(() => setLabel('Copy'), 1500);
@@ -91,7 +118,7 @@ function CodeBlock({ code, lang }) {
           {label}
         </button>
       </div>
-      <pre><code>{code}</code></pre>
+      <pre><code className={tokens ? 'hljs' : undefined}>{tokens || code}</code></pre>
     </div>
   );
 }
