@@ -6,6 +6,7 @@ import { useChannelMessages, badgeCounts } from './state/useChannelMessages.js';
 import { useDms } from './state/useDms.js';
 import { useSpaces } from './state/useSpaces.js';
 import { useVoiceCall } from './state/useVoiceCall.js';
+import { useDocumentAttention } from './attention.js';
 import Login from './components/Login.jsx';
 import SetupWizard from './components/SetupWizard.jsx';
 import ServerRail from './components/ServerRail.jsx';
@@ -129,6 +130,9 @@ export default function App() {
     unread: chat.unread, mentions: chat.mentions, spaces: sp.spaces, currentSpace: sp.currentSpace, channels: sp.channels,
   });
   const call = voice.call;
+  // Browser tab: "(N) DisGourd" + a favicon dot for mentions and unread DMs.
+  const total = (counts) => Object.values(counts).reduce((a, b) => a + b, 0);
+  useDocumentAttention({ mentions: total(spaceMentions), dms: dm.totalUnread, unread: total(spaceUnread) });
 
   if (!token) {
     if (!authInfo) {
