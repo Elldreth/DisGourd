@@ -16,8 +16,12 @@ export default function NotificationSettings() {
   const [level, setLevel] = useState(getNotifyLevel);
   const [sounds, setSounds] = useState(getMessageSounds);
   const [permission, setPermission] = useState(permissionNow);
+  // True after the browser's prompt was closed without Allow or Block.
+  const [dismissed, setDismissed] = useState(false);
+  const [testFailed, setTestFailed] = useState(false);
 
   async function choose(next) {
+    setDismissed(false);
     if (next === 'off') {
       setNotifyLevel('off');
       setLevel('off');
@@ -27,10 +31,20 @@ export default function NotificationSettings() {
     if (p === 'default') {
       p = await Notification.requestPermission();
       setPermission(p);
+      if (p === 'default') setDismissed(true);
     }
-    if (p !== 'granted') return; // the notice below explains what to do
+    if (p !== 'granted') return; // the notices below explain what to do
     setNotifyLevel(next);
     setLevel(next);
+  }
+
+  function sendTest() {
+    setTestFailed(false);
+    try {
+      new Notification('DisGourd test', { body: 'Desktop notifications are working.', icon: '/icon-192.png' });
+    } catch {
+      setTestFailed(true);
+    }
   }
 
   function toggleSounds(e) {
@@ -62,6 +76,32 @@ export default function NotificationSettings() {
             </label>
           ))}
         </div>
+        {dismissed && (
+          <p role="status" className="mt-2 rounded-lg bg-idle/10 px-3 py-2 text-xs text-idle">
+            The browser's prompt was closed without an answer, so notifications are still off. Choose a level again
+            and click Allow. (In Chrome, the prompt may show as a small bell icon at the right of the address bar.)
+          </p>
+        )}
+        {permission === 'granted' && (
+          <div className="mt-2 flex items-center justify-between gap-3 px-2">
+            <span className="text-xs text-gray-500">
+              Nothing pops up? Check that your browser is allowed in Windows (or macOS) notification settings and that
+              Do Not Disturb is off.
+            </span>
+            <button
+              type="button"
+              onClick={sendTest}
+              className="shrink-0 rounded-md bg-ink-600 px-2.5 py-1 text-xs text-gray-200 hover:bg-ink-500"
+            >
+              Send a test notification
+            </button>
+          </div>
+        )}
+        {testFailed && (
+          <p role="status" className="mt-2 text-xs text-pink">
+            This browser wouldn't show a test notification from this page.
+          </p>
+        )}
         {permission === 'denied' && (
           <p role="status" className="mt-2 rounded-lg bg-pink/10 px-3 py-2 text-xs text-pink">
             Notifications are blocked for this site in your browser. To turn them on, allow notifications in the

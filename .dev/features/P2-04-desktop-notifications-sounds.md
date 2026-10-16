@@ -33,12 +33,15 @@ New `web/src/notify.js`, `web/src/sounds.js`, `web/src/audio.js` (setting getter
 |---|---|
 | `notify.test.js` (14 tests): own messages, mention / DM / plain message, focused vs background, open channel vs same name elsewhere, levels off / mentions / all, sounds on/off, notification text | pass |
 | `NotificationSettings.test.jsx` (5 tests): nothing asked on load; allowing saves the level; blocking keeps it off with a notice; already blocked never asks; sound toggle works with no Notification API | pass |
-| Full web suite / build | 95/95 pass, `vite build` ok |
+| `NotificationSettings.test.jsx` (+3 after user testing): closing the prompt unanswered shows a note and stays Off; test button shows a notification when allowed; no test button before that | pass |
+| Full web suite / build | 98/98 pass, `vite build` ok |
+| User's own Chrome on localhost:3000: after allowing, an @mention with the window minimised showed a Windows notification | pass |
 | Sandbox, real browser permission "denied": Settings shows the Notifications section and the blocked notice; choosing "Mentions and DMs" stays on Off and never prompts | pass |
 | Sandbox, `Notification` stubbed as granted, level "mentions", bob sends four frames while sandy reads #history: mention in #general -> "bob in #general · Tx Check", body "hey @sandy look at Spoiler this"; mention in the open #history -> none; plain message in #random -> none; DM -> "bob", "a direct one" | pass |
 | Clicking those notifications opens #general and the DM with bob, and closes them | pass |
 
 ## Implementation notes
+- Added after user testing: the user's first try silently stayed Off (prompt never answered, so permission stayed "default"). Now a note explains it, and a "Send a test notification" button helps rule out Windows / Do Not Disturb blocking.
 - The rules are pure functions (`attentionKind`, `shouldNotify`, `soundFor`, `notificationText`); `useNotifications()` wires them up. The channel and DM hooks call `onIncoming` with each incoming frame.
 - One notification per conversation (`tag`): a newer one replaces the older. Open notifications close when the window regains focus.
 - Sounds are separate from desktop notifications: mentions and DMs chime; plain messages blip only at "All messages".
