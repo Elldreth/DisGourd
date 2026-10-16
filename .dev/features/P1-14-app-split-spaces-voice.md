@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Split up App.jsx"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#55)
 - **Effort:** M
 - **Depends on:** P1-13
 - **Serialize with:** App.jsx units

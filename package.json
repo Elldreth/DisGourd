@@ -10,6 +10,6 @@
     "server": "node server/server.js",
     "dev:server": "node server/server.js",
     "dev:web": "npm --prefix web run dev",
-    "test": "npm --prefix server test"
+    "test": "npm --prefix server test && npm --prefix web test"
   }
 }
