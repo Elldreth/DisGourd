@@ -1,0 +1,83 @@
+// Smoke test: the whole app renders, signed in and signed out, without throwing
+// or logging errors. It catches bugs `vite build` can't, such as a value read
+// before it's declared (which blanked the app in P1-13).
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { act, cleanup, render, screen } from '@testing-library/react';
+
+const SPACE = {
+  name: 'Smoke',
+  channels: ['general'],
+  voiceChannels: ['lounge'],
+  role: 'owner',
+  permissions: { delete_others_messages: 2 },
+  channelMeta: { general: { type: 'text', view: 1, post: 1 }, lounge: { type: 'voice', view: 1, post: 1 } },
+};
+
+// A fake server API; each test sets whether we're signed in.
+let signedIn = true;
+vi.mock('./api.js', () => ({
+  getToken: () => (signedIn ? 'token' : ''),
+  decodeToken: (t) => (t ? { sub: 1, name: 'tester' } : null),
+  setUnauthorizedHandler: () => {},
+  clearToken: () => {},
+  getAuthInfo: () => Promise.resolve({ registration: 'open', setup: false }),
+  getSpaces: () => Promise.resolve([SPACE]),
+  getMe: () => Promise.resolve({ id: 1, username: 'tester', avatar: null }),
+  getMembers: () => Promise.resolve({ members: [{ username: 'tester', role: 'owner', online: true }] }),
+  getMessages: () =>
+    Promise.resolve([{ id: 1, author: 'tester', content: 'hello from the smoke test', timestamp: Date.now(), reactions: [] }]),
+  getDms: () => Promise.resolve([]),
+  getDmMessages: () => Promise.resolve([]),
+}));
+
+// A WebSocket that never connects anywhere.
+class FakeSocket {
+  static OPEN = 1;
+  constructor() {
+    this.readyState = 0;
+  }
+  send() {}
+  close() {}
+}
+
+let errors;
+beforeEach(() => {
+  errors = [];
+  vi.stubGlobal('WebSocket', FakeSocket);
+  // jsdom has no layout, so these browser APIs are missing.
+  Element.prototype.scrollIntoView = () => {};
+  vi.spyOn(console, 'error').mockImplementation((...args) => errors.push(args.map(String).join(' ')));
+  localStorage.clear();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+async function renderApp() {
+  const { default: App } = await import('./App.jsx');
+  await act(async () => {
+    render(<App />);
+  });
+  // Let the initial loads (spaces, members, messages) resolve and re-render.
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 50));
+  });
+}
+
+test('signed in: renders the server, its channels and the message list', async () => {
+  signedIn = true;
+  await renderApp();
+  expect(await screen.findByText('hello from the smoke test')).toBeTruthy();
+  expect(screen.getByRole('log', { name: 'Messages in #general' })).toBeTruthy();
+  expect(screen.getByText('lounge')).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
+test('signed out: renders the sign-in screen', async () => {
+  signedIn = false;
+  await renderApp();
+  expect(await screen.findByText(/sign in/i, { selector: 'button' })).toBeTruthy();
+  expect(errors).toEqual([]);
+});

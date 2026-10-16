@@ -19,4 +19,11 @@ export default defineConfig({
       '/gateway': { target: wsServer, ws: true },
     },
   },
+  // Unit + smoke tests (`npm test`). Test files live next to the code as
+  // *.test.js(x); Vite never bundles them because nothing imports them.
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.test.{js,jsx}'],
+    restoreMocks: true,
+  },
 });
