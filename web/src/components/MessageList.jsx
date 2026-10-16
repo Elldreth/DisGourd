@@ -419,9 +419,11 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
         grouped ? '' : 'mt-3'
       } ${mentionsMe ? 'border-l-2 border-pink bg-pink/10' : ''} ${flash ? '!bg-brand/20 ring-1 ring-brand-hi/60' : ''}`}
     >
-      <div className="w-10 shrink-0">
+      <div className="relative w-10 shrink-0">
         {grouped ? (
-          <span className="hidden w-10 pt-1 text-right text-[10px] text-gray-500 group-hover:inline-block group-focus-visible:inline-block">
+          // Out of the layout and on one line, so showing it on hover never
+          // changes the row's height.
+          <span className="absolute right-0 top-1 hidden whitespace-nowrap text-[10px] leading-4 text-gray-500 group-hover:block group-focus-visible:block">
             {formatTime(m.timestamp)}
           </span>
         ) : (
