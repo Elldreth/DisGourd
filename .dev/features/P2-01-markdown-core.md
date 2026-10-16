@@ -74,3 +74,14 @@ MessageList.jsx (325 lines) and the new module. Blast radius: every rendered mes
 | (extra) manual rendering | One message each with: bold, italic, underline, strike and inline code; nested italic; a two-line quote; a mention; a JS code block (label + Copy, `**not bold**` literal); a link without its trailing period; a hidden spoiler (Enter reveals "the cake is a lie"); and `<img …>` / `javascript:` / `snake_case_name` as plain text. |
 | (extra) Copy button | The pane denies clipboard writes. Swapping in a fake clipboard: failure gives "Couldn't copy" and resets to "Copy". Success gives "Copied" with the exact code text. |
 | Build | `vite build` passes. |
+
+## CI fix (2026-10-16)
+The first CI run of #57 failed two speed tests: "**a"×1333 took 123ms and a run of backticks took 427ms (the limit was 50ms). Measurements split parse time from DOM render time:
+- **Parsing was always about 1ms.** The test was timing jsdom rendering, which varies by machine.
+- **A real bug:** 4,000 backticks became **666 empty code blocks**, because every "``````" counted as a fence pair.
+
+Fixes:
+- An empty fence pair is now literal text. New tests cover a run of backticks and `before `````` after`.
+- The speed tests time `renderMarkdown()` (the parse) only, which is what guards against hangs from crafted input. Three more pathological cases were added (`~~`, `@a`, `https://`), each under 1.6ms locally.
+
+Web suite: 53/53.

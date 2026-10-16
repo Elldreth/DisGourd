@@ -151,17 +151,35 @@ describe('safety and performance', () => {
     expect(el.textContent).toBe('<img src=x onerror="alert(1)"> <script>alert(2)</script>');
   });
 
+  // Guards against inputs that make the parser blow up (the risk with
+  // regex-based markdown). This times the parse only: how fast the test DOM
+  // renders depends on the machine, not on this code.
   test.each([
     ['*', '*'.repeat(4000)],
     ['**a', '**a'.repeat(1333)],
     ['_', '_'.repeat(4000)],
     ['`', '`'.repeat(4000)],
     ['||', '|'.repeat(4000)],
-  ])('4,000 characters of %s render quickly', (_name, text) => {
+    ['~~', '~'.repeat(4000)],
+    ['@', '@a'.repeat(2000)],
+    ['https', 'https://'.repeat(500)],
+  ])('4,000 characters of %s parse quickly', (_name, text) => {
     const start = performance.now();
-    const el = md(text);
+    const nodes = renderMarkdown(text, { me: 'me', mentions: true });
     const ms = performance.now() - start;
-    expect(el.textContent.length).toBeGreaterThan(0);
+    expect(nodes.length).toBeGreaterThan(0);
     expect(ms).toBeLessThan(50);
+  });
+
+  test('a run of backticks is text, not hundreds of empty code blocks', () => {
+    const el = md('`'.repeat(4000));
+    expect(el.querySelector('.md-codeblock')).toBeNull();
+    expect(el.textContent).toBe('`'.repeat(4000));
+  });
+
+  test('an empty fence pair is literal text', () => {
+    const el = md('before `````` after');
+    expect(el.querySelector('.md-codeblock')).toBeNull();
+    expect(el.textContent).toBe('before `````` after');
   });
 });

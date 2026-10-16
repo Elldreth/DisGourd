@@ -254,16 +254,12 @@ export function renderMarkdown(text, opts = {}) {
   const keys = { n: 0 };
   const out = [];
   const src = String(text || '');
-  let i = 0;
-  while (i < src.length) {
-    const open = src.indexOf('```', i);
+  let textStart = 0; // start of text not yet rendered
+  let searchFrom = 0; // where to look for the next fence
+  for (;;) {
+    const open = src.indexOf('```', searchFrom);
     const close = open === -1 ? -1 : src.indexOf('```', open + 3);
-    if (open === -1 || close === -1) {
-      parseTextBlock(src.slice(i), options, keys, out);
-      break;
-    }
-    // Text before the fence (drop the newline the block replaces).
-    if (open > i) parseTextBlock(src.slice(i, open).replace(/\n$/, ''), options, keys, out);
+    if (open === -1 || close === -1) break;
     let body = src.slice(open + 3, close);
     let lang = '';
     const langLine = /^([A-Za-z0-9+#._-]{1,20})\n/.exec(body);
@@ -273,9 +269,19 @@ export function renderMarkdown(text, opts = {}) {
     } else if (body.startsWith('\n')) {
       body = body.slice(1);
     }
-    out.push(<CodeBlock key={`c${keys.n++}`} code={body.replace(/\n$/, '')} lang={lang} />);
-    i = close + 3;
-    if (src[i] === '\n') i += 1;
+    const code = body.replace(/\n$/, '');
+    // An empty fence (``````) is just text, not an empty code block.
+    if (!code.trim()) {
+      searchFrom = close + 3;
+      continue;
+    }
+    // Text before the fence (drop the newline the block replaces).
+    if (open > textStart) parseTextBlock(src.slice(textStart, open).replace(/\n$/, ''), options, keys, out);
+    out.push(<CodeBlock key={`c${keys.n++}`} code={code} lang={lang} />);
+    textStart = close + 3;
+    if (src[textStart] === '\n') textStart += 1;
+    searchFrom = textStart;
   }
+  if (textStart < src.length) parseTextBlock(src.slice(textStart), options, keys, out);
   return out;
 }
