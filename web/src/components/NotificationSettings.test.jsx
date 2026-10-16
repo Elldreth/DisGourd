@@ -4,9 +4,19 @@ import NotificationSettings from './NotificationSettings.jsx';
 import { getNotifyLevel, getMessageSounds } from '../audio.js';
 
 let requestPermission;
+let shown;
 function mockNotification(permission, answer) {
   requestPermission = vi.fn(() => Promise.resolve(answer));
-  vi.stubGlobal('Notification', Object.assign(function Notification() {}, { permission, requestPermission }));
+  shown = [];
+  vi.stubGlobal(
+    'Notification',
+    Object.assign(
+      function Notification(title, opts) {
+        shown.push({ title, ...opts });
+      },
+      { permission, requestPermission }
+    )
+  );
 }
 
 beforeEach(() => localStorage.clear());
@@ -62,4 +72,27 @@ test('the sound toggle works without notification permission', async () => {
     fireEvent.click(screen.getByLabelText(/message sounds/i));
   });
   expect(getMessageSounds()).toBe(true);
+});
+
+test('closing the prompt without answering says so and keeps it off', async () => {
+  mockNotification('default', 'default');
+  render(<NotificationSettings />);
+  await choose('Mentions and DMs');
+  expect(getNotifyLevel()).toBe('off');
+  expect(screen.getByText(/closed without an answer/i)).toBeTruthy();
+  expect(screen.getByLabelText('Off').checked).toBe(true);
+});
+
+test('with permission granted, the test button shows a notification', async () => {
+  mockNotification('granted', 'granted');
+  render(<NotificationSettings />);
+  fireEvent.click(screen.getByRole('button', { name: /send a test notification/i }));
+  expect(shown).toHaveLength(1);
+  expect(shown[0].title).toBe('DisGourd test');
+});
+
+test('no test button until notifications are allowed', () => {
+  mockNotification('default', 'granted');
+  render(<NotificationSettings />);
+  expect(screen.queryByRole('button', { name: /send a test notification/i })).toBeNull();
 });
