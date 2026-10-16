@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (enabler; not in IMPROVEMENT-PLAN.md but needed to test P2-01 markdown, the P1-12 reducers and P2-03 helpers)
 - **Phase:** 1
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#56)
 - **Effort:** S
 - **Depends on:** P1-18 (the Vitest major must match the Vite major)
 - **Serialize with:** web/package.json units

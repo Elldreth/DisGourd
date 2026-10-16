@@ -4,64 +4,17 @@ import Album from './Album.jsx';
 import Icon from './Icon.jsx';
 import { MessageToolbar, ActionMenu, ReactionPicker } from './MessageActions.jsx';
 import { formatTime, formatDay } from '../util.js';
+import { renderMarkdown } from '../markdown.jsx';
 
 const LONG_PRESS_MS = 450;
 const LONG_PRESS_SLOP_PX = 10;
 
 const MENTION_RE = /(@[A-Za-z0-9_.-]+)/g;
 
-// Render message text with @mentions highlighted (extra-highlighted if it's you).
-function renderMentions(content, me) {
-  return content.split(MENTION_RE).map((part, i) => {
-    if (part[0] === '@') {
-      const isMe = part.slice(1) === me;
-      return (
-        <span
-          key={i}
-          className={`rounded px-0.5 font-medium ${isMe ? 'bg-brand/40 text-white' : 'bg-brand/15 text-brand-hi'}`}
-        >
-          {part}
-        </span>
-      );
-    }
-    return part;
-  });
-}
-
+// Whether a message mentions you (for the row highlight).
 function mentionsUser(content, me) {
   if (!content || !me) return false;
   return content.split(MENTION_RE).some((p) => p[0] === '@' && p.slice(1) === me);
-}
-
-// A ||spoiler|| segment: hidden until clicked.
-function SpoilerText({ children }) {
-  const [revealed, setRevealed] = useState(false);
-  return (
-    <span
-      onClick={() => !revealed && setRevealed(true)}
-      title={revealed ? undefined : 'Spoiler — click to reveal'}
-      className={
-        revealed
-          ? 'rounded bg-ink-600/40 px-0.5'
-          : 'cursor-pointer select-none rounded bg-ink-500 px-0.5 text-transparent hover:bg-ink-600'
-      }
-    >
-      {children}
-    </span>
-  );
-}
-
-// Render message text with ||spoiler|| segments and (optionally) @mentions.
-function renderRich(content, me, withMentions) {
-  const nodes = [];
-  content.split(/(\|\|[\s\S]+?\|\|)/g).forEach((seg, i) => {
-    if (seg.length >= 4 && seg.startsWith('||') && seg.endsWith('||')) {
-      nodes.push(<SpoilerText key={`s${i}`}>{seg.slice(2, -2)}</SpoilerText>);
-    } else if (seg) {
-      nodes.push(withMentions ? <span key={`t${i}`}>{renderMentions(seg, me)}</span> : seg);
-    }
-  });
-  return nodes;
 }
 
 // Groups consecutive messages from the same author (within 5 minutes) into a
@@ -530,7 +483,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
           <>
             {m.content && (
               <div className="whitespace-pre-wrap break-words text-gray-200">
-                {renderRich(m.content, currentUser, !simple)}
+                {renderMarkdown(m.content, { me: currentUser, mentions: !simple })}
                 {m.editedAt && <span className="ml-1 text-[10px] text-gray-500">(edited)</span>}
               </div>
             )}
