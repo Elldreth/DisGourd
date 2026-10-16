@@ -5,8 +5,10 @@ import Icon from './Icon.jsx';
 import { MessageToolbar, ActionMenu, ReactionPicker } from './MessageActions.jsx';
 import { formatTime, formatDay } from '../util.js';
 import { renderMarkdown } from '../markdown.jsx';
+import { newDivider } from '../newMessages.js';
 
 const LONG_PRESS_MS = 450;
+const JUMP_MAX_PAGES = 10; // how far back "Jump" will page before giving up
 const LONG_PRESS_SLOP_PX = 10;
 
 const MENTION_RE = /(@[A-Za-z0-9_.-]+)/g;
@@ -22,8 +24,11 @@ function mentionsUser(content, me) {
 // `canModerate(author)` (optional) says whether you may delete that author's
 // messages as a moderator.
 // `onReply(message)` (optional) adds a Reply action. `onLoadOlder` (optional)
-// is called when you scroll near the top while `hasMore`.
-export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, simple = false, emptyHeading, emptyBody }) {
+// is called when you scroll near the top while `hasMore`; it may return a
+// promise that settles once the page is in. `newMessages` ({ since, count },
+// optional) draws a "New" divider after the last message you'd read, with a
+// bar to jump back to it when it's out of view.
+export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, simple = false, emptyHeading, emptyBody }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // When a channel is first opened (or the transcript was cleared on switch /
@@ -38,6 +43,67 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
   const [jumpNote, setJumpNote] = useState('');
   const timers = useRef([]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+  // ---- "New" divider and the jump bar ----
+  const divider = newMessages ? newDivider(messages, newMessages.since, currentUser, hasMore) : null;
+  const [barDismissed, setBarDismissed] = useState(false);
+  const [dividerAbove, setDividerAbove] = useState(false);
+  const [jumping, setJumping] = useState(false);
+  useEffect(() => setBarDismissed(false), [newMessages]);
+  // The latest props, for the jump loop (which awaits across renders).
+  const live = useRef({});
+  live.current = { messages, hasMore, loadingOlder, onLoadOlder, newMessages, currentUser };
+
+  // Is the divider out of view above (or not loaded yet)?
+  function checkDivider() {
+    const el = containerRef.current;
+    if (!el) return;
+    const d = el.querySelector('[data-new-divider]');
+    setDividerAbove(!d || d.getBoundingClientRect().bottom < el.getBoundingClientRect().top);
+  }
+  useEffect(checkDivider, [messages, newMessages]);
+
+  const showBar = !!divider && !barDismissed && dividerAbove;
+
+  // Esc dismisses the bar, unless you're typing or a popup handled it.
+  useEffect(() => {
+    if (!showBar) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (e.target.closest?.('input, textarea, [contenteditable="true"]')) return;
+      setBarDismissed(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showBar]);
+
+  const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+
+  // Page back until the first new message is loaded, then scroll to it.
+  async function jumpToNew() {
+    setJumping(true);
+    const where = () => {
+      const l = live.current;
+      return l.newMessages ? newDivider(l.messages, l.newMessages.since, l.currentUser, l.hasMore) : null;
+    };
+    for (let pages = 0; where() && !where().loaded && pages < JUMP_MAX_PAGES; pages++) {
+      const el = containerRef.current;
+      if (el) prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop };
+      await live.current.onLoadOlder?.();
+      // Let React render the new page before looking again.
+      for (let i = 0; i < 20 && live.current.loadingOlder; i++) await nextFrame();
+      await nextFrame();
+      if (!live.current.hasMore) break;
+    }
+    setJumping(false);
+    const target = containerRef.current?.querySelector('[data-new-divider]');
+    if (target) {
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else {
+      setJumpNote('The first new message is too far back to jump to. Scroll up to keep reading.');
+      timers.current.push(setTimeout(() => setJumpNote(''), 4000));
+    }
+  }
 
   function jumpTo(id) {
     const el = containerRef.current?.querySelector(`[data-msg-id="${id}"]`);
@@ -132,6 +198,12 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
       lastDay = day;
       lastAuthor = null;
     }
+    // The "New" divider also starts a new block, so the first new message
+    // shows its author.
+    if (divider?.id === m.id) {
+      rows.push({ kind: 'new', key: 'new-divider' });
+      lastAuthor = null;
+    }
     // A reply always starts a new block, so its quote line sits under a header.
     const grouped = !m.replyTo && m.author === lastAuthor && m.timestamp - lastTs < 5 * 60 * 1000;
     rows.push({ kind: 'msg', key: m.id, m, grouped });
@@ -140,7 +212,29 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
   });
 
   return (
-    <div ref={containerRef} className="relative flex-1 overflow-y-auto">
+    <div ref={containerRef} onScroll={divider ? checkDivider : undefined} className="relative flex-1 overflow-y-auto">
+      {showBar && (
+        <div className="anim-slide-down sticky top-0 z-30 flex items-center gap-3 bg-brand px-4 py-1.5 text-sm text-white shadow-md">
+          <span className="min-w-0 flex-1 truncate">
+            {newMessages.count} new message{newMessages.count === 1 ? '' : 's'}
+            {divider.loaded && (() => {
+              const first = messages.find((x) => x.id === divider.id);
+              return first ? ` since ${formatTime(first.timestamp)}` : '';
+            })()}
+          </span>
+          <button
+            type="button"
+            onClick={jumpToNew}
+            disabled={jumping}
+            className="shrink-0 font-semibold hover:underline disabled:opacity-60"
+          >
+            {jumping ? 'Jumping…' : 'Jump'}
+          </button>
+          <button type="button" onClick={() => setBarDismissed(true)} className="shrink-0 hover:underline">
+            Mark as read
+          </button>
+        </div>
+      )}
       {jumpNote && (
         <div role="status" className="anim-pop sticky top-2 z-30 mx-auto w-fit rounded-full bg-ink-900 px-4 py-1.5 text-sm text-gray-200 shadow-lg ring-1 ring-ink-500/60">
           {jumpNote}
@@ -173,7 +267,18 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
         )}
 
         {rows.map((row) =>
-          row.kind === 'divider' ? (
+          row.kind === 'new' ? (
+            <div
+              key={row.key}
+              data-new-divider
+              role="separator"
+              aria-label="New messages"
+              className="mb-1 mt-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-pink"
+            >
+              <div className="h-px flex-1 bg-pink/70" />
+              <span>New</span>
+            </div>
+          ) : row.kind === 'divider' ? (
             <div key={row.key} className="my-3 flex items-center gap-3 text-xs text-gray-500">
               <div className="h-px flex-1 bg-ink-500/40" />
               <span>{row.day}</span>

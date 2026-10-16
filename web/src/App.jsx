@@ -298,6 +298,7 @@ export default function App() {
               hasMore={chat.hasMore}
               loadingOlder={chat.loadingOlder}
               onLoadOlder={chat.loadOlder}
+              newMessages={chat.newMessages}
               onTyping={chat.sendTyping}
               onOpenSearch={() => setSearchOpen(true)}
               onOpenNav={() => setNavOpen(true)}
