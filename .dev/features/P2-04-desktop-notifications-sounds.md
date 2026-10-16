@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 2 (part 2)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #60 and #61)
 - **Effort:** S–M
 - **Depends on:** P1-13 (channel and DM handlers live in hooks, so notification logic plugs in without editing App.jsx)
 - **Soft-depends on:** P2-14 (DND suppresses notifications; add that check when P2-14 lands)
