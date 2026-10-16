@@ -101,3 +101,56 @@ h3 {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---- Message markdown (markdown.jsx) ---- */
+.md-code {
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.35);
+}
+.md-codeblock {
+  margin: 0.35rem 0;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  white-space: normal;
+}
+.md-codeblock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgb(255 255 255 / 0.45);
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+}
+.md-codeblock-copy {
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.75rem;
+}
+.md-codeblock-copy:hover { background: rgb(255 255 255 / 0.08); color: white; }
+.md-codeblock pre {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.md-quote {
+  margin: 0.15rem 0;
+  padding-left: 0.65rem;
+  border-left: 3px solid rgb(255 255 255 / 0.2);
+}
+.md-link { color: theme('colors.brand.hi'); text-decoration: none; word-break: break-all; }
+.md-link:hover { text-decoration: underline; }
