@@ -61,3 +61,7 @@ export const playPeerJoin = () => playTones([[587.33, 0.07], [739.99, 0.1]], { v
 export const playPeerLeave = () => playTones([[587.33, 0.07], [440.0, 0.1]], { volume: 0.1 }); // D5 → A4
 // Speaker test: a friendly two-note tone, a touch louder.
 export const playTestTone = () => playTones([[440, 0.16], [660, 0.18]], { volume: 0.2 });
+// New message elsewhere (only at the "all messages" level): one soft blip.
+export const playMessage = () => playTones([[880, 0.06]], { volume: 0.08 }); // A5
+// A mention or DM: a brighter two-note chime.
+export const playMention = () => playTones([[659.25, 0.07], [987.77, 0.12]], { volume: 0.12 }); // E5 → B5

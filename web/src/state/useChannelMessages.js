@@ -85,7 +85,8 @@ const withoutKey = (k) => (prev) => {
 // live, and the actions that send to it.
 //   active: the server view is showing (not DMs)
 //   send:   a stable send (see useLateSend); status: the gateway status
-export function useChannelMessages({ space, channel, active, user, send, status }) {
+//   onIncoming(frame): told about every incoming message (notifications, sounds)
+export function useChannelMessages({ space, channel, active, user, send, status, onIncoming }) {
   const [messages, dispatch] = useReducer(messagesReducer, []);
   const [typingUsers, setTypingUsers] = useState({}); // username -> expires-at ms
   const [unread, setUnread] = useState({}); // unreadKey -> count
@@ -103,6 +104,7 @@ export function useChannelMessages({ space, channel, active, user, send, status 
 
   const handlers = {
     message: (m) => {
+      onIncoming?.({ kind: 'message', ...m });
       if (isOpen(m.space, m.channel)) {
         dispatch({ type: 'merged', messages: [m] });
         if (m.id) send({ op: 'read', space: m.space, channel: m.channel, lastId: m.id });

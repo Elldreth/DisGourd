@@ -7,6 +7,7 @@ import { useDms } from './state/useDms.js';
 import { useSpaces } from './state/useSpaces.js';
 import { useVoiceCall } from './state/useVoiceCall.js';
 import { useDocumentAttention } from './attention.js';
+import { useNotifications } from './notify.js';
 import Login from './components/Login.jsx';
 import SetupWizard from './components/SetupWizard.jsx';
 import ServerRail from './components/ServerRail.jsx';
@@ -64,7 +65,8 @@ export default function App() {
   const gatewayTable = useHandlerTable();
   const { status, send } = useGateway({ token, handlers: gatewayTable.handlers });
   const voice = useVoiceCall({ send, myId });
-  const dm = useDms({ active: view === 'dm', user, send, status });
+  const notifier = useNotifications();
+  const dm = useDms({ active: view === 'dm', user, send, status, onIncoming: notifier.onIncoming });
   const sp = useSpaces({
     token,
     myId,
@@ -83,6 +85,18 @@ export default function App() {
     user,
     send,
     status,
+    onIncoming: notifier.onIncoming,
+  });
+  // Notifications need to know what you're looking at, and how to open what
+  // a clicked notification is about.
+  notifier.update({
+    me: user,
+    view,
+    space: sp.currentSpace,
+    channel: sp.currentChannel,
+    dm: dm.current,
+    openChannel: (space, channel) => openChannelFromSearch(space, channel),
+    openDm: (name) => selectDm(name),
   });
   gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, dm.handlers);
 

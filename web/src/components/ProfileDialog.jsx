@@ -2,6 +2,7 @@ import { useState } from 'react';
 import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
 import AudioSettings from './AudioSettings.jsx';
+import NotificationSettings from './NotificationSettings.jsx';
 import RegistrationAdmin from './RegistrationAdmin.jsx';
 import ImageCropper from './ImageCropper.jsx';
 
@@ -131,6 +132,11 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
               onMicChange={onMicChange}
               inCall={inCall}
             />
+          </section>
+
+          <section>
+            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Notifications</h4>
+            <NotificationSettings />
           </section>
 
           {profile?.siteAdmin && (

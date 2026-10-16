@@ -1,0 +1,121 @@
+// Desktop notifications and message sounds: who gets alerted about what.
+// The rules are pure functions (unit-tested); useNotifications wires them to
+// incoming gateway frames, the settings in audio.js, and the browser API.
+import { useEffect, useRef } from 'react';
+import { getNotifyLevel, getMessageSounds } from './audio.js';
+import { playMessage, playMention } from './sounds.js';
+
+// A frame is { kind: 'message', author, space, channel, mentions } or
+// { kind: 'dm', from, to }. ctx is where you are and what you've chosen:
+// { me, focused, view: 'server'|'dm', space, channel, dm, level, sounds }.
+
+// What an incoming message is to you: 'mention' | 'dm' | 'message', or null
+// when it's yours or you're looking right at it (window focused, that
+// channel or DM open).
+export function attentionKind(frame, ctx) {
+  if (frame.kind === 'dm') {
+    if (frame.from === ctx.me) return null;
+    if (ctx.focused && ctx.view === 'dm' && ctx.dm === frame.from) return null;
+    return 'dm';
+  }
+  if (frame.author === ctx.me) return null;
+  if (ctx.focused && ctx.view === 'server' && ctx.space === frame.space && ctx.channel === frame.channel) return null;
+  return (frame.mentions || []).includes(ctx.me) ? 'mention' : 'message';
+}
+
+// Whether to show a desktop notification, by level: 'off' | 'mentions'
+// (mentions and DMs) | 'all'. Returns the kind, or null.
+export function shouldNotify(frame, ctx) {
+  const kind = attentionKind(frame, ctx);
+  if (!kind || ctx.level === 'off' || !ctx.level) return null;
+  if (kind === 'message' && ctx.level !== 'all') return null;
+  return kind;
+}
+
+// Which sound to play, if any: 'mention' (mentions and DMs) or 'message'
+// (other messages, only at the "all messages" level). Independent of whether
+// desktop notifications are on.
+export function soundFor(frame, ctx) {
+  if (!ctx.sounds) return null;
+  const kind = attentionKind(frame, ctx);
+  if (kind === 'mention' || kind === 'dm') return 'mention';
+  if (kind === 'message' && ctx.level === 'all') return 'message';
+  return null;
+}
+
+// Plain-text preview for a notification body: markdown markers removed,
+// spoilers hidden, code blocks summarised, at most 120 characters.
+export function notificationText(content, attachments = []) {
+  let text = String(content || '')
+    .replace(/```[\s\S]*?```/g, ' [code] ')
+    .replace(/\|\|[\s\S]+?\|\|/g, 'Spoiler')
+    .replace(/(\*\*|__|~~|`)/g, '')
+    .replace(/(^|[^\w])[*_](\S(?:[^*_]*?\S)?)[*_](?=[^\w]|$)/g, '$1$2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const n = attachments.length;
+  if (n) text = text ? `${text} (${n === 1 ? 'attachment' : `${n} attachments`})` : n === 1 ? 'Sent an attachment' : `Sent ${n} attachments`;
+  return text.length > 120 ? `${text.slice(0, 119)}…` : text;
+}
+
+const canNotify = () => typeof Notification !== 'undefined' && Notification.permission === 'granted';
+
+// Hook: returns onIncoming(frame) for the channel and DM hooks to call with
+// every incoming message. App keeps `update(...)` current with where you are
+// and how to open a conversation when a notification is clicked:
+//   update({ me, view, space, channel, dm, openChannel(space, channel), openDm(name) })
+export function useNotifications() {
+  const where = useRef({});
+  const update = (next) => {
+    where.current = next;
+  };
+
+  // Close stale notifications when you come back to the window.
+  const open = useRef(new Set());
+  useEffect(() => {
+    const clear = () => {
+      for (const n of open.current) n.close();
+      open.current.clear();
+    };
+    window.addEventListener('focus', clear);
+    return () => window.removeEventListener('focus', clear);
+  }, []);
+
+  function onIncoming(frame) {
+    const w = where.current;
+    const ctx = {
+      ...w,
+      focused: document.visibilityState === 'visible' && document.hasFocus(),
+      level: getNotifyLevel(),
+      sounds: getMessageSounds(),
+    };
+    const sound = soundFor(frame, ctx);
+    if (sound === 'mention') playMention();
+    else if (sound === 'message') playMessage();
+
+    const kind = shouldNotify(frame, ctx);
+    if (!kind || !canNotify()) return;
+    const isDm = frame.kind === 'dm';
+    const author = isDm ? frame.from : frame.author;
+    try {
+      const n = new Notification(isDm ? `${author}` : `${author} in #${frame.channel} · ${frame.space}`, {
+        body: notificationText(frame.content, frame.attachments || []),
+        icon: '/icon-192.png',
+        // One notification per conversation: a newer one replaces the older.
+        tag: isDm ? `dm:${author}` : `ch:${frame.space}:${frame.channel}`,
+      });
+      open.current.add(n);
+      n.onclose = () => open.current.delete(n);
+      n.onclick = () => {
+        window.focus();
+        if (isDm) w.openDm?.(author);
+        else w.openChannel?.(frame.space, frame.channel);
+        n.close();
+      };
+    } catch {
+      /* some browsers only allow notifications from a service worker */
+    }
+  }
+
+  return { onIncoming, update };
+}
