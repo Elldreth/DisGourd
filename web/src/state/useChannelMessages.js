@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import * as api from '../api.js';
 import { mergeMessages } from '../util.js';
 import { useHistoryPaging } from './useHistoryPaging.js';
+import { mergeLastRead } from '../newMessages.js';
 
 // Key for per-channel maps (unread, mentions, voice state).
 export const unreadKey = (space, channel) => JSON.stringify([space, channel]);
@@ -92,6 +93,17 @@ export function useChannelMessages({ space, channel, active, user, send, status,
   const [unread, setUnread] = useState({}); // unreadKey -> count
   const [mentions, setMentions] = useState({}); // unreadKey -> mention count
   const paging = useHistoryPaging(unreadKey(space, channel));
+  // Where you stopped reading each channel (unreadKey -> last read message id),
+  // and, for the open channel, what was new when you opened it:
+  // { since, count } or null. That drives the "New" divider.
+  const lastRead = useRef({});
+  const [newMessages, setNewMessages] = useState(null);
+  const capturedFor = useRef(null); // the channel key newMessages was taken for
+  const unreadRef = useRef(unread);
+  unreadRef.current = unread;
+  const noteRead = (k, id) => {
+    lastRead.current = mergeLastRead(lastRead.current, { [k]: id });
+  };
 
   // Handlers run outside render, so they read the latest selection from refs.
   const spaceRef = useRef(space);
@@ -107,9 +119,15 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       onIncoming?.({ kind: 'message', ...m });
       if (isOpen(m.space, m.channel)) {
         dispatch({ type: 'merged', messages: [m] });
-        if (m.id) send({ op: 'read', space: m.space, channel: m.channel, lastId: m.id });
+        if (m.id) {
+          send({ op: 'read', space: m.space, channel: m.channel, lastId: m.id });
+          noteRead(unreadKey(m.space, m.channel), m.id);
+        }
       } else {
         const k = unreadKey(m.space, m.channel);
+        // A channel missing from the connect-time unread frame had nothing
+        // unread, so everything before this first new message was read.
+        if (m.id && lastRead.current[k] == null) noteRead(k, m.id - 1);
         setUnread((prev) => ({ ...prev, [k]: (prev[k] || 0) + 1 }));
         if (m.mentions && m.mentions.includes(userRef.current)) {
           setMentions((prev) => ({ ...prev, [k]: (prev[k] || 0) + 1 }));
@@ -118,8 +136,13 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     },
     unread: (f) => {
       const map = {};
-      for (const c of f.counts || []) map[unreadKey(c.space, c.channel)] = c.count;
+      const reads = {};
+      for (const c of f.counts || []) {
+        map[unreadKey(c.space, c.channel)] = c.count;
+        if (c.lastReadId != null) reads[unreadKey(c.space, c.channel)] = c.lastReadId;
+      }
       setUnread(map);
+      lastRead.current = mergeLastRead(lastRead.current, reads);
       const mmap = {};
       for (const c of f.mentions || []) mmap[unreadKey(c.space, c.channel)] = c.count;
       setMentions(mmap);
@@ -142,6 +165,8 @@ export function useChannelMessages({ space, channel, active, user, send, status,
   useEffect(() => {
     dispatch({ type: 'reset', messages: [] });
     setTypingUsers({});
+    setNewMessages(null); // the divider is only for the visit that found it
+    capturedFor.current = null;
   }, [space, channel]);
 
   // Focus the active channel and (re)load its history — also on reconnect.
@@ -154,11 +179,20 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       .then((msgs) => {
         if (cancelled) return;
         dispatch({ type: 'reset', messages: msgs });
-        paging.pageLoaded(unreadKey(space, channel), msgs.length);
+        const k = unreadKey(space, channel);
+        paging.pageLoaded(k, msgs.length);
+        // Note what was new before marking it read. Only on the first load of
+        // this visit: a reconnect reload keeps the divider where it was.
+        if (capturedFor.current !== k) {
+          capturedFor.current = k;
+          const count = unreadRef.current[k] || 0;
+          const since = lastRead.current[k];
+          setNewMessages(count > 0 && since != null ? { since, count } : null);
+        }
         // This channel is now read up to its latest message.
         const maxId = msgs.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
         send({ op: 'read', space, channel, lastId: maxId });
-        const k = unreadKey(space, channel);
+        noteRead(k, maxId);
         setUnread(withoutKey(k));
         setMentions(withoutKey(k));
       })
@@ -180,13 +214,17 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     setTypingUsers({});
     setUnread({});
     setMentions({});
+    setNewMessages(null);
+    lastRead.current = {};
+    capturedFor.current = null;
   }
 
-  // Fetch the page just older than the oldest message shown.
+  // Fetch the page just older than the oldest message shown. Resolves once
+  // that page is in (or straight away when there's nothing to load).
   function loadOlder() {
     const oldest = messages[0]?.id;
-    if (!oldest) return;
-    paging.loadOlder(
+    if (!oldest) return Promise.resolve();
+    return paging.loadOlder(
       (limit) => api.getMessages(space, channel, { limit, before: oldest }),
       (rows) => dispatch({ type: 'merged', messages: rows })
     );
@@ -197,6 +235,7 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     hasMore: paging.hasMore,
     loadingOlder: paging.loadingOlder,
     loadOlder,
+    newMessages,
     typingNames: Object.keys(typingUsers).filter((u) => u !== user),
     unread,
     mentions,

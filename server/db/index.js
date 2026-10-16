@@ -528,7 +528,8 @@ const memberRankSql = (alias) =>
 // (only channels the user is allowed to view).
 function getUnreadCounts(userId) {
   return db.prepare(`
-    SELECT s.name AS space, c.name AS channel, COUNT(m.id) AS count
+    SELECT s.name AS space, c.name AS channel, COUNT(m.id) AS count,
+      COALESCE(rs.last_read_id, 0) AS lastReadId
     FROM space_members sm
     JOIN spaces s ON sm.space_id = s.id
     JOIN channels c ON c.space_id = s.id AND c.view_role <= ${memberRankSql('sm')}

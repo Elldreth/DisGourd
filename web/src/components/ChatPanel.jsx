@@ -22,6 +22,7 @@ export default function ChatPanel({
   hasMore,
   loadingOlder,
   onLoadOlder,
+  newMessages,
   onTyping,
   onOpenSearch,
   onOpenNav,
@@ -92,6 +93,7 @@ export default function ChatPanel({
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
+        newMessages={newMessages}
       />
       <TypingIndicator names={typingUsers} />
       {canPost ? (
