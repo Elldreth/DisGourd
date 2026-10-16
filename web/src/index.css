@@ -154,3 +154,19 @@ h3 {
 }
 .md-link { color: theme('colors.brand.hi'); text-decoration: none; word-break: break-all; }
 .md-link:hover { text-decoration: underline; }
+
+/* Syntax highlighting tokens (highlight.js / lowlight), Neon Calabash colours.
+   Contrast on the code-block background (#131024): violet 6.5:1, lime 14.2:1,
+   pink 6.6:1, amber 11.6:1, comments 9.0:1. */
+.md-codeblock code.hljs { color: theme('colors.gray.100'); }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type, .hljs-doctag, .hljs-built_in,
+.hljs-section, .hljs-name, .hljs-tag { color: theme('colors.brand.hi'); }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-symbol, .hljs-template-tag,
+.hljs-selector-attr, .hljs-selector-pseudo { color: theme('colors.lime'); }
+.hljs-number, .hljs-deletion, .hljs-meta, .hljs-bullet, .hljs-link { color: theme('colors.pink'); }
+.hljs-title, .hljs-attr, .hljs-attribute, .hljs-property, .hljs-selector-id,
+.hljs-selector-class { color: theme('colors.idle'); }
+.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-subst { color: theme('colors.gray.200'); }
+.hljs-comment, .hljs-quote { color: theme('colors.gray.400'); font-style: italic; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }

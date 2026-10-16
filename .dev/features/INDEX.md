@@ -37,8 +37,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-17 | GitHub Actions CI | 1 | COMPLETE | S | none | .github/workflows/ci.yml |
 | P1-18 | Bump Vite | 1 | READY | S | none | web/package.json, vite.config.js |
 | P1-19 | Web test harness (Vitest) | 1 | COMPLETE | S | P1-18 | web/package.json, vite.config.js |
-| P2-01 | Markdown core | 2 | REVIEW | S–M | P1-19 | markdown.jsx (new), MessageList.jsx, index.css |
-| P2-02 | Syntax highlighting (lazy) | 2 | PLANNED | S | P2-01 | markdown.jsx, highlight.js (new), index.css |
+| P2-01 | Markdown core | 2 | COMPLETE | S–M | P1-19 | markdown.jsx (new), MessageList.jsx, index.css |
+| P2-02 | Syntax highlighting (lazy) | 2 | REVIEW | S | P2-01 | markdown.jsx, highlight.js (new), index.css |
 | P2-03 | Tab title + favicon badge | 2 | READY | S | none | attention.js (new), App.jsx (+2 lines) |
 | P2-04 | Desktop notifications + sounds | 2 | PLANNED | S–M | P1-13 | notify.js (new), sounds.js, audio.js, ProfileDialog.jsx |
 | P2-05 | New-messages divider + jump | 2 | PLANNED | S–M | P1-08 | db/index.js, MessageList.jsx, useChannelMessages.js |

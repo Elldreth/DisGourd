@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 1 ("Markdown and code blocks with syntax highlighting"). This unit covers the markdown part. Highlighting is P2-02.
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in Elldreth/DisGourd#57)
 - **Effort:** S–M
 - **Depends on:** P1-19. A message parser on a security boundary needs unit tests.
 - **Serialize with:** MessageList.jsx units, index.css units (P2-16, P2-17)
