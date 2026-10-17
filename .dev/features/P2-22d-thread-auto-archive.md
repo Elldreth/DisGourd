@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-22)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #100, 2026-10-17)
 - **Effort:** S
 - **Depends on:** P2-22a (`last_activity_at`, `archived_at`, and reopening on post)
 - **Serialize with:** `server/gateway/index.js` (the status sweep lives there too)
