@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (decomposed 2026-10-17 into P2-22a–d)
 - **Phase:** 2, rank 14
-- **State:** PLANNED (children below; P2-22a is READY)
+- **State:** COMPLETE (all four children merged: #97, #98, #99, #100; 2026-10-17)
 - **Effort:** L in total
 - **Depends on:** P2-09 and P2-10 (replies, `around` jump, newer-page loading), P1-08, P1-09, P2-13 (pins, now reused by threads)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #14
