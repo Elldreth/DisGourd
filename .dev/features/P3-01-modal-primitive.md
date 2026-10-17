@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "Dialogs need role=dialog, aria-modal, a focus trap and Esc to close"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #76)
 - **Effort:** S–M
 - **Depends on:** none
 - **Serialize with:** units touching the migrated dialog files
