@@ -45,7 +45,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-04 | Desktop notifications + sounds | 2 | COMPLETE | S–M | P1-13 | notify.js (new), sounds.js, audio.js, ProfileDialog.jsx |
 | P2-05 | New-messages divider + jump | 2 | COMPLETE | S–M | P1-08 | db/index.js, MessageList.jsx, useChannelMessages.js |
 | P2-06 | Emoji picker in composer | 2 | COMPLETE | S–M | none | EmojiPicker.jsx (new), emoji.js (new), Composer.jsx, web/package.json |
-| P2-07 | Any emoji as reaction | 2 | REVIEW | S | P2-06, P3-05 | MessageActions.jsx |
+| P2-07 | Any emoji as reaction | 2 | COMPLETE | S | P2-06, P3-05 | MessageActions.jsx |
 | P2-08 | Drag-drop + paste upload | 2 | COMPLETE | S | none | Composer.jsx, ChatPanel.jsx, DmPanel.jsx |
 | P2-09 | Replies in channels | 2 | COMPLETE | M | P1-01, P1-05, P3-05 | migrations.js, db/index.js, gateway/chat.js, Composer/MessageList |
 | P2-10 | Replies in DMs + jump (`around`) | 2 | PLANNED | S–M | P2-09, P1-08, P1-13 | db/index.js, gateway/dm.js, routes, MessageList |
@@ -72,7 +72,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-09 | Undo toast for message delete | 3 | PLANNED | S–M | P3-05 | Toasts.jsx (new), App.jsx, MessageActions.jsx |
 | P3-10 | Mobile member-list drawer | 3 | READY | S | none | ChatPanel.jsx, MemberList.jsx, App.jsx |
 | P3-11 | Ctrl+K switcher + Alt+↑/↓ | 3 | PLANNED | S–M | P3-01 (soft P1-14) | QuickSwitcher.jsx (new), shortcuts.js (new), App.jsx |
-| P3-12 | ↑ edits last message | 3 | PLANNED | S | P3-05 | Composer.jsx, MessageList.jsx |
+| P3-12 | ↑ edits last message | 3 | REVIEW | S | P3-05 | Composer.jsx, MessageList.jsx |
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | READY | S–M | none | VideoStage.jsx, voice.js |
 
 ## Dependency map (hard dependencies)

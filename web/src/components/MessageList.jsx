@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
 import Icon from './Icon.jsx';
@@ -28,9 +28,39 @@ function mentionsUser(content, me) {
 // promise that settles once the page is in. `newMessages` ({ since, count },
 // optional) draws a "New" divider after the last message you'd read, with a
 // bar to jump back to it when it's out of view.
-export default function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, simple = false, emptyHeading, emptyBody }) {
+// `onEditDone` (optional) is called when an edit started by `startEditLast()`
+// (the composer's up arrow) ends, so the composer can take focus back.
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody }, ref) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
+  // The message being edited, and where focus goes when that edit ends: back
+  // to its row, or to the composer when the composer's up arrow started it.
+  const [editingId, setEditingId] = useState(null);
+  const editReturn = useRef('row');
+
+  // Edit your newest loaded message that has text (the composer's up arrow;
+  // attachment-only messages are skipped). Returns whether there was one.
+  function startEditLast() {
+    const last = [...messages].reverse().find((m) => m.author === currentUser && m.content && onEdit);
+    if (!last) return false;
+    editReturn.current = 'composer';
+    setEditingId(last.id);
+    containerRef.current?.querySelector(`[data-msg-id="${last.id}"]`)?.scrollIntoView?.({ block: 'nearest' });
+    return true;
+  }
+  useImperativeHandle(ref, () => ({ startEditLast }));
+
+  // Called by a row when its edit ends. Returns true if the row should take
+  // focus back itself.
+  function endEdit() {
+    setEditingId(null);
+    if (editReturn.current === 'composer') {
+      editReturn.current = 'row';
+      onEditDone?.();
+      return false;
+    }
+    return true;
+  }
   // When a channel is first opened (or the transcript was cleared on switch /
   // refresh), the next batch of messages should jump straight to the newest.
   const pendingInitialScroll = useRef(true);
@@ -302,6 +332,12 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
               tabIndex={row.m.id === tabStopId ? 0 : -1}
               onFocusRow={() => setActiveId(row.m.id)}
               onNavigate={focusSibling}
+              editing={row.m.id === editingId}
+              onStartEdit={() => {
+                editReturn.current = 'row';
+                setEditingId(row.m.id);
+              }}
+              onEndEdit={endEdit}
             />
           )
         )}
@@ -309,11 +345,27 @@ export default function MessageList({ messages, channel, currentUser, onEdit, on
       </div>
     </div>
   );
-}
+});
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate }) {
-  const [editing, setEditing] = useState(false);
+export default MessageList;
+
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
   const [draft, setDraft] = useState(m.content || '');
+  const editRef = useRef(null);
+  // Entering edit mode (from this row or the composer's up arrow): start from
+  // the message's text, with the caret at the end.
+  useEffect(() => {
+    if (!editing) return;
+    const text = m.content || '';
+    setDraft(text);
+    requestAnimationFrame(() => {
+      const el = editRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(text.length, text.length);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
   // Which popup is open: null | 'menu' | 'react'. `sheet` shows it as a touch
   // bottom sheet instead of a popover.
   const [popup, setPopup] = useState(null);
@@ -358,13 +410,11 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
 
   function startEdit() {
     setPopup(null);
-    setDraft(m.content || '');
-    setEditing(true);
+    onStartEdit();
   }
 
   function finishEdit() {
-    setEditing(false);
-    focusRow();
+    if (onEndEdit()) focusRow();
   }
 
   function saveEdit() {
@@ -567,7 +617,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
         {editing ? (
           <div className="mt-1">
             <textarea
-              autoFocus
+              ref={editRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onEditKeyDown}

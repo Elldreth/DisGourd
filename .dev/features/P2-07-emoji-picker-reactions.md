@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 4 (part 2)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #73)
 - **Effort:** S
 - **Depends on:** P2-06 (EmojiPicker), P3-05 (MessageActions component)
 - **Serialize with:** MessageList.jsx/MessageActions.jsx units

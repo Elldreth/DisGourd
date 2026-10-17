@@ -34,6 +34,7 @@ export default function ChatPanel({
   useEffect(() => setReplyingTo(null), [space, channel]);
   // Files dropped anywhere on the panel go to the composer.
   const composerRef = useRef(null);
+  const listRef = useRef(null);
   const drop = useFileDrop({ enabled: !!channel && canPost, onFiles: (files) => composerRef.current?.addFiles(files) });
 
   if (!space) {
@@ -88,6 +89,7 @@ export default function ChatPanel({
       )}
 
       <MessageList
+        ref={listRef}
         messages={messages}
         channel={channel}
         currentUser={currentUser}
@@ -100,6 +102,7 @@ export default function ChatPanel({
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
         newMessages={newMessages}
+        onEditDone={() => composerRef.current?.focus()}
       />
       <TypingIndicator names={typingUsers} />
       {canPost ? (
@@ -107,6 +110,7 @@ export default function ChatPanel({
         <Composer
           ref={composerRef}
           channel={channel}
+          onEditLast={() => listRef.current?.startEditLast() ?? false}
           disabled={false}
           onSend={(content, attachments, spoiler) => {
             onSend(content, attachments, spoiler, replyingTo ? replyingTo.id : undefined);

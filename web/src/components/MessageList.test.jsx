@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { createRef } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MessageList from './MessageList.jsx';
 
 // jsdom has no layout: every element measures 0, so a loaded divider counts as
@@ -112,4 +113,63 @@ test('gives up after 10 pages and says so', async () => {
   await waitFor(() => expect(screen.getByText(/too far back/i)).toBeTruthy());
   expect(onLoadOlder).toHaveBeenCalledTimes(10);
   vi.unstubAllGlobals();
+});
+
+describe('editing your last message from the composer (startEditLast)', () => {
+  const own = (id, content) => ({ id, author: 'sandy', content, timestamp: T + id * 1000 });
+
+  function setup(messages) {
+    const ref = createRef();
+    const onEdit = vi.fn();
+    const onEditDone = vi.fn();
+    render(<MessageList ref={ref} messages={messages} channel="general" currentUser="sandy" onEdit={onEdit} onEditDone={onEditDone} />);
+    return { ref, onEdit, onEditDone };
+  }
+
+  test('opens your newest message for editing, caret at the end; Enter saves and hands focus back', async () => {
+    const { ref, onEdit, onEditDone } = setup([own(1, 'first'), own(2, 'my latest'), msg(3)]);
+    let started;
+    act(() => {
+      started = ref.current.startEditLast();
+    });
+    expect(started).toBe(true);
+    const box = screen.getByRole('textbox', { name: 'Edit message' });
+    expect(box.value).toBe('my latest');
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    expect(box.selectionStart).toBe('my latest'.length);
+    fireEvent.change(box, { target: { value: 'my latest, edited' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onEdit).toHaveBeenCalledWith(2, 'my latest, edited');
+    expect(onEditDone).toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: 'Edit message' })).toBeNull();
+  });
+
+  test('Esc cancels and also hands focus back', () => {
+    const { ref, onEdit, onEditDone } = setup([own(1, 'hello')]);
+    act(() => {
+      ref.current.startEditLast();
+    });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit message' }), { key: 'Escape' });
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(onEditDone).toHaveBeenCalled();
+  });
+
+  test('skips your attachment-only messages (nothing to edit there)', () => {
+    const photo = { id: 3, author: 'sandy', content: '', attachments: ['/uploads/x/cat.png'], timestamp: T + 3000 };
+    const { ref } = setup([own(1, 'has words'), msg(2), photo]);
+    act(() => {
+      ref.current.startEditLast();
+    });
+    expect(screen.getByRole('textbox', { name: 'Edit message' }).value).toBe('has words');
+  });
+
+  test('with none of your own messages loaded, nothing happens', () => {
+    const { ref } = setup([msg(1), msg(2)]);
+    let started;
+    act(() => {
+      started = ref.current.startEditLast();
+    });
+    expect(started).toBe(false);
+    expect(screen.queryByRole('textbox', { name: 'Edit message' })).toBeNull();
+  });
 });
