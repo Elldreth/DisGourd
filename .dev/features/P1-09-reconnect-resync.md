@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Resync everything on WebSocket reconnect, not just the open channel"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #64)
 - **Effort:** S–M
 - **Depends on:** P1-05 (gateway/index.js connect frames), P1-08 (merge semantics must keep older pages), P1-14 (all client state in hooks)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 1
