@@ -242,7 +242,7 @@ export default function ChannelList({
               title="Create channel"
               aria-label="Create channel"
               aria-expanded={adding}
-              className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
+              className="tap flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
             >
               <Icon name="plus" size={16} />
             </button>
@@ -272,7 +272,7 @@ export default function ChannelList({
             <div key={c} className="group relative mb-0.5">
               <button
                 onClick={() => onSelect(c)}
-                className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
+                className={`tap-row flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
                   active
                     ? 'bg-ink-600 text-fg'
                     : hasUnread || mentionCount
@@ -302,7 +302,7 @@ export default function ChannelList({
                   title="Channel settings"
                   ref={(el) => (gearRefs.current[c] = el)}
                   onClick={() => setChannelSettings(c)}
-                  className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
+                  className={`tap absolute right-1 top-1/2 -translate-y-1/2 items-center justify-center rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
                   // stays shown while its dialog is open, so focus can come back to it
                   channelSettings === c ? 'flex' : 'hidden'
                 }`}
@@ -329,7 +329,7 @@ export default function ChannelList({
                   title="Create voice channel"
                   aria-label="Create voice channel"
                   aria-expanded={addingVoice}
-                  className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
+                  className="tap flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
                 >
                   <Icon name="plus" size={16} />
                 </button>
@@ -356,7 +356,7 @@ export default function ChannelList({
                   <div className="group relative">
                     <button
                       onClick={() => onJoinVoice(space, vc)}
-                      className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
+                      className={`tap-row flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
                         inThis ? 'bg-ink-600 text-fg' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
                       }`}
                     >
@@ -374,7 +374,7 @@ export default function ChannelList({
                         title="Channel settings"
                         ref={(el) => (gearRefs.current[vc] = el)}
                         onClick={() => setChannelSettings(vc)}
-                        className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
+                        className={`tap absolute right-1 top-1/2 -translate-y-1/2 items-center justify-center rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
                   // stays shown while its dialog is open, so focus can come back to it
                   channelSettings === vc ? 'flex' : 'hidden'
                 }`}

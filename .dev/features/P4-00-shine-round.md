@@ -13,7 +13,7 @@ Take the fifteen findings of the review and ship the ones that change how the ap
 ## Children
 | ID | Title | Size | Review items | State |
 |---|---|---|---|---|
-| P4-01 | Phone touch targets and header | M | A1, M2 | READY |
+| P4-01 | Phone touch targets and header | M | A1, M2 | REVIEW |
 | P4-02 | Settings sections | M | F1 | READY |
 | P4-03 | Empty states with illustrations | M | V3 (+ kie.ai assets) | READY |
 | P4-04 | New message from DMs | S | F2 | READY |

@@ -29,7 +29,7 @@ function ThreadSummary({ thread, badge, onOpen }) {
       tabIndex={-1}
       onClick={(e) => onOpen(e.currentTarget)}
       aria-label={`Open thread ${thread.name}, ${replyCount(thread.messageCount)}${thread.archived ? ', archived' : ''}${state}`}
-      className={`mt-1.5 flex max-w-full items-center gap-2 rounded-md bg-ink-800/70 px-2 py-1 text-xs ring-1 transition hover:ring-brand-hi ${
+      className={`tap-chip mt-1.5 flex max-w-full items-center gap-2 rounded-md bg-ink-800/70 px-2 py-1 text-xs ring-1 transition hover:ring-brand-hi ${
         unread || mentions ? 'ring-brand-hi/60' : 'ring-ink-500/60'
       }`}
     >
@@ -807,7 +807,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
             {m.embeds?.map((e) => <Embed key={e.url} embed={e} />)}
             {m.thread && onOpenThread && <ThreadSummary thread={m.thread} badge={threadBadge?.(m.thread.channel)} onOpen={(el) => onOpenThread(m.thread, m, el)} />}
             {reactions.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1">
+              <div className="mt-1 flex flex-wrap gap-1 coarse:gap-2">
                 {reactions.map((r) => {
                   const mineReacted = r.users?.includes(currentUser);
                   return (
@@ -817,7 +817,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
                       title={(r.users || []).join(', ')}
                       aria-label={`${r.emoji} ${r.count}${mineReacted ? ', you reacted' : ''}`}
                       aria-pressed={!!mineReacted}
-                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition ${
+                      className={`tap-reaction flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition ${
                         mineReacted
                           ? 'bg-brand/25 text-fg ring-brand-hi'
                           : 'bg-ink-600/60 text-gray-200 ring-ink-500/60 hover:ring-brand-hi'

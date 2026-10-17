@@ -48,10 +48,36 @@ export default function ChatPanel({
   const [pinsOpen, setPinsOpen] = useState(false);
   const [threadsOpen, setThreadsOpen] = useState(false);
   const [threadFrom, setThreadFrom] = useState(null); // the message a new thread starts from
+  // The phone-only More menu (Threads, Pins). Opening it focuses its first
+  // item; Esc or picking an item closes it and puts focus back on the button.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+  const firstMoreItem = useRef(null);
+  useEffect(() => {
+    if (moreOpen) firstMoreItem.current?.focus();
+  }, [moreOpen]);
+  const closeMore = (refocus = true) => {
+    setMoreOpen(false);
+    if (refocus) moreRef.current?.focus();
+  };
+  const onMoreKey = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMore();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const items = [...e.currentTarget.querySelectorAll('[role=menuitem]')];
+      const i = items.indexOf(document.activeElement);
+      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+    }
+  };
   useEffect(() => {
     setPinsOpen(false);
     setThreadsOpen(false);
     setThreadFrom(null);
+    setMoreOpen(false);
   }, [space, channel]);
   // The message being replied to ({ id, author }), shown above the composer.
   const [replyingTo, setReplyingTo] = useState(null);
@@ -91,7 +117,7 @@ export default function ChatPanel({
           size={20}
           label="Channels"
           onClick={onOpenNav}
-          className="-ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
+          className="tap -ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         />
         <Icon name="hash" size={20} className="text-gray-500" />
         <h2 className="font-bold">{channel}</h2>
@@ -102,13 +128,77 @@ export default function ChatPanel({
             title="Members"
             aria-label="Members"
             aria-expanded={membersOpen}
-            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg lg:hidden"
+            className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg lg:hidden"
           >
             <Icon name="users" size={18} />
           </button>
         )}
+        {/* Phones: Threads and Pins fold under one More menu so the header
+            buttons have room at 44px. md and up keeps the separate buttons. */}
+        <span className="relative md:hidden">
+          <IconButton
+            ref={moreRef}
+            icon="more"
+            size={18}
+            label={threadsUnread ? `More (${threadsUnread} unread)` : 'More'}
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((v) => !v)}
+            className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg md:hidden"
+          />
+          {threadsUnread > 0 && (
+            <span aria-hidden="true" className="pointer-events-none absolute right-1 top-1 h-2 w-2 rounded-full bg-brand" />
+          )}
+          {moreOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
+              <div
+                role="menu"
+                aria-label="More"
+                onKeyDown={onMoreKey}
+                className="anim-pop absolute right-0 top-full z-20 mt-1 w-56 rounded-lg bg-ink-900 p-1 shadow-xl ring-1 ring-ink-500/60"
+              >
+                {onOpenThread && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    ref={firstMoreItem}
+                    aria-label={threadsUnread ? `Threads (${threadsUnread} unread)` : undefined}
+                    onClick={() => {
+                      closeMore(false);
+                      setThreadsOpen(true);
+                    }}
+                    className="tap-row flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-ink-600 focus-visible:bg-ink-600"
+                  >
+                    <Icon name="thread" size={16} className="text-brand-hi" />
+                    <span className="flex-1">Threads</span>
+                    {threadsUnread > 0 && (
+                      <span className="rounded-full bg-brand px-1.5 text-xs font-bold text-ink-900">
+                        {threadsUnread}
+                        <span className="sr-only"> unread</span>
+                      </span>
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  ref={onOpenThread ? undefined : firstMoreItem}
+                  onClick={() => {
+                    closeMore(false);
+                    setPinsOpen(true);
+                  }}
+                  className="tap-row flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-ink-600 focus-visible:bg-ink-600"
+                >
+                  <Icon name="pin" size={16} className="text-brand-hi" />
+                  Pinned messages
+                </button>
+              </div>
+            </>
+          )}
+        </span>
         {onOpenThread && (
-          <span className="relative">
+          <span className="relative hidden md:inline-flex">
             <IconButton
               icon="thread"
               size={18}
@@ -116,7 +206,7 @@ export default function ChatPanel({
               aria-haspopup="dialog"
               aria-expanded={threadsOpen}
               onClick={() => setThreadsOpen(true)}
-              className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+              className="tap hidden items-center justify-center rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg md:inline-flex"
             />
             {threadsUnread > 0 && (
               <span aria-hidden="true" className="pointer-events-none absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-brand px-1 text-center text-[10px] font-bold leading-4 text-ink-900">
@@ -132,14 +222,14 @@ export default function ChatPanel({
           aria-haspopup="dialog"
           aria-expanded={pinsOpen}
           onClick={() => setPinsOpen(true)}
-          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+          className="tap hidden items-center justify-center rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg md:inline-flex"
         />
         <IconButton
           icon="search"
           size={18}
           label="Search messages"
           onClick={onOpenSearch}
-          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+          className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
         />
       </header>
 
