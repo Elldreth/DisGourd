@@ -1,3 +1,4 @@
+import EmptyState from './EmptyState.jsx';
 import { useEffect, useState } from 'react';
 import * as api from '../api.js';
 import Modal from './Modal.jsx';
@@ -57,7 +58,7 @@ export default function PinsPanel({ space, channel, version, canPin = false, onU
         )}
         {!error && pins === null && <p className="p-4 text-center text-sm text-gray-500">Loading…</p>}
         {!error && pins?.length === 0 && (
-          <p className="p-6 text-center text-sm text-gray-500">No pinned messages in #{channel} yet. Pin one from its menu.</p>
+          <EmptyState compact icon="pin" title={`No pinned messages in #${channel} yet`} body="Pin one from its menu." />
         )}
         {pins?.length > 0 && (
           <ul className="space-y-1">

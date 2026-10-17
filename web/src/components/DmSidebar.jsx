@@ -1,4 +1,5 @@
 import Avatar from './Avatar.jsx';
+import EmptyState from './EmptyState.jsx';
 import IconButton from './IconButton.jsx';
 import UserFooter from './UserFooter.jsx';
 import { unreadLabel } from '../util.js';
@@ -39,18 +40,12 @@ export default function DmSidebar({
 
       <div className="flex-1 overflow-y-auto px-2 py-3">
         {conversations.length === 0 && (
-          <div className="px-2 text-sm text-gray-500">
-            <p>No conversations yet.</p>
-            {onNewMessage && (
-              <button
-                type="button"
-                onClick={onNewMessage}
-                className="tap-row mt-2 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-hover"
-              >
-                New message
-              </button>
-            )}
-          </div>
+          <EmptyState
+            compact
+            art="dms"
+            title="No conversations yet"
+            action={onNewMessage ? { label: 'New message', onClick: onNewMessage } : undefined}
+          />
         )}
         {conversations.map((c) => {
           const active = c.username === currentDm;

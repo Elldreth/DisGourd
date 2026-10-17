@@ -1,3 +1,4 @@
+import EmptyState from './EmptyState.jsx';
 import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
@@ -147,7 +148,7 @@ export default function MemberList({ space, members, currentUser, myRole, onMess
           </button>
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
-          {members.length === 0 && <p className="px-2 text-sm text-gray-500">No members to show.</p>}
+          {members.length === 0 && <EmptyState compact icon="users" title="No members to show" />}
           {renderGroup('Online', online, 'online')}
           {renderGroup('Offline', offline, 'offline')}
         </div>

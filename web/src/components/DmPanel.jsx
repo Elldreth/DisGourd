@@ -6,6 +6,7 @@ import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
 import DropOverlay from './DropOverlay.jsx';
+import EmptyState from './EmptyState.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 
 // The conversation view in Direct Messages mode.
@@ -30,20 +31,13 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
             className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
           />
         )}
-        <div className="mb-3 text-6xl">💬</div>
-        <h2 className="text-xl font-bold">Your messages</h2>
-        <p className="mt-1 max-w-sm text-gray-400">
-          {onNewMessage ? 'Pick a conversation, or start one with anyone you share a server with.' : 'Pick a conversation, or open a member in one of your servers to start a new one.'}
-        </p>
-        {onNewMessage && (
-          <button
-            type="button"
-            onClick={onNewMessage}
-            className="tap-row mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover"
-          >
-            New message
-          </button>
-        )}
+        <EmptyState
+          art="dms"
+          as="h2"
+          title="Your messages"
+          body={onNewMessage ? 'Pick a conversation, or start one with anyone you share a server with.' : 'Pick a conversation, or open a member in one of your servers to start a new one.'}
+          action={onNewMessage ? { label: 'New message', onClick: onNewMessage } : undefined}
+        />
       </main>
     );
   }

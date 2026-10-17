@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (children P4-01 … P4-07)
 - **Phase:** 4 (design polish)
-- **State:** PLANNED
+- **State:** COMPLETE (2026-10-17; P4-03 is the last child, in review)
 - **Effort:** 7 units, three M and four S
 - **Depends on:** nothing merged after #100 is required
 - **Requirement Source:** `design/UX-REVIEW-2026-10.md` (the prioritised list at the end). Published copy: the "DisGourd UX Review" artifact.
@@ -15,11 +15,11 @@ Take the fifteen findings of the review and ship the ones that change how the ap
 |---|---|---|---|---|
 | P4-01 | Phone touch targets and header | M | A1, M2 | COMPLETE (#103) |
 | P4-02 | Settings sections | M | F1 | COMPLETE (#105) |
-| P4-03 | Empty states with illustrations | M | V3 (+ kie.ai assets) | READY |
+| P4-03 | Empty states with illustrations | M | V3 (+ kie.ai assets) | REVIEW |
 | P4-04 | New message from DMs | S | F2 | COMPLETE (#106) |
 | P4-05 | Calmer link previews | S | V1 | COMPLETE (#107) |
 | P4-06 | Hierarchy and a11y polish | S | V4, F6, V5, V6, V8, A2, A3, A4, V2, V7 | COMPLETE (#104) |
-| P4-07 | Thread panel on phones | S | M1 (+ V8 if P4-06 hasn't landed) | REVIEW |
+| P4-07 | Thread panel on phones | S | M1 (+ V8 if P4-06 hasn't landed) | COMPLETE (#108) |
 
 ## Cross-child dependencies and hot files
 - All children are independent in scope, but several touch the same files, so they run **one at a time**:
@@ -35,7 +35,16 @@ Take the fifteen findings of the review and ship the ones that change how the ap
 - axe-core on the main screen: no violations (down from two moderate).
 - Web and server suites pass; `vite build` clean.
 
+## Integration verification (done 2026-10-17, on the P4-03 branch with #103–#108 merged)
+- Phone walk at 375×812 in the sandbox copy: sign in, open a channel (header buttons 44px, More menu for Threads and Pins), member drawer (44px rows), thread panel with its back button and hardware back, settings strip with 44px tabs, New message from the DM view, the GitHub preview capped at 124px tall. No console errors beyond reconnect noise from server restarts.
+- Desktop 1280×800: every control measured at its pre-round size; settings list on the left; previews 420px wide.
+- axe on the main screen: the two structural findings from the review are gone; two pre-existing ones remain (offline member row contrast, colour-only links), recorded in P4-06.
+- Web suite 58 files / 504 tests; server suite untouched (no server changes in the round); `vite build` clean.
+
 ## Follow-ups recorded, not planned (from the review)
+- Offline member rows use `opacity-50` and fail AA contrast; message links are colour-only (axe, found in P4-06).
+- "Hide preview" for link cards needs a server route (found in P4-05).
+- "Create a server" from the no-server screen needs an open-request prop on `ServerRail` (found in P4-03).
 - F3 Wizard step 4: show the invite link in its own field with "Copy link" (S).
 - F4 Keyboard-shortcuts sheet on Ctrl+/ and shortcut hints in tooltips (S).
 - F5 Pins/Threads popovers stay open on inner clicks (S).

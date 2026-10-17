@@ -1,3 +1,4 @@
+import EmptyState from './EmptyState.jsx';
 import { useEffect, useState } from 'react';
 import * as api from '../api.js';
 import Modal from './Modal.jsx';
@@ -60,9 +61,12 @@ export default function ThreadsList({ space, channel, version, badge, onOpen, on
         )}
         {!error && threads === null && <p className="p-4 text-center text-sm text-gray-500">Loading…</p>}
         {!error && threads?.length === 0 && (
-          <p className="p-6 text-center text-sm text-gray-500">
-            {archived ? `No archived threads in #${channel}.` : `No threads in #${channel} yet. Start one from a message’s menu.`}
-          </p>
+          <EmptyState
+            compact
+            icon="thread"
+            title={archived ? `No archived threads in #${channel}` : `No threads in #${channel} yet`}
+            body={archived ? undefined : 'Start one from a message’s menu.'}
+          />
         )}
         {threads?.length > 0 && (
           <ul className="space-y-1">
