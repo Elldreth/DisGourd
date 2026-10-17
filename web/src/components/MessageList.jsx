@@ -17,6 +17,37 @@ const MENTION_RE = /(@[A-Za-z0-9_.-]+)/g;
 // "No replies yet", "1 reply", "4 replies".
 const replyCount = (n) => (!n ? 'No replies yet' : n === 1 ? '1 reply' : `${n} replies`);
 
+// The line under a root message: "Thread name · 3 replies · last 5 min ago",
+// with a dot (or a mention count) when the thread has something unread.
+function ThreadSummary({ thread, badge, onOpen }) {
+  const unread = badge?.unread || 0;
+  const mentions = badge?.mentions || 0;
+  const state = mentions ? `, ${mentions === 1 ? '1 mention' : `${mentions} mentions`}` : unread ? ', unread' : '';
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      onClick={(e) => onOpen(e.currentTarget)}
+      aria-label={`Open thread ${thread.name}, ${replyCount(thread.messageCount)}${state}`}
+      className={`mt-1.5 flex max-w-full items-center gap-2 rounded-md bg-ink-800/70 px-2 py-1 text-xs ring-1 transition hover:ring-brand-hi ${
+        unread || mentions ? 'ring-brand-hi/60' : 'ring-ink-500/60'
+      }`}
+    >
+      <Icon name="thread" size={14} className="shrink-0 text-brand-hi" />
+      <span className={`truncate ${unread || mentions ? 'font-bold text-fg' : 'font-semibold text-gray-100'}`}>{thread.name}</span>
+      <span className="shrink-0 text-gray-400">
+        · {replyCount(thread.messageCount)}
+        {thread.messageCount > 0 && ` · last ${formatAgo(thread.lastActivityAt)}`}
+      </span>
+      {mentions > 0 ? (
+        <span aria-hidden="true" className="shrink-0 rounded-full bg-pink px-1.5 text-[10px] font-bold leading-4 text-ink-900">{mentions}</span>
+      ) : unread > 0 ? (
+        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-brand-hi" />
+      ) : null}
+    </button>
+  );
+}
+
 // Whether a message mentions you (for the row highlight).
 function mentionsUser(content, me) {
   if (!content || !me) return false;
@@ -39,11 +70,12 @@ function mentionsUser(content, me) {
 // one; `onOpenThread(thread, message, opener)` (optional) draws the summary
 // under a message that has a thread, and adds Open thread. `opener` is the
 // element to give focus back to when the thread closes.
+// `threadBadge(channel)` (optional) gives a thread's { unread, mentions } for its summary.
 // `label` (optional) names the list (default "Messages in #channel").
 // `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
 // an original that isn't loaded, and, while that older window is showing
 // (`history.hasNewer`), offers newer pages and "Jump to present".
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, history = null, onPin, onCreateThread, onOpenThread, label }, ref) {
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label }, ref) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // The message being edited, and where focus goes when that edit ends: back
@@ -403,6 +435,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               onPin={onPin}
               onCreateThread={onCreateThread}
               onOpenThread={onOpenThread}
+              threadBadge={threadBadge}
               onJumpTo={jumpTo}
               flash={row.m.id === flashId}
               simple={simple}
@@ -439,7 +472,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
 
 export default MessageList;
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onPin, onCreateThread, onOpenThread, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onPin, onCreateThread, onOpenThread, threadBadge, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
   const [draft, setDraft] = useState(m.content || '');
   const editRef = useRef(null);
   // Entering edit mode (from this row or the composer's up arrow): start from
@@ -771,22 +804,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
               />
             )}
             {m.embeds?.map((e) => <Embed key={e.url} embed={e} />)}
-            {m.thread && onOpenThread && (
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={(e) => onOpenThread(m.thread, m, e.currentTarget)}
-                aria-label={`Open thread ${m.thread.name}, ${replyCount(m.thread.messageCount)}`}
-                className="mt-1.5 flex max-w-full items-center gap-2 rounded-md bg-ink-800/70 px-2 py-1 text-xs ring-1 ring-ink-500/60 transition hover:ring-brand-hi"
-              >
-                <Icon name="thread" size={14} className="shrink-0 text-brand-hi" />
-                <span className="truncate font-semibold text-gray-100">{m.thread.name}</span>
-                <span className="shrink-0 text-gray-400">
-                  · {replyCount(m.thread.messageCount)}
-                  {m.thread.messageCount > 0 && ` · last ${formatAgo(m.thread.lastActivityAt)}`}
-                </span>
-              </button>
-            )}
+            {m.thread && onOpenThread && <ThreadSummary thread={m.thread} badge={threadBadge?.(m.thread.channel)} onOpen={(el) => onOpenThread(m.thread, m, el)} />}
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {reactions.map((r) => {

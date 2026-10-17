@@ -86,28 +86,42 @@ export function pruneExpired(prev) {
 }
 
 // Unread + mention badges per channel (for the current server) and per server.
-export function badgeCounts({ unread, mentions, spaces, currentSpace, channels }) {
+// `threads` (unreadKey -> { parent, followed }) are the threads we know of:
+// their counts roll up into the parent channel and the server, and
+// `channelThreads` says how many threads in each channel have something unread.
+export function badgeCounts({ unread, mentions, spaces, currentSpace, channels, threads = {} }) {
+  const add = (map, key, n) => {
+    if (n) map[key] = (map[key] || 0) + n;
+  };
   const channelUnread = {};
   const channelMentions = {};
+  const channelThreads = {};
   for (const c of channels) {
-    const n = unread[unreadKey(currentSpace, c)];
-    if (n) channelUnread[c] = n;
-    const mn = mentions[unreadKey(currentSpace, c)];
-    if (mn) channelMentions[c] = mn;
+    add(channelUnread, c, unread[unreadKey(currentSpace, c)]);
+    add(channelMentions, c, mentions[unreadKey(currentSpace, c)]);
   }
   const spaceUnread = {};
   const spaceMentions = {};
   for (const s of spaces) {
-    let total = 0;
-    let mtotal = 0;
     for (const c of s.channels) {
-      total += unread[unreadKey(s.name, c)] || 0;
-      mtotal += mentions[unreadKey(s.name, c)] || 0;
+      add(spaceUnread, s.name, unread[unreadKey(s.name, c)]);
+      add(spaceMentions, s.name, mentions[unreadKey(s.name, c)]);
     }
-    if (total) spaceUnread[s.name] = total;
-    if (mtotal) spaceMentions[s.name] = mtotal;
   }
-  return { channelUnread, channelMentions, spaceUnread, spaceMentions };
+  for (const [k, info] of Object.entries(threads)) {
+    const n = unread[k] || 0;
+    const mn = mentions[k] || 0;
+    if (!n && !mn) continue;
+    const [space] = JSON.parse(k);
+    add(spaceUnread, space, n);
+    add(spaceMentions, space, mn);
+    if (space === currentSpace && info.parent) {
+      add(channelUnread, info.parent, n);
+      add(channelMentions, info.parent, mn);
+      add(channelThreads, info.parent, 1);
+    }
+  }
+  return { channelUnread, channelMentions, spaceUnread, spaceMentions, channelThreads };
 }
 
 // The part of a thread shown under its root message.
@@ -130,7 +144,9 @@ const withoutKey = (k) => (prev) => {
 //   threadOnly: this instance shows an open thread (channel = '~tN'). It only
 //     handles frames for that thread: no unread or mention counts, no
 //     notifications, and it doesn't take the gateway focus from the channel.
-export function useChannelMessages({ space, channel, active, user, send, status, onIncoming, threadOnly = false }) {
+//   openThread: the channel instance is told which thread ('~tN') is open in
+//     the panel, so replies there don't count as unread.
+export function useChannelMessages({ space, channel, active, user, send, status, onIncoming, threadOnly = false, openThread = '' }) {
   const [messages, dispatch] = useReducer(messagesReducer, []);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -139,6 +155,18 @@ export function useChannelMessages({ space, channel, active, user, send, status,
   const [threadsVersion, setThreadsVersion] = useState(0); // bumps when this channel's threads change
   const [unread, setUnread] = useState({}); // unreadKey -> count
   const [mentions, setMentions] = useState({}); // unreadKey -> mention count
+  // Threads we know of: unreadKey -> { parent, name, followed }. Followed ones
+  // count as unread and notify; a mention in any thread counts (P2-22c).
+  const [threads, setThreads] = useState({});
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
+  const noteThread = (k, info) => {
+    const next = { ...threadsRef.current, [k]: { followed: false, ...threadsRef.current[k], ...info } };
+    threadsRef.current = next; // handlers may run again before the next render
+    setThreads(next);
+  };
+  const openThreadRef = useRef(openThread);
+  openThreadRef.current = openThread;
   const paging = useHistoryPaging(unreadKey(space, channel));
   // Where you stopped reading each channel (unreadKey -> last read message id),
   // and, for the open channel, what was new when you opened it:
@@ -169,15 +197,28 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     setThreadsVersion((v) => v + 1); // an open threads list reloads
   };
 
+  // A reply in a thread (the channel instance): it counts and notifies only
+  // if you follow the thread, except that an @mention always counts. The open
+  // thread's own instance shows and reads it.
+  const threadReply = (m) => {
+    const k = unreadKey(m.space, m.channel);
+    if (m.thread) noteThread(k, { parent: m.thread.parentChannel, name: m.thread.name });
+    const followed = !!threadsRef.current[k]?.followed;
+    const mentioned = !!(m.mentions && m.mentions.includes(userRef.current));
+    if (!followed && !mentioned) return;
+    onIncoming?.({ kind: 'message', ...m });
+    if (m.space === spaceRef.current && m.channel === openThreadRef.current) return;
+    if (m.id && lastRead.current[k] == null) noteRead(k, m.id - 1);
+    if (followed) setUnread((prev) => ({ ...prev, [k]: (prev[k] || 0) + 1 }));
+    if (mentioned) setMentions((prev) => ({ ...prev, [k]: (prev[k] || 0) + 1 }));
+  };
+
   const handlers = {
     message: (m) => {
       if (threadOnly) {
         if (!isOpen(m.space, m.channel)) return;
-      } else if (isThreadChannel(m.channel)) {
-        // Replies in threads: unread counts and notifications come with
-        // following threads (P2-22c). The open thread's own instance shows them.
-        return;
-      } else onIncoming?.({ kind: 'message', ...m });
+      } else if (isThreadChannel(m.channel)) return threadReply(m);
+      else onIncoming?.({ kind: 'message', ...m });
       if (isOpen(m.space, m.channel)) {
         // Reading older history: it's picked up by loadNewer / Jump to present.
         if (paging.hasNewerRef.current) return;
@@ -210,6 +251,24 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       const mmap = {};
       for (const c of f.mentions || []) mmap[unreadKey(c.space, c.channel)] = c.count;
       setMentions(mmap);
+      // The threads you follow, plus any thread with a count (a mention in
+      // one you don't follow); thread rows name their parent channel.
+      const tmap = {};
+      for (const t of f.threads || []) tmap[unreadKey(t.space, t.channel)] = { parent: t.parent, name: t.name, followed: true };
+      for (const c of [...(f.counts || []), ...(f.mentions || [])]) {
+        if (!c.parent) continue;
+        const k = unreadKey(c.space, c.channel);
+        tmap[k] = { followed: false, parent: c.parent, ...tmap[k] };
+      }
+      threadsRef.current = tmap;
+      setThreads(tmap);
+    },
+    // You started following a thread (or stopped). Unfollowed threads never badge.
+    thread_follow: (f) => {
+      if (threadOnly) return;
+      const k = unreadKey(f.space, f.channel);
+      noteThread(k, { parent: f.parentChannel, name: f.name, followed: !!f.followed });
+      if (!f.followed) setUnread(withoutKey(k));
     },
     message_update: (u) => {
       if (isOpen(u.space, u.channel)) dispatch({ type: 'updated', id: u.id, content: u.content, editedAt: u.editedAt });
@@ -300,6 +359,8 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     setTypingUsers({});
     setUnread({});
     setMentions({});
+    setThreads({});
+    threadsRef.current = {};
     setNewMessages(null);
     lastRead.current = {};
     capturedFor.current = null;
@@ -343,6 +404,13 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     typingNames: Object.keys(typingUsers).filter((u) => u !== user),
     unread,
     mentions,
+    threads,
+    // Opening a thread in the panel: its badge goes (its own instance tells the server).
+    clearUnread: (s, c) => {
+      const k = unreadKey(s, c);
+      setUnread(withoutKey(k));
+      setMentions(withoutKey(k));
+    },
     handlers,
     reset,
     pinsVersion,

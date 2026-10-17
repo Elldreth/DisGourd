@@ -333,6 +333,23 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 9,
+    name: 'thread follows',
+    up(db) {
+      // Who follows which thread (a channel row of type 'thread'). Followed
+      // threads count as unread and notify; the row goes with the user or thread.
+      db.exec(`
+        CREATE TABLE thread_follows (
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+          followed_at INTEGER NOT NULL,
+          PRIMARY KEY (user_id, channel_id)
+        );
+        CREATE INDEX idx_thread_follows_channel ON thread_follows(channel_id);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

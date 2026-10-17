@@ -107,6 +107,9 @@ export default function App() {
       dm.select(name);
     },
   });
+  // The open thread (a side panel next to the channel): { space, parentChannel,
+  // channel: '~tN', name, rootMessageId, root? } or null.
+  const [openThread, setOpenThread] = useState(null);
   const chat = useChannelMessages({
     space: sp.currentSpace,
     channel: sp.currentChannel,
@@ -115,11 +118,9 @@ export default function App() {
     send,
     status,
     onIncoming: notifier.onIncoming,
+    openThread: openThread?.channel || '',
   });
-  // The open thread (a side panel next to the channel), with its own copy of
-  // the channel machinery: { space, parentChannel, channel: '~tN', name,
-  // rootMessageId, root? } or null.
-  const [openThread, setOpenThread] = useState(null);
+  // The open thread has its own copy of the channel machinery.
   const threadOpener = useRef(null); // what to focus again when it closes
   const thread = useChannelMessages({
     space: openThread?.space || '',
@@ -135,6 +136,7 @@ export default function App() {
   // focus when it closes. `space`/`parentChannel` default to the open channel.
   function openThreadPanel(t, { root = null, opener = null, space = sp.currentSpace, parentChannel = sp.currentChannel } = {}) {
     threadOpener.current = opener || document.activeElement;
+    chat.clearUnread(space, t.channel); // its badge goes now; the panel tells the server
     setOpenThread({
       space,
       parentChannel: t.parentChannel || parentChannel,
@@ -164,10 +166,12 @@ export default function App() {
     view,
     space: sp.currentSpace,
     channel: sp.currentChannel,
+    thread: openThread?.channel || '',
     dm: dm.current,
     dnd: presence === 'dnd', // Do Not Disturb: no notifications or sounds
     openChannel: (space, channel) => openChannelFromSearch(space, channel),
     openDm: (name) => selectDm(name),
+    openThread: (space, t) => openThreadFromSearch(space, t),
   });
   gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, thread.handlers, dm.handlers, {
     // You changed your status in another tab.
@@ -244,8 +248,13 @@ export default function App() {
   }
 
   // Unread + mention badges: per-channel (for the current server) and per-server totals.
-  const { channelUnread, channelMentions, spaceUnread, spaceMentions } = badgeCounts({
-    unread: chat.unread, mentions: chat.mentions, spaces: sp.spaces, currentSpace: sp.currentSpace, channels: sp.channels,
+  const { channelUnread, channelMentions, spaceUnread, spaceMentions, channelThreads } = badgeCounts({
+    unread: chat.unread, mentions: chat.mentions, spaces: sp.spaces, currentSpace: sp.currentSpace, channels: sp.channels, threads: chat.threads,
+  });
+  // What a thread's summary or list row shows: its unread and mention counts.
+  const threadBadge = (channel) => ({
+    unread: chat.unread[unreadKey(sp.currentSpace, channel)] || 0,
+    mentions: chat.mentions[unreadKey(sp.currentSpace, channel)] || 0,
   });
   const call = voice.call;
   // Browser tab: "(N) DisGourd" + a favicon dot for mentions and unread DMs.
@@ -481,6 +490,8 @@ export default function App() {
               membersOpen={membersOpen}
               onOpenThread={openThreadPanel}
               threadsVersion={chat.threadsVersion}
+              threadBadge={threadBadge}
+              threadsUnread={channelThreads[sp.currentChannel] || 0}
             />
           </div>
           {openThread && (
@@ -506,6 +517,10 @@ export default function App() {
               history={thread.history}
               onTyping={thread.sendTyping}
               onClose={closeThread}
+              followed={!!chat.threads[unreadKey(openThread.space, openThread.channel)]?.followed}
+              onToggleFollow={(follow) =>
+                (follow ? api.followThread : api.unfollowThread)(openThread.space, openThread.channel).catch(() => {})
+              }
             />
           )}
           <MemberList

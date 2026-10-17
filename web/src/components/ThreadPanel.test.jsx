@@ -69,3 +69,21 @@ test('without permission to post there is no composer', () => {
   expect(screen.queryByPlaceholderText('Reply in Weekend plans')).toBeNull();
   expect(screen.getByText(/permission to post/)).toBeTruthy();
 });
+
+test('Follow / Following toggles following the thread (P2-22c)', () => {
+  const onToggleFollow = vi.fn();
+  const { rerender } = render(
+    <ThreadPanel space="S" thread={thread} status="open" messages={[]} currentUser="sandy" onSend={() => {}} onClose={() => {}} followed={false} onToggleFollow={onToggleFollow} />
+  );
+  const btn = screen.getByRole('button', { name: 'Follow thread' });
+  expect(btn.getAttribute('aria-pressed')).toBe('false');
+  fireEvent.click(btn);
+  expect(onToggleFollow).toHaveBeenCalledWith(true);
+  rerender(
+    <ThreadPanel space="S" thread={thread} status="open" messages={[]} currentUser="sandy" onSend={() => {}} onClose={() => {}} followed onToggleFollow={onToggleFollow} />
+  );
+  const on = screen.getByRole('button', { name: 'Unfollow thread' });
+  expect(on.textContent).toBe('Following');
+  fireEvent.click(on);
+  expect(onToggleFollow).toHaveBeenLastCalledWith(false);
+});

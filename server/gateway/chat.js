@@ -4,7 +4,7 @@ const WebSocket = require('ws');
 const db = require('../db');
 const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments, parseReactionEmoji } = require('../validate');
 const { canViewChannel, canPostChannel, canView, canModerateMessage } = require('../permissions');
-const { userClients, deliverToChannelViewers } = require('./delivery');
+const { userClients, deliverToChannelViewers, tellFollow } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
 const linkPreviews = require('../linkPreviews');
 
@@ -65,10 +65,13 @@ const ops = {
     if (replyTo && replyTo.authorId && replyTo.authorId !== userId && !mentionNames.includes(replyTo.author)) {
       mentionNames.push(replyTo.author);
     }
+    // In a thread, the frame says which one (for notifications and badges).
+    const thread = type === 'thread' ? db.getThread(msg.space, msg.channel) : null;
     const stored = db.storeMessageWithMentions(
       msg.space, msg.channel, content, userId, attachments, spoiler, space.id, mentionNames, replyTo ? replyTo.id : null
     );
     const mentions = stored ? stored.mentions : [];
+    if (stored && thread) for (const uid of stored.newFollows) tellFollow(uid, msg.space, thread, true);
     deliverToChannelViewers(msg.space, msg.channel, JSON.stringify({
       type: 'message',
       id: stored ? stored.id : undefined,
@@ -84,6 +87,7 @@ const ops = {
       mentions,
       replyTo,
       timestamp: stored ? stored.timestamp : Date.now(),
+      thread: thread ? { name: thread.name, parentChannel: thread.parentChannel } : undefined,
     }));
     if (stored && content) previewChannelMessage(msg.space, msg.channel, stored.id, content, userId);
     if (stored) threadUpdated(msg.space, msg.channel);

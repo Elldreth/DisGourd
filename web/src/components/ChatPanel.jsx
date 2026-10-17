@@ -42,6 +42,8 @@ export default function ChatPanel({
   // panel; threadsVersion changes when this channel's threads change.
   onOpenThread,
   threadsVersion = 0,
+  threadBadge, // (channel) => { unread, mentions } for a thread's summary or row
+  threadsUnread = 0, // how many of this channel's threads have something unread
 }) {
   const [pinsOpen, setPinsOpen] = useState(false);
   const [threadsOpen, setThreadsOpen] = useState(false);
@@ -106,15 +108,22 @@ export default function ChatPanel({
           </button>
         )}
         {onOpenThread && (
-          <IconButton
-            icon="thread"
-            size={18}
-            label="Threads"
-            aria-haspopup="dialog"
-            aria-expanded={threadsOpen}
-            onClick={() => setThreadsOpen(true)}
-            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
-          />
+          <span className="relative">
+            <IconButton
+              icon="thread"
+              size={18}
+              label={threadsUnread ? `Threads (${threadsUnread} unread)` : 'Threads'}
+              aria-haspopup="dialog"
+              aria-expanded={threadsOpen}
+              onClick={() => setThreadsOpen(true)}
+              className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+            />
+            {threadsUnread > 0 && (
+              <span aria-hidden="true" className="pointer-events-none absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-brand px-1 text-center text-[10px] font-bold leading-4 text-ink-900">
+                {threadsUnread}
+              </span>
+            )}
+          </span>
         )}
         <IconButton
           icon="pin"
@@ -154,6 +163,7 @@ export default function ChatPanel({
         onReply={canPost ? (m) => setReplyingTo({ id: m.id, author: m.author }) : null}
         onCreateThread={onOpenThread && canPost ? (m) => setThreadFrom(m) : undefined}
         onOpenThread={onOpenThread ? (t, m, opener) => onOpenThread(t, { root: m, opener }) : undefined}
+        threadBadge={threadBadge}
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
@@ -188,6 +198,7 @@ export default function ChatPanel({
           space={space}
           channel={channel}
           version={threadsVersion}
+          badge={threadBadge}
           onOpen={(t) => onOpenThread(t, {})}
           onClose={() => setThreadsOpen(false)}
         />

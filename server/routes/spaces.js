@@ -6,7 +6,7 @@ const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateSpaceName, normalizeChannelName, validateChannelName } = require('../validate');
 const { canViewChannel, canPostChannel } = require('../permissions');
-const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence } = require('../gateway/delivery');
+const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence, tellFollow } = require('../gateway/delivery');
 
 const getJsonBody = readJsonBody;
 
@@ -183,7 +183,7 @@ const routes = [
           if (!type) return sendJson(res, 404, { error: 'Channel not found' });
           if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           if (type !== 'text') return sendJson(res, 400, { error: 'Threads can only be started in text channels' });
-          if (req.method === 'GET') return sendJson(res, 200, db.getThreads(spaceName, channelName, parsedUrl.query.archived === '1'));
+          if (req.method === 'GET') return sendJson(res, 200, db.getThreads(spaceName, channelName, parsedUrl.query.archived === '1', userId));
           if (!canPostChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot post in this channel' });
           const body = await getJsonBody(req);
           const messageId = parseInt(body.messageId, 10);
@@ -192,8 +192,19 @@ const routes = [
           if (result.error) return sendJson(res, 400, { error: 'Thread name must be 1–80 characters' });
           if (result.created) {
             deliverToChannelViewers(spaceName, channelName, JSON.stringify({ type: 'thread_created', space: spaceName, channel: channelName, thread: result.thread }));
+            tellFollow(userId, spaceName, result.thread, true); // you follow what you start
           }
           return sendJson(res, result.created ? 201 : 200, { thread: result.thread });
+        }
+        // PUT/DELETE follow — follow or unfollow a thread by hand (viewers only).
+        if (channelName && db.isThreadChannel(channelName) && pathSegments[4] === 'follow' && pathSegments.length === 5 && (req.method === 'PUT' || req.method === 'DELETE')) {
+          const threadId = db.threadChannelId(spaceName, channelName);
+          if (!threadId) return sendJson(res, 404, { error: 'Thread not found' });
+          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this thread' });
+          const followed = req.method === 'PUT';
+          const changed = followed ? db.followThread(userId, threadId) : db.unfollowThread(userId, threadId);
+          if (changed) tellFollow(userId, spaceName, db.getThread(spaceName, channelName), followed);
+          return sendJson(res, 200, { followed });
         }
         // Thread channels are managed through their parent, not as channels.
         if (channelName && db.isThreadChannel(channelName) && (req.method === 'DELETE' || pathSegments[4] === 'permissions')) {

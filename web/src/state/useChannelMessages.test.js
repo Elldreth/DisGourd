@@ -61,6 +61,26 @@ test('badgeCounts totals unread and mentions per channel and per server', () => 
     channelMentions: { random: 1 },
     spaceUnread: { S1: 3, S2: 1 },
     spaceMentions: { S1: 1 },
+    channelThreads: {},
+  });
+});
+
+test('badgeCounts rolls followed threads into their parent channel and server (P2-22c)', () => {
+  const spaces = [{ name: 'S1', channels: ['general'] }, { name: 'S2', channels: ['general'] }];
+  const unread = { [unreadKey('S1', '~t5')]: 2, [unreadKey('S2', '~t9')]: 1, [unreadKey('S1', '~t6')]: 4 };
+  const mentions = { [unreadKey('S1', '~t7')]: 1 };
+  const threads = {
+    [unreadKey('S1', '~t5')]: { parent: 'general', followed: true },
+    [unreadKey('S1', '~t7')]: { parent: 'general', followed: false }, // a mention in a thread you don't follow
+    [unreadKey('S2', '~t9')]: { parent: 'general', followed: true },
+    // ~t6 is unknown (no parent): it can't be placed, so it doesn't count
+  };
+  expect(badgeCounts({ unread, mentions, spaces, currentSpace: 'S1', channels: ['general'], threads })).toEqual({
+    channelUnread: { general: 2 },
+    channelMentions: { general: 1 },
+    channelThreads: { general: 2 },
+    spaceUnread: { S1: 2, S2: 1 },
+    spaceMentions: { S1: 1 },
   });
 });
 
