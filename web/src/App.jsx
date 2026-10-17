@@ -63,14 +63,15 @@ export default function App() {
   // ---- Gateway (one connection for the whole app) and feature hooks ----
   // Order matters: each hook may use the ones above it.
   const gatewayTable = useHandlerTable();
-  const { status, send } = useGateway({ token, handlers: gatewayTable.handlers });
+  const { status, send, reconnects } = useGateway({ token, handlers: gatewayTable.handlers });
   const voice = useVoiceCall({ send, myId });
   const notifier = useNotifications();
-  const dm = useDms({ active: view === 'dm', user, send, status, onIncoming: notifier.onIncoming });
+  const dm = useDms({ active: view === 'dm', user, send, status, reconnects, onIncoming: notifier.onIncoming });
   const sp = useSpaces({
     token,
     myId,
     status,
+    reconnects,
     view,
     dmCurrent: dm.current,
     onRestoreDm: (name) => {

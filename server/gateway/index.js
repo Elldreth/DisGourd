@@ -2,7 +2,7 @@ const url = require('url');
 const db = require('../db');
 const { verifyToken } = require('../auth/tokens');
 const { userClients, broadcastPresence } = require('./delivery');
-const { voiceLeave } = require('./voice');
+const { voiceLeave, voiceStatesFor } = require('./voice');
 const { handleGatewayMessage } = require('./router');
 
 // Per-connection lifecycle chatter is silenced under test to keep output clean
@@ -72,6 +72,7 @@ function attachGateway(httpServer, wss) {
       // Keyed by `with`, like the other DM ops (getDmUnreadCounts names it `other`).
       const dmCounts = db.getDmUnreadCounts(ws.userId).map((c) => ({ with: c.other, count: c.count }));
       ws.send(JSON.stringify({ type: 'dm_unread', counts: dmCounts }));
+      for (const frame of voiceStatesFor(ws.userId)) ws.send(JSON.stringify(frame));
 
       ws.on('message', (raw) => {
         // A bad frame must never take the whole server down.

@@ -26,7 +26,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-06 | Transactions (space create, msg+mentions, invite, registration) | 1 | COMPLETE | S–M | P1-03, P1-04, P1-05 | db/index.js, routes/*, gateway/chat.js |
 | P1-07 | Cursor pagination API (`before`) | 1 | COMPLETE | S | none (soft P1-01) | db/index.js, server.js (2 handlers) |
 | P1-08 | Load older messages UI | 1 | COMPLETE | M | P1-07, P1-12 | MessageList.jsx, api.js, state hooks |
-| P1-09 | Reconnect resync | 1 | PLANNED | S–M | P1-05, P1-08, P1-14 | gateway/index.js, state hooks, useSocket.js |
+| P1-09 | Reconnect resync | 1 | REVIEW | S–M | P1-05, P1-08, P1-14 | gateway/index.js, state hooks, useSocket.js |
 | P1-10 | Moderation: delete_others_messages | 1 | COMPLETE | S | P3-05 (soft P1-05) | permissions.js, db/index.js, gateway/chat.js, MessageActions.jsx |
 | P1-11 | Fix dm_unread key mismatch | 1 | COMPLETE | S | none | server.js (1 line) |
 | P1-12 | App split 1/3: channel-message hook | 1 | COMPLETE | M | none (after P1-11) | App.jsx, state/useChannelMessages.js |

@@ -8,10 +8,13 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 //  - Queues outgoing frames while offline and flushes them on reconnect.
 //  - Dispatches incoming frames to handlers keyed by the frame's `type`.
 //
-// Returns { status, send } where status is one of:
+// Returns { status, send, reconnects } where status is one of:
 //   'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
+// and reconnects counts how many times the socket has opened again after the
+// first time (feature hooks resync when it changes).
 export function useGateway({ token, handlers }) {
   const [status, setStatus] = useState('idle');
+  const [reconnects, setReconnects] = useState(0);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
   const sendRef = useRef(() => false);
@@ -25,6 +28,7 @@ export function useGateway({ token, handlers }) {
     let ws = null;
     let intentional = false;
     let attempt = 0;
+    let openedBefore = false;
     let timer = null;
     const queue = [];
 
@@ -50,7 +54,10 @@ export function useGateway({ token, handlers }) {
       setStatus('reconnecting');
       const delay = Math.min(15000, 500 * 2 ** attempt) + Math.floor(Math.random() * 250);
       attempt += 1;
-      timer = setTimeout(connect, delay);
+      timer = setTimeout(() => {
+        timer = null;
+        connect();
+      }, delay);
     };
 
     const connect = () => {
@@ -65,6 +72,8 @@ export function useGateway({ token, handlers }) {
       ws.onopen = () => {
         attempt = 0;
         setStatus('open');
+        if (openedBefore) setReconnects((n) => n + 1);
+        openedBefore = true;
         flush();
       };
 
@@ -110,10 +119,21 @@ export function useGateway({ token, handlers }) {
       return false;
     };
 
+    // The browser says the network is back: retry now rather than waiting out
+    // the backoff timer (which can be up to 15s by then).
+    const onOnline = () => {
+      if (ws || intentional || !timer) return; // connected, connecting, or shut down
+      clearTimeout(timer);
+      timer = null;
+      connect();
+    };
+    window.addEventListener('online', onOnline);
+
     connect();
 
     return () => {
       intentional = true;
+      window.removeEventListener('online', onOnline);
       if (timer) clearTimeout(timer);
       sendRef.current = () => false;
       if (ws) {
@@ -127,5 +147,5 @@ export function useGateway({ token, handlers }) {
   }, [token]);
 
   const send = useCallback((obj) => sendRef.current(obj), []);
-  return { status, send };
+  return { status, send, reconnects };
 }

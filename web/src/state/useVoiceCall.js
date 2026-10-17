@@ -27,6 +27,10 @@ export function useVoiceCall({ send, myId }) {
   const v = () => voiceRef.current;
 
   const handlers = {
+    // Every connect starts with `ready`, followed by a voice_state for each
+    // occupied room. Forget what we knew first, so rooms that emptied while
+    // we were offline don't keep showing people.
+    ready: () => setStates({}),
     voice_state: (f) => {
       setStates((prev) => ({ ...prev, [unreadKey(f.space, f.channel)]: f.participants || [] }));
       v() && v().handleState(f);

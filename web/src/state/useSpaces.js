@@ -15,7 +15,7 @@ import {
 // and saving/restoring what you were looking at.
 //   view / dmCurrent: what's showing, for save/restore
 //   onRestoreDm(name): reopen a saved DM after sign-in
-export function useSpaces({ token, myId, status, view, dmCurrent, onRestoreDm }) {
+export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent, onRestoreDm }) {
   const [spaces, setSpaces] = useState([]);
   const [serverOrder, setServerOrder] = useState([]); // user's custom rail order
   const [currentSpace, setCurrentSpace] = useState('');
@@ -120,6 +120,19 @@ export function useSpaces({ token, myId, status, view, dmCurrent, onRestoreDm })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels, currentChannel, view]);
+
+  // After a reconnect, reload the server list: channels or servers may have
+  // been created, deleted or hidden from you while you were away. A deleted
+  // or hidden channel falls back via the effect above; a server you're no
+  // longer in sends you to the first one. (An empty list means the request
+  // failed, so leave things as they are.)
+  useEffect(() => {
+    if (!reconnects) return;
+    loadSpaces().then((next) => {
+      if (next.length && spaceRef.current && !next.some((s) => s.name === spaceRef.current)) goToFirst(next);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reconnects]);
 
   // Load members on server switch and when the gateway (re)connects.
   useEffect(() => {
