@@ -1,5 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from './Icon.jsx';
+import EmojiPicker from './EmojiPicker.jsx';
 
 // Actions on a single message. Every surface — the hover/focus toolbar, the
 // "…" menu, the right-click menu and the touch bottom sheet — renders the same
@@ -141,9 +143,49 @@ export function ActionMenu({ actions, sheet, above, onClose, label }) {
 }
 
 // Emoji choices for a reaction. Left/Right move, Enter picks, Esc closes.
+// The full picker's size (EmojiPicker is w-80 h-96) and its gap from the
+// quick-reaction strip.
+const PICKER_W = 320;
+const PICKER_H = 384;
+const GAP = 8;
+
+// Where to put the full picker: next to the quick-reaction strip, above it if
+// there's room, always inside the window. Fixed positioning (in a portal) so
+// the scrolling message list can't clip it.
+function pickerPosition(anchor) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const left = Math.min(Math.max(anchor.right - PICKER_W, GAP), Math.max(vw - PICKER_W - GAP, GAP));
+  const top = anchor.top - PICKER_H - GAP >= GAP
+    ? anchor.top - PICKER_H - GAP
+    : Math.min(anchor.bottom + GAP, Math.max(vh - PICKER_H - GAP, GAP));
+  return { left, top };
+}
+
 export function ReactionPicker({ onPick, onClose, sheet, above }) {
   const ref = useRef(null);
   useAutoFocusFirst(ref);
+  // null = the quick strip; otherwise where the full picker goes.
+  const [full, setFull] = useState(null);
+
+  function openFull() {
+    if (sheet) setFull({ sheet: true });
+    else setFull(pickerPosition(ref.current.getBoundingClientRect()));
+  }
+
+  if (full) {
+    return createPortal(
+      <div className={`fixed inset-0 z-50 ${full.sheet ? 'flex items-end justify-center bg-black/50 pb-[env(safe-area-inset-bottom)]' : ''}`} onClick={onClose}>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={full.sheet ? undefined : { position: 'fixed', left: full.left, top: full.top }}
+        >
+          <EmojiPicker onPick={onPick} onClose={onClose} />
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   const onKeyDown = (e) => {
     if (e.key === 'Escape' || e.key === 'Tab') {
@@ -169,7 +211,22 @@ export function ReactionPicker({ onPick, onClose, sheet, above }) {
     >
       {emoji}
     </button>
-  ));
+  )).concat(
+    <button
+      key="more"
+      type="button"
+      role="menuitem"
+      data-menu-item
+      aria-label="More reactions"
+      title="More reactions"
+      onClick={openFull}
+      className={`flex items-center justify-center rounded text-gray-400 outline-hidden hover:bg-ink-600 hover:text-fg focus-visible:bg-ink-600 focus-visible:ring-2 focus-visible:ring-brand-hi ${
+        sheet ? 'p-2' : 'p-1'
+      }`}
+    >
+      <Icon name="plus" size={sheet ? 24 : 18} />
+    </button>
+  );
 
   if (sheet) {
     return (
