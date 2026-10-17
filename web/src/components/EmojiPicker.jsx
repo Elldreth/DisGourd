@@ -94,12 +94,12 @@ export default function EmojiPicker({ onPick, onClose }) {
       {!results && list && (
         <div className="flex gap-0.5 border-b border-ink-900/60 px-2 pb-1.5">
           {recent.length > 0 && (
-            <button type="button" tabIndex={-1} title="Recent" onClick={() => jumpTo('recent')} className="rounded-sm p-1 text-base hover:bg-ink-600">
+            <button type="button" tabIndex={-1} title="Recent" aria-label="Recent" onClick={() => jumpTo('recent')} className="rounded-sm p-1 text-base hover:bg-ink-600">
               🕘
             </button>
           )}
           {EMOJI_GROUPS.map((g) => (
-            <button key={g.id} type="button" tabIndex={-1} title={g.name} onClick={() => jumpTo(`g${g.id}`)} className="rounded-sm p-1 text-base hover:bg-ink-600">
+            <button key={g.id} type="button" tabIndex={-1} title={g.name} aria-label={g.name} onClick={() => jumpTo(`g${g.id}`)} className="rounded-sm p-1 text-base hover:bg-ink-600">
               {g.icon}
             </button>
           ))}

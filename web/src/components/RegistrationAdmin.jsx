@@ -164,7 +164,7 @@ export default function RegistrationAdmin() {
           {data.admins.map((a) => (
             <span key={a} className="flex items-center gap-1 rounded-full bg-ink-700 px-2 py-0.5 text-xs">
               {a}
-              <button onClick={() => removeAdmin(a)} title="Remove" className="text-gray-400 hover:text-danger"><Icon name="x" size={12} strokeWidth={2.2} /></button>
+              <button onClick={() => removeAdmin(a)} title="Remove" aria-label={`Remove ${a} as an admin`} className="text-gray-400 hover:text-danger"><Icon name="x" size={12} strokeWidth={2.2} /></button>
             </span>
           ))}
         </div>
@@ -174,6 +174,7 @@ export default function RegistrationAdmin() {
             onChange={(e) => setNewAdmin(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addAdmin()}
             placeholder="username to promote"
+            aria-label="Username to make an admin"
             className="input flex-1"
           />
           <button onClick={addAdmin} className="rounded-lg bg-ink-600 px-3 py-2 text-sm font-semibold text-gray-200 hover:bg-ink-500">

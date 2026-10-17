@@ -11,6 +11,7 @@ import Modal from './Modal.jsx';
 // User settings: avatar/profile and audio devices.
 export default function ProfileDialog({ profile, onClose, onUpdated, onOutputChange, onPttChange, onMicChange, inCall }) {
   const bodyRef = useRef(null); // focus starts on the first setting, not the header's Close
+  const fileRef = useRef(null);
   const [avatar, setAvatar] = useState(profile?.avatar || null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -93,14 +94,18 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
           </div>
           {error && <div className="mt-3 text-sm text-danger">{error}</div>}
           <div className="mt-4 flex items-center gap-2">
-            <label
+            {/* A real button (a <label> around a hidden input can't be tabbed to). */}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
               className={`cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover ${
                 busy ? 'pointer-events-none opacity-60' : ''
               }`}
             >
               {busy ? 'Saving…' : avatar ? 'Change avatar' : 'Upload avatar'}
-              <input type="file" accept="image/*" hidden onChange={pickFile} disabled={busy} />
-            </label>
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickFile} disabled={busy} />
             {profile?.avatarOriginal && (
               <button
                 onClick={reframe}

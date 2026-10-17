@@ -197,12 +197,14 @@ export default function AudioSettings({ onOutputChange, onPttChange, onMicChange
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Speaker</span>
           <button
             onClick={() => playTestTone()}
+            aria-label="Test speaker"
             className="rounded-sm bg-ink-600 px-2 py-1 text-xs font-semibold text-gray-200 hover:bg-ink-500"
           >
             Test
           </button>
         </div>
         <select
+          aria-label="Speaker"
           value={speaker}
           onChange={(e) => chooseSpeaker(e.target.value)}
           disabled={!outputSupported}
