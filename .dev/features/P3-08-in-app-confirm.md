@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "Replace window.confirm"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #78)
 - **Effort:** S
 - **Depends on:** P3-01
 - **Serialize with:** MemberList.jsx (P3-10), ChannelList.jsx units

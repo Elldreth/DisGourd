@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { useHandlerTable } from './state/gatewayHandlers.js';
@@ -22,6 +22,8 @@ import DmSidebar from './components/DmSidebar.jsx';
 import DmPanel from './components/DmPanel.jsx';
 import SearchOverlay from './components/SearchOverlay.jsx';
 import ImageCropper from './components/ImageCropper.jsx';
+import { useToasts } from './components/Toasts.jsx';
+import { useUndoDelete } from './state/useUndoDelete.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
@@ -101,6 +103,20 @@ export default function App() {
     openDm: (name) => selectDm(name),
   });
   gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, dm.handlers);
+
+  // Deleting a message: hidden at once with an Undo toast, sent after 5s.
+  const toast = useToasts();
+  const undoDelete = useUndoDelete({ toast });
+  const chatMessagesRef = useRef(chat.messages);
+  chatMessagesRef.current = chat.messages;
+  const dmMessagesRef = useRef(dm.messages);
+  dmMessagesRef.current = dm.messages;
+  const deleteChatMessage = (id) =>
+    undoDelete.request(`c:${id}`, { send: () => chat.deleteMessage(id), exists: () => chatMessagesRef.current.some((m) => m.id === id) });
+  const deleteDmMessage = (id) =>
+    undoDelete.request(`d:${id}`, { send: () => dm.remove(id), exists: () => dmMessagesRef.current.some((m) => m.id === id) });
+  const shownChatMessages = chat.messages.filter((m) => !undoDelete.isHidden(`c:${m.id}`));
+  const shownDmMessages = dm.messages.filter((m) => !undoDelete.isHidden(`d:${m.id}`));
 
   // ---- Navigation and session ----
   function logout() {
@@ -267,12 +283,12 @@ export default function App() {
       {view === 'dm' ? (
         <DmPanel
           username={dm.current}
-          messages={dm.messages}
+          messages={shownDmMessages}
           currentUser={user}
           typing={dm.typingNames}
           onSend={dm.send}
           onEdit={dm.edit}
-          onDelete={dm.remove}
+          onDelete={deleteDmMessage}
           hasMore={dm.hasMore}
           loadingOlder={dm.loadingOlder}
           onLoadOlder={dm.loadOlder}
@@ -289,13 +305,13 @@ export default function App() {
               channel={sp.currentChannel}
               status={status}
               canPost={sp.canPostCurrent}
-              messages={chat.messages}
+              messages={shownChatMessages}
               currentUser={user}
               typingUsers={chat.typingNames}
               memberNames={sp.memberNames}
               onSend={chat.sendMessage}
               onEdit={chat.editMessage}
-              onDelete={chat.deleteMessage}
+              onDelete={deleteChatMessage}
               canModerate={sp.canModerate}
               onReact={chat.react}
               hasMore={chat.hasMore}

@@ -173,3 +173,14 @@ describe('editing your last message from the composer (startEditLast)', () => {
     expect(screen.queryByRole('textbox', { name: 'Edit message' })).toBeNull();
   });
 });
+
+test('deleting a message does not ask with the browser popup (the undo toast covers it)', () => {
+  const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => {
+    throw new Error('window.confirm was called');
+  });
+  const onDelete = vi.fn();
+  render(<MessageList messages={[msg(1, 'sandy'), msg(2)]} channel="general" currentUser="sandy" onDelete={onDelete} />);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Delete message' })[0]);
+  expect(onDelete).toHaveBeenCalledWith(1);
+  confirmSpy.mockRestore();
+});

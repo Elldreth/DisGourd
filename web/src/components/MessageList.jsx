@@ -423,11 +423,13 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
     finishEdit();
   }
 
+  // No "are you sure?": the message hides with an Undo toast instead (see
+  // useUndoDelete). Focus moves to a neighbouring message so it isn't lost.
   function confirmDelete() {
     setPopup(null);
-    const question = mine ? 'Delete this message?' : `Delete this message from ${m.author || 'this user'}?`;
-    if (window.confirm(question)) onDelete(m.id);
-    else focusRow();
+    const row = rowRef.current;
+    if (row && row.contains(document.activeElement)) onNavigate(row, row.nextElementSibling?.matches('[data-msg-row]') ? 1 : -1);
+    onDelete(m.id);
   }
 
   function pickReaction(emoji) {

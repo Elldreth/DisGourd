@@ -1,0 +1,56 @@
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { ToastProvider, useToasts } from './Toasts.jsx';
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+let api;
+function Grab() {
+  api = useToasts();
+  return <button>Somewhere else</button>;
+}
+
+function setup() {
+  render(
+    <ToastProvider>
+      <Grab />
+    </ToastProvider>
+  );
+}
+
+test('toasts appear in a polite live region and go away after their duration', () => {
+  setup();
+  const region = screen.getByRole('status');
+  expect(region.getAttribute('aria-live')).toBe('polite');
+  act(() => api.show({ id: 'a', message: 'Message deleted', duration: 5000 }));
+  expect(region.textContent).toContain('Message deleted');
+  act(() => vi.advanceTimersByTime(5100));
+  expect(region.textContent).not.toContain('Message deleted');
+});
+
+test('the action button works by keyboard and does not steal focus when it appears', () => {
+  setup();
+  const elsewhere = screen.getByRole('button', { name: 'Somewhere else' });
+  elsewhere.focus();
+  const onAction = vi.fn();
+  act(() => api.show({ id: 'a', message: 'Message deleted', actionLabel: 'Undo', onAction, duration: 5000 }));
+  expect(document.activeElement).toBe(elsewhere);
+  const undo = screen.getByRole('button', { name: 'Undo' });
+  fireEvent.click(undo);
+  expect(onAction).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull(); // acting dismisses it
+});
+
+test('showing a toast with the same id replaces it; dismiss removes it', () => {
+  setup();
+  act(() => api.show({ id: 'a', message: 'one' }));
+  act(() => api.show({ id: 'a', message: 'two' }));
+  expect(screen.getByRole('status').textContent).toContain('two');
+  expect(screen.getByRole('status').textContent).not.toContain('one');
+  act(() => api.dismiss('a'));
+  expect(screen.getByRole('status').textContent).not.toContain('two');
+});
