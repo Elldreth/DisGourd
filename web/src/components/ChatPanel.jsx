@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
 import Gourd from './Gourd.jsx';
+import DropOverlay from './DropOverlay.jsx';
+import { useFileDrop } from '../useFileDrop.js';
 
 export default function ChatPanel({
   space,
@@ -30,6 +32,9 @@ export default function ChatPanel({
   // The message being replied to ({ id, author }), shown above the composer.
   const [replyingTo, setReplyingTo] = useState(null);
   useEffect(() => setReplyingTo(null), [space, channel]);
+  // Files dropped anywhere on the panel go to the composer.
+  const composerRef = useRef(null);
+  const drop = useFileDrop({ enabled: !!channel && canPost, onFiles: (files) => composerRef.current?.addFiles(files) });
 
   if (!space) {
     return (
@@ -53,7 +58,8 @@ export default function ChatPanel({
   const degraded = status === 'reconnecting' || status === 'closed' || status === 'connecting';
 
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700">
+    <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700" {...drop.dropProps}>
+      {drop.dragging && <DropOverlay target={`#${channel}`} />}
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-sm shadow-black/20 md:px-4">
         <button
           onClick={onOpenNav}
@@ -99,6 +105,7 @@ export default function ChatPanel({
       {canPost ? (
         // Always enabled: sends during a blip are queued and flushed on reconnect.
         <Composer
+          ref={composerRef}
           channel={channel}
           disabled={false}
           onSend={(content, attachments, spoiler) => {

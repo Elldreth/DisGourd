@@ -1,11 +1,18 @@
+import { useRef } from 'react';
 import Avatar from './Avatar.jsx';
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
+import DropOverlay from './DropOverlay.jsx';
+import { useFileDrop } from '../useFileDrop.js';
 
 // The conversation view in Direct Messages mode.
 export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, onTyping, onOpenSearch, onOpenNav }) {
+  // Files dropped anywhere on the conversation go to the composer.
+  const composerRef = useRef(null);
+  const drop = useFileDrop({ enabled: !!username, onFiles: (files) => composerRef.current?.addFiles(files) });
+
   if (!username) {
     return (
       <main className="relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
@@ -28,7 +35,8 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
   }
 
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700">
+    <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700" {...drop.dropProps}>
+      {drop.dragging && <DropOverlay target={`@${username}`} />}
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-sm shadow-black/20 md:px-4">
         <button
           onClick={onOpenNav}
@@ -62,7 +70,7 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
         emptyBody="Say hi! 👋"
       />
       <TypingIndicator names={typing} />
-      <Composer channel={username} disabled={false} onSend={onSend} onTyping={onTyping} placeholder={`Message @${username}`} />
+      <Composer ref={composerRef} channel={username} disabled={false} onSend={onSend} onTyping={onTyping} placeholder={`Message @${username}`} />
     </main>
   );
 }
