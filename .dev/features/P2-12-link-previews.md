@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (rank 7, slice 2)
 - **Phase:** 2, rank 7
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** M
 - **Depends on:** P2-11, P1-01 (migration), P1-05 (gateway/chat.js, gateway/dm.js)
 - **Soft-depends on:** P2-01 (shared URL-detection regex; if P2-01 hasn't landed, put the regex in a shared `server/validate.js` + client util)
