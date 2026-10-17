@@ -12,7 +12,7 @@ const key = (k, mods = {}) => ({ key: k, ctrlKey: false, metaKey: false, altKey:
 test('matchShortcut names the app shortcuts and leaves others alone', () => {
   expect(matchShortcut(key('k', { ctrlKey: true }))).toBe('switcher');
   expect(matchShortcut(key('K', { metaKey: true }))).toBe('switcher');
-  expect(matchShortcut(key('k', { ctrlKey: true, shiftKey: true }))).toBe(null);
+  expect(matchShortcut(key('k', { ctrlKey: true, shiftKey: true }))).toBe('people'); // P4-04: new message
   expect(matchShortcut(key('ArrowDown', { altKey: true }))).toBe('next');
   expect(matchShortcut(key('ArrowUp', { altKey: true }))).toBe('prev');
   expect(matchShortcut(key('ArrowDown', { altKey: true, shiftKey: true }))).toBe('next-unread');
