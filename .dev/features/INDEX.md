@@ -38,6 +38,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-18 | Bump Vite | 1 | COMPLETE | S | none | web/package.json, vite.config.js |
 | P1-19 | Web test harness (Vitest) | 1 | COMPLETE | S | P1-18 | web/package.json, vite.config.js |
 | P1-20 | Voice rejoin after reconnect | 1 | COMPLETE | S–M | P1-09 | voice.js, useVoiceCall.js, gateway/voice.js |
+| P1-21 | Tailwind 4 + theme as CSS variables (absorbs P2-16) | 1 | ACTIVE | M | P1-18 | index.css, vite.config.js, package.json, class renames |
 | P2-01 | Markdown core | 2 | COMPLETE | S–M | P1-19 | markdown.jsx (new), MessageList.jsx, index.css |
 | P2-02 | Syntax highlighting (lazy) | 2 | COMPLETE | S | P2-01 | markdown.jsx, highlight.js (new), index.css |
 | P2-03 | Tab title + favicon badge | 2 | COMPLETE | S | none | attention.js (new), App.jsx (+2 lines) |
@@ -53,7 +54,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-13 | Pins | 2 | PLANNED | M | P1-01, P1-04, P1-05, P3-05 | migrations.js, gateway/chat.js, routes/spaces.js, PinsPanel.jsx (new) |
 | P2-14 | DND / invisible presence | 2 | PLANNED | S–M | P1-01, P1-05 | migrations.js, gateway/delivery.js, routes/auth.js, UserFooter/Avatar/MemberList |
 | P2-15 | Custom status text | 2 | PLANNED | S | P2-14 | same as P2-14 |
-| P2-16 | Theme tokens → CSS vars | 2 | READY | S | none | tailwind.config.js, index.css |
+| P2-16 | Theme tokens → CSS vars (done in P1-21) | 2 | ACTIVE | S | none | tailwind.config.js, index.css |
 | P2-17 | Light theme + picker | 2 | PLANNED | M | P2-16 | index.css, theme.js (new), index.html, ~12 components |
 | P2-18 | PWA + Web Push (Container: a, b) | 2 | PLANNED | M | see packet | sw.js, static.js, push |
 | P2-19 | Custom server emoji (Container: a, b) | 2 | PLANNED | M | see packet | migrations, routes/spaces, markdown, picker |
