@@ -82,3 +82,14 @@ test('members: idle and dnd count as online, each with its own dot and words', (
   expect(dot(row('cat')).className).toMatch(/bg-idle/);
   expect(dot(row('dan')).className).toMatch(/bg-gray-500/);
 });
+
+test('one status dot in the footer: the avatar shows it; the line only adds one for connection trouble', () => {
+  const dots = (container) => container.querySelectorAll('.rounded-full.h-2.w-2, span.absolute.rounded-full');
+  const { container, rerender } = render(
+    <UserFooter user="sandy" status="open" presence="online" onSetPresence={() => {}} onOpenProfile={() => {}} onLogout={() => {}} />
+  );
+  expect(dots(container)).toHaveLength(1); // just the avatar's
+  rerender(<UserFooter user="sandy" status="reconnecting" presence="online" onSetPresence={() => {}} onOpenProfile={() => {}} onLogout={() => {}} />);
+  expect(dots(container)).toHaveLength(2); // the avatar's, plus the pulsing connection dot
+  expect(screen.getByText('Reconnecting…')).toBeTruthy();
+});

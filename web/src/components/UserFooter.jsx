@@ -85,7 +85,8 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
       >
         <span className="truncate text-sm font-semibold">{user}</span>
         <span className="flex items-center gap-1.5 text-xs text-gray-400">
-          <span className={`h-2 w-2 rounded-full ${trouble ? trouble.color : DOT_CLASS[mode.dot]}`} />
+          {/* Your status dot is on the avatar; this one only flags connection trouble. */}
+          {trouble && <span className={`h-2 w-2 shrink-0 rounded-full ${trouble.color}`} />}
           <span className="truncate">{trouble ? trouble.text : custom || mode.label}</span>
         </span>
       </button>

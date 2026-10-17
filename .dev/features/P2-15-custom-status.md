@@ -40,3 +40,4 @@ Tests: server 216 (7 new). Web 426 (5 new). Build clean.
 - "Today" is the next midnight in the browser's timezone (sent as `tzOffset`).
 - There's no profile popover in the app yet, so the status shows in the member list and your footer. Revisit if a profile card is added.
 - `EmojiPicker` is reused as is. Its Enter/Esc handling keeps the surrounding form and dialog safe.
+- **Footer fix (user report, 2026-10-17):** your status showed twice in the footer: the avatar's corner dot plus a second dot before "Online". The line's dot now appears only for connection trouble (Connecting/Reconnecting/Disconnected); the avatar dot shows your status. Covered by a Presence test and checked in the sandbox (one dot).
