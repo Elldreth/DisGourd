@@ -122,18 +122,18 @@ export default function RegistrationAdmin() {
             {data.codes.map((c) => {
               const st = codeStatus(c);
               return (
-                <div key={c.id} className="flex items-center gap-2 rounded bg-ink-800 px-2 py-1.5 text-sm">
+                <div key={c.id} className="flex items-center gap-2 rounded-sm bg-ink-800 px-2 py-1.5 text-sm">
                   <code className="font-mono text-brand-hi">{c.code}</code>
                   <span className="text-xs text-gray-500">
                     {c.uses}/{c.maxUses ?? '∞'} used{c.expiresAt ? ` · exp ${new Date(c.expiresAt).toLocaleDateString()}` : ''}
                   </span>
                   <span className={`text-xs ${st.cls}`}>{st.label}</span>
                   <div className="ml-auto flex items-center gap-1">
-                    <button onClick={() => copy(c.code)} className="rounded px-1.5 py-0.5 text-xs text-gray-300 hover:bg-ink-600 hover:text-white">
+                    <button onClick={() => copy(c.code)} className="rounded-sm px-1.5 py-0.5 text-xs text-gray-300 hover:bg-ink-600 hover:text-white">
                       {copied === c.code ? 'Copied' : 'Copy'}
                     </button>
                     {!c.revokedAt && (
-                      <button onClick={() => revoke(c.id)} title="Revoke" className="rounded px-1.5 py-0.5 text-xs text-gray-400 hover:bg-ink-600 hover:text-danger">
+                      <button onClick={() => revoke(c.id)} title="Revoke" className="rounded-sm px-1.5 py-0.5 text-xs text-gray-400 hover:bg-ink-600 hover:text-danger">
                         Revoke
                       </button>
                     )}

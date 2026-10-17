@@ -49,9 +49,9 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm }) {
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Escape' && onClose()}
             placeholder="Search messages…"
-            className="flex-1 bg-transparent text-gray-100 outline-none placeholder:text-gray-500"
+            className="flex-1 bg-transparent text-gray-100 outline-hidden placeholder:text-gray-500"
           />
-          <button onClick={onClose} className="rounded px-2 text-xs text-gray-400 hover:text-white">
+          <button onClick={onClose} className="rounded-sm px-2 text-xs text-gray-400 hover:text-white">
             esc
           </button>
         </div>
@@ -99,7 +99,7 @@ function ResultRow({ m, where, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-start gap-3 rounded px-2 py-2 text-left transition hover:bg-ink-600/50"
+      className="flex w-full items-start gap-3 rounded-sm px-2 py-2 text-left transition hover:bg-ink-600/50"
     >
       <Avatar name={m.author} size={32} src={m.authorAvatar} />
       <div className="min-w-0 flex-1">

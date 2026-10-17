@@ -118,7 +118,7 @@ export default function ServerRail({
               onChange={(e) => setName(e.target.value)}
               onBlur={() => !name && setAdding(false)}
               placeholder="name"
-              className="w-14 rounded-lg bg-ink-700 px-1 py-1 text-center text-xs outline-none ring-1 ring-ink-500 focus:ring-brand-hi"
+              className="w-14 rounded-lg bg-ink-700 px-1 py-1 text-center text-xs outline-hidden ring-1 ring-ink-500 focus:ring-brand-hi"
             />
           </form>
         ) : (
@@ -157,13 +157,13 @@ export default function ServerRail({
               <button
                 type="button"
                 onClick={() => setJoining(false)}
-                className="rounded px-2 py-1 text-gray-400 hover:text-white"
+                className="rounded-sm px-2 py-1 text-gray-400 hover:text-white"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="rounded bg-brand px-3 py-1 font-semibold text-white hover:bg-brand-hover"
+                className="rounded-sm bg-brand px-3 py-1 font-semibold text-white hover:bg-brand-hover"
               >
                 Join
               </button>

@@ -84,7 +84,7 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
 
   return (
     <aside className="hidden w-56 flex-col border-l border-ink-900/50 bg-ink-800 lg:flex">
-      <header className="flex h-12 items-center border-b border-ink-900/60 px-4 shadow-sm shadow-black/20">
+      <header className="flex h-12 items-center border-b border-ink-900/60 px-4 shadow-xs shadow-black/20">
         <h3 className="text-sm font-semibold text-gray-300">Members — {members.length}</h3>
       </header>
       <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
@@ -98,7 +98,7 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
 
 function RoleBadge({ children }) {
   return (
-    <span className="shrink-0 rounded bg-brand/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-hi">
+    <span className="shrink-0 rounded-sm bg-brand/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-hi">
       {children}
     </span>
   );

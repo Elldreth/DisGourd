@@ -9,7 +9,7 @@
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #9
 
 ## Scope
-- `[data-theme="light"]` overrides every `--c-*` with a Neon Calabash light palette: lavender-white surfaces, deep violet text, brand violet kept, and lime/pink darkened enough to reach AA as text on light.
+- `[data-theme="light"]` overrides every theme variable (`--color-*` from `@theme` in `index.css`, since P1-21; the packet originally said `--c-*`) with a Neon Calabash light palette: lavender-white surfaces, deep violet text, brand violet kept, and lime/pink darkened enough to reach AA as text on light.
 - New `web/src/theme.js`: `getTheme`/`setTheme` ('dark'|'light'|'system') and `applyTheme()`. `system` follows `matchMedia('(prefers-color-scheme: light)')` live. An inline script in `index.html` applies the saved theme before first paint (no flash). Update `color-scheme` and `meta[name=theme-color]`.
 - An "Appearance" section in ProfileDialog.
 - **Audit hard-coded colour classes** that assume dark: `text-white`, `bg-black/*`, `shadow-black/*`, `ring-white/*`, plus inline hex. Replace them with semantic tokens (`--c-on-brand`, `--c-overlay`). Expect about 10–15 components.

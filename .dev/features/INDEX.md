@@ -38,7 +38,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-18 | Bump Vite | 1 | COMPLETE | S | none | web/package.json, vite.config.js |
 | P1-19 | Web test harness (Vitest) | 1 | COMPLETE | S | P1-18 | web/package.json, vite.config.js |
 | P1-20 | Voice rejoin after reconnect | 1 | COMPLETE | S–M | P1-09 | voice.js, useVoiceCall.js, gateway/voice.js |
-| P1-21 | Tailwind 4 + theme as CSS variables (absorbs P2-16) | 1 | ACTIVE | M | P1-18 | index.css, vite.config.js, package.json, class renames |
+| P1-21 | Tailwind 4 + theme as CSS variables (absorbs P2-16) | 1 | REVIEW | M | P1-18 | index.css, vite.config.js, package.json, class renames |
 | P2-01 | Markdown core | 2 | COMPLETE | S–M | P1-19 | markdown.jsx (new), MessageList.jsx, index.css |
 | P2-02 | Syntax highlighting (lazy) | 2 | COMPLETE | S | P2-01 | markdown.jsx, highlight.js (new), index.css |
 | P2-03 | Tab title + favicon badge | 2 | COMPLETE | S | none | attention.js (new), App.jsx (+2 lines) |
@@ -54,7 +54,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-13 | Pins | 2 | PLANNED | M | P1-01, P1-04, P1-05, P3-05 | migrations.js, gateway/chat.js, routes/spaces.js, PinsPanel.jsx (new) |
 | P2-14 | DND / invisible presence | 2 | PLANNED | S–M | P1-01, P1-05 | migrations.js, gateway/delivery.js, routes/auth.js, UserFooter/Avatar/MemberList |
 | P2-15 | Custom status text | 2 | PLANNED | S | P2-14 | same as P2-14 |
-| P2-16 | Theme tokens → CSS vars (done in P1-21) | 2 | ACTIVE | S | none | tailwind.config.js, index.css |
+| P2-16 | Theme tokens → CSS vars (done in P1-21) | 2 | REVIEW | S | none | index.css (@theme) |
 | P2-17 | Light theme + picker | 2 | PLANNED | M | P2-16 | index.css, theme.js (new), index.html, ~12 components |
 | P2-18 | PWA + Web Push (Container: a, b) | 2 | PLANNED | M | see packet | sw.js, static.js, push |
 | P2-19 | Custom server emoji (Container: a, b) | 2 | PLANNED | M | see packet | migrations, routes/spaces, markdown, picker |
@@ -106,7 +106,7 @@ Emoji:          P2-06 -> P2-07, P2-19b
 | `web/src/components/MessageList.jsx` | P3-05, P2-01, P1-08, P2-05, P2-09, P3-12 |
 | `web/src/components/Composer.jsx` | P2-06, P2-08, P2-09, P3-12 |
 | `web/package.json` + lock | P1-18, P1-19, P2-02, P2-06 |
-| `web/src/index.css` / `tailwind.config.js` | P2-16, P2-01, P2-02, P2-17 |
+| `web/src/index.css` (theme now lives here) | P2-16, P2-01, P2-02, P2-17 |
 | `README.md` / `docker-compose.yml` | P1-15, P1-16 |
 
 **Rule used for states:** features that add *new* server modules (replies, previews, pins, status) hard-depend on the split and on migrations. Small edits to existing handlers (P1-07, P1-11, P1-16) are READY, but must not run *concurrently* with a split unit.

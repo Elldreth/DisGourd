@@ -104,7 +104,7 @@ export default function ChannelList({
 
   return (
     <div className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
-      <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-sm shadow-black/20">
+      <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-xs shadow-black/20">
         {/* Server identity + the active highlight live in the left rail; the header
             just needs the name and its menu (which holds change/reposition icon). */}
         {renaming ? (
@@ -116,13 +116,13 @@ export default function ChannelList({
               onBlur={() => setRenaming(false)}
               onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
               maxLength={60}
-              className="w-full rounded bg-ink-900 px-2 py-1 text-sm font-bold outline-none ring-1 ring-brand-hi"
+              className="w-full rounded-sm bg-ink-900 px-2 py-1 text-sm font-bold outline-hidden ring-1 ring-brand-hi"
             />
           </form>
         ) : (
           <button
             onClick={() => space && setMenuOpen((v) => !v)}
-            className="flex h-full flex-1 items-center justify-between rounded px-2 hover:bg-ink-700/40"
+            className="flex h-full flex-1 items-center justify-between rounded-sm px-2 hover:bg-ink-700/40"
           >
             <h2 className="truncate font-bold">{space || 'No server'}</h2>
             {space && <Icon name={menuOpen ? 'x' : 'chevronDown'} size={16} className="text-gray-400" />}
@@ -224,7 +224,7 @@ export default function ChannelList({
             <button
               onClick={() => setAdding((v) => !v)}
               title="Create channel"
-              className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-ink-700 hover:text-white"
+              className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-white"
             >
               <Icon name="plus" size={16} />
             </button>
@@ -239,7 +239,7 @@ export default function ChannelList({
               onChange={(e) => setName(e.target.value)}
               onBlur={() => !name && setAdding(false)}
               placeholder="new-channel"
-              className="w-full rounded bg-ink-900 px-2 py-1 text-sm outline-none ring-1 ring-ink-500 focus:ring-brand-hi"
+              className="w-full rounded-sm bg-ink-900 px-2 py-1 text-sm outline-hidden ring-1 ring-ink-500 focus:ring-brand-hi"
             />
           </form>
         )}
@@ -300,7 +300,7 @@ export default function ChannelList({
                 <button
                   onClick={() => setAddingVoice((v) => !v)}
                   title="Create voice channel"
-                  className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-ink-700 hover:text-white"
+                  className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-white"
                 >
                   <Icon name="plus" size={16} />
                 </button>
@@ -314,7 +314,7 @@ export default function ChannelList({
                   onChange={(e) => setVoiceName(e.target.value)}
                   onBlur={() => !voiceName && setAddingVoice(false)}
                   placeholder="voice-channel"
-                  className="w-full rounded bg-ink-900 px-2 py-1 text-sm outline-none ring-1 ring-ink-500 focus:ring-brand-hi"
+                  className="w-full rounded-sm bg-ink-900 px-2 py-1 text-sm outline-hidden ring-1 ring-ink-500 focus:ring-brand-hi"
                 />
               </form>
             )}
@@ -375,7 +375,7 @@ export default function ChannelList({
         <div role="status" className="flex items-start gap-2 border-t border-ink-900/60 bg-idle/10 px-3 py-2 text-xs text-idle">
           <Icon name="volume" size={15} className="mt-px shrink-0" />
           <span className="min-w-0 flex-1">{voiceNotice}</span>
-          <button onClick={onDismissVoiceNotice} title="Dismiss" className="shrink-0 rounded px-1 hover:bg-ink-600">
+          <button onClick={onDismissVoiceNotice} title="Dismiss" className="shrink-0 rounded-sm px-1 hover:bg-ink-600">
             ✕
           </button>
         </div>
@@ -397,7 +397,7 @@ export default function ChannelList({
             <button
               onClick={onLeaveVoice}
               title="Disconnect"
-              className="rounded bg-danger/80 px-2 py-1 text-xs font-semibold text-ink-900 hover:bg-danger"
+              className="rounded-sm bg-danger/80 px-2 py-1 text-xs font-semibold text-ink-900 hover:bg-danger"
             >
               Leave
             </button>
@@ -508,7 +508,7 @@ function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
   return (
     <div className="flex items-center gap-1.5 py-0.5 pl-14 pr-2 text-xs text-gray-400">
       <span className="-ml-3 select-none text-ink-500">↳</span>
-      <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-ink-700 text-gray-300"><Icon name="music" size={11} /></span>
+      <span className="grid h-4 w-4 shrink-0 place-items-center rounded-sm bg-ink-700 text-gray-300"><Icon name="music" size={11} /></span>
       <span className="min-w-0 flex-1 truncate">{p.username}’s audio</span>
       {isSelf && <span className="text-[10px] font-semibold uppercase text-gray-500">you</span>}
       {controllable && (
@@ -526,7 +526,7 @@ function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
           <button
             onClick={onToggleMute}
             title={p.shareMutedLocally ? 'Unmute for me' : 'Mute for me'}
-            className={`flex h-6 w-6 items-center justify-center rounded ${p.shareMutedLocally ? 'text-danger' : 'text-gray-400 hover:text-white'}`}
+            className={`flex h-6 w-6 items-center justify-center rounded-sm ${p.shareMutedLocally ? 'text-danger' : 'text-gray-400 hover:text-white'}`}
           >
             <Icon name={p.shareMutedLocally ? 'volumeOff' : 'volume'} size={14} />
           </button>

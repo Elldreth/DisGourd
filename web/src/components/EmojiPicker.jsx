@@ -88,18 +88,18 @@ export default function EmojiPicker({ onPick, onClose }) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="Search emoji"
-          className="w-full rounded-lg bg-ink-900 px-3 py-1.5 text-sm text-gray-100 outline-none ring-1 ring-ink-500 placeholder:text-gray-500 focus:ring-brand-hi"
+          className="w-full rounded-lg bg-ink-900 px-3 py-1.5 text-sm text-gray-100 outline-hidden ring-1 ring-ink-500 placeholder:text-gray-500 focus:ring-brand-hi"
         />
       </div>
       {!results && list && (
         <div className="flex gap-0.5 border-b border-ink-900/60 px-2 pb-1.5">
           {recent.length > 0 && (
-            <button type="button" tabIndex={-1} title="Recent" onClick={() => jumpTo('recent')} className="rounded p-1 text-base hover:bg-ink-600">
+            <button type="button" tabIndex={-1} title="Recent" onClick={() => jumpTo('recent')} className="rounded-sm p-1 text-base hover:bg-ink-600">
               🕘
             </button>
           )}
           {EMOJI_GROUPS.map((g) => (
-            <button key={g.id} type="button" tabIndex={-1} title={g.name} onClick={() => jumpTo(`g${g.id}`)} className="rounded p-1 text-base hover:bg-ink-600">
+            <button key={g.id} type="button" tabIndex={-1} title={g.name} onClick={() => jumpTo(`g${g.id}`)} className="rounded-sm p-1 text-base hover:bg-ink-600">
               {g.icon}
             </button>
           ))}
