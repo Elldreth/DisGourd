@@ -46,6 +46,11 @@
   --color-idle: #ffc24a;
   --color-danger: #ff5fa2;
 
+  /* The strongest foreground: text-fg for active / unread items and icon
+     hovers, which are white on dark and near-black on light. (text-white is
+     for text on brand fills, photos and dark overlays, in both themes.) */
+  --color-fg: #ffffff;
+
   --font-sans:
     'Inter Variable', Inter, ui-sans-serif, system-ui, Segoe UI, Roboto,
     sans-serif;
@@ -90,6 +95,47 @@
 :root {
   color-scheme: dark;
   accent-color: var(--color-brand); /* native checkboxes, ranges */
+  /* Code and quote tints (markdown), dark theme. */
+  --code-bg: rgb(0 0 0 / 0.35);
+  --code-muted: rgb(255 255 255 / 0.45); /* code block language + Copy */
+}
+
+/* Light theme: set by theme.js (and public/theme-init.js before first paint)
+   as <html data-theme="light">. Same roles as above, inverted: ink-* are the
+   light surfaces, gray-100 the darkest text. Lime, pink and amber are
+   darkened so they read as text on light. Every text / background pair is
+   checked for WCAG AA in theme.contrast.test.js. */
+[data-theme='light'] {
+  color-scheme: light;
+  --color-ink-500: #d9d0f0;
+  --color-ink-600: #e8e2f6;
+  --color-ink-700: #fcfbff;
+  --color-ink-800: #f3f0fb;
+  --color-ink-900: #eae5f7;
+
+  --color-gray-100: #1a1430;
+  --color-gray-200: #2a2347;
+  --color-gray-300: #3a3260;
+  --color-gray-400: #4f4775;
+  --color-gray-500: #5e5684;
+  --color-gray-600: #8f87b3;
+  --color-gray-700: #b3acd3;
+  --color-gray-800: #d9d0f0;
+  --color-gray-900: #eee9fa;
+
+  --color-brand-hi: #5528cf;
+  --color-brand-soft: #e6ddff;
+
+  --color-lime: #2b7512;
+  --color-pink: #9a1052;
+  --color-online: #2b7512;
+  --color-idle: #875500;
+  --color-danger: #9a1052;
+
+  --color-fg: #120d24;
+
+  --code-bg: rgb(26 20 48 / 0.06);
+  --code-muted: var(--color-gray-500);
 }
 
 html,
@@ -184,15 +230,15 @@ h3 {
   font-size: 0.85em;
   padding: 0.1em 0.35em;
   border-radius: 4px;
-  background: rgb(0 0 0 / 0.35);
+  background: var(--code-bg);
 }
 .md-codeblock {
   margin: 0.35rem 0;
   max-width: 100%;
   overflow: hidden;
   border-radius: 8px;
-  background: rgb(0 0 0 / 0.35);
-  border: 1px solid rgb(255 255 255 / 0.06);
+  background: var(--code-bg);
+  border: 1px solid color-mix(in srgb, var(--color-fg) 6%, transparent);
   white-space: normal;
 }
 .md-codeblock-bar {
@@ -203,8 +249,8 @@ h3 {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgb(255 255 255 / 0.45);
-  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  color: var(--code-muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-fg) 6%, transparent);
 }
 .md-codeblock-copy {
   border-radius: 4px;
@@ -213,7 +259,7 @@ h3 {
   letter-spacing: normal;
   font-size: 0.75rem;
 }
-.md-codeblock-copy:hover { background: rgb(255 255 255 / 0.08); color: white; }
+.md-codeblock-copy:hover { background: color-mix(in srgb, var(--color-fg) 8%, transparent); color: var(--color-fg); }
 .md-codeblock pre {
   margin: 0;
   padding: 0.6rem 0.75rem;
@@ -226,7 +272,7 @@ h3 {
 .md-quote {
   margin: 0.15rem 0;
   padding-left: 0.65rem;
-  border-left: 3px solid rgb(255 255 255 / 0.2);
+  border-left: 3px solid color-mix(in srgb, var(--color-fg) 20%, transparent);
 }
 .md-link { color: var(--color-brand-hi); text-decoration: none; word-break: break-all; }
 .md-link:hover { text-decoration: underline; }

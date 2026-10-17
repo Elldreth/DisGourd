@@ -58,7 +58,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
       >
         <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
           <h3 className="text-lg font-bold">{isVoice ? channel : `#${channel}`} settings</h3>
-          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">Close</button>
         </div>
 
         <div className="space-y-4 p-6">
@@ -103,7 +103,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
                 <button
                   onClick={() => setConfirmDelete(false)}
                   disabled={busy}
-                  className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-white"
+                  className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-fg"
                 >
                   Cancel
                 </button>
@@ -120,7 +120,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
         </div>
 
         <div className="flex justify-end gap-2 border-t border-ink-500/40 px-6 py-3">
-          <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-white">Cancel</button>
+          <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-fg">Cancel</button>
           <button
             onClick={save}
             disabled={busy}

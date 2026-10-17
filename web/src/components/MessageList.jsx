@@ -613,7 +613,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
                       aria-pressed={!!mineReacted}
                       className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition ${
                         mineReacted
-                          ? 'bg-brand/25 text-white ring-brand-hi'
+                          ? 'bg-brand/25 text-fg ring-brand-hi'
                           : 'bg-ink-600/60 text-gray-200 ring-ink-500/60 hover:ring-brand-hi'
                       }`}
                     >

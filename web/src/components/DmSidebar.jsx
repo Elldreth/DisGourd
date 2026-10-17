@@ -40,7 +40,7 @@ export default function DmSidebar({
             >
               <Avatar name={c.username} size={32} src={c.avatar} />
               <div className="min-w-0 flex-1">
-                <div className={`truncate text-sm ${hasUnread ? 'font-semibold text-white' : 'text-gray-200'}`}>
+                <div className={`truncate text-sm ${hasUnread ? 'font-semibold text-fg' : 'text-gray-200'}`}>
                   {c.username}
                 </div>
                 {preview && <div className="truncate text-xs text-gray-500">{preview}</div>}

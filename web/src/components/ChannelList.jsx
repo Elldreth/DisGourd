@@ -224,7 +224,7 @@ export default function ChannelList({
             <button
               onClick={() => setAdding((v) => !v)}
               title="Create channel"
-              className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-white"
+              className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
             >
               <Icon name="plus" size={16} />
             </button>
@@ -255,9 +255,9 @@ export default function ChannelList({
                 onClick={() => onSelect(c)}
                 className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
                   active
-                    ? 'bg-ink-600 text-white'
+                    ? 'bg-ink-600 text-fg'
                     : hasUnread || mentionCount
-                      ? 'font-semibold text-white hover:bg-ink-700/60'
+                      ? 'font-semibold text-fg hover:bg-ink-700/60'
                       : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
                 }`}
               >
@@ -276,7 +276,7 @@ export default function ChannelList({
                 <button
                   onClick={() => setChannelSettings(c)}
                   title="Channel settings"
-                  className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-white group-hover:flex"
+                  className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex"
                 >
                   <Icon name="settings" size={15} />
                 </button>
@@ -300,7 +300,7 @@ export default function ChannelList({
                 <button
                   onClick={() => setAddingVoice((v) => !v)}
                   title="Create voice channel"
-                  className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-white"
+                  className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
                 >
                   <Icon name="plus" size={16} />
                 </button>
@@ -327,7 +327,7 @@ export default function ChannelList({
                     <button
                       onClick={() => onJoinVoice(space, vc)}
                       className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
-                        inThis ? 'bg-ink-600 text-white' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
+                        inThis ? 'bg-ink-600 text-fg' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
                       }`}
                     >
                       <Icon name="volume" size={17} className="shrink-0 text-gray-500" />
@@ -340,7 +340,7 @@ export default function ChannelList({
                       <button
                         onClick={() => setChannelSettings(vc)}
                         title="Channel settings"
-                        className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-white group-hover:flex"
+                        className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex"
                       >
                         <Icon name="settings" size={15} />
                       </button>
@@ -526,7 +526,7 @@ function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
           <button
             onClick={onToggleMute}
             title={p.shareMutedLocally ? 'Unmute for me' : 'Mute for me'}
-            className={`flex h-6 w-6 items-center justify-center rounded-sm ${p.shareMutedLocally ? 'text-danger' : 'text-gray-400 hover:text-white'}`}
+            className={`flex h-6 w-6 items-center justify-center rounded-sm ${p.shareMutedLocally ? 'text-danger' : 'text-gray-400 hover:text-fg'}`}
           >
             <Icon name={p.shareMutedLocally ? 'volumeOff' : 'volume'} size={14} />
           </button>

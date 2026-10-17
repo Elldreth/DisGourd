@@ -64,7 +64,7 @@ export default function ChatPanel({
         <button
           onClick={onOpenNav}
           title="Channels"
-          className="-ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-white md:hidden"
+          className="-ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         >
           <Icon name="menu" size={20} />
         </button>
@@ -74,7 +74,7 @@ export default function ChatPanel({
         <button
           onClick={onOpenSearch}
           title="Search messages"
-          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-white"
+          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
         >
           <Icon name="search" size={18} />
         </button>
@@ -133,7 +133,7 @@ function Empty({ title, body, onOpenNav }) {
         <button
           onClick={onOpenNav}
           title="Channels"
-          className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-white md:hidden"
+          className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         >
           <Icon name="menu" size={22} />
         </button>

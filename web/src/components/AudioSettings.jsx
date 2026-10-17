@@ -260,7 +260,7 @@ export default function AudioSettings({ onOutputChange, onPttChange, onMicChange
               {recording ? 'Press any key… (Esc cancels)' : 'Set key'}
             </button>
             <span className="text-sm text-gray-300">
-              Key: <span className="font-semibold text-white">{keyLabel(pttKey)}</span>
+              Key: <span className="font-semibold text-fg">{keyLabel(pttKey)}</span>
             </span>
           </div>
         )}
