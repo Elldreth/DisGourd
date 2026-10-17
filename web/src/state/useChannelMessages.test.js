@@ -93,3 +93,13 @@ describe('resync after a reconnect', () => {
     expect(hasGap([], page(10, 11), 2)).toBe(false);
   });
 });
+
+test('messagesReducer: link-preview cards replace a message\'s embeds (an empty list clears them)', () => {
+  const card = { url: 'https://a.example/', title: 'A' };
+  const start = [{ id: 1, content: 'x' }, { id: 2, content: 'y' }];
+  const withCard = messagesReducer(start, { type: 'embeds', id: 2, embeds: [card] });
+  expect(withCard[1].embeds).toEqual([card]);
+  expect(withCard[0]).toBe(start[0]); // others untouched
+  expect(messagesReducer(withCard, { type: 'embeds', id: 2, embeds: [] })[1].embeds).toEqual([]);
+  expect(messagesReducer(start, { type: 'embeds', id: 99, embeds: [card] })).toEqual(start);
+});

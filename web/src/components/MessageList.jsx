@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
+import Embed from './Embed.jsx';
 import Icon from './Icon.jsx';
 import { MessageToolbar, ActionMenu, ReactionPicker } from './MessageActions.jsx';
 import { formatTime, formatDay } from '../util.js';
@@ -652,6 +653,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
                 spoiler={m.spoiler}
               />
             )}
+            {m.embeds?.map((e) => <Embed key={e.url} embed={e} />)}
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {reactions.map((r) => {

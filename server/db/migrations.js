@@ -247,6 +247,38 @@ const MIGRATIONS = [
       db.exec('ALTER TABLE dm_messages ADD COLUMN reply_to INTEGER');
     },
   },
+  {
+    version: 4,
+    name: 'link previews',
+    up(db) {
+      // link_previews caches one card per URL (data is the card JSON; ok = 0
+      // remembers a failed fetch so it isn't retried every message).
+      // message_embeds / dm_message_embeds say which cards a message shows, in
+      // order; they go when the message does.
+      db.exec(`
+        CREATE TABLE link_previews (
+          url TEXT PRIMARY KEY,
+          data TEXT,
+          fetched_at INTEGER NOT NULL,
+          ok INTEGER NOT NULL
+        );
+        CREATE TABLE message_embeds (
+          message_id INTEGER NOT NULL,
+          url TEXT NOT NULL,
+          position INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(message_id, url),
+          FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+        );
+        CREATE TABLE dm_message_embeds (
+          message_id INTEGER NOT NULL,
+          url TEXT NOT NULL,
+          position INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(message_id, url),
+          FOREIGN KEY(message_id) REFERENCES dm_messages(id) ON DELETE CASCADE
+        );
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

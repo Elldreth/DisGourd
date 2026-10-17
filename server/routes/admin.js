@@ -4,11 +4,26 @@ const db = require('../db');
 const { config, registrationMode } = require('../config');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, readJsonBody } = require('../http/util');
+const linkPreviews = require('../linkPreviews');
 
 const getJsonBody = readJsonBody;
 
 // Tried in order; the first match handles the request.
 const routes = [
+  {
+    // PUT /admin/link-previews { enabled } — turn link previews on/off for the instance
+    match: ({ req, pathSegments }) =>
+      pathSegments[0] === 'admin' && pathSegments[1] === 'link-previews' && pathSegments.length === 2 && req.method === 'PUT',
+    run: async ({ req, res, parsedUrl }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can change this' });
+      const { enabled } = await getJsonBody(req);
+      if (typeof enabled !== 'boolean') return sendJson(res, 400, { error: 'enabled must be true or false' });
+      linkPreviews.setEnabled(enabled);
+      return sendJson(res, 200, { enabled });
+    },
+  },
   {
     // ---- Instance admin: registration management (site admins only) ----
     match: ({ pathSegments }) => pathSegments[0] === 'admin' && pathSegments[1] === 'registration',
@@ -25,6 +40,7 @@ const routes = [
           envCodeActive: !!config.registrationCode,
           codes: db.listRegCodes(),
           admins: db.listSiteAdmins(),
+          linkPreviews: linkPreviews.enabled(),
         });
       }
       // PUT /admin/registration — change the mode

@@ -4,6 +4,19 @@ const db = require('../db');
 const { MAX_MESSAGE_LENGTH, normalizeAttachments } = require('../validate');
 const { userClients, sendToUser } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
+const linkPreviews = require('../linkPreviews');
+
+// Cards for the links in a DM, sent to both people in it.
+function previewDm(dm, content, userId, edited = false) {
+  linkPreviews.handleMessage({
+    kind: 'dm', messageId: dm.id, content, userId, edited,
+    deliver: (embeds) => {
+      const frame = JSON.stringify({ type: 'dm_embeds', id: dm.id, embeds });
+      sendToUser(dm.a, frame);
+      sendToUser(dm.b, frame);
+    },
+  });
+}
 
 // Op handlers, called by router.js with { ws, msg, userId }.
 const ops = {
@@ -36,6 +49,7 @@ const ops = {
     });
     sendToUser(userId, frame);
     sendToUser(to.id, frame);
+    if (content) previewDm({ id: stored.id, a: userId, b: to.id }, content, userId);
     return;
   },
   dm_edit({ ws, msg, userId }) {
@@ -50,6 +64,7 @@ const ops = {
       const frame = JSON.stringify({ type: 'dm_update', id, content: newContent, editedAt });
       sendToUser(dm.user_a, frame);
       sendToUser(dm.user_b, frame);
+      previewDm({ id, a: dm.user_a, b: dm.user_b }, newContent, userId, true);
     }
     return;
   },

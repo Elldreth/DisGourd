@@ -83,6 +83,10 @@ export function getAuthInfo() {
 export function getAdminRegistration() {
   return request('/admin/registration');
 }
+// Link previews for the whole instance (site admins only).
+export function setLinkPreviews(enabled) {
+  return request('/admin/link-previews', { method: 'PUT', body: { enabled } });
+}
 export function setRegistrationMode(mode) {
   return request('/admin/registration', { method: 'PUT', body: { mode } });
 }

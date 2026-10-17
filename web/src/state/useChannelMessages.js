@@ -14,6 +14,7 @@ export const unreadKey = (space, channel) => JSON.stringify([space, channel]);
 //   { type: 'updated', id, content, editedAt }        an edit
 //   { type: 'deleted', id }
 //   { type: 'reaction', id, emoji, count, users }     one emoji's new total
+//   { type: 'embeds', id, embeds }                    a message's link-preview cards
 //   { type: 'resynced', messages, full }              the newest page, refetched
 //       after a reconnect: it replaces what we had in its range (picking up
 //       edits, reactions and deletions) and keeps older loaded pages as they
@@ -35,6 +36,10 @@ export function messagesReducer(state, action) {
       return state.map((m) => (m.id === action.id ? { ...m, content: action.content, editedAt: action.editedAt } : m));
     case 'deleted':
       return state.filter((m) => m.id !== action.id);
+    case 'embeds':
+      return state.some((m) => m.id === action.id)
+        ? state.map((m) => (m.id === action.id ? { ...m, embeds: action.embeds || [] } : m))
+        : state;
     case 'reaction':
       return state.map((m) => {
         if (m.id !== action.id) return m;
@@ -178,6 +183,9 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     },
     reaction: (r) => {
       if (isOpen(r.space, r.channel)) dispatch({ type: 'reaction', id: r.id, emoji: r.emoji, count: r.count, users: r.users });
+    },
+    message_embeds: (e) => {
+      if (isOpen(e.space, e.channel)) dispatch({ type: 'embeds', id: e.id, embeds: e.embeds });
     },
     typing: (t) => {
       if (isOpen(t.space, t.channel)) setTypingUsers((prev) => ({ ...prev, [t.user]: Date.now() + 4000 }));
