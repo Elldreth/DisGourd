@@ -101,13 +101,36 @@ export function initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+// Contrast of white text on hsl(hue 45% l%) (WCAG ratio).
+function whiteOnHsl(hue, l) {
+  const s = 0.45;
+  const L = l / 100;
+  const a = s * Math.min(L, 1 - L);
+  const k = (n) => (n + hue / 30) % 12;
+  const ch = (n) => {
+    const v = L - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const lum = 0.2126 * ch(0) + 0.7152 * ch(8) + 0.0722 * ch(4);
+  return 1.05 / (lum + 0.05);
+}
+
+// The avatar / server-icon colour for a hue: 45% saturation and 45%
+// lightness, darkened only as far as needed for white initials to reach
+// WCAG AA (4.5:1). Yellows and greens are bright at the same lightness, so
+// they end up darker; blues and violets keep 45%.
+export function avatarColor(hue) {
+  let l = 45;
+  while (l > 20 && whiteOnHsl(hue, l) < 4.5) l -= 1;
+  return `hsl(${hue} 45% ${l}%)`;
+}
+
 // Deterministic pleasant color from a name, for avatars.
 export function colorForName(name) {
   let hash = 0;
   const s = String(name || '');
   for (let i = 0; i < s.length; i += 1) hash = s.charCodeAt(i) + ((hash << 5) - hash);
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue} 45% 45%)`;
+  return avatarColor(Math.abs(hash) % 360);
 }
 
 // Merge message lists by id, keeping ascending order and dropping duplicates.

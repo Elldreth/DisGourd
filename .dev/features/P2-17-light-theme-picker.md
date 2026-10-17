@@ -51,5 +51,5 @@ High fan-out but shallow edits. Run it in a quiet window.
 - Firefox / Safari; real OS theme switching (emulated in the pane).
 
 ## Discovered Work
-- **Avatar and server-icon initials** are white on per-name colours at 2.9–3.2:1 (below AA for small text), the same in both themes, so not caused by this unit. Fix: darken the name palette or use dark initials on light hues.
+- ~~**Avatar and server-icon initials** below AA (2.9–3.2:1)~~: fixed on `claude/avatar-initials-contrast` (user request after #71). `avatarColor(hue)` keeps `hsl(h 45% 45%)` and lowers lightness only as far as needed for white text to reach 4.5:1: 179 of 360 hues unchanged, yellows / greens / teals go to 33–44%. A test checks all 360 hues; in the sandbox sandy 2.92 -> 4.59, bob 3.01 -> 4.72, server "ST" 3.23 -> 4.55 in both themes.
 - **The full-colour gourd logo** (loading screen, login) has a lime leaf that is faint on the light background. It's brand art with fixed colours, so it's left for a design decision (e.g. a darker leaf in light mode).
