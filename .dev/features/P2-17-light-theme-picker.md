@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 9 (slice 2)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #71)
 - **Effort:** M
 - **Depends on:** P2-16
 - **Serialize with:** index.css units. Its component audit touches many files, so run it when few client units are in flight.

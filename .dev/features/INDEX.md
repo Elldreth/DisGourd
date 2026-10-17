@@ -55,7 +55,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-14 | DND / invisible presence | 2 | PLANNED | S–M | P1-01, P1-05 | migrations.js, gateway/delivery.js, routes/auth.js, UserFooter/Avatar/MemberList |
 | P2-15 | Custom status text | 2 | PLANNED | S | P2-14 | same as P2-14 |
 | P2-16 | Theme tokens → CSS vars (done in P1-21) | 2 | COMPLETE | S | none | index.css (@theme) |
-| P2-17 | Light theme + picker | 2 | REVIEW | M | P2-16 | index.css, theme.js (new), index.html, ~12 components |
+| P2-17 | Light theme + picker | 2 | COMPLETE | M | P2-16 | index.css, theme.js (new), index.html, ~12 components |
 | P2-18 | PWA + Web Push (Container: a, b) | 2 | PLANNED | M | see packet | sw.js, static.js, push |
 | P2-19 | Custom server emoji (Container: a, b) | 2 | PLANNED | M | see packet | migrations, routes/spaces, markdown, picker |
 | P2-20 | /imagine via kie.ai (Container: a, b, c) | 2 | PLANNED | M+ | see packet | integrations/kie.js, bot user |
