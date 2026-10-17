@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (slice 1; icon and templates are P3-06)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S
 - **Depends on:** P3-01
 - **Serialize with:** App.jsx units (small edit: `createSpace`/`joinServer` must rethrow so the dialog can show errors inline)
