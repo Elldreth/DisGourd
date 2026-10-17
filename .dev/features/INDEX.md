@@ -32,7 +32,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-12 | App split 1/3: channel-message hook | 1 | COMPLETE | M | none (after P1-11) | App.jsx, state/useChannelMessages.js |
 | P1-13 | App split 2/3: DM hook | 1 | COMPLETE | S–M | P1-12 | App.jsx, state/useDms.js |
 | P1-14 | App split 3/3: spaces + voice hooks | 1 | COMPLETE | M | P1-13 | App.jsx, state/useSpaces.js, state/useVoiceCall.js |
-| P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | READY | S | none | Dockerfile, docker-compose.yml, README.md |
+| P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | REVIEW | S | none | Dockerfile, docker-compose.yml, README.md |
 | P1-16 | Nightly VACUUM INTO backups | 1 | COMPLETE | S | none | backup.js (new), server.js (boot), README.md |
 | P1-17 | GitHub Actions CI | 1 | COMPLETE | S | none | .github/workflows/ci.yml |
 | P1-18 | Bump Vite | 1 | COMPLETE | S | none | web/package.json, vite.config.js |
@@ -136,7 +136,7 @@ Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at 
 - P1-01: fail fast on a migration error at boot (a behaviour change)?
 - P1-10: moderators can delete only lower-ranked authors' messages (assumed)?
 - P1-12/P1-19: hooks + useReducer (no store library), and Vitest (assumed)?
-- P1-15: UID/GID for Unraid volumes (99:100?), plus a one-time chown needed.
+- ~~P1-15: UID/GID for Unraid volumes (99:100?), plus a one-time chown needed.~~ 99:100 (2026-10-17); chown documented in the README.
 - ~~P2-12: proxy og:images to hide viewer IPs (v1 assumes no)?~~ Yes, built in P2-23 (2026-10-17).
 - P2-18: iOS install requirement for push; push message previews?
 - P2-20: kie.ai models, endpoints, cost, quota defaults, NSFW policy (unknown; do not invent).

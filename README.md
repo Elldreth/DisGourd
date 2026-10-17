@@ -112,6 +112,32 @@ volumes:
   - /path/on/big/storage:/uploads       # uploads (UPLOADS_DIR=/uploads)
 ```
 
+The container runs as a **non-root user** with a built-in health check
+(`docker ps` shows `healthy`). `docker-compose.yml` runs it as `99:100`
+(Unraid's nobody:users); the folders you mount must belong to that user. On a
+fresh install, create them and `chown -R 99:100` them once (or remove the
+`user:` line to use the image's own user, 1000:1000).
+
+#### Upgrading to the non-root image
+
+Older images ran as root, so your existing `/config` and `/uploads` folders are
+owned by root and the new container can't write to them. It stops at start-up
+with a message like:
+
+```
+  DisGourd can't write to its data folders (running as 99:100):
+    Database folder: /config  (EACCES)
+```
+
+Fix it once on the host (Unraid terminal), using your own volume paths, then
+start the container again:
+
+```bash
+chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/bigboi/media/images
+```
+
+(Use `1000:1000` instead if you removed the `user:` line.)
+
 **Always set `JWT_SECRET`** to 32+ random characters. Short or placeholder
 values are ignored; the server then generates one and keeps it in a
 `.jwt-secret` file next to the database (`/config` above), so mount that

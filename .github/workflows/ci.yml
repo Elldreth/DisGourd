@@ -46,7 +46,7 @@ jobs:
       - run: npm run build --prefix web
 
   docker:
-    name: Docker image builds
+    name: Docker image builds and runs
     needs: [server, web]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -57,6 +57,10 @@ jobs:
         with:
           context: .
           push: false
+          load: true # keep the image locally for the smoke test
           tags: disgourd:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Runs it as 99:100 with host volumes: healthy, not root, data survives a
+      # restart, and a root-owned volume fails clearly (see deploy/docker-smoke.sh).
+      - run: bash deploy/docker-smoke.sh disgourd:ci

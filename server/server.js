@@ -3,6 +3,14 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ quiet: true });
+
+// First: can we write our data? (Before the database or the secret file are touched.)
+const dataProblem = require('./preflight').checkDataDirs();
+if (dataProblem) {
+  console.error(dataProblem);
+  if (require.main === module) process.exit(1);
+  throw new Error('DisGourd cannot write to its data folders');
+}
 const db = require('./db');
 const { config, registrationMode, isWeakSecret, resolveJwtSecret } = require('./config');
 const { clientIp } = require('./auth/rateLimit');
