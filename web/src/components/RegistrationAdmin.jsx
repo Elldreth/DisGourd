@@ -36,6 +36,16 @@ export default function RegistrationAdmin() {
     load();
   }, []);
 
+  async function changeLinkPreviews(enabled) {
+    setData((d) => ({ ...d, linkPreviews: enabled }));
+    try {
+      await api.setLinkPreviews(enabled);
+    } catch (err) {
+      setError(err.message || 'Could not change link previews');
+      load();
+    }
+  }
+
   async function changeMode(mode) {
     setData((d) => ({ ...d, mode }));
     try {
@@ -182,6 +192,22 @@ export default function RegistrationAdmin() {
           </button>
         </div>
       </div>
+
+      <label className="flex items-start justify-between gap-3 rounded-lg bg-ink-900/60 p-3">
+        <span className="text-sm text-gray-200">
+          Link previews
+          <span className="block text-xs text-gray-500">
+            Show a card under links in messages. The server fetches each page safely; the card&rsquo;s image loads from
+            that site in each viewer&rsquo;s browser.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={data.linkPreviews !== false}
+          onChange={(e) => changeLinkPreviews(e.target.checked)}
+          className="mt-1 h-4 w-4 accent-brand"
+        />
+      </label>
 
       {error && <div className="text-sm text-danger">{error}</div>}
     </div>

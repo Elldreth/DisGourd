@@ -73,6 +73,7 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     },
     dm_update: (u) => dispatch({ type: 'updated', id: u.id, content: u.content, editedAt: u.editedAt }),
     dm_delete: (d) => dispatch({ type: 'deleted', id: d.id }),
+    dm_embeds: (e) => dispatch({ type: 'embeds', id: e.id, embeds: e.embeds }),
     dm_typing: (t) => {
       if (activeRef.current && currentRef.current === t.from) {
         setTyping((prev) => ({ ...prev, [t.from]: Date.now() + 4000 }));

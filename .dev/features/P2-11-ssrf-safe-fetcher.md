@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (slice 1 of rank 7, "Link previews ... with SSRF protection")
 - **Phase:** 2, rank 7
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** M
 - **Depends on:** none (new files only)
 - **Serialize with:** none

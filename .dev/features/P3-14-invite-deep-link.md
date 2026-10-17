@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 (follow-up found in P3-07)
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S
 - **Depends on:** none (P3-04 Join dialog is merged)
 - **Serialize with:** CreateServerDialog.jsx, ServerRail.jsx, InviteDialog.jsx, App.jsx units

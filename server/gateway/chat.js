@@ -6,6 +6,15 @@ const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments, parseRe
 const { canViewChannel, canPostChannel, canView, canModerateMessage } = require('../permissions');
 const { userClients, deliverToChannelViewers } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
+const linkPreviews = require('../linkPreviews');
+
+// Cards for the links in a channel message, sent to whoever can see it.
+function previewChannelMessage(space, channel, id, content, userId, edited = false) {
+  linkPreviews.handleMessage({
+    kind: 'channel', messageId: id, content, userId, edited,
+    deliver: (embeds) => deliverToChannelViewers(space, channel, JSON.stringify({ type: 'message_embeds', id, space, channel, embeds })),
+  });
+}
 
 // Op handlers, called by router.js with { ws, msg, userId }.
 const ops = {
@@ -64,6 +73,7 @@ const ops = {
       replyTo,
       timestamp: stored ? stored.timestamp : Date.now(),
     }));
+    if (stored && content) previewChannelMessage(msg.space, msg.channel, stored.id, content, userId);
     return;
   },
   edit({ ws, msg, userId }) {
@@ -78,6 +88,7 @@ const ops = {
       deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
         type: 'message_update', id, space: loc.space, channel: loc.channel, content: newContent, editedAt,
       }));
+      previewChannelMessage(loc.space, loc.channel, id, newContent, userId, true);
     }
     return;
   },

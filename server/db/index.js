@@ -3,6 +3,11 @@ const Database = require('better-sqlite3');
 const { runMigrations } = require('./migrations');
 require('dotenv').config({ quiet: true });
 
+// Tests must say which database to use (usually ':memory:'). Without this, a
+// test that loads a module too early would silently open the real database.
+if (process.env.NODE_ENV === 'test' && !process.env.DB_PATH) {
+  throw new Error('Tests must set DB_PATH (e.g. ":memory:") before loading the database; refusing to open the real one.');
+}
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'disgourd.db');
 const db = new Database(dbPath);
 
@@ -408,7 +413,7 @@ function getMessages(spaceName, channelName, limit = 20, offset = 0) {
     ORDER BY m.id DESC
     LIMIT ? OFFSET ?
   `).all(spaceName, channelName, limit, offset).reverse();
-  return attachReactions(rows.map(hydrateMessage));
+  return attachEmbeds('channel', attachReactions(rows.map(hydrateMessage)));
 }
 
 // The page of messages just older than `beforeId`, returned oldest-first — used
@@ -419,7 +424,7 @@ function getMessagesBefore(spaceName, channelName, beforeId, limit = 50) {
     ORDER BY m.id DESC
     LIMIT ?
   `).all(spaceName, channelName, beforeId, limit).reverse();
-  return attachReactions(rows.map(hydrateMessage));
+  return attachEmbeds('channel', attachReactions(rows.map(hydrateMessage)));
 }
 
 // Messages newer than a given id, oldest-first — used to backfill gaps after a
@@ -430,7 +435,61 @@ function getMessagesAfter(spaceName, channelName, afterId, limit = 200) {
     ORDER BY m.id ASC
     LIMIT ?
   `).all(spaceName, channelName, afterId, limit);
-  return attachReactions(rows.map(hydrateMessage));
+  return attachEmbeds('channel', attachReactions(rows.map(hydrateMessage)));
+}
+
+// ---- Link previews ----
+// kind: 'channel' (messages) or 'dm' (dm_messages).
+const EMBED_TABLE = { channel: 'message_embeds', dm: 'dm_message_embeds' };
+const MESSAGE_TABLE = { channel: 'messages', dm: 'dm_messages' };
+
+function getLinkPreview(url) {
+  const row = db.prepare('SELECT data, fetched_at AS fetchedAt, ok FROM link_previews WHERE url = ?').get(url);
+  if (!row) return null;
+  return { card: row.ok && row.data ? JSON.parse(row.data) : null, fetchedAt: row.fetchedAt, ok: !!row.ok };
+}
+
+// Cache a card (or a failure, card = null) for a URL.
+function saveLinkPreview(url, card) {
+  db.prepare(`INSERT INTO link_previews(url, data, fetched_at, ok) VALUES (?, ?, ?, ?)
+    ON CONFLICT(url) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at, ok = excluded.ok`)
+    .run(url, card ? JSON.stringify(card) : null, Date.now(), card ? 1 : 0);
+}
+
+function messageExists(kind, messageId) {
+  return !!db.prepare(`SELECT 1 FROM ${MESSAGE_TABLE[kind]} WHERE id = ?`).get(messageId);
+}
+
+// Replace the list of URLs whose cards a message shows.
+const setEmbeds = db.transaction((kind, messageId, urls) => {
+  const table = EMBED_TABLE[kind];
+  db.prepare(`DELETE FROM ${table} WHERE message_id = ?`).run(messageId);
+  const insert = db.prepare(`INSERT OR IGNORE INTO ${table}(message_id, url, position) VALUES (?, ?, ?)`);
+  urls.forEach((url, i) => insert.run(messageId, url, i));
+});
+
+function getEmbedUrls(kind, messageId) {
+  return db.prepare(`SELECT url FROM ${EMBED_TABLE[kind]} WHERE message_id = ? ORDER BY position`).all(messageId).map((r) => r.url);
+}
+
+// Attach `embeds` (card objects, in order) to each message.
+function attachEmbeds(kind, messages) {
+  if (!messages.length) return messages;
+  const ids = messages.map((m) => m.id);
+  const rows = db.prepare(`
+    SELECT e.message_id AS messageId, p.data
+    FROM ${EMBED_TABLE[kind]} e
+    JOIN link_previews p ON p.url = e.url AND p.ok = 1
+    WHERE e.message_id IN (${ids.map(() => '?').join(',')})
+    ORDER BY e.message_id, e.position
+  `).all(...ids);
+  const byMsg = new Map();
+  for (const r of rows) {
+    if (!byMsg.has(r.messageId)) byMsg.set(r.messageId, []);
+    byMsg.get(r.messageId).push(JSON.parse(r.data));
+  }
+  for (const m of messages) m.embeds = byMsg.get(m.id) || [];
+  return messages;
 }
 
 // ---- Reactions ----
@@ -628,21 +687,21 @@ function storeDm(fromId, toId, content, attachments = [], spoiler = false) {
 
 function getDmMessages(userId, otherId, limit = 50, offset = 0) {
   const [a, b] = dmPair(userId, otherId);
-  return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? ORDER BY m.id DESC LIMIT ? OFFSET ?`)
-    .all(a, b, limit, offset).reverse().map(hydrateAttachments);
+  return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? ORDER BY m.id DESC LIMIT ? OFFSET ?`)
+    .all(a, b, limit, offset).reverse().map(hydrateAttachments));
 }
 
 // The page of DMs just older than `beforeId`, oldest-first.
 function getDmMessagesBefore(userId, otherId, beforeId, limit = 50) {
   const [a, b] = dmPair(userId, otherId);
-  return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id < ? ORDER BY m.id DESC LIMIT ?`)
-    .all(a, b, beforeId, limit).reverse().map(hydrateAttachments);
+  return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id < ? ORDER BY m.id DESC LIMIT ?`)
+    .all(a, b, beforeId, limit).reverse().map(hydrateAttachments));
 }
 
 function getDmMessagesAfter(userId, otherId, afterId, limit = 200) {
   const [a, b] = dmPair(userId, otherId);
-  return db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id > ? ORDER BY m.id ASC LIMIT ?`)
-    .all(a, b, afterId, limit).map(hydrateAttachments);
+  return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id > ? ORDER BY m.id ASC LIMIT ?`)
+    .all(a, b, afterId, limit).map(hydrateAttachments));
 }
 
 // The two participants + author of a DM, so we can notify both sides.
@@ -1041,6 +1100,12 @@ module.exports = {
   setSiteAdminByUsername,
   listSiteAdmins,
   getSetting,
+  getLinkPreview,
+  saveLinkPreview,
+  messageExists,
+  setEmbeds,
+  getEmbedUrls,
+  attachEmbeds,
   setSetting,
   addRegCode,
   listRegCodes,
