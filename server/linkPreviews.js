@@ -13,6 +13,7 @@
 const db = require('./db');
 const { unfurl } = require('./integrations/unfurl');
 const { rateLimitOk } = require('./auth/rateLimit');
+const { publicCard } = require('./net/imageProxy');
 
 const MAX_URLS = 3;
 const FRESH_MS = 24 * 60 * 60 * 1000; // reuse a card for a day
@@ -132,7 +133,7 @@ function handleMessage({ kind, messageId, content, userId, deliver, edited = fal
     if (shown.length === 0 && had === 0) return;
     if (!db.messageExists(kind, messageId)) return; // deleted while we were fetching
     db.setEmbeds(kind, messageId, shown.map((x) => x.url));
-    deliver(shown.map((x) => x.card));
+    deliver(shown.map((x) => publicCard(x.card))); // images go through our proxy
   })().catch((err) => console.warn('[link previews]', err.message));
   pending.add(job);
   job.finally(() => pending.delete(job));

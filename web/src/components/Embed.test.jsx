@@ -52,3 +52,16 @@ test('a card with only a title still renders, without empty parts', () => {
   expect(screen.getByRole('link', { name: 'Only a title' })).toBeTruthy();
   expect(img()).toBeNull();
 });
+
+test('an image served by our own proxy is used (a same-origin /media/preview path)', () => {
+  render(<Embed embed={{ ...card, image: '/media/preview/abcDEF_-123/aHR0cHM6Ly9jZG4uZXhhbXBsZS9zLmpwZw' }} />);
+  expect(img().getAttribute('src')).toBe('/media/preview/abcDEF_-123/aHR0cHM6Ly9jZG4uZXhhbXBsZS9zLmpwZw');
+});
+
+test('other relative or odd paths are still refused', () => {
+  for (const bad of ['/uploads/x.png', '/media/preview/../../etc', '//evil.example/x.png']) {
+    cleanup();
+    render(<Embed embed={{ ...card, image: bad }} />);
+    expect(img()).toBeNull();
+  }
+});

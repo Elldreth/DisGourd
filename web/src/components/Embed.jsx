@@ -1,15 +1,17 @@
 import { useState } from 'react';
 
 // A link-preview card under a message: site name, linked title, description and
-// the page's image. The server fetched the page safely; the image loads from
-// its own site (no referrer, lazily), and disappears if it fails.
+// the page's image. The server fetched the page safely and normally serves the
+// image itself (/media/preview/…, so the site never sees viewers); with the
+// proxy off it's a direct https link. No referrer, lazy, gone if it fails.
 const httpUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
+const imageUrl = (u) => (typeof u === 'string' && /^\/media\/preview\/[\w-]+\/[\w-]+$/.test(u) ? u : httpUrl(u));
 const hexColor = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : null);
 
 export default function Embed({ embed }) {
   const [imageOk, setImageOk] = useState(true);
   const url = httpUrl(embed.url);
-  const image = imageOk ? httpUrl(embed.image) : null;
+  const image = imageOk ? imageUrl(embed.image) : null;
   const color = hexColor(embed.themeColor);
 
   return (

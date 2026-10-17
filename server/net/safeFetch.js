@@ -12,7 +12,8 @@
 //   - no cookies or auth are ever sent
 //
 //   safeFetch(url, opts) -> { url, status, contentType, body } | null
-//     null: a non-2xx status or a non-HTML body. Refusals and failures throw an
+//     null: a non-2xx status or a content type not in `types` (default: HTML).
+//     opts.as: 'text' (default; decoded with the page's charset) or 'buffer'. Refusals and failures throw an
 //     Error with `code`: BAD_URL, BLOCKED_PROTOCOL, BLOCKED_PORT, CREDENTIALS,
 //     BLOCKED_ADDRESS, TOO_MANY_REDIRECTS, TOO_LARGE, TIMEOUT, NETWORK.
 
@@ -157,7 +158,7 @@ function decode(buf, contentTypeHeader) {
 
 // One request to an already-vetted target. Resolves with
 // { redirect } | { response: null } | { response: {...} }.
-function request({ u, host, port, pick }, { maxBytes, onRequest }) {
+function request({ u, host, port, pick }, { maxBytes, onRequest, types, as }) {
   return new Promise((resolve, reject) => {
     const lib = u.protocol === 'https:' ? https : http;
     const req = lib.request({
@@ -168,7 +169,7 @@ function request({ u, host, port, pick }, { maxBytes, onRequest }) {
       method: 'GET',
       agent: false, // no pooled sockets from earlier, differently-vetted requests
       servername: net.isIP(host) ? undefined : host,
-      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1', 'Accept-Encoding': 'identity' },
+      headers: { 'User-Agent': USER_AGENT, Accept: [...types].join(',') + ';q=0.9,*/*;q=0.1', 'Accept-Encoding': 'identity' },
       // Pin the connection to the address we checked.
       lookup: (_h, opts, cb) => {
         if (typeof opts === 'function') cb = opts;
@@ -187,7 +188,7 @@ function request({ u, host, port, pick }, { maxBytes, onRequest }) {
         return resolve({ redirect: new URL(res.headers.location, u).toString() });
       }
       const type = (res.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-      if (status < 200 || status >= 300 || !HTML_TYPES.has(type)) {
+      if (status < 200 || status >= 300 || !types.has(type)) {
         req.destroy();
         return resolve({ response: null });
       }
@@ -208,7 +209,14 @@ function request({ u, host, port, pick }, { maxBytes, onRequest }) {
         chunks.push(c);
       });
       res.on('end', () =>
-        resolve({ response: { url: u.toString(), status, contentType: type, body: decode(Buffer.concat(chunks), res.headers['content-type']) } })
+        resolve({
+          response: {
+            url: u.toString(),
+            status,
+            contentType: type,
+            body: as === 'buffer' ? Buffer.concat(chunks) : decode(Buffer.concat(chunks), res.headers['content-type']),
+          },
+        })
       );
       res.on('error', (err) => reject(err.safeFetch ? err : fail('NETWORK', err.message)));
     });
@@ -216,7 +224,11 @@ function request({ u, host, port, pick }, { maxBytes, onRequest }) {
   });
 }
 
-async function safeFetch(url, { timeoutMs = 5000, maxBytes = 512 * 1024, maxRedirects = 3, lookup = defaultLookup, allowLoopback = false } = {}) {
+async function safeFetch(
+  url,
+  { timeoutMs = 5000, maxBytes = 512 * 1024, maxRedirects = 3, lookup = defaultLookup, allowLoopback = false, types = HTML_TYPES, as = 'text' } = {}
+) {
+  const allowedTypes = types instanceof Set ? types : new Set(types);
   // Test-only: lets the suite talk to a local server. Ignored everywhere else.
   const loopbackOk = !!allowLoopback && process.env.NODE_ENV === 'test';
   let current = null; // the in-flight request, if any
@@ -233,7 +245,7 @@ async function safeFetch(url, { timeoutMs = 5000, maxBytes = 512 * 1024, maxRedi
     for (let hop = 0; ; hop += 1) {
       if (hop > maxRedirects) throw fail('TOO_MANY_REDIRECTS', 'Too many redirects');
       const target = await vet(next, { lookup, loopbackOk });
-      const out = await request(target, { maxBytes, onRequest: (req) => (current = req) });
+      const out = await request(target, { maxBytes, types: allowedTypes, as, onRequest: (req) => (current = req) });
       if (!out.redirect) return out.response;
       next = out.redirect;
     }

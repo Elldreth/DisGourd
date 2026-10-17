@@ -8,6 +8,7 @@ const modules = [
   require('./spaces'),
   require('./invites'),
   require('./uploads'),
+  require('./media'),
 ];
 
 async function dispatch(ctx) {

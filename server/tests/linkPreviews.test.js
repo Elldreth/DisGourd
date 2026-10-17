@@ -123,7 +123,8 @@ test('a message with a link gets a card for everyone who can see it, and history
     const f = embedFrames(who).find((x) => Number(x.id) === Number(id));
     expect(f).toMatchObject({ space: 'Linkland', channel: 'general' });
     expect(f.embeds).toEqual([
-      expect.objectContaining({ title: 'Page one', description: 'About Page one', siteName: 'Fixture', image: `${site}/card.png` }),
+      // The image goes through our proxy (P2-23), never straight to the site.
+      expect.objectContaining({ title: 'Page one', description: 'About Page one', siteName: 'Fixture', image: expect.stringMatching(/^\/media\/preview\//) }),
     ]);
   }
   expect(embedFrames('outsider')).toEqual([]); // not a member
