@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import MessageList from './MessageList.jsx';
+import PinsPanel from './PinsPanel.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
@@ -32,7 +33,12 @@ export default function ChatPanel({
   onOpenNav,
   onOpenMembers,
   membersOpen = false,
+  canPin = false,
+  onSetPinned,
+  pinsVersion = 0,
 }) {
+  const [pinsOpen, setPinsOpen] = useState(false);
+  useEffect(() => setPinsOpen(false), [space, channel]);
   // The message being replied to ({ id, author }), shown above the composer.
   const [replyingTo, setReplyingTo] = useState(null);
   useEffect(() => setReplyingTo(null), [space, channel]);
@@ -88,6 +94,15 @@ export default function ChatPanel({
           </button>
         )}
         <IconButton
+          icon="pin"
+          size={18}
+          label="Pinned messages"
+          aria-haspopup="dialog"
+          aria-expanded={pinsOpen}
+          onClick={() => setPinsOpen(true)}
+          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+        />
+        <IconButton
           icon="search"
           size={18}
           label="Search messages"
@@ -105,6 +120,7 @@ export default function ChatPanel({
 
       <MessageList
         ref={listRef}
+        onPin={canPin && onSetPinned ? onSetPinned : undefined}
         messages={messages}
         channel={channel}
         currentUser={currentUser}
@@ -141,6 +157,17 @@ export default function ChatPanel({
         <div className="mx-4 mb-5 mt-1 flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-3 text-center text-sm text-gray-400 ring-1 ring-ink-500/40">
           <Icon name="shield" size={15} className="shrink-0" /> You don’t have permission to post in this channel.
         </div>
+      )}
+      {pinsOpen && (
+        <PinsPanel
+          space={space}
+          channel={channel}
+          version={pinsVersion}
+          canPin={canPin}
+          onUnpin={(id) => onSetPinned?.(id, false)}
+          onJump={(id) => listRef.current?.jumpTo(id)}
+          onClose={() => setPinsOpen(false)}
+        />
       )}
     </main>
   );

@@ -180,6 +180,11 @@ export function getMessages(space, channel, { limit = 50, offset = 0, before, af
   );
 }
 
+// A channel's pinned messages, most recently pinned first.
+export function getPins(space, channel) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/pins`);
+}
+
 // ---- Search ----
 export function search(q) {
   return request(`/search?q=${encodeURIComponent(q)}`);

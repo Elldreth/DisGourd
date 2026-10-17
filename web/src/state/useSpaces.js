@@ -49,6 +49,9 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     ? (author) => roleRank(members.find((mb) => mb.username === author)?.role) < myRank
     : null;
 
+  // Whether I may pin and unpin messages here (the server checks too).
+  const canPin = myRank >= (activeSpace?.permissions?.pin_messages ?? 2);
+
   async function loadSpaces() {
     try {
       const next = await api.getSpaces();
@@ -327,6 +330,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     canManage,
     canPostCurrent,
     canModerate,
+    canPin,
     members,
     memberNames: members.map((m) => m.username),
     error,

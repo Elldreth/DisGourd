@@ -22,6 +22,8 @@ const OPS = new Map([
   ['edit', chat.ops.edit],
   ['delete', chat.ops.delete],
   ['react', chat.ops.react],
+  ['pin', chat.ops.pin],
+  ['unpin', chat.ops.unpin],
   ['typing', chat.ops.typing],
   // dm
   ['dm', dm.ops.dm],
