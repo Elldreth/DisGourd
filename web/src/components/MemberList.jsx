@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
+import ConfirmDialog from './ConfirmDialog.jsx';
 
 // Right-hand roster grouped by online status. Clicking a member opens a menu:
 // message them, and (with permission) promote/demote or remove them.
@@ -8,8 +9,9 @@ import Icon from './Icon.jsx';
 // slide-in drawer below that, opened from the chat header (`open` /
 // `onClose`). The drawer closes on Esc, the backdrop or its close button;
 // focus moves into it and goes back where it was when it closes.
-export default function MemberList({ members, currentUser, myRole, onMessageUser, onSetRole, onKick, open = false, onClose }) {
+export default function MemberList({ space, members, currentUser, myRole, onMessageUser, onSetRole, onKick, open = false, onClose }) {
   const panelRef = useRef(null);
+  const [kicking, setKicking] = useState(null); // username awaiting "are you sure?"
   useEffect(() => {
     if (!open) return undefined;
     const returnTo = document.activeElement;
@@ -47,7 +49,10 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
         label: 'Remove from server',
         danger: true,
         onClick: () => {
-          if (window.confirm(`Remove ${m.username} from the server?`)) onKick(m.username);
+          // The menu item disappears; put focus on the member's row so the
+          // confirm dialog has somewhere to return it.
+          panelRef.current?.querySelector(`button[title="${CSS.escape(m.username)}"]`)?.focus();
+          setKicking(m.username);
         },
       });
     }
@@ -132,6 +137,19 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
           {renderGroup('Offline', offline, 'offline')}
         </div>
       </aside>
+      {kicking && (
+        <ConfirmDialog
+          title={`Remove @${kicking} from ${space || 'this server'}?`}
+          body="They can rejoin with an invite."
+          confirmLabel="Remove"
+          danger
+          onCancel={() => setKicking(null)}
+          onConfirm={() => {
+            onKick(kicking);
+            setKicking(null);
+          }}
+        />
+      )}
     </>
   );
 }

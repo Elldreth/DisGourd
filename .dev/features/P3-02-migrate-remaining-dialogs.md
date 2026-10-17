@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #77)
 - **Effort:** S–M
 - **Depends on:** P3-01
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 3

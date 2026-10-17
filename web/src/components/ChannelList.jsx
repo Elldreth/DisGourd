@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
+import ConfirmDialog from './ConfirmDialog.jsx';
 import UserFooter from './UserFooter.jsx';
 import ServerPermissionsDialog from './ServerPermissionsDialog.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
@@ -67,6 +68,7 @@ export default function ChannelList({
   const [voiceName, setVoiceName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef(null);
+  const [confirmDeleteServer, setConfirmDeleteServer] = useState(false);
   // Closing the server menu by picking an item puts focus back on its button,
   // so a dialog the item opens has somewhere to return focus to.
   const closeMenu = () => {
@@ -199,9 +201,7 @@ export default function ChannelList({
                   danger
                   onClick={() => {
                     closeMenu();
-                    if (window.confirm(`Delete the server “${space}” for everyone? This cannot be undone.`)) {
-                      onDeleteServer();
-                    }
+                    setConfirmDeleteServer(true);
                   }}
                 >
                   <Icon name="trash" size={16} /> Delete server
@@ -494,6 +494,20 @@ export default function ChannelList({
           permissions={permissions || {}}
           onClose={() => setPermsOpen(false)}
           onSaved={onPermsChanged}
+        />
+      )}
+      {confirmDeleteServer && (
+        <ConfirmDialog
+          title={`Delete ${space}?`}
+          body="This deletes the server, its channels and all messages for everyone. It can't be undone."
+          confirmLabel="Delete server"
+          danger
+          requireText={space}
+          onCancel={() => setConfirmDeleteServer(false)}
+          onConfirm={() => {
+            setConfirmDeleteServer(false);
+            onDeleteServer();
+          }}
         />
       )}
       {channelSettings && (
