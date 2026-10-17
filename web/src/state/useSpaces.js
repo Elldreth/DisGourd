@@ -146,7 +146,13 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const handlers = {
     presence: (p) => {
       // status: online | idle | dnd | offline (an invisible member reads as offline)
-      setMembers((prev) => prev.map((m) => (m.username === p.user ? { ...m, status: p.status, online: p.status !== 'offline' } : m)));
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.username === p.user
+            ? { ...m, status: p.status, online: p.status !== 'offline', statusText: p.statusText ?? null, statusEmoji: p.statusEmoji ?? null }
+            : m
+        )
+      );
     },
     channel_created: () => loadSpaces(),
     channel_deleted: (f) => {

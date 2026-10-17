@@ -84,8 +84,17 @@ export default function MemberList({ space, members, currentUser, myRole, onMess
                 } ${acts.length ? 'hover:bg-ink-700/60' : 'cursor-default'}`}
               >
                 <Avatar name={m.username} size={30} status={statusOf(m)} src={m.avatar} />
-                <span className="min-w-0 flex-1 truncate text-sm text-gray-200">{m.username}</span>
-                {STATUS_WORDS[statusOf(m)] && <span className="sr-only">, {STATUS_WORDS[statusOf(m)]}</span>}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-gray-200">{m.username}</span>
+                  {STATUS_WORDS[statusOf(m)] && <span className="sr-only">, {STATUS_WORDS[statusOf(m)]}</span>}
+                  {(m.statusText || m.statusEmoji) && (
+                    // Plain text, never markdown or HTML.
+                    <span className="block truncate text-xs text-gray-400">
+                      <span className="sr-only">, </span>
+                      {[m.statusEmoji, m.statusText].filter(Boolean).join(' ')}
+                    </span>
+                  )}
+                </span>
                 {m.role === 'owner' && <RoleBadge>Owner</RoleBadge>}
                 {m.role === 'admin' && <RoleBadge>Admin</RoleBadge>}
               </button>

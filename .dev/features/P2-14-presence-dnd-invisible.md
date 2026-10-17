@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 8 (part 2)
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S–M
 - **Depends on:** P1-01, P1-05 (gateway/delivery.js, broadcastPresence)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #8

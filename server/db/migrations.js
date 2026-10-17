@@ -288,6 +288,17 @@ const MIGRATIONS = [
       db.exec("ALTER TABLE users ADD COLUMN presence TEXT NOT NULL DEFAULT 'online'");
     },
   },
+  {
+    version: 6,
+    name: 'custom status',
+    up(db) {
+      // A short custom status (up to 80 characters) with an optional emoji,
+      // cleared at status_expires_at (ms) if set.
+      db.exec('ALTER TABLE users ADD COLUMN status_text TEXT');
+      db.exec('ALTER TABLE users ADD COLUMN status_emoji TEXT');
+      db.exec('ALTER TABLE users ADD COLUMN status_expires_at INTEGER');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

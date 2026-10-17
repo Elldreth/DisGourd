@@ -973,6 +973,32 @@ function setUserPresence(userId, mode) {
   return db.prepare('UPDATE users SET presence = ? WHERE id = ?').run(mode, userId).changes > 0;
 }
 
+// ---- Custom status ----
+// { statusText, statusEmoji, statusExpiresAt }, all null when unset. An expired
+// status is cleared the moment anyone reads it.
+function getUserStatus(userId) {
+  const row = db.prepare('SELECT status_text, status_emoji, status_expires_at FROM users WHERE id = ?').get(userId);
+  const none = { statusText: null, statusEmoji: null, statusExpiresAt: null };
+  if (!row) return none;
+  if (row.status_expires_at && row.status_expires_at <= Date.now()) {
+    setUserStatus(userId, null, null, null);
+    return none;
+  }
+  return { statusText: row.status_text || null, statusEmoji: row.status_emoji || null, statusExpiresAt: row.status_expires_at || null };
+}
+function setUserStatus(userId, text, emoji, expiresAt) {
+  db.prepare('UPDATE users SET status_text = ?, status_emoji = ?, status_expires_at = ? WHERE id = ?')
+    .run(text || null, emoji || null, text || emoji ? expiresAt || null : null, userId);
+}
+// Clear every status whose time is up; returns those users' ids.
+function clearExpiredStatuses(now = Date.now()) {
+  const ids = db.prepare('SELECT id FROM users WHERE status_expires_at IS NOT NULL AND status_expires_at <= ?').all(now).map((r) => r.id);
+  if (ids.length) {
+    db.prepare(`UPDATE users SET status_text = NULL, status_emoji = NULL, status_expires_at = NULL WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
+  }
+  return ids;
+}
+
 function setUserAvatar(userId, avatarUrl, originalUrl = null, crop = null) {
   return db.prepare('UPDATE users SET avatar_url = ?, avatar_original = ?, avatar_crop = ? WHERE id = ?')
     .run(avatarUrl || null, originalUrl || null, crop ? JSON.stringify(crop) : null, userId).changes > 0;
@@ -1193,6 +1219,9 @@ module.exports = {
   PRESENCE_MODES,
   getUserPresence,
   setUserPresence,
+  getUserStatus,
+  setUserStatus,
+  clearExpiredStatuses,
   getLinkPreview,
   saveLinkPreview,
   messageExists,

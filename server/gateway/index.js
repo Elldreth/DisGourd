@@ -1,7 +1,7 @@
 const url = require('url');
 const db = require('../db');
 const { verifyToken } = require('../auth/tokens');
-const { userClients, broadcastPresence } = require('./delivery');
+const { userClients, broadcastPresence, sendToUser } = require('./delivery');
 const { voiceLeave, voiceStatesFor } = require('./voice');
 const { handleGatewayMessage } = require('./router');
 
@@ -19,6 +19,17 @@ function detachGateway(ws) {
     delete userClients[ws.userId];
     broadcastPresence(ws.userId); // now offline
   }
+}
+
+// Clear custom statuses whose time is up and tell everyone (run every minute;
+// also exported for tests). Returns the ids that were cleared.
+function sweepExpiredStatuses() {
+  const ids = db.clearExpiredStatuses();
+  for (const id of ids) {
+    broadcastPresence(id);
+    sendToUser(id, JSON.stringify({ type: 'my_status', statusText: null, statusEmoji: null, statusExpiresAt: null }));
+  }
+  return ids;
 }
 
 // Wire the gateway onto the HTTP server: authenticate the /gateway upgrade,
@@ -41,7 +52,12 @@ function attachGateway(httpServer, wss) {
     });
   }, HEARTBEAT_INTERVAL_MS);
   heartbeatTimer.unref(); // don't keep the process (or tests) alive just for this
-  wss.on('close', () => clearInterval(heartbeatTimer));
+  const statusTimer = setInterval(sweepExpiredStatuses, 60000);
+  statusTimer.unref();
+  wss.on('close', () => {
+    clearInterval(heartbeatTimer);
+    clearInterval(statusTimer);
+  });
 
   httpServer.on('upgrade', (request, socket, head) => {
     const parsedUrl = url.parse(request.url, true);
@@ -88,4 +104,4 @@ function attachGateway(httpServer, wss) {
   });
 }
 
-module.exports = { attachGateway };
+module.exports = { attachGateway, sweepExpiredStatuses };
