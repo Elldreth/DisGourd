@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2 (follow-up to P2-12's open privacy question)
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S–M
 - **Depends on:** P2-11 (safeFetch), P2-12 (cards)
 - **Serialize with:** linkPreviews.js, routes/spaces.js, routes/social.js, Embed.jsx units

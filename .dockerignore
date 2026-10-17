@@ -19,3 +19,11 @@ update.bat
 .env
 .env.*
 *.local
+# Not needed to build or run the app (and design/ is large).
+design
+.dev
+deploy
+# Any database, its WAL/SHM files, or a generated secret, wherever they are.
+**/*.db
+**/*.db-*
+**/.jwt-secret

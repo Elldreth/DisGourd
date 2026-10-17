@@ -11,6 +11,12 @@ services:
     image: disgourd:latest
     container_name: disgourd
     restart: unless-stopped
+    # Run as Unraid's nobody:users so files on the shares stay manageable from
+    # the host. The host folders below must belong to this user (one time:
+    #   chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/bigboi/media/images
+    # see "Upgrading to the non-root image" in the README). Remove this line to
+    # use the image's own non-root user (1000:1000) instead.
+    user: "99:100"
     environment:
       - PORT=3000
       - DB_PATH=/config/disgourd.db
