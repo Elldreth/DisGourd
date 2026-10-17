@@ -118,8 +118,7 @@ export default function App() {
     sp.selectSpace(name);
   }
   function openDms() {
-    setView('dm');
-    dm.loadConversations();
+    setView('dm'); // useDms loads the conversation list when the view opens
   }
   function selectDm(username) {
     setView('dm');

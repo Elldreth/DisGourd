@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — "Resync everything on WebSocket reconnect, not just the open channel"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #64)
 - **Effort:** S–M
 - **Depends on:** P1-05 (gateway/index.js connect frames), P1-08 (merge semantics must keep older pages), P1-14 (all client state in hooks)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 1
@@ -55,4 +55,4 @@
 
 ## Discovered Work
 - If you're in a voice call when the connection drops, the server removes you from the room, and the client doesn't rejoin after reconnecting. Needs its own unit (rejoin, or tell the user the call ended).
-- DM sidebar "No conversations yet" (from P2-04): opening a DM from a notification uses `selectDm`, which doesn't load the conversation list (`openDms` does). Small fix.
+- ~~DM sidebar "No conversations yet" (from P2-04)~~: fixed on `claude/fix-dm-list-from-notification` (the list now loads whenever the DM view opens).
