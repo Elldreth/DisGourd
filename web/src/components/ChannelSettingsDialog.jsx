@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import * as api from '../api.js';
 import Icon from './Icon.jsx';
+import Modal from './Modal.jsx';
 
 const LEVELS = [
   { v: 1, label: 'Everyone' },
@@ -17,6 +18,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Voice channels only gate visibility/joining — "who can post" doesn't apply.
   const isVoice = meta?.type === 'voice';
+  const bodyRef = useRef(null); // focus starts on the first setting, not the header's Close
 
   // You can't post somewhere you can't see, so keep post >= view.
   function chooseView(v) {
@@ -51,85 +53,84 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
   }
 
   return (
-    <div className="anim-fade absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="anim-scale-in w-full max-w-sm rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
-          <h3 className="text-lg font-bold">{isVoice ? channel : `#${channel}`} settings</h3>
-          <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">Close</button>
-        </div>
-
-        <div className="space-y-4 p-6">
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
-              {isVoice ? 'Who can see & join this channel' : 'Who can see this channel'}
-            </span>
-            <select value={view} onChange={(e) => chooseView(parseInt(e.target.value, 10))} className="input">
-              {LEVELS.map((l) => <option key={l.v} value={l.v}>{l.label}</option>)}
-            </select>
-          </label>
-          {!isVoice && (
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Who can post</span>
-              <select value={Math.max(view, post)} onChange={(e) => setPost(parseInt(e.target.value, 10))} className="input">
-                {LEVELS.filter((l) => l.v >= view).map((l) => <option key={l.v} value={l.v}>{l.label}</option>)}
-              </select>
-              <span className="mt-1 block text-xs text-gray-500">
-                Set posting higher than viewing for a read-only / announcements channel.
-              </span>
-            </label>
-          )}
-          {error && <div className="text-sm text-danger">{error}</div>}
-        </div>
-
-        <div className="border-t border-ink-500/40 px-6 py-4">
-          {!confirmDelete ? (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-2 text-sm font-medium text-danger transition hover:underline"
-            >
-              <Icon name="trash" size={15} /> Delete channel
-            </button>
-          ) : (
-            <div className="rounded-lg bg-danger/10 p-3 ring-1 ring-danger/30">
-              <p className="text-sm text-gray-200">
-                Delete <span className="font-semibold">{isVoice ? channel : `#${channel}`}</span>? This
-                permanently removes the channel{isVoice ? '' : ' and every message in it'}. This can’t be
-                undone.
-              </p>
-              <div className="mt-3 flex justify-end gap-2">
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  disabled={busy}
-                  className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-fg"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={remove}
-                  disabled={busy}
-                  className="rounded-lg bg-danger px-3 py-1.5 text-sm font-semibold text-ink-900 transition hover:brightness-110 active:scale-95 disabled:opacity-60 disabled:active:scale-100"
-                >
-                  {busy ? 'Deleting…' : 'Delete channel'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-ink-500/40 px-6 py-3">
-          <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-fg">Cancel</button>
-          <button
-            onClick={save}
-            disabled={busy}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60"
-          >
-            {busy ? 'Saving…' : 'Save'}
-          </button>
-        </div>
+    <Modal
+      onClose={onClose}
+      initialFocusRef={bodyRef}
+      panelClassName="w-full max-w-sm rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
+    >
+      <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
+        <Modal.Title>{isVoice ? channel : `#${channel}`} settings</Modal.Title>
+        <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">Close</button>
       </div>
-    </div>
+
+      <div ref={bodyRef} className="space-y-4 p-6">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+            {isVoice ? 'Who can see & join this channel' : 'Who can see this channel'}
+          </span>
+          <select value={view} onChange={(e) => chooseView(parseInt(e.target.value, 10))} className="input">
+            {LEVELS.map((l) => <option key={l.v} value={l.v}>{l.label}</option>)}
+          </select>
+        </label>
+        {!isVoice && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Who can post</span>
+            <select value={Math.max(view, post)} onChange={(e) => setPost(parseInt(e.target.value, 10))} className="input">
+              {LEVELS.filter((l) => l.v >= view).map((l) => <option key={l.v} value={l.v}>{l.label}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-gray-500">
+              Set posting higher than viewing for a read-only / announcements channel.
+            </span>
+          </label>
+        )}
+        {error && <div className="text-sm text-danger">{error}</div>}
+      </div>
+
+      <div className="border-t border-ink-500/40 px-6 py-4">
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="flex items-center gap-2 text-sm font-medium text-danger transition hover:underline"
+          >
+            <Icon name="trash" size={15} /> Delete channel
+          </button>
+        ) : (
+          <div className="rounded-lg bg-danger/10 p-3 ring-1 ring-danger/30">
+            <p className="text-sm text-gray-200">
+              Delete <span className="font-semibold">{isVoice ? channel : `#${channel}`}</span>? This
+              permanently removes the channel{isVoice ? '' : ' and every message in it'}. This can’t be
+              undone.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                disabled={busy}
+                className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-fg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={remove}
+                disabled={busy}
+                className="rounded-lg bg-danger px-3 py-1.5 text-sm font-semibold text-ink-900 transition hover:brightness-110 active:scale-95 disabled:opacity-60 disabled:active:scale-100"
+              >
+                {busy ? 'Deleting…' : 'Delete channel'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-2 border-t border-ink-500/40 px-6 py-3">
+        <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-fg">Cancel</button>
+        <button
+          onClick={save}
+          disabled={busy}
+          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60"
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </Modal>
   );
 }

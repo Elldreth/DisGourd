@@ -66,6 +66,13 @@ export default function ChannelList({
   const [addingVoice, setAddingVoice] = useState(false);
   const [voiceName, setVoiceName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef(null);
+  // Closing the server menu by picking an item puts focus back on its button,
+  // so a dialog the item opens has somewhere to return focus to.
+  const closeMenu = () => {
+    setMenuOpen(false);
+    menuButtonRef.current?.focus();
+  };
   const [permsOpen, setPermsOpen] = useState(false);
   const [channelSettings, setChannelSettings] = useState(null); // channel name or null
   const [renaming, setRenaming] = useState(false);
@@ -121,6 +128,7 @@ export default function ChannelList({
           </form>
         ) : (
           <button
+            ref={menuButtonRef}
             onClick={() => space && setMenuOpen((v) => !v)}
             className="flex h-full flex-1 items-center justify-between rounded-sm px-2 hover:bg-ink-700/40"
           >
@@ -135,7 +143,7 @@ export default function ChannelList({
             <div className="anim-pop absolute left-2 right-2 top-11 z-20 rounded-lg bg-ink-900 p-1.5 shadow-xl ring-1 ring-ink-500/50">
               <MenuItem
                 onClick={() => {
-                  setMenuOpen(false);
+                  closeMenu();
                   onInvite();
                 }}
               >
@@ -149,7 +157,7 @@ export default function ChannelList({
               {canManage && (
                 <MenuItem
                   onClick={() => {
-                    setMenuOpen(false);
+                    closeMenu();
                     iconInputRef.current?.click();
                   }}
                 >
@@ -159,7 +167,7 @@ export default function ChannelList({
               {canManage && canReframeIcon && (
                 <MenuItem
                   onClick={() => {
-                    setMenuOpen(false);
+                    closeMenu();
                     onReframeServerIcon();
                   }}
                 >
@@ -169,7 +177,7 @@ export default function ChannelList({
               {canManage && hasIcon && (
                 <MenuItem
                   onClick={() => {
-                    setMenuOpen(false);
+                    closeMenu();
                     onRemoveServerIcon();
                   }}
                 >
@@ -179,7 +187,7 @@ export default function ChannelList({
               {isOwner && (
                 <MenuItem
                   onClick={() => {
-                    setMenuOpen(false);
+                    closeMenu();
                     setPermsOpen(true);
                   }}
                 >
@@ -190,7 +198,7 @@ export default function ChannelList({
                 <MenuItem
                   danger
                   onClick={() => {
-                    setMenuOpen(false);
+                    closeMenu();
                     if (window.confirm(`Delete the server “${space}” for everyone? This cannot be undone.`)) {
                       onDeleteServer();
                     }
