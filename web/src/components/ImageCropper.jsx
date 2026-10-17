@@ -183,7 +183,7 @@ export default function ImageCropper({ src, shape = 'circle', title = 'Position 
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onCancel} className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-white">
+          <button onClick={onCancel} className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-fg">
             Cancel
           </button>
           <button

@@ -51,7 +51,7 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm }) {
             placeholder="Search messages…"
             className="flex-1 bg-transparent text-gray-100 outline-hidden placeholder:text-gray-500"
           />
-          <button onClick={onClose} className="rounded-sm px-2 text-xs text-gray-400 hover:text-white">
+          <button onClick={onClose} className="rounded-sm px-2 text-xs text-gray-400 hover:text-fg">
             esc
           </button>
         </div>

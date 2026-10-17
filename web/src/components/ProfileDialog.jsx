@@ -3,6 +3,7 @@ import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
 import AudioSettings from './AudioSettings.jsx';
 import NotificationSettings from './NotificationSettings.jsx';
+import AppearanceSettings from './AppearanceSettings.jsx';
 import RegistrationAdmin from './RegistrationAdmin.jsx';
 import ImageCropper from './ImageCropper.jsx';
 
@@ -76,7 +77,7 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
       >
         <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
           <h3 className="text-lg font-bold">Settings</h3>
-          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">
             Close
           </button>
         </div>
@@ -105,7 +106,7 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
                 <button
                   onClick={reframe}
                   disabled={busy}
-                  className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-white"
+                  className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-fg"
                 >
                   Reposition
                 </button>
@@ -114,7 +115,7 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
                 <button
                   onClick={removeAvatar}
                   disabled={busy}
-                  className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:text-white"
+                  className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:text-fg"
                 >
                   Remove
                 </button>
@@ -132,6 +133,11 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
               onMicChange={onMicChange}
               inCall={inCall}
             />
+          </section>
+
+          <section>
+            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Appearance</h4>
+            <AppearanceSettings />
           </section>
 
           <section>

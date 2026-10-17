@@ -49,7 +49,7 @@ export default function InviteDialog({ space, code, onClose }) {
           </button>
         </div>
         <div className="mt-5 text-right">
-          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">
             Close
           </button>
         </div>

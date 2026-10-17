@@ -273,7 +273,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
             onClick={onCancelReply}
             title="Cancel reply"
             aria-label="Cancel reply"
-            className="rounded-sm p-0.5 text-gray-400 hover:bg-ink-600 hover:text-white"
+            className="rounded-sm p-0.5 text-gray-400 hover:bg-ink-600 hover:text-fg"
           >
             <Icon name="x" size={14} />
           </button>
@@ -311,8 +311,8 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
             title="Emoji"
             aria-label="Emoji"
             aria-expanded={emojiOpen}
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-ink-500 hover:text-white disabled:opacity-50 ${
-              emojiOpen ? 'bg-ink-500 text-white' : 'text-gray-400'
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-ink-500 hover:text-fg disabled:opacity-50 ${
+              emojiOpen ? 'bg-ink-500 text-fg' : 'text-gray-400'
             }`}
           >
             <Icon name="smile" size={18} />

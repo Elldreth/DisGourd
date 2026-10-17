@@ -226,7 +226,7 @@ function parseInline(text, opts, keys) {
             <span
               key={key()}
               className={`md-mention rounded px-0.5 font-medium ${
-                isMe ? 'md-mention-me bg-brand/40 text-white' : 'bg-brand/15 text-brand-hi'
+                isMe ? 'md-mention-me bg-brand/40 text-fg' : 'bg-brand/15 text-brand-hi'
               }`}
             >
               @{name}

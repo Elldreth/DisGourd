@@ -32,7 +32,7 @@ export default function UserFooter({ user, avatar, status, onOpenProfile, onLogo
       <button
         onClick={onLogout}
         title="Sign out"
-        className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-white"
+        className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
       >
         <Icon name="logout" size={17} />
       </button>

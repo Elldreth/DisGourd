@@ -51,7 +51,7 @@ export function MessageToolbar({ actions, onOpenMenu, forceVisible }) {
           onClick={(e) => a.onSelect(e)}
           title={a.label}
           aria-label={a.label}
-          className={`rounded-sm p-1 text-gray-400 hover:bg-ink-600 ${a.danger ? 'hover:text-danger' : 'hover:text-white'}`}
+          className={`rounded-sm p-1 text-gray-400 hover:bg-ink-600 ${a.danger ? 'hover:text-danger' : 'hover:text-fg'}`}
         >
           <Icon name={a.icon} size={16} />
         </button>
@@ -63,7 +63,7 @@ export function MessageToolbar({ actions, onOpenMenu, forceVisible }) {
         title="More actions"
         aria-label="More actions"
         aria-haspopup="menu"
-        className="rounded-sm p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
+        className="rounded-sm p-1 text-gray-400 hover:bg-ink-600 hover:text-fg"
       >
         <Icon name="more" size={16} />
       </button>

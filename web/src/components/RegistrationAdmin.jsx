@@ -129,7 +129,7 @@ export default function RegistrationAdmin() {
                   </span>
                   <span className={`text-xs ${st.cls}`}>{st.label}</span>
                   <div className="ml-auto flex items-center gap-1">
-                    <button onClick={() => copy(c.code)} className="rounded-sm px-1.5 py-0.5 text-xs text-gray-300 hover:bg-ink-600 hover:text-white">
+                    <button onClick={() => copy(c.code)} className="rounded-sm px-1.5 py-0.5 text-xs text-gray-300 hover:bg-ink-600 hover:text-fg">
                       {copied === c.code ? 'Copied' : 'Copy'}
                     </button>
                     {!c.revokedAt && (
