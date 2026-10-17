@@ -75,7 +75,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-12 | ↑ edits last message | 3 | COMPLETE | S | P3-05 | Composer.jsx, MessageList.jsx |
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | COMPLETE | S–M | none | VideoStage.jsx, voice.js |
 | P3-14 | Invite deep link (`/invite/<code>`) | 3 | COMPLETE | S | none (follow-up to P3-07) | inviteLink.js (new), App.jsx, ServerRail.jsx, CreateServerDialog.jsx, InviteDialog.jsx, SetupWizard.jsx |
-| P3-15 | Server templates in the setup wizard | 3 | REVIEW | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
+| P3-15 | Server templates in the setup wizard | 3 | COMPLETE | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
 
 ## Dependency map (hard dependencies)
 
