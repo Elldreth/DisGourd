@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { initials, colorForName } from '../util.js';
 import Icon from './Icon.jsx';
 import Gourd from './Gourd.jsx';
+import CreateServerDialog from './CreateServerDialog.jsx';
 
 // The far-left rail of server (space) icons, Discord-style, plus create/join.
 export default function ServerRail({
@@ -17,10 +18,7 @@ export default function ServerRail({
   onJoin,
   onReorder,
 }) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [joining, setJoining] = useState(false);
-  const [code, setCode] = useState('');
+  const [dialogTab, setDialogTab] = useState(null); // 'create' | 'join' | null
   const [dragIndex, setDragIndex] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
 
@@ -33,24 +31,6 @@ export default function ServerRail({
     }
     setDragIndex(null);
     setDropIndex(null);
-  }
-
-  async function submitCreate(e) {
-    e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    await onCreate(trimmed);
-    setName('');
-    setAdding(false);
-  }
-
-  async function submitJoin(e) {
-    e.preventDefault();
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    await onJoin(trimmed);
-    setCode('');
-    setJoining(false);
   }
 
   return (
@@ -110,66 +90,32 @@ export default function ServerRail({
           );
         })}
 
-        {adding ? (
-          <form onSubmit={submitCreate} className="px-1">
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => !name && setAdding(false)}
-              placeholder="name"
-              className="w-14 rounded-lg bg-ink-700 px-1 py-1 text-center text-xs outline-hidden ring-1 ring-ink-500 focus:ring-brand-hi"
-            />
-          </form>
-        ) : (
-          <button
-            onClick={() => { setAdding(true); setJoining(false); }}
-            title="Create a server"
-            className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-ink-900 active:scale-90"
-          >
-            <Icon name="plus" size={24} />
-          </button>
-        )}
+        <button
+          onClick={() => setDialogTab('create')}
+          title="Create a server"
+          aria-label="Create a server"
+          className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-ink-900 active:scale-90"
+        >
+          <Icon name="plus" size={24} />
+        </button>
 
         <button
-          onClick={() => { setJoining((v) => !v); setAdding(false); }}
+          onClick={() => setDialogTab('join')}
           title="Join a server with an invite"
+          aria-label="Join a server with an invite"
           className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-gray-300 transition-all hover:rounded-2xl hover:bg-brand hover:text-white active:scale-90"
         >
           <Icon name="login" size={20} />
         </button>
       </div>
 
-      {joining && (
-        <div className="anim-pop absolute bottom-3 left-[76px] z-20 w-60 rounded-lg bg-ink-800 p-3 shadow-xl ring-1 ring-ink-500/50">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Join a server
-          </div>
-          <form onSubmit={submitJoin}>
-            <input
-              autoFocus
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Paste invite code"
-              className="input"
-            />
-            <div className="mt-2 flex justify-end gap-2 text-sm">
-              <button
-                type="button"
-                onClick={() => setJoining(false)}
-                className="rounded-sm px-2 py-1 text-gray-400 hover:text-fg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-sm bg-brand px-3 py-1 font-semibold text-white hover:bg-brand-hover"
-              >
-                Join
-              </button>
-            </div>
-          </form>
-        </div>
+      {dialogTab && (
+        <CreateServerDialog
+          initialTab={dialogTab}
+          onCreate={onCreate}
+          onJoin={onJoin}
+          onClose={() => setDialogTab(null)}
+        />
       )}
     </nav>
   );
