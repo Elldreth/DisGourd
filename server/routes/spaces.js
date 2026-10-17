@@ -1,4 +1,5 @@
 // Servers ("spaces"): settings, members, roles, invites, permissions and channels.
+const { withPublicEmbeds } = require('../net/imageProxy');
 const crypto = require('crypto');
 const db = require('../db');
 const { authUserId } = require('../auth/tokens');
@@ -155,12 +156,12 @@ const routes = [
         if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
           if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
-          if (after > 0) return sendJson(res, 200, db.getMessagesAfter(spaceName, channelName, after));
+          if (after > 0) return sendJson(res, 200, withPublicEmbeds(db.getMessagesAfter(spaceName, channelName, after)));
           const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
           const before = intParam(parsedUrl.query.before, 0, 0, Number.MAX_SAFE_INTEGER);
-          if (before > 0) return sendJson(res, 200, db.getMessagesBefore(spaceName, channelName, before, limit));
+          if (before > 0) return sendJson(res, 200, withPublicEmbeds(db.getMessagesBefore(spaceName, channelName, before, limit)));
           const offset = intParam(parsedUrl.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
-          return sendJson(res, 200, db.getMessages(spaceName, channelName, limit, offset));
+          return sendJson(res, 200, withPublicEmbeds(db.getMessages(spaceName, channelName, limit, offset)));
         }
         // PATCH channel permissions — view/post minimum ranks (managers only)
         if (channelName && pathSegments[4] === 'permissions' && req.method === 'PATCH') {

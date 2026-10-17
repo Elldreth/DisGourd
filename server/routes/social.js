@@ -1,4 +1,5 @@
 // Direct-message history, search and friends.
+const { withPublicEmbeds } = require('../net/imageProxy');
 const db = require('../db');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, readJsonBody } = require('../http/util');
@@ -26,11 +27,11 @@ const routes = [
         const other = db.getUserByUsername(pathSegments[1]);
         if (!other) return sendJson(res, 404, { error: 'User not found' });
         const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
-        if (after > 0) return sendJson(res, 200, db.getDmMessagesAfter(userId, other.id, after));
+        if (after > 0) return sendJson(res, 200, withPublicEmbeds(db.getDmMessagesAfter(userId, other.id, after)));
         const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
         const before = intParam(parsedUrl.query.before, 0, 0, Number.MAX_SAFE_INTEGER);
-        if (before > 0) return sendJson(res, 200, db.getDmMessagesBefore(userId, other.id, before, limit));
-        return sendJson(res, 200, db.getDmMessages(userId, other.id, limit, 0));
+        if (before > 0) return sendJson(res, 200, withPublicEmbeds(db.getDmMessagesBefore(userId, other.id, before, limit)));
+        return sendJson(res, 200, withPublicEmbeds(db.getDmMessages(userId, other.id, limit, 0)));
       }
       return sendJson(res, 404, { error: 'Not found' });
     },

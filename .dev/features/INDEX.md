@@ -61,6 +61,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-20 | /imagine via kie.ai (Container: a, b, c) | 2 | PLANNED | M+ | see packet | integrations/kie.js, bot user |
 | P2-21 | Custom roles (Container: a–d) | 2 | PLANNED | L | see packet | permissions.js, migrations, UI |
 | P2-22 | Threads (Container) | 2 | PLANNED | L | P2-10 | TBD after P2-10 |
+| P2-23 | Link-preview image proxy | 2 | REVIEW | S–M | P2-11, P2-12 | net/imageProxy.js (new), net/safeFetch.js, routes, linkPreviews.js, Embed.jsx |
 | P3-01 | Modal primitive + simple dialogs | 3 | COMPLETE | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
 | P3-02 | Remaining overlays → Modal | 3 | COMPLETE | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
 | P3-03 | Icon-button labels sweep | 3 | COMPLETE | S–M | P3-02, P3-05 | IconButton.jsx (new), ~12 components (exclusive) |
@@ -75,7 +76,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-12 | ↑ edits last message | 3 | COMPLETE | S | P3-05 | Composer.jsx, MessageList.jsx |
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | COMPLETE | S–M | none | VideoStage.jsx, voice.js |
 | P3-14 | Invite deep link (`/invite/<code>`) | 3 | COMPLETE | S | none (follow-up to P3-07) | inviteLink.js (new), App.jsx, ServerRail.jsx, CreateServerDialog.jsx, InviteDialog.jsx, SetupWizard.jsx |
-| P3-15 | Server templates in the setup wizard | 3 | REVIEW | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
+| P3-15 | Server templates in the setup wizard | 3 | COMPLETE | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
 
 ## Dependency map (hard dependencies)
 
@@ -136,7 +137,7 @@ Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at 
 - P1-10: moderators can delete only lower-ranked authors' messages (assumed)?
 - P1-12/P1-19: hooks + useReducer (no store library), and Vitest (assumed)?
 - P1-15: UID/GID for Unraid volumes (99:100?), plus a one-time chown needed.
-- P2-12: proxy og:images to hide viewer IPs (v1 assumes no)?
+- ~~P2-12: proxy og:images to hide viewer IPs (v1 assumes no)?~~ Yes, built in P2-23 (2026-10-17).
 - P2-18: iOS install requirement for push; push message previews?
 - P2-20: kie.ai models, endpoints, cost, quota defaults, NSFW policy (unknown; do not invent).
 - P2-21: bitset permissions versus named thresholds. P2-22: thread model.

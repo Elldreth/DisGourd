@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 (follow-up found in P3-06)
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S
 - **Depends on:** P3-06 (templates on the server and in the Add-a-server dialog), P3-07 (wizard)
 - **Serialize with:** CreateServerDialog.jsx, SetupWizard.jsx units
