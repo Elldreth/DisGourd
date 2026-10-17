@@ -79,7 +79,7 @@ export default function MemberList({ space, members, currentUser, myRole, onMess
               <button
                 onClick={() => acts.length && setMenuFor(open ? null : m.username)}
                 title={acts.length ? m.username : 'You'}
-                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition ${
+                className={`tap-row flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition ${
                   status === 'offline' ? 'opacity-50' : ''
                 } ${acts.length ? 'hover:bg-ink-700/60' : 'cursor-default'}`}
               >
@@ -141,7 +141,7 @@ export default function MemberList({ space, members, currentUser, myRole, onMess
             onClick={onClose}
             aria-label="Close member list"
             title="Close"
-            className="-mr-1 rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg lg:hidden"
+            className="tap -mr-1 rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg lg:hidden"
           >
             <Icon name="x" size={18} />
           </button>

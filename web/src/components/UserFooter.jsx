@@ -74,14 +74,14 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
         title="Set status"
         aria-haspopup="menu"
         aria-expanded={menuOpen}
-        className="shrink-0 rounded-full p-0.5 transition hover:bg-ink-600/50"
+        className="tap flex shrink-0 items-center justify-center rounded-full p-0.5 transition hover:bg-ink-600/50"
       >
         <Avatar name={user} size={32} src={avatar} status={mode.dot} />
       </button>
       <button
         onClick={onOpenProfile}
         title="Edit your profile"
-        className="flex min-w-0 flex-1 flex-col rounded-sm px-1 py-0.5 text-left transition hover:bg-ink-600/50"
+        className="tap-row flex min-w-0 flex-1 flex-col justify-center rounded-sm px-1 py-0.5 text-left transition hover:bg-ink-600/50"
       >
         <span className="truncate text-sm font-semibold">{user}</span>
         <span className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -95,7 +95,7 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
         size={17}
         label="Sign out"
         onClick={onLogout}
-        className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+        className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
       />
       {menuOpen && (
         <div

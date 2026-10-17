@@ -297,7 +297,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
           disabled={disabled}
           title="Attach files (images, videos, and more)"
           aria-label="Attach files"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-500 text-gray-200 transition hover:bg-brand hover:text-white active:scale-90 disabled:opacity-50"
+          className="tap flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-500 text-gray-200 transition hover:bg-brand hover:text-white active:scale-90 disabled:opacity-50"
         >
           <Icon name="plus" size={18} />
         </button>
@@ -322,7 +322,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
             title="Emoji"
             aria-label="Emoji"
             aria-expanded={emojiOpen}
-            className={`flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-ink-500 hover:text-fg disabled:opacity-50 ${
+            className={`tap flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-ink-500 hover:text-fg disabled:opacity-50 ${
               emojiOpen ? 'bg-ink-500 text-fg' : 'text-gray-400'
             }`}
           >
@@ -332,9 +332,13 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
         <button
           onClick={submit}
           disabled={disabled || (!text.trim() && pending.length === 0)}
-          className="flex h-8 shrink-0 items-center rounded-lg bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+          aria-label="Send"
+          title="Send"
+          className="tap flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover active:scale-95 disabled:opacity-40 disabled:active:scale-100"
         >
-          Send
+          {/* Phones get the icon alone; the word comes back from md up. */}
+          <Icon name="send" size={18} className="md:hidden" />
+          <span className="hidden md:inline">Send</span>
         </button>
       </div>
     </div>

@@ -102,7 +102,7 @@ export default function ThreadPanel({
             onClick={() => onSetArchived(!thread.archived)}
             aria-label={thread.archived ? 'Reopen thread' : 'Archive thread'}
             title={thread.archived ? 'Put this thread back in the active list' : 'Move this thread to the archived list (a reply brings it back)'}
-            className="shrink-0 rounded-md px-2 py-1 text-xs text-gray-400 ring-1 ring-ink-500/60 transition hover:text-fg"
+            className="tap-chip shrink-0 rounded-md px-2 py-1 text-xs text-gray-400 ring-1 ring-ink-500/60 transition hover:text-fg"
           >
             {thread.archived ? 'Reopen' : 'Archive'}
           </button>
@@ -114,7 +114,7 @@ export default function ThreadPanel({
             aria-pressed={followed}
             aria-label={followed ? 'Unfollow thread' : 'Follow thread'}
             title={followed ? 'Stop getting unread badges and notifications for this thread' : 'Get unread badges and notifications for this thread'}
-            className={`shrink-0 rounded-md px-2 py-1 text-xs ring-1 transition ${
+            className={`tap-chip shrink-0 rounded-md px-2 py-1 text-xs ring-1 transition ${
               followed ? 'bg-brand/20 text-fg ring-brand-hi' : 'text-gray-400 ring-ink-500/60 hover:text-fg'
             }`}
           >
@@ -126,7 +126,7 @@ export default function ThreadPanel({
           size={18}
           label="Close thread"
           onClick={onClose}
-          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+          className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
         />
       </header>
 
