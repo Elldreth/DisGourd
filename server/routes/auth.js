@@ -6,6 +6,7 @@ const { createToken, authUserId } = require('../auth/tokens');
 const { rateLimitOk, safeEqual, clientIp } = require('../auth/rateLimit');
 const { sendJson, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateRegistration } = require('../validate');
+const { broadcastPresence, sendToUser } = require('../gateway/delivery');
 
 const getJsonBody = readJsonBody;
 
@@ -124,12 +125,24 @@ const routes = [
       const userId = authUserId(req, parsedUrl);
       if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
       if (req.method === 'PATCH') {
-        const { avatar, avatarOriginal, avatarCrop } = await getJsonBody(req);
-        const okUrl = (v) => v == null || v === '' || (typeof v === 'string' && v.startsWith('/uploads/'));
-        if (!okUrl(avatar) || !okUrl(avatarOriginal)) {
-          return sendJson(res, 400, { error: 'Avatar must be an uploaded image URL' });
+        const body = await getJsonBody(req);
+        // Each field is optional: only what's sent changes.
+        if ('presence' in body) {
+          if (!db.PRESENCE_MODES.includes(body.presence)) {
+            return sendJson(res, 400, { error: 'Presence must be online, idle, dnd or invisible' });
+          }
+          db.setUserPresence(userId, body.presence);
+          broadcastPresence(userId); // what others now see
+          sendToUser(userId, JSON.stringify({ type: 'my_presence', mode: body.presence })); // your other tabs
         }
-        db.setUserAvatar(userId, avatar || null, avatarOriginal || null, sanitizeCrop(avatarCrop));
+        if ('avatar' in body || 'avatarOriginal' in body) {
+          const { avatar, avatarOriginal, avatarCrop } = body;
+          const okUrl = (v) => v == null || v === '' || (typeof v === 'string' && v.startsWith('/uploads/'));
+          if (!okUrl(avatar) || !okUrl(avatarOriginal)) {
+            return sendJson(res, 400, { error: 'Avatar must be an uploaded image URL' });
+          }
+          db.setUserAvatar(userId, avatar || null, avatarOriginal || null, sanitizeCrop(avatarCrop));
+        }
       }
       const u = db.getUserById(userId);
       if (!u) return sendJson(res, 404, { error: 'User not found' });
@@ -141,6 +154,7 @@ const routes = [
         avatarOriginal: u.avatar_original || null,
         avatarCrop: u.avatar_crop ? JSON.parse(u.avatar_crop) : null,
         siteAdmin: !!u.site_admin,
+        presence: db.getUserPresence(userId),
       });
     },
   },

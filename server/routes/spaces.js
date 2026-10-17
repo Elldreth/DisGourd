@@ -6,7 +6,7 @@ const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateSpaceName, normalizeChannelName, validateChannelName } = require('../validate');
 const { canViewChannel } = require('../permissions');
-const { userClients, sendToUser, deliverToSpaceMembers, deliverToChannelViewers } = require('../gateway/delivery');
+const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, effectiveStatus } = require('../gateway/delivery');
 
 const getJsonBody = readJsonBody;
 
@@ -87,12 +87,10 @@ const routes = [
 
       // GET /spaces/:name/members
       if (pathSegments[2] === 'members' && pathSegments.length === 3 && req.method === 'GET') {
-        const members = db.getSpaceMembers(space.id).map((m) => ({
-          username: m.username,
-          avatar: m.avatar,
-          role: m.role,
-          online: !!(userClients[m.userId] && userClients[m.userId].size > 0),
-        }));
+        const members = db.getSpaceMembers(space.id).map((m) => {
+          const status = effectiveStatus(m.userId); // online | idle | dnd | offline
+          return { username: m.username, avatar: m.avatar, role: m.role, status, online: status !== 'offline' };
+        });
         return sendJson(res, 200, { members });
       }
 

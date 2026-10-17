@@ -31,15 +31,24 @@ function deliverToChannelViewers(spaceName, channelName, frameStr) {
   }
 }
 
-// Announce a user's online/offline transition to everyone who shares a server
-// (or friendship) with them, so member lists update live.
-function broadcastPresence(userId, status) {
+// What others see: 'offline' when the user isn't connected or chose to be
+// invisible, otherwise their chosen mode ('online' | 'idle' | 'dnd').
+function effectiveStatus(userId) {
+  if (!(userClients[userId] && userClients[userId].size > 0)) return 'offline';
+  const mode = db.getUserPresence(userId);
+  return mode === 'invisible' ? 'offline' : mode;
+}
+
+// Announce a user's current status to everyone who shares a server (or
+// friendship) with them, so member lists update live. Never reveals the
+// chosen mode itself (an invisible user just looks offline).
+function broadcastPresence(userId) {
   const user = db.getUserById(userId);
   if (!user) return;
-  const frame = JSON.stringify({ type: 'presence', user: user.username, userId, status });
+  const frame = JSON.stringify({ type: 'presence', user: user.username, userId, status: effectiveStatus(userId) });
   const targets = new Set(db.getCoMemberIds(userId));
   for (const f of db.getFriends(userId)) targets.add(f.id);
   targets.forEach((id) => sendToUser(id, frame));
 }
 
-module.exports = { userClients, sendToUser, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence };
+module.exports = { userClients, sendToUser, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus };

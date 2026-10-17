@@ -9,6 +9,9 @@ import ConfirmDialog from './ConfirmDialog.jsx';
 // slide-in drawer below that, opened from the chat header (`open` /
 // `onClose`). The drawer closes on Esc, the backdrop or its close button;
 // focus moves into it and goes back where it was when it closes.
+// Spoken after a member's name (the dot alone isn't enough).
+const STATUS_WORDS = { idle: 'Idle', dnd: 'Do Not Disturb' };
+
 export default function MemberList({ space, members, currentUser, myRole, onMessageUser, onSetRole, onKick, open = false, onClose }) {
   const panelRef = useRef(null);
   const [kicking, setKicking] = useState(null); // username awaiting "are you sure?"
@@ -28,8 +31,10 @@ export default function MemberList({ space, members, currentUser, myRole, onMess
   }, [open]);
 
   const [menuFor, setMenuFor] = useState(null);
-  const online = members.filter((m) => m.online);
-  const offline = members.filter((m) => !m.online);
+  // status: online | idle | dnd | offline (older servers only sent `online`).
+  const statusOf = (m) => m.status || (m.online ? 'online' : 'offline');
+  const online = members.filter((m) => statusOf(m) !== 'offline');
+  const offline = members.filter((m) => statusOf(m) === 'offline');
   const isOwner = myRole === 'owner';
 
   function actionsFor(m) {
@@ -78,8 +83,9 @@ export default function MemberList({ space, members, currentUser, myRole, onMess
                   status === 'offline' ? 'opacity-50' : ''
                 } ${acts.length ? 'hover:bg-ink-700/60' : 'cursor-default'}`}
               >
-                <Avatar name={m.username} size={30} status={status} src={m.avatar} />
+                <Avatar name={m.username} size={30} status={statusOf(m)} src={m.avatar} />
                 <span className="min-w-0 flex-1 truncate text-sm text-gray-200">{m.username}</span>
+                {STATUS_WORDS[statusOf(m)] && <span className="sr-only">, {STATUS_WORDS[statusOf(m)]}</span>}
                 {m.role === 'owner' && <RoleBadge>Owner</RoleBadge>}
                 {m.role === 'admin' && <RoleBadge>Admin</RoleBadge>}
               </button>

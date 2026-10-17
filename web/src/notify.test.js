@@ -99,3 +99,15 @@ describe('notificationText', () => {
     expect(out.endsWith('…')).toBe(true);
   });
 });
+
+describe('Do Not Disturb (P2-14)', () => {
+  test('no desktop notifications and no sounds, even for mentions and DMs', () => {
+    const dnd = ctx({ dnd: true, level: 'all', focused: false });
+    expect(shouldNotify(msg({ mentions: ['sandy'] }), dnd)).toBeNull();
+    expect(shouldNotify(dmFrame(), dnd)).toBeNull();
+    expect(soundFor(msg({ mentions: ['sandy'] }), dnd)).toBeNull();
+    expect(soundFor(dmFrame(), dnd)).toBeNull();
+    // ...and everything comes back when it's off.
+    expect(shouldNotify(dmFrame(), ctx({ level: 'all', focused: false }))).toBe('dm');
+  });
+});

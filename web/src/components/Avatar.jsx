@@ -5,6 +5,7 @@ export default function Avatar({ name, size = 40, status, src, speaking }) {
     online: 'bg-online',
     offline: 'bg-gray-500',
     idle: 'bg-idle',
+    dnd: 'bg-pink',
   }[status];
 
   return (
