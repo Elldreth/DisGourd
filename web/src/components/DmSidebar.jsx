@@ -20,7 +20,7 @@ export default function DmSidebar({
   onLogout,
 }) {
   return (
-    <div className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
+    <nav aria-label="Direct messages" className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
       <header className="flex h-12 items-center border-b border-ink-900/60 px-4 shadow-xs shadow-black/20">
         <h2 className="font-bold">Direct Messages</h2>
       </header>
@@ -74,6 +74,6 @@ export default function DmSidebar({
         onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />
-    </div>
+    </nav>
   );
 }

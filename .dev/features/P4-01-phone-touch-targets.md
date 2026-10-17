@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P4-00)
 - **Phase:** 4
-- **State:** REVIEW (branch `claude/p4-01-touch-targets`, PR pending)
+- **State:** COMPLETE (merged in #103, 2026-10-17)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** P4-06 and P4-07 (`ChatPanel.jsx`, `MessageList.jsx`, `index.css`)

@@ -120,7 +120,7 @@ export default function ChannelList({
   }
 
   return (
-    <div className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
+    <nav aria-label="Channels" className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
       <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-xs shadow-black/20">
         {/* Server identity + the active highlight live in the left rail; the header
             just needs the name and its menu (which holds change/reposition icon). */}
@@ -205,15 +205,18 @@ export default function ChannelList({
                 </MenuItem>
               )}
               {isOwner && (
-                <MenuItem
-                  danger
-                  onClick={() => {
-                    closeMenu();
-                    setConfirmDeleteServer(true);
-                  }}
-                >
-                  <Icon name="trash" size={16} /> Delete server
-                </MenuItem>
+                <>
+                  <div role="separator" aria-orientation="horizontal" className="my-1 h-px bg-ink-500/60" />
+                  <MenuItem
+                    danger
+                    onClick={() => {
+                      closeMenu();
+                      setConfirmDeleteServer(true);
+                    }}
+                  >
+                    <Icon name="trash" size={16} /> Delete server
+                  </MenuItem>
+                </>
               )}
             </div>
           </>
@@ -564,7 +567,7 @@ export default function ChannelList({
           onSaved={onPermsChanged}
         />
       )}
-    </div>
+    </nav>
   );
 }
 

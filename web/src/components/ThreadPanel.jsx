@@ -159,6 +159,8 @@ export default function ThreadPanel({
         history={history}
         emptyHeading={messages.length ? 'The start of the thread' : 'No replies yet'}
         emptyBody={messages.length ? '' : 'Be the first to reply in this thread.'}
+        emptyIcon="thread"
+        topAligned
         onEditDone={() => composerRef.current?.focus()}
       />
       <TypingIndicator names={typingUsers} />
@@ -202,11 +204,9 @@ function RootMessage({ root, currentUser }) {
     <div className="flex gap-3 border-b border-ink-900/60 bg-ink-800/40 px-3 py-3" aria-label="Original message">
       <Avatar name={root.author || '?'} size={32} src={root.authorAvatar} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-sm font-semibold text-gray-100">{root.author || 'Unknown'}</span>
-          <span className="text-xs text-gray-500">
-            {formatDay(root.timestamp)} {formatTime(root.timestamp)}
-          </span>
+          <span className="text-xs text-gray-500">{`Started by ${root.author || 'unknown'} · ${formatDay(root.timestamp)} ${formatTime(root.timestamp)}`}</span>
         </div>
         <div className="prose-chat mt-0.5 max-h-40 overflow-y-auto text-sm text-gray-200">
           {root.content ? renderMarkdown(root.content, { me: currentUser, mentions: true }) : hasAttachment ? <em className="text-gray-400">Attachment</em> : null}

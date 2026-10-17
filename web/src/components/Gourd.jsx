@@ -1,8 +1,8 @@
 // The DisGourd logo: a bottle gourd whose lower bulb is an open speech bubble,
 // with a leaf on the stem. Paths match design/brand/disgourd-mark*.svg.
 //
-// With no `color` it draws the full-colour mark tuned for dark surfaces (violet
-// body, lime leaf). Pass `color` to draw it in one colour (e.g. white on a
+// With no `color` it draws the full-colour mark from the theme tokens (violet
+// body, lime leaf), so the light theme's darker lime keeps the leaf readable. Pass `color` to draw it in one colour (e.g. white on a
 // brand tile, or a faint watermark). Below ~28px it switches to the small-size
 // drawing: thicker bubble walls and no stem, so it stays readable.
 const BODY_OUTER =
@@ -29,8 +29,8 @@ export const GOURD_LIME = '#B8F34A';
 
 export default function Gourd({ size = 24, color, className = '', title }) {
   const small = size < 28;
-  const body = color || GOURD_VIOLET;
-  const leaf = color || GOURD_LIME;
+  const body = color || 'var(--color-brand-logo)';
+  const leaf = color || 'var(--color-lime)';
   return (
     <svg
       width={size}

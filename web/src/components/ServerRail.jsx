@@ -46,7 +46,8 @@ export default function ServerRail({
   }
 
   return (
-    <nav className="relative flex w-[72px] flex-col items-center gap-2 bg-ink-900 py-3">
+    <nav aria-label="Servers" className="relative flex w-[72px] flex-col items-center gap-2 bg-ink-900 py-3">
+      <h1 className="sr-only">DisGourd</h1>
       <button
         onClick={onSelectDms}
         title="Direct Messages"
@@ -62,7 +63,7 @@ export default function ServerRail({
           </span>
         )}
       </button>
-      <div className="h-px w-8 bg-ink-500/50" />
+      <div role="separator" aria-orientation="horizontal" className="h-px w-8 bg-ink-500/50" />
 
       <div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto">
         {spaces.map((s, i) => {
@@ -105,11 +106,13 @@ export default function ServerRail({
           );
         })}
 
+        {/* Filled circles are places; outlined ones are actions. */}
+        {spaces.length > 0 && <div role="separator" aria-orientation="horizontal" className="my-1 h-px w-8 shrink-0 bg-ink-500/50" />}
         <button
           onClick={() => setDialog({ tab: 'create' })}
           title="Create a server"
           aria-label="Create a server"
-          className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-ink-900 active:scale-90"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[26px] text-online ring-2 ring-inset ring-ink-500 transition-all hover:rounded-2xl hover:bg-online hover:text-ink-900 hover:ring-online active:scale-90"
         >
           <Icon name="plus" size={24} />
         </button>
@@ -118,7 +121,7 @@ export default function ServerRail({
           onClick={() => setDialog({ tab: 'join' })}
           title="Join a server with an invite"
           aria-label="Join a server with an invite"
-          className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-gray-300 transition-all hover:rounded-2xl hover:bg-brand hover:text-white active:scale-90"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[26px] text-gray-300 ring-2 ring-inset ring-ink-500 transition-all hover:rounded-2xl hover:bg-brand hover:text-white hover:ring-brand active:scale-90"
         >
           <Icon name="login" size={20} />
         </button>

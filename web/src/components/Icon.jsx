@@ -248,6 +248,7 @@ export default function Icon({ name, size = 20, className = '', strokeWidth = 1.
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
+      data-icon={name}
       role={title ? 'img' : undefined}
       aria-hidden={title ? undefined : 'true'}
       aria-label={title}

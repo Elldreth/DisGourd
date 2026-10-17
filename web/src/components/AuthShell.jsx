@@ -13,8 +13,8 @@ export default function AuthShell({ title, subtitle, children }) {
 
       <div className="anim-scale-in relative z-10 w-full max-w-md rounded-2xl bg-ink-800 p-8 ring-1 ring-ink-500">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-ink-900 ring-1 ring-ink-500">
-            <Gourd size={56} />
+          <div className="mx-auto mb-4 flex justify-center">
+            <Gourd size={64} />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
           <div className="mx-auto mt-1.5 max-w-xs text-sm text-gray-400">{subtitle}</div>
