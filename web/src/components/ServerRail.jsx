@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { initials, colorForName, unreadLabel } from '../util.js';
 import Icon from './Icon.jsx';
 import Gourd from './Gourd.jsx';
 import CreateServerDialog from './CreateServerDialog.jsx';
 
 // The far-left rail of server (space) icons, Discord-style, plus create/join.
+// pendingInvite: a code from an invite link; opens Join with it, then calls
+// onInviteOpened so the app can forget it.
 export default function ServerRail({
   spaces,
   currentSpace,
@@ -17,10 +19,20 @@ export default function ServerRail({
   onCreate,
   onJoin,
   onReorder,
+  pendingInvite = '',
+  onInviteOpened,
 }) {
-  const [dialogTab, setDialogTab] = useState(null); // 'create' | 'join' | null
+  const [dialog, setDialog] = useState(null); // { tab: 'create' | 'join', code } | null
   const [dragIndex, setDragIndex] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
+
+  useEffect(() => {
+    if (!pendingInvite) return;
+    setDialog({ tab: 'join', code: pendingInvite });
+    onInviteOpened?.();
+    // onInviteOpened is a fresh function each render; only a new code matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingInvite]);
 
   function handleDrop(toIndex) {
     if (dragIndex !== null && dragIndex !== toIndex && onReorder) {
@@ -94,7 +106,7 @@ export default function ServerRail({
         })}
 
         <button
-          onClick={() => setDialogTab('create')}
+          onClick={() => setDialog({ tab: 'create' })}
           title="Create a server"
           aria-label="Create a server"
           className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-online transition-all hover:rounded-2xl hover:bg-online hover:text-ink-900 active:scale-90"
@@ -103,7 +115,7 @@ export default function ServerRail({
         </button>
 
         <button
-          onClick={() => setDialogTab('join')}
+          onClick={() => setDialog({ tab: 'join' })}
           title="Join a server with an invite"
           aria-label="Join a server with an invite"
           className="flex h-12 w-12 items-center justify-center rounded-[26px] bg-ink-700 text-gray-300 transition-all hover:rounded-2xl hover:bg-brand hover:text-white active:scale-90"
@@ -112,12 +124,14 @@ export default function ServerRail({
         </button>
       </div>
 
-      {dialogTab && (
+      {dialog && (
         <CreateServerDialog
-          initialTab={dialogTab}
+          key={dialog.code || dialog.tab}
+          initialTab={dialog.tab}
+          initialCode={dialog.code}
           onCreate={onCreate}
           onJoin={onJoin}
-          onClose={() => setDialogTab(null)}
+          onClose={() => setDialog(null)}
         />
       )}
     </nav>

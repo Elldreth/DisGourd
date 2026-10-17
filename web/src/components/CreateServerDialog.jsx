@@ -31,7 +31,8 @@ const TABS = [
 // the ARIA tabs pattern (← → Home End move between them). Errors from the
 // server show inline and the dialog stays open; on success it closes.
 //   onCreate(name) / onJoin(code): resolve on success, throw with a message.
-export default function CreateServerDialog({ initialTab = 'create', onCreate, onJoin, onClose }) {
+//   initialCode: fills the Join box (from an invite link).
+export default function CreateServerDialog({ initialTab = 'create', initialCode = '', onCreate, onJoin, onClose }) {
   const [tab, setTab] = useState(initialTab);
   const baseId = useId();
   const tabRefs = useRef({});
@@ -83,7 +84,7 @@ export default function CreateServerDialog({ initialTab = 'create', onCreate, on
         {tab === 'create' ? (
           <CreatePanel fieldRef={fieldRef} onCreate={onCreate} onDone={onClose} onCancel={onClose} />
         ) : (
-          <JoinPanel fieldRef={fieldRef} onJoin={onJoin} onDone={onClose} onCancel={onClose} />
+          <JoinPanel fieldRef={fieldRef} initialCode={initialCode} onJoin={onJoin} onDone={onClose} onCancel={onClose} />
         )}
       </div>
     </Modal>
@@ -161,8 +162,8 @@ function CreatePanel({ fieldRef, onCreate, onDone, onCancel }) {
   );
 }
 
-function JoinPanel({ fieldRef, onJoin, onDone, onCancel }) {
-  const [input, setInput] = useState('');
+function JoinPanel({ fieldRef, initialCode, onJoin, onDone, onCancel }) {
+  const [input, setInput] = useState(initialCode);
   const [preview, setPreview] = useState(null); // { space, members, alreadyMember }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

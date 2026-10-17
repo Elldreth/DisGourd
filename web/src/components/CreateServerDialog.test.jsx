@@ -115,3 +115,17 @@ test('Join: an invalid code shows the server error inline', async () => {
   expect(screen.getByRole('alert').textContent).toBe('This invite is invalid or has expired');
   expect(onClose).not.toHaveBeenCalled();
 });
+
+test('Join: opened with a code from an invite link, it is filled in and previewed at once; Enter joins', async () => {
+  const { onJoin, onClose } = setup({ initialTab: 'join', initialCode: 'abc123' });
+  const box = screen.getByRole('textbox', { name: 'Invite code or link' });
+  expect(box.value).toBe('abc123');
+  await waitFor(() => expect(document.activeElement).toBe(box));
+  await waitFor(() => expect(screen.getByText(/Tx Check/)).toBeTruthy());
+  expect(api.previewInvite).toHaveBeenCalledWith('abc123');
+  await act(async () => {
+    fireEvent.submit(box.closest('form'));
+  });
+  expect(onJoin).toHaveBeenCalledWith('abc123');
+  expect(onClose).toHaveBeenCalled();
+});

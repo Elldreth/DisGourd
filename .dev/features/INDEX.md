@@ -74,6 +74,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-11 | Ctrl+K switcher + Alt+↑/↓ | 3 | COMPLETE | S–M | P3-01 (soft P1-14) | QuickSwitcher.jsx (new), shortcuts.js (new), App.jsx |
 | P3-12 | ↑ edits last message | 3 | COMPLETE | S | P3-05 | Composer.jsx, MessageList.jsx |
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | REVIEW | S–M | none | VideoStage.jsx, voice.js |
+| P3-14 | Invite deep link (`/invite/<code>`) | 3 | REVIEW | S | none (follow-up to P3-07) | inviteLink.js (new), App.jsx, ServerRail.jsx, CreateServerDialog.jsx, InviteDialog.jsx |
 
 ## Dependency map (hard dependencies)
 
