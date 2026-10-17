@@ -4,39 +4,14 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "web",
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["--prefix", "web", "run", "dev"],
       "port": 5173
     },
     {
       "name": "app",
       "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "server/server.js"
-      ],
+      "runtimeArgs": ["server/server.js"],
       "port": 3000
-    },
-    {
-      "name": "app-sandbox",
-      "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "-e",
-        "const os=require('os'),p=require('path');process.env.DB_PATH=p.join(os.tmpdir(),'disgourd-sandbox.db');process.env.UPLOADS_DIR=p.join(os.tmpdir(),'disgourd-sandbox-uploads');process.env.PORT='3005';require('./server/server.js').httpServer.listen(3005,()=>console.log('sandbox on 3005'))"
-      ],
-      "port": 3005
-    },
-    {
-      "name": "web-sandbox",
-      "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "-e",
-        "process.env.DISGOURD_SERVER='http://localhost:3005';const path=require('path');const vite=path.resolve('web/node_modules/vite/bin/vite.js');process.chdir('web');process.argv=[process.argv[0],vite,'--port','5174','--strictPort'];import(require('url').pathToFileURL(vite).href)"
-      ],
-      "port": 5174
     }
   ]
 }
