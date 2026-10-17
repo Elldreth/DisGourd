@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (rank 6, slice 2)
 - **Phase:** 2, rank 6
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S–M
 - **Depends on:** P2-09, P1-08 (pagination), P1-13 (DM hook)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #6
