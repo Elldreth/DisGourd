@@ -9,7 +9,7 @@ import DropOverlay from './DropOverlay.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 
 // The conversation view in Direct Messages mode.
-export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav }) {
+export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
   // The message being replied to ({ id, author }), cleared on send, Esc or switching conversation.
   const [replyingTo, setReplyingTo] = useState(null);
   useEffect(() => setReplyingTo(null), [username]);
@@ -33,8 +33,17 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
         <div className="mb-3 text-6xl">💬</div>
         <h2 className="text-xl font-bold">Your messages</h2>
         <p className="mt-1 max-w-sm text-gray-400">
-          Pick a conversation, or open a member in one of your servers to start a new one.
+          {onNewMessage ? 'Pick a conversation, or start one with anyone you share a server with.' : 'Pick a conversation, or open a member in one of your servers to start a new one.'}
         </p>
+        {onNewMessage && (
+          <button
+            type="button"
+            onClick={onNewMessage}
+            className="tap-row mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover"
+          >
+            New message
+          </button>
+        )}
       </main>
     );
   }

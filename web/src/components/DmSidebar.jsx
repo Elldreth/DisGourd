@@ -1,4 +1,5 @@
 import Avatar from './Avatar.jsx';
+import IconButton from './IconButton.jsx';
 import UserFooter from './UserFooter.jsx';
 import { unreadLabel } from '../util.js';
 
@@ -18,18 +19,38 @@ export default function DmSidebar({
   onEditStatus,
   onOpenProfile,
   onLogout,
+  onNewMessage,
 }) {
   return (
     <nav aria-label="Direct messages" className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
-      <header className="flex h-12 items-center border-b border-ink-900/60 px-4 shadow-xs shadow-black/20">
+      <header className="flex h-12 items-center justify-between border-b border-ink-900/60 pl-4 pr-2 shadow-xs shadow-black/20">
         <h2 className="font-bold">Direct Messages</h2>
+        {onNewMessage && (
+          <IconButton
+            icon="edit"
+            size={18}
+            label="New message"
+            title="New message (Ctrl+Shift+K)"
+            onClick={onNewMessage}
+            className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+          />
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto px-2 py-3">
         {conversations.length === 0 && (
-          <p className="px-2 text-sm text-gray-500">
-            No conversations yet. Open a member in a server (right-hand list) to start one.
-          </p>
+          <div className="px-2 text-sm text-gray-500">
+            <p>No conversations yet.</p>
+            {onNewMessage && (
+              <button
+                type="button"
+                onClick={onNewMessage}
+                className="tap-row mt-2 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-hover"
+              >
+                New message
+              </button>
+            )}
+          </div>
         )}
         {conversations.map((c) => {
           const active = c.username === currentDm;

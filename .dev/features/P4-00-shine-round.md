@@ -14,9 +14,9 @@ Take the fifteen findings of the review and ship the ones that change how the ap
 | ID | Title | Size | Review items | State |
 |---|---|---|---|---|
 | P4-01 | Phone touch targets and header | M | A1, M2 | COMPLETE (#103) |
-| P4-02 | Settings sections | M | F1 | REVIEW |
+| P4-02 | Settings sections | M | F1 | COMPLETE (#105) |
 | P4-03 | Empty states with illustrations | M | V3 (+ kie.ai assets) | READY |
-| P4-04 | New message from DMs | S | F2 | READY |
+| P4-04 | New message from DMs | S | F2 | REVIEW |
 | P4-05 | Calmer link previews | S | V1 | READY |
 | P4-06 | Hierarchy and a11y polish | S | V4, F6, V5, V6, V8, A2, A3, A4, V2, V7 | COMPLETE (#104) |
 | P4-07 | Thread panel on phones | S | M1 (+ V8 if P4-06 hasn't landed) | READY |

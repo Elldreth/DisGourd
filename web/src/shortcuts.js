@@ -2,12 +2,13 @@ import { useEffect, useRef } from 'react';
 
 // App-wide keyboard shortcuts:
 //   Ctrl/Cmd+K          open the quick switcher ('switcher')
+//   Ctrl/Cmd+Shift+K    new direct message: the people picker ('people')
 //   Alt+↑ / Alt+↓       previous / next text channel ('prev' / 'next')
 //   Alt+Shift+↑ / ↓     previous / next unread channel ('prev-unread' / 'next-unread')
 // Voice owns Ctrl+Shift+M/D and the push-to-talk key; none of these overlap.
 export function matchShortcut(e) {
   const k = e.key;
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (k === 'k' || k === 'K')) return 'switcher';
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (k === 'k' || k === 'K')) return e.shiftKey ? 'people' : 'switcher';
   if (e.altKey && !e.ctrlKey && !e.metaKey && (k === 'ArrowUp' || k === 'ArrowDown')) {
     const dir = k === 'ArrowUp' ? 'prev' : 'next';
     return e.shiftKey ? `${dir}-unread` : dir;

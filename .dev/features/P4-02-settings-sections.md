@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P4-00)
 - **Phase:** 4
-- **State:** REVIEW (branch `claude/p4-02-settings`, PR pending)
+- **State:** COMPLETE (merged in #105, 2026-10-17)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** anything editing `ProfileDialog.jsx`, `AudioSettings.jsx`, `NotificationSettings.jsx`, `AppearanceSettings.jsx`, `RegistrationAdmin.jsx`

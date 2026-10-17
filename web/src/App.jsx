@@ -26,7 +26,7 @@ import ImageCropper from './components/ImageCropper.jsx';
 import StatusDialog from './components/StatusDialog.jsx';
 import { useToasts } from './components/Toasts.jsx';
 import { useUndoDelete } from './state/useUndoDelete.js';
-import QuickSwitcher, { itemKey, loadRecent, recordVisit } from './components/QuickSwitcher.jsx';
+import QuickSwitcher, { itemKey, loadRecent, recordVisit, peopleItems } from './components/QuickSwitcher.jsx';
 import { useShortcuts, stepChannel } from './shortcuts.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
 
@@ -275,11 +275,27 @@ export default function App() {
     if (here) recordVisit(here, myId);
   }, [here, myId]);
 
+  // "New message": the quick switcher in people mode. Members of every server
+  // you're in are fetched when it opens (one small request per server); the
+  // list shows your conversations straight away and fills in as they arrive.
+  const [people, setPeople] = useState([]);
+  function openPeoplePicker() {
+    if (dm.conversations.length === 0) dm.loadConversations();
+    setPeople([]);
+    setSwitcher({ recent: loadRecent(myId), mode: 'people' });
+    Promise.all(sp.spaces.map((s) => api.getMembers(s.name).then((r) => r.members || []).catch(() => []))).then((lists) =>
+      setPeople(lists.flat())
+    );
+  }
   useShortcuts((action) => {
     if (!token) return;
     if (action === 'switcher') {
       if (dm.conversations.length === 0) dm.loadConversations(); // so DMs are listed too
       setSwitcher({ recent: loadRecent(myId) });
+      return;
+    }
+    if (action === 'people') {
+      openPeoplePicker();
       return;
     }
     if (view !== 'server') return;
@@ -289,8 +305,11 @@ export default function App() {
     if (to) sp.selectChannel(to);
   });
 
-  const switcherItems = switcher
-    ? [
+  const switcherItems = !switcher
+    ? []
+    : switcher.mode === 'people'
+      ? peopleItems({ me: user, conversations: dm.conversations, unread: dm.unread, members: people })
+      : [
         ...sp.orderedSpaces.flatMap((s) =>
           s.channels.map((c) => ({
             kind: 'channel',
@@ -302,8 +321,7 @@ export default function App() {
         ),
         ...sp.orderedSpaces.map((s) => ({ kind: 'server', name: s.name, unread: spaceUnread[s.name] || 0, mention: spaceMentions[s.name] || 0 })),
         ...dm.conversations.map((d) => ({ kind: 'dm', username: d.username, unread: dm.unread[d.username] || 0 })),
-      ]
-    : [];
+      ];
   function goToPicked(it) {
     setSwitcher(null);
     setNavOpen(false);
@@ -355,6 +373,7 @@ export default function App() {
           <DmSidebar
             conversations={dm.conversations}
             currentDm={dm.current}
+            onNewMessage={openPeoplePicker}
             unread={dm.unread}
             onSelect={(u) => {
               selectDm(u);
@@ -458,6 +477,7 @@ export default function App() {
           onLoadOlder={dm.loadOlder}
           history={dm.history}
           onTyping={dm.sendTyping}
+          onNewMessage={openPeoplePicker}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenNav={() => setNavOpen(true)}
         />
@@ -572,7 +592,7 @@ export default function App() {
         />
       )}
       {switcher && (
-        <QuickSwitcher items={switcherItems} recent={switcher.recent} onPick={goToPicked} onClose={() => setSwitcher(null)} />
+        <QuickSwitcher mode={switcher.mode} items={switcherItems} recent={switcher.recent} onPick={goToPicked} onClose={() => setSwitcher(null)} />
       )}
       {statusOpen && (
         <StatusDialog current={profile || {}} onSave={saveStatus} onClose={() => setStatusOpen(false)} />

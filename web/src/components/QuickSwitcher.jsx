@@ -6,9 +6,31 @@ import Modal from './Modal.jsx';
 //   { kind: 'channel', space, channel, unread?, mention? }
 //   { kind: 'server', name, unread?, mention? }
 //   { kind: 'dm', username, unread? }
+//   { kind: 'person', username }       (people mode: a member you haven't messaged yet)
+//
+// `mode="people"` is the "New message" picker: the same dialog, listing only
+// people (your conversations, then everyone you share a server with).
 
 export const itemKey = (it) =>
   it.kind === 'channel' ? `c:${JSON.stringify([it.space, it.channel])}` : it.kind === 'server' ? `s:${it.name}` : `d:${it.username}`;
+
+// The people-mode list: your conversations (with their unread counts) first,
+// then members of your servers you haven't messaged, never yourself, no repeats.
+export function peopleItems({ me, conversations = [], unread = {}, members = [] }) {
+  const seen = new Set([me]);
+  const items = [];
+  for (const c of conversations) {
+    if (seen.has(c.username)) continue;
+    seen.add(c.username);
+    items.push({ kind: 'dm', username: c.username, unread: unread[c.username] || 0 });
+  }
+  for (const m of members) {
+    if (seen.has(m.username)) continue;
+    seen.add(m.username);
+    items.push({ kind: 'person', username: m.username });
+  }
+  return items;
+}
 
 const itemName = (it) => (it.kind === 'channel' ? it.channel : it.kind === 'server' ? it.name : it.username);
 
@@ -67,7 +89,9 @@ export function rankItems(items, query, recent) {
 
 const MAX_SHOWN = 50;
 
-export default function QuickSwitcher({ items, recent, onPick, onClose }) {
+export default function QuickSwitcher({ items, recent, onPick, onClose, mode = 'go' }) {
+  const people = mode === 'people';
+  const prompt = people ? 'Message who?' : 'Where do you want to go?';
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef(null);
@@ -98,7 +122,7 @@ export default function QuickSwitcher({ items, recent, onPick, onClose }) {
   return (
     <Modal
       onClose={onClose}
-      label="Quick switcher"
+      label={people ? 'New message' : 'Quick switcher'}
       initialFocusRef={inputRef}
       backdropClassName="flex items-start justify-center bg-black/60 p-4 pt-20"
       panelClassName="flex max-h-[70vh] w-full max-w-lg flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
@@ -107,7 +131,7 @@ export default function QuickSwitcher({ items, recent, onPick, onClose }) {
         <input
           ref={inputRef}
           role="combobox"
-          aria-label="Where do you want to go?"
+          aria-label={prompt}
           aria-expanded={results.length > 0}
           aria-controls={listId}
           aria-autocomplete="list"
@@ -115,13 +139,13 @@ export default function QuickSwitcher({ items, recent, onPick, onClose }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Where do you want to go?"
+          placeholder={prompt}
           autoComplete="off"
           spellCheck={false}
           className="w-full bg-transparent text-lg text-gray-100 outline-hidden placeholder:text-gray-500"
         />
       </div>
-      <ul id={listId} role="listbox" aria-label="Destinations" className="flex-1 overflow-y-auto p-2">
+      <ul id={listId} role="listbox" aria-label={people ? 'People' : 'Destinations'} className="flex-1 overflow-y-auto p-2">
         {results.map((it, i) => (
           <li
             key={itemKey(it)}
@@ -135,12 +159,13 @@ export default function QuickSwitcher({ items, recent, onPick, onClose }) {
             }`}
           >
             <span className="w-4 shrink-0 text-center text-gray-500" aria-hidden="true">
-              {it.kind === 'channel' ? '#' : it.kind === 'dm' ? '@' : '◆'}
+              {it.kind === 'channel' ? '#' : it.kind === 'dm' || it.kind === 'person' ? '@' : '◆'}
             </span>
             <span className={`truncate ${it.unread || it.mention ? 'font-semibold text-gray-100' : ''}`}>{itemName(it)}</span>
             {it.kind === 'channel' && <span className="truncate text-xs text-gray-500">{it.space}</span>}
             {it.kind === 'server' && <span className="text-xs text-gray-500">server</span>}
             {it.kind === 'dm' && <span className="text-xs text-gray-500">direct message</span>}
+            {it.kind === 'person' && <span className="text-xs text-gray-500">member</span>}
             {(it.mention || it.unread) > 0 && (
               <span className="ml-auto rounded-full bg-danger px-1.5 text-xs font-bold text-ink-900">
                 {it.mention ? `@${it.mention}` : it.unread}
@@ -149,9 +174,13 @@ export default function QuickSwitcher({ items, recent, onPick, onClose }) {
           </li>
         ))}
       </ul>
-      {results.length === 0 && <p className="p-4 text-center text-sm text-gray-500">No matches. Try another name.</p>}
+      {results.length === 0 && (
+        <p className="p-4 text-center text-sm text-gray-500">
+          {people ? 'No one by that name in your servers. People you share a server with show up here.' : 'No matches. Try another name.'}
+        </p>
+      )}
       <p className="border-t border-ink-500/40 px-3 py-2 text-xs text-gray-500">
-        ↑↓ to choose · Enter to go · Esc to close · Alt+↑↓ switches channels
+        {people ? '↑↓ to choose · Enter to message · Esc to close' : '↑↓ to choose · Enter to go · Esc to close · Alt+↑↓ switches channels'}
       </p>
     </Modal>
   );
