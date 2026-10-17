@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — Ops
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P1-16 (both edit README.md / docker-compose.yml)
@@ -34,7 +34,7 @@
 ## Evidence
 Baseline: main after #90 (P2-23). Branch `claude/p1-15-docker-hardening`.
 
-**There's no Docker on the dev machine**, so the container criteria are proven by CI instead. The existing "Docker image builds" job now also runs `deploy/docker-smoke.sh` on GitHub's Ubuntu runner (real Docker). It runs the image as 99:100 with host folders. Results are on the PR's checks; this packet is updated once they're green.
+**There's no Docker on the dev machine**, so the container criteria are proven by CI instead. The existing "Docker image builds" job now also runs `deploy/docker-smoke.sh` on GitHub's Ubuntu runner (real Docker). It runs the image as 99:100 with host folders. **Result (PR #91, run 39006668509, all green):** healthy after 6s; `uid=99 gid=100`; register → upload → restart → login + file OK, DB file on the host owned by 99:100; root-owned volumes → exit 1 with "DisGourd can't write to its data folders (running as 99:100)" + `EACCES` for both folders → after `chown -R 99:100` healthy after 6s; "Docker smoke test passed."
 
 | Acceptance criterion | Evidence |
 |---|---|

@@ -32,7 +32,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-12 | App split 1/3: channel-message hook | 1 | COMPLETE | M | none (after P1-11) | App.jsx, state/useChannelMessages.js |
 | P1-13 | App split 2/3: DM hook | 1 | COMPLETE | S–M | P1-12 | App.jsx, state/useDms.js |
 | P1-14 | App split 3/3: spaces + voice hooks | 1 | COMPLETE | M | P1-13 | App.jsx, state/useSpaces.js, state/useVoiceCall.js |
-| P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | REVIEW | S | none | Dockerfile, docker-compose.yml, README.md |
+| P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | COMPLETE | S | none | Dockerfile, docker-compose.yml, README.md |
 | P1-16 | Nightly VACUUM INTO backups | 1 | COMPLETE | S | none | backup.js (new), server.js (boot), README.md |
 | P1-17 | GitHub Actions CI | 1 | COMPLETE | S | none | .github/workflows/ci.yml |
 | P1-18 | Bump Vite | 1 | COMPLETE | S | none | web/package.json, vite.config.js |
@@ -48,7 +48,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-07 | Any emoji as reaction | 2 | COMPLETE | S | P2-06, P3-05 | MessageActions.jsx |
 | P2-08 | Drag-drop + paste upload | 2 | COMPLETE | S | none | Composer.jsx, ChatPanel.jsx, DmPanel.jsx |
 | P2-09 | Replies in channels | 2 | COMPLETE | M | P1-01, P1-05, P3-05 | migrations.js, db/index.js, gateway/chat.js, Composer/MessageList |
-| P2-10 | Replies in DMs + jump (`around`) | 2 | PLANNED | S–M | P2-09, P1-08, P1-13 | db/index.js, gateway/dm.js, routes, MessageList |
+| P2-10 | Replies in DMs + jump (`around`) | 2 | REVIEW | S–M | P2-09, P1-08, P1-13 | db/index.js, gateway/dm.js, routes, MessageList |
 | P2-11 | SSRF-safe fetcher + OG parser | 2 | COMPLETE | M | none | net/safeFetch.js (new), integrations/unfurl.js (new) |
 | P2-12 | Link previews end-to-end | 2 | COMPLETE | M | P2-11, P1-01, P1-05 (soft P2-01) | linkPreviews.js (new), migrations.js, gateway, Embed.jsx (new) |
 | P2-13 | Pins | 2 | PLANNED | M | P1-01, P1-04, P1-05, P3-05 | migrations.js, gateway/chat.js, routes/spaces.js, PinsPanel.jsx (new) |

@@ -438,6 +438,19 @@ function getMessagesAfter(spaceName, channelName, afterId, limit = 200) {
   return attachEmbeds('channel', attachReactions(rows.map(hydrateMessage)));
 }
 
+// A window of history around one message (for jumping to it): up to `half`
+// messages before it, the message itself, and up to `half` after, oldest
+// first. null if that message isn't in this channel.
+function getMessagesAround(spaceName, channelName, messageId, half = 25) {
+  const where = 'WHERE s.name = ? AND c.name = ?';
+  if (!db.prepare(`${MESSAGE_SELECT} ${where} AND m.id = ?`).get(spaceName, channelName, messageId)) return null;
+  const before = db.prepare(`${MESSAGE_SELECT} ${where} AND m.id < ? ORDER BY m.id DESC LIMIT ?`)
+    .all(spaceName, channelName, messageId, half).reverse();
+  const from = db.prepare(`${MESSAGE_SELECT} ${where} AND m.id >= ? ORDER BY m.id ASC LIMIT ?`)
+    .all(spaceName, channelName, messageId, half + 1);
+  return attachEmbeds('channel', attachReactions([...before, ...from].map(hydrateMessage)));
+}
+
 // ---- Link previews ----
 // kind: 'channel' (messages) or 'dm' (dm_messages).
 const EMBED_TABLE = { channel: 'message_embeds', dm: 'dm_message_embeds' };
@@ -668,40 +681,73 @@ const DM_SELECT = `
          m.edited_at AS editedAt,
          m.author_id AS authorId,
          u.username AS author,
-         u.avatar_url AS authorAvatar
+         u.avatar_url AS authorAvatar,
+         m.reply_to AS replyToId,
+         p.id AS replyFoundId,
+         p.content AS replyContent,
+         p.attachment_url AS replyAttachment,
+         p.attachments AS replyAttachments,
+         p.author_id AS replyAuthorId,
+         pu.username AS replyAuthor
   FROM dm_messages m
   JOIN users u ON m.author_id = u.id
+  LEFT JOIN dm_messages p ON p.id = m.reply_to
+  LEFT JOIN users pu ON pu.id = p.author_id
 `;
 
-function storeDm(fromId, toId, content, attachments = [], spoiler = false) {
+function storeDm(fromId, toId, content, attachments = [], spoiler = false, replyTo = null) {
   const [a, b] = dmPair(fromId, toId);
   const list = Array.isArray(attachments) ? attachments : (attachments ? [attachments] : []);
   const first = list[0] || null;
   const json = list.length ? JSON.stringify(list) : null;
   const createdAt = Date.now();
   const info = db.prepare(
-    'INSERT INTO dm_messages(user_a, user_b, author_id, content, attachment_url, attachments, attachment_spoiler, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(a, b, fromId, content, first, json, spoiler ? 1 : 0, createdAt);
+    'INSERT INTO dm_messages(user_a, user_b, author_id, content, attachment_url, attachments, attachment_spoiler, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(a, b, fromId, content, first, json, spoiler ? 1 : 0, createdAt, replyTo || null);
   return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 
 function getDmMessages(userId, otherId, limit = 50, offset = 0) {
   const [a, b] = dmPair(userId, otherId);
   return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? ORDER BY m.id DESC LIMIT ? OFFSET ?`)
-    .all(a, b, limit, offset).reverse().map(hydrateAttachments));
+    .all(a, b, limit, offset).reverse().map(hydrateMessage));
+}
+
+// The quote for a new DM reply, if `messageId` is in this same conversation
+// (so a reply can never reveal someone else's messages).
+function getDmReplyTarget(userId, otherId, messageId) {
+  const [a, b] = dmPair(userId, otherId);
+  const row = db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id = ?`).get(a, b, messageId);
+  if (!row) return null;
+  return {
+    id: row.id,
+    authorId: row.authorId,
+    author: row.author || 'Unknown',
+    snippet: replySnippet(row.content, !!(row.attachment || row.attachments)),
+  };
+}
+
+// A window of a conversation around one message (see getMessagesAround).
+function getDmMessagesAround(userId, otherId, messageId, half = 25) {
+  const [a, b] = dmPair(userId, otherId);
+  const where = 'WHERE m.user_a = ? AND m.user_b = ?';
+  if (!db.prepare(`${DM_SELECT} ${where} AND m.id = ?`).get(a, b, messageId)) return null;
+  const before = db.prepare(`${DM_SELECT} ${where} AND m.id < ? ORDER BY m.id DESC LIMIT ?`).all(a, b, messageId, half).reverse();
+  const from = db.prepare(`${DM_SELECT} ${where} AND m.id >= ? ORDER BY m.id ASC LIMIT ?`).all(a, b, messageId, half + 1);
+  return attachEmbeds('dm', [...before, ...from].map(hydrateMessage));
 }
 
 // The page of DMs just older than `beforeId`, oldest-first.
 function getDmMessagesBefore(userId, otherId, beforeId, limit = 50) {
   const [a, b] = dmPair(userId, otherId);
   return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id < ? ORDER BY m.id DESC LIMIT ?`)
-    .all(a, b, beforeId, limit).reverse().map(hydrateAttachments));
+    .all(a, b, beforeId, limit).reverse().map(hydrateMessage));
 }
 
 function getDmMessagesAfter(userId, otherId, afterId, limit = 200) {
   const [a, b] = dmPair(userId, otherId);
   return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.user_a = ? AND m.user_b = ? AND m.id > ? ORDER BY m.id ASC LIMIT ?`)
-    .all(a, b, afterId, limit).map(hydrateAttachments));
+    .all(a, b, afterId, limit).map(hydrateMessage));
 }
 
 // The two participants + author of a DM, so we can notify both sides.
@@ -1093,6 +1139,9 @@ module.exports = {
   deleteMessage,
   getMessages,
   getMessagesAfter,
+  getMessagesAround,
+  getDmMessagesAround,
+  getDmReplyTarget,
   createSpaceWithDefaults,
   SERVER_TEMPLATES,
   templateChannels,

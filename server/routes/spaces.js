@@ -151,12 +151,22 @@ const routes = [
       if (pathSegments[2] === 'channels') {
         const channelName = pathSegments[3];
         // GET messages — must be a member AND allowed to view this channel.
-        // Latest page by default; ?before=<id> pages back, ?after=<id> backfills
-        // (after > before > offset).
+        // Latest page by default; ?around=<id> is a window around one message
+        // (jumping to it; 404 if it isn't in this channel), ?after=<id> loads
+        // newer (up to 200 unless ?limit=), ?before=<id> pages back
+        // (around > after > before > offset).
         if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
           if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          const around = intParam(parsedUrl.query.around, 0, 0, Number.MAX_SAFE_INTEGER);
+          if (around > 0) {
+            const rows = db.getMessagesAround(spaceName, channelName, around);
+            return rows ? sendJson(res, 200, withPublicEmbeds(rows)) : sendJson(res, 404, { error: 'Message not found in this channel' });
+          }
           const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
-          if (after > 0) return sendJson(res, 200, withPublicEmbeds(db.getMessagesAfter(spaceName, channelName, after)));
+          if (after > 0) {
+            const afterLimit = intParam(parsedUrl.query.limit, 200, 1, 200);
+            return sendJson(res, 200, withPublicEmbeds(db.getMessagesAfter(spaceName, channelName, after, afterLimit)));
+          }
           const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
           const before = intParam(parsedUrl.query.before, 0, 0, Number.MAX_SAFE_INTEGER);
           if (before > 0) return sendJson(res, 200, withPublicEmbeds(db.getMessagesBefore(spaceName, channelName, before, limit)));

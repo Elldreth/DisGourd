@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
@@ -9,7 +9,10 @@ import DropOverlay from './DropOverlay.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 
 // The conversation view in Direct Messages mode.
-export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, onTyping, onOpenSearch, onOpenNav }) {
+export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav }) {
+  // The message being replied to ({ id, author }), cleared on send, Esc or switching conversation.
+  const [replyingTo, setReplyingTo] = useState(null);
+  useEffect(() => setReplyingTo(null), [username]);
   // Files dropped anywhere on the conversation go to the composer.
   const composerRef = useRef(null);
   const listRef = useRef(null);
@@ -68,13 +71,28 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
+        history={history}
+        onReply={(m) => setReplyingTo({ id: m.id, author: m.author })}
         simple
         emptyHeading={`This is the beginning of your conversation with ${username}`}
         emptyBody="Say hi! 👋"
         onEditDone={() => composerRef.current?.focus()}
       />
       <TypingIndicator names={typing} />
-      <Composer ref={composerRef} onEditLast={() => listRef.current?.startEditLast() ?? false} channel={username} disabled={false} onSend={onSend} onTyping={onTyping} placeholder={`Message @${username}`} />
+      <Composer
+        ref={composerRef}
+        onEditLast={() => listRef.current?.startEditLast() ?? false}
+        channel={username}
+        disabled={false}
+        onSend={(content, attachments, spoiler) => {
+          onSend(content, attachments, spoiler, replyingTo ? replyingTo.id : undefined);
+          setReplyingTo(null);
+        }}
+        replyingTo={replyingTo}
+        onCancelReply={() => setReplyingTo(null)}
+        onTyping={onTyping}
+        placeholder={`Message @${username}`}
+      />
     </main>
   );
 }

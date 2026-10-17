@@ -31,7 +31,10 @@ function mentionsUser(content, me) {
 // bar to jump back to it when it's out of view.
 // `onEditDone` (optional) is called when an edit started by `startEditLast()`
 // (the composer's up arrow) ends, so the composer can take focus back.
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody }, ref) {
+// `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
+// an original that isn't loaded, and, while that older window is showing
+// (`history.hasNewer`), offers newer pages and "Jump to present".
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, history = null }, ref) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // The message being edited, and where focus goes when that edit ends: back
@@ -83,7 +86,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
   useEffect(() => setBarDismissed(false), [newMessages]);
   // The latest props, for the jump loop (which awaits across renders).
   const live = useRef({});
-  live.current = { messages, hasMore, loadingOlder, onLoadOlder, newMessages, currentUser };
+  live.current = { messages, hasMore, loadingOlder, onLoadOlder, newMessages, currentUser, history };
 
   // Is the divider out of view above (or not loaded yet)?
   function checkDivider() {
@@ -136,18 +139,60 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
     }
   }
 
-  function jumpTo(id) {
+  function note(text) {
+    setJumpNote(text);
+    timers.current.push(setTimeout(() => setJumpNote(''), 3000));
+  }
+  // Scroll to a loaded message and highlight it; false if it isn't loaded.
+  function showMessage(id) {
     const el = containerRef.current?.querySelector(`[data-msg-id="${id}"]`);
-    if (!el) {
-      setJumpNote('The original message is further up in the history.');
-      timers.current.push(setTimeout(() => setJumpNote(''), 3000));
-      return;
-    }
+    if (!el) return false;
     el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     el.focus({ preventScroll: true });
     setFlashId(id);
     timers.current.push(setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 2000));
+    return true;
   }
+  // A reply's quote was clicked: go to the original, loading the history
+  // around it first if it isn't loaded.
+  async function jumpTo(id) {
+    if (showMessage(id)) return;
+    const h = live.current.history;
+    if (!h?.jumpAround) {
+      note('The original message is further up in the history.');
+      return;
+    }
+    if (!(await h.jumpAround(id))) {
+      note("Couldn't load the original message.");
+      return;
+    }
+    // Wait for the window to render, then go to it.
+    for (let i = 0; i < 20 && !containerRef.current?.querySelector(`[data-msg-id="${id}"]`); i++) await nextFrame();
+    if (!showMessage(id)) note("Couldn't load the original message.");
+  }
+
+  async function jumpToPresent() {
+    pendingInitialScroll.current = true; // the newest page lands at the bottom
+    await live.current.history?.jumpToPresent();
+  }
+
+  // Reading older history: a sentinel at the bottom asks for newer pages.
+  const bottomSentinel = useRef(null);
+  const loadNewerRef = useRef(null);
+  loadNewerRef.current = history?.hasNewer && !history.loadingNewer ? history.loadNewer : null;
+  useEffect(() => {
+    const el = containerRef.current;
+    const sentinel = bottomSentinel.current;
+    if (!el || !sentinel || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && loadNewerRef.current) loadNewerRef.current();
+      },
+      { root: el, rootMargin: '0px 0px 300px 0px' }
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [history?.hasNewer, history?.loadingNewer]);
 
   // Loading older messages: a sentinel at the top asks for the next page, and
   // the scroll position is restored after the prepend so the view doesn't jump.
@@ -198,6 +243,8 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
       requestAnimationFrame(toBottom);
       return;
     }
+    // Reading older history: never chase the bottom (newer pages append there).
+    if (live.current.history?.hasNewer) return;
     // Subsequent updates: only follow the newest if you're already near the bottom.
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
     if (nearBottom) bottomRef.current?.scrollIntoView({ block: 'end' });
@@ -244,6 +291,14 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
 
   return (
     <div ref={containerRef} onScroll={divider ? checkDivider : undefined} className="relative flex-1 overflow-y-auto">
+      {history?.hasNewer && (
+        <div className="sticky top-0 z-30 flex items-center gap-3 bg-ink-900/95 px-4 py-1.5 text-sm text-gray-200 shadow-md ring-1 ring-ink-500/60">
+          <span className="min-w-0 flex-1 truncate">You’re viewing older messages</span>
+          <button type="button" onClick={jumpToPresent} className="shrink-0 font-semibold text-brand-hi hover:underline">
+            Jump to present
+          </button>
+        </div>
+      )}
       {showBar && (
         <div className="anim-slide-down sticky top-0 z-30 flex items-center gap-3 bg-brand px-4 py-1.5 text-sm text-white shadow-md">
           <span className="min-w-0 flex-1 truncate">
@@ -341,6 +396,19 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               onEndEdit={endEdit}
             />
           )
+        )}
+        {history?.hasNewer && (
+          <div className="flex justify-center py-3">
+            <div ref={bottomSentinel} aria-hidden="true" />
+            <button
+              type="button"
+              onClick={() => history.loadNewer()}
+              disabled={history.loadingNewer}
+              className="rounded-full bg-ink-600 px-4 py-1.5 text-sm text-gray-200 transition hover:bg-ink-500 disabled:opacity-60"
+            >
+              {history.loadingNewer ? 'Loading newer messages…' : 'Load newer messages'}
+            </button>
+          </div>
         )}
         <div ref={bottomRef} />
       </div>

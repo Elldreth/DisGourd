@@ -26,8 +26,16 @@ const routes = [
       if (pathSegments[2] === 'messages' && req.method === 'GET') {
         const other = db.getUserByUsername(pathSegments[1]);
         if (!other) return sendJson(res, 404, { error: 'User not found' });
+        const around = intParam(parsedUrl.query.around, 0, 0, Number.MAX_SAFE_INTEGER);
+        if (around > 0) {
+          const rows = db.getDmMessagesAround(userId, other.id, around);
+          return rows ? sendJson(res, 200, withPublicEmbeds(rows)) : sendJson(res, 404, { error: 'Message not found in this conversation' });
+        }
         const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
-        if (after > 0) return sendJson(res, 200, withPublicEmbeds(db.getDmMessagesAfter(userId, other.id, after)));
+        if (after > 0) {
+          const afterLimit = intParam(parsedUrl.query.limit, 200, 1, 200);
+          return sendJson(res, 200, withPublicEmbeds(db.getDmMessagesAfter(userId, other.id, after, afterLimit)));
+        }
         const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
         const before = intParam(parsedUrl.query.before, 0, 0, Number.MAX_SAFE_INTEGER);
         if (before > 0) return sendJson(res, 200, withPublicEmbeds(db.getDmMessagesBefore(userId, other.id, before, limit)));
