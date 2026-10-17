@@ -26,6 +26,7 @@ export function attentionKind(frame, ctx) {
 // Whether to show a desktop notification, by level: 'off' | 'mentions'
 // (mentions and DMs) | 'all'. Returns the kind, or null.
 export function shouldNotify(frame, ctx) {
+  if (ctx.dnd) return null; // Do Not Disturb: badges still count, nothing pops up
   const kind = attentionKind(frame, ctx);
   if (!kind || ctx.level === 'off' || !ctx.level) return null;
   if (kind === 'message' && ctx.level !== 'all') return null;
@@ -36,7 +37,7 @@ export function shouldNotify(frame, ctx) {
 // (other messages, only at the "all messages" level). Independent of whether
 // desktop notifications are on.
 export function soundFor(frame, ctx) {
-  if (!ctx.sounds) return null;
+  if (!ctx.sounds || ctx.dnd) return null;
   const kind = attentionKind(frame, ctx);
   if (kind === 'mention' || kind === 'dm') return 'mention';
   if (kind === 'message' && ctx.level === 'all') return 'message';
@@ -63,7 +64,8 @@ const canNotify = () => typeof Notification !== 'undefined' && Notification.perm
 // Hook: returns onIncoming(frame) for the channel and DM hooks to call with
 // every incoming message. App keeps `update(...)` current with where you are
 // and how to open a conversation when a notification is clicked:
-//   update({ me, view, space, channel, dm, openChannel(space, channel), openDm(name) })
+//   update({ me, view, space, channel, dm, dnd, openChannel(space, channel), openDm(name) })
+// (dnd: your status is Do Not Disturb, so no notifications or sounds)
 export function useNotifications() {
   const where = useRef({});
   const update = (next) => {

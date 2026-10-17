@@ -279,6 +279,15 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 5,
+    name: 'presence modes',
+    up(db) {
+      // The presence a user chose: online | idle | dnd | invisible. What others
+      // see is derived from this and whether they're connected.
+      db.exec("ALTER TABLE users ADD COLUMN presence TEXT NOT NULL DEFAULT 'online'");
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

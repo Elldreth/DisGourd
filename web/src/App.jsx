@@ -44,6 +44,17 @@ export default function App() {
   const [view, setView] = useState('server'); // 'server' | 'dm'
   const [profile, setProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  // Your chosen status (online | idle | dnd | invisible), kept on your profile.
+  const presence = profile?.presence || 'online';
+  async function setPresence(mode) {
+    const before = presence;
+    setProfile((p) => (p ? { ...p, presence: mode } : p));
+    try {
+      await api.updateMe({ presence: mode });
+    } catch {
+      setProfile((p) => (p ? { ...p, presence: before } : p)); // put it back
+    }
+  }
   const [searchOpen, setSearchOpen] = useState(false);
   const [switcher, setSwitcher] = useState(null); // { recent } while the Ctrl+K switcher is open
   const [navOpen, setNavOpen] = useState(false); // mobile nav drawer (rail + sidebar)
@@ -105,10 +116,14 @@ export default function App() {
     space: sp.currentSpace,
     channel: sp.currentChannel,
     dm: dm.current,
+    dnd: presence === 'dnd', // Do Not Disturb: no notifications or sounds
     openChannel: (space, channel) => openChannelFromSearch(space, channel),
     openDm: (name) => selectDm(name),
   });
-  gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, dm.handlers);
+  gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, dm.handlers, {
+    // You changed your status in another tab.
+    my_presence: (f) => setProfile((p) => (p ? { ...p, presence: f.mode } : p)),
+  });
 
   // Deleting a message: hidden at once with an Undo toast, sent after 5s.
   const toast = useToasts();
@@ -269,6 +284,8 @@ export default function App() {
             user={user}
             avatar={profile?.avatar}
             status={status}
+            presence={presence}
+            onSetPresence={setPresence}
             onOpenProfile={() => setProfileOpen(true)}
             onLogout={logout}
           />
@@ -327,6 +344,8 @@ export default function App() {
             onPermsChanged={sp.reloadSpaces}
             user={user}
             avatar={profile?.avatar}
+            presence={presence}
+            onSetPresence={setPresence}
             onOpenProfile={() => setProfileOpen(true)}
             status={status}
             onLogout={logout}

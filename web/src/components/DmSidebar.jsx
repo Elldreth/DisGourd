@@ -11,6 +11,8 @@ export default function DmSidebar({
   user,
   avatar,
   status,
+  presence,
+  onSetPresence,
   onOpenProfile,
   onLogout,
 }) {
@@ -61,6 +63,8 @@ export default function DmSidebar({
         user={user}
         avatar={avatar}
         status={status}
+        presence={presence}
+        onSetPresence={onSetPresence}
         onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />

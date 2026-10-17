@@ -17,7 +17,7 @@ function detachGateway(ws) {
   set.delete(ws);
   if (set.size === 0) {
     delete userClients[ws.userId];
-    broadcastPresence(ws.userId, 'offline');
+    broadcastPresence(ws.userId); // now offline
   }
 }
 
@@ -64,7 +64,7 @@ function attachGateway(httpServer, wss) {
 
       const set = userClients[ws.userId] || (userClients[ws.userId] = new Set());
       set.add(ws);
-      if (set.size === 1) broadcastPresence(ws.userId, 'online');
+      if (set.size === 1) broadcastPresence(ws.userId); // their mode, or offline if invisible
       logInfo(`Gateway connected for user ${ws.userId} (${set.size} socket(s))`);
 
       ws.send(JSON.stringify({ type: 'ready' }));

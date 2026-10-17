@@ -962,6 +962,17 @@ function setUserPassword(userId, passwordHash, salt) {
     .run(passwordHash, salt, userId).changes > 0;
 }
 
+// ---- Presence mode (what the user picked; see gateway/delivery.js) ----
+const PRESENCE_MODES = ['online', 'idle', 'dnd', 'invisible'];
+function getUserPresence(userId) {
+  const row = db.prepare('SELECT presence FROM users WHERE id = ?').get(userId);
+  return row && PRESENCE_MODES.includes(row.presence) ? row.presence : 'online';
+}
+function setUserPresence(userId, mode) {
+  if (!PRESENCE_MODES.includes(mode)) return false;
+  return db.prepare('UPDATE users SET presence = ? WHERE id = ?').run(mode, userId).changes > 0;
+}
+
 function setUserAvatar(userId, avatarUrl, originalUrl = null, crop = null) {
   return db.prepare('UPDATE users SET avatar_url = ?, avatar_original = ?, avatar_crop = ? WHERE id = ?')
     .run(avatarUrl || null, originalUrl || null, crop ? JSON.stringify(crop) : null, userId).changes > 0;
@@ -1179,6 +1190,9 @@ module.exports = {
   setSiteAdminByUsername,
   listSiteAdmins,
   getSetting,
+  PRESENCE_MODES,
+  getUserPresence,
+  setUserPresence,
   getLinkPreview,
   saveLinkPreview,
   messageExists,

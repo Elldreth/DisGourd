@@ -62,6 +62,8 @@ export default function ChannelList({
   avatar,
   onOpenProfile,
   status,
+  presence,
+  onSetPresence,
   onLogout,
 }) {
   const [adding, setAdding] = useState(false);
@@ -515,6 +517,8 @@ export default function ChannelList({
         user={user}
         avatar={avatar}
         status={status}
+        presence={presence}
+        onSetPresence={onSetPresence}
         onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />
