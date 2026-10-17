@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 8 (part 1 of "Pins, custom status, DND/invisible")
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** M
 - **Depends on:** P1-01, P1-04 (routes/spaces.js), P1-05 (gateway), P3-05 (Pin action)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #8
