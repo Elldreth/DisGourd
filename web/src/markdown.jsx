@@ -9,6 +9,7 @@
 //   **bold**  __underline__  ~~strike~~  *italic*  _italic_
 //   http(s)://…    autolinks (only these two schemes)
 //   @name          mentions (optional)
+//   :name:         custom server emoji (optional: only names the server has)
 //   \*            backslash escapes
 // Not supported on purpose: masked links [text](url) (phishing), headings,
 // lists, tables, raw HTML.
@@ -214,6 +215,20 @@ function parseInline(text, opts, keys) {
       }
     }
 
+    // Custom server emoji: :name:, only for names this server has (P2-19).
+    if (c === ':' && opts.emoji) {
+      const m = /^:([a-z0-9_]{2,32}):/.exec(text.slice(i, i + 35));
+      const url = m ? opts.emoji.get(m[1]) : null;
+      if (url) {
+        flush();
+        out.push(
+          <img key={key()} src={url} alt={`:${m[1]}:`} title={`:${m[1]}:`} draggable="false" className="md-emoji inline-block h-[22px] w-[22px] object-contain align-text-bottom" />
+        );
+        i += m[0].length;
+        continue;
+      }
+    }
+
     // Mention: @name at a word boundary (so emails aren't mentions).
     if (c === '@' && opts.mentions && !/[A-Za-z0-9_.]/.test(text[i - 1] || '')) {
       const m = /^@([A-Za-z0-9_.-]{1,32})/.exec(text.slice(i, i + 34));
@@ -275,9 +290,10 @@ function parseTextBlock(text, opts, keys, out) {
   emit();
 }
 
-// Render message text. opts: { me: your username, mentions: highlight @names }
+// Render message text. opts: { me: your username, mentions: highlight @names,
+// emoji: a Map of this server's custom emoji names to image URLs }
 export function renderMarkdown(text, opts = {}) {
-  const options = { me: opts.me || '', mentions: !!opts.mentions };
+  const options = { me: opts.me || '', mentions: !!opts.mentions, emoji: opts.emoji instanceof Map && opts.emoji.size ? opts.emoji : null };
   const keys = { n: 0 };
   const out = [];
   const src = String(text || '');

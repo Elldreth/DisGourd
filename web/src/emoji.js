@@ -70,6 +70,33 @@ export function searchEmoji(list, query) {
   return scored.sort((a, b) => b[0] - a[0]).map(([, e]) => e);
 }
 
+// ---- Custom server emoji (P2-19) ----
+// Picker items for a server's own emoji: typed as :name:, reacted as <:name:id>.
+export function customEmojiItems(list) {
+  return (list || []).map((e) => ({
+    emoji: `:${e.name}:`,
+    label: `:${e.name}:`,
+    shortcodes: [e.name],
+    tags: [],
+    group: -1,
+    custom: { id: e.id, name: e.name, url: e.url },
+    reaction: `<:${e.name}:${e.id}>`,
+  }));
+}
+
+// The parts of a <:name:id> reaction token, or null for a normal emoji.
+export function parseEmojiToken(value) {
+  const m = /^<:([a-z0-9_]{2,32}):(\d+)>$/.exec(String(value || ''));
+  return m ? { name: m[1], id: Number(m[2]) } : null;
+}
+
+// name -> url, for rendering :name: in messages.
+export function emojiLookup(list) {
+  const map = new Map();
+  for (const e of list || []) map.set(e.name, e.url);
+  return map;
+}
+
 // ---- Recently used (this browser) ----
 const RECENT_KEY = 'disgourd.recentEmoji';
 const RECENT_MAX = 24;

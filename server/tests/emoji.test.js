@@ -152,6 +152,29 @@ test('delete removes one; a second delete is 404; servers never see each other\'
   expect(other).toEqual([]);
 });
 
+test('a custom emoji reacts as <:name:id> when it exists in this server, and is ignored otherwise (P2-19b)', async () => {
+  const { db } = serverModule;
+  const space = db.getSpaceByName(SPACE);
+  const party = db.getSpaceEmoji(space.id).find((e) => e.name === 'party_gourd');
+  const other = db.getSpaceByName('Elsewhere');
+  const foreign = db.addSpaceEmoji(other.id, 'foreign', smallUrl, users.outsider.id);
+  const msgId = Number(db.storeMessage(SPACE, 'general', 'react with the gourd', users.owner.id).id);
+  const send = (who, emoji) => users[who].gw.send(JSON.stringify({ op: 'react', id: msgId, emoji }));
+  users.owner.frames.length = 0;
+  send('member', `<:party_gourd:${party.id}>`);
+  await wait(100);
+  expect(framesOf('owner', 'reaction').at(-1)).toMatchObject({ id: msgId, emoji: `<:party_gourd:${party.id}>`, count: 1, users: ['member'] });
+  users.owner.frames.length = 0;
+  send('member', `<:party_gourd:${party.id + 1000}>`); // wrong id
+  send('member', `<:not_the_name:${party.id}>`); // wrong name
+  send('member', `<:foreign:${foreign.id}>`); // another server's emoji
+  send('member', '<:party_gourd:abc>'); // not a token at all
+  await wait(100);
+  expect(framesOf('owner', 'reaction')).toEqual([]);
+  const rows = await (await fetch(`${base()}/spaces/${SPACE}/channels/general/messages?limit=5`, { headers: auth('member') })).json();
+  expect(rows.find((m) => m.id === msgId).reactions).toEqual([{ emoji: `<:party_gourd:${party.id}>`, count: 1, users: ['member'] }]);
+});
+
 test('deleting the server removes its emoji rows', async () => {
   const { db } = serverModule;
   const id = db.createSpaceWithDefaults('Temporary', users.owner.id);

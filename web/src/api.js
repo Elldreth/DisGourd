@@ -185,6 +185,18 @@ export function getPins(space, channel) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/pins`);
 }
 
+// ---- Custom server emoji (P2-19) ----
+export function getEmoji(space) {
+  return request(`/spaces/${encodeURIComponent(space)}/emoji`);
+}
+// `url` is an upload made with uploadFile first.
+export function addEmoji(space, name, url) {
+  return request(`/spaces/${encodeURIComponent(space)}/emoji`, { method: 'POST', body: { name, url } });
+}
+export function deleteEmoji(space, name) {
+  return request(`/spaces/${encodeURIComponent(space)}/emoji/${encodeURIComponent(name)}`, { method: 'DELETE' });
+}
+
 // ---- Threads ----
 // Start a thread from a message in `channel` (or get the one it already has).
 // Resolves to { thread }; `name` is optional (the server takes it from the message).

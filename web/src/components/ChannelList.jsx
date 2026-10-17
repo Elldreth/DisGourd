@@ -3,11 +3,12 @@ import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
-import { unreadLabel } from '../util.js';
+import { roleRank, unreadLabel } from '../util.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import UserFooter from './UserFooter.jsx';
 import ServerPermissionsDialog from './ServerPermissionsDialog.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
+import ServerEmojiDialog from './ServerEmojiDialog.jsx';
 import { displayCaptureSupported } from '../audio.js';
 
 export default function ChannelList({
@@ -57,6 +58,7 @@ export default function ChannelList({
   canReframeIcon,
   role,
   permissions,
+  emoji = [], // the server's custom emoji (for the Server emoji dialog)
   channelMeta = {},
   onPermsChanged,
   user,
@@ -84,6 +86,8 @@ export default function ChannelList({
     menuButtonRef.current?.focus();
   };
   const [permsOpen, setPermsOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const canManageEmoji = roleRank(role) >= (permissions?.manage_emoji ?? 2);
   const [channelSettings, setChannelSettings] = useState(null); // channel name or null
   const gearRefs = useRef({}); // channel -> its settings gear, to return focus to
   const [renaming, setRenaming] = useState(false);
@@ -193,6 +197,16 @@ export default function ChannelList({
                   }}
                 >
                   <Icon name="ban" size={16} /> Remove icon
+                </MenuItem>
+              )}
+              {canManageEmoji && (
+                <MenuItem
+                  onClick={() => {
+                    closeMenu();
+                    setEmojiOpen(true);
+                  }}
+                >
+                  <Icon name="smile" size={16} /> Server emoji
                 </MenuItem>
               )}
               {isOwner && (
@@ -533,6 +547,9 @@ export default function ChannelList({
         onLogout={onLogout}
       />
 
+      {emojiOpen && (
+        <ServerEmojiDialog space={space} emoji={emoji} onClose={() => setEmojiOpen(false)} onChanged={onPermsChanged} />
+      )}
       {permsOpen && (
         <ServerPermissionsDialog
           space={space}

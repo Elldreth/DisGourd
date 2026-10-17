@@ -10,7 +10,7 @@ import { insertAtCaret } from '../emoji.js';
 // the ref.
 // `onEditLast()` (optional): up arrow in an empty box edits your last message;
 // it returns whether there was one to edit.
-const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], replyingTo, onCancelReply, onEditLast }, ref) {
+const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], customEmoji = [], replyingTo, onCancelReply, onEditLast }, ref) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState([]); // [{ url, name, size }] — an album
   const [spoilerPending, setSpoilerPending] = useState(false);
@@ -190,7 +190,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
       {/* Anchored to the whole composer (not the button) so it fits on phones. */}
       {emojiOpen && (
         <div ref={emojiPopRef} className="absolute bottom-full right-4 z-50 mb-1">
-          <EmojiPicker onPick={pickEmoji} onClose={closeEmoji} />
+          <EmojiPicker custom={customEmoji} onPick={pickEmoji} onClose={closeEmoji} />
         </div>
       )}
       {error && <div className="mb-1 text-sm text-danger">{error}</div>}

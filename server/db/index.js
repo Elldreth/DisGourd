@@ -111,6 +111,13 @@ const addSpaceEmoji = db.transaction((spaceId, rawName, url, userId) => {
   return getSpaceEmoji(spaceId).find((e) => e.id === info.lastInsertRowid);
 });
 
+// Whether the server named `spaceName` has emoji `id` called `name`.
+function spaceHasEmoji(spaceName, id, name) {
+  return !!db.prepare(`
+    SELECT 1 FROM space_emoji e JOIN spaces s ON s.id = e.space_id WHERE s.name = ? AND e.id = ? AND e.name = ?
+  `).get(spaceName, id, name);
+}
+
 function deleteSpaceEmoji(spaceId, name) {
   return db.prepare('DELETE FROM space_emoji WHERE space_id = ? AND name = ?').run(spaceId, String(name || '').toLowerCase()).changes > 0;
 }
@@ -1418,6 +1425,7 @@ module.exports = {
   getSpaceEmoji,
   addSpaceEmoji,
   deleteSpaceEmoji,
+  spaceHasEmoji,
   MAX_EMOJI_PER_SPACE,
   getSpaceMembers,
   createInvite,

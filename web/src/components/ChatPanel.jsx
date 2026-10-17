@@ -44,6 +44,7 @@ export default function ChatPanel({
   threadsVersion = 0,
   threadBadge, // (channel) => { unread, mentions } for a thread's summary or row
   threadsUnread = 0, // how many of this channel's threads have something unread
+  emoji = [], // the server's custom emoji [{ id, name, url }]
 }) {
   const [pinsOpen, setPinsOpen] = useState(false);
   const [threadsOpen, setThreadsOpen] = useState(false);
@@ -256,6 +257,7 @@ export default function ChatPanel({
         onCreateThread={onOpenThread && canPost ? (m) => setThreadFrom(m) : undefined}
         onOpenThread={onOpenThread ? (t, m, opener) => onOpenThread(t, { root: m, opener }) : undefined}
         threadBadge={threadBadge}
+        emoji={emoji}
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
@@ -277,6 +279,7 @@ export default function ChatPanel({
           }}
           onTyping={onTyping}
           mentionCandidates={memberNames}
+          customEmoji={emoji}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
         />

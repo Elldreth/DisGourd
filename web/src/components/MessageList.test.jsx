@@ -311,3 +311,18 @@ test('an archived thread is marked in its summary (P2-22d)', () => {
   const summary = screen.getByRole('button', { name: 'Open thread Weekend plans, 2 replies, archived' });
   expect(summary.textContent).toContain('· archived');
 });
+
+describe('custom server emoji (P2-19b)', () => {
+  const emoji = [{ id: 7, name: 'party_gourd', url: '/uploads/a/party.png' }];
+  test('a reaction chip shows the image, or :name: when the emoji is gone', () => {
+    const m = { ...msg(1), reactions: [{ emoji: '<:party_gourd:7>', count: 2, users: ['bob', 'sandy'] }, { emoji: '<:old_one:3>', count: 1, users: ['bob'] }] };
+    render(<MessageList messages={[m]} channel="general" currentUser="sandy" onReact={() => {}} emoji={emoji} />);
+    const chip = screen.getByRole('button', { name: ':party_gourd: 2, you reacted' });
+    expect(chip.querySelector('img').getAttribute('src')).toBe('/uploads/a/party.png');
+    expect(screen.getByRole('button', { name: ':old_one: 1' }).textContent).toContain(':old_one:');
+  });
+  test(':name: in a message renders the image', () => {
+    render(<MessageList messages={[{ ...msg(1), content: 'go :party_gourd:' }]} channel="general" currentUser="sandy" emoji={emoji} />);
+    expect(screen.getByRole('article').querySelector('img[alt=":party_gourd:"]')).toBeTruthy();
+  });
+});
