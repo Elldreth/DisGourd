@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 2, rank 11
-- **State:** PLANNED
+- **State:** PLANNED (P2-19a ACTIVE; child packets P2-19a-emoji-server.md, P2-19b to follow)
 - **Effort:** M (total)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #11
 

@@ -350,6 +350,25 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 10,
+    name: 'custom server emoji',
+    up(db) {
+      // A server's own emoji: an uploaded image under a short name, used as
+      // :name: in that server. Rows go with the server.
+      db.exec(`
+        CREATE TABLE space_emoji (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          url TEXT NOT NULL,
+          created_by INTEGER,
+          created_at INTEGER NOT NULL,
+          UNIQUE (space_id, name)
+        );
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

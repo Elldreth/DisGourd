@@ -12,6 +12,7 @@ export const PERMISSION_ACTIONS = [
   { key: 'delete_others_messages', label: "Delete others' messages" },
   { key: 'pin_messages', label: 'Pin messages' },
   { key: 'edit_server', label: 'Edit server (name, icon)' },
+  { key: 'manage_emoji', label: 'Manage server emoji' },
   { key: 'manage_roles', label: 'Manage roles' },
 ];
 

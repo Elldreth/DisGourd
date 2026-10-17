@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P4-00)
 - **Phase:** 4
-- **State:** REVIEW (branch `claude/p4-03-empty-states`, PR pending)
+- **State:** COMPLETE (merged in #109, 2026-10-17)
 - **Effort:** M
 - **Depends on:** none (P4-04 benefits from it)
 - **Serialize with:** P4-04 (`DmSidebar.jsx`, `DmPanel.jsx`), P4-06/P4-07 (`ThreadPanel.jsx`)
