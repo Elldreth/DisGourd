@@ -5,7 +5,7 @@ const db = require('../db');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateSpaceName, normalizeChannelName, validateChannelName } = require('../validate');
-const { canViewChannel } = require('../permissions');
+const { canViewChannel, canPostChannel } = require('../permissions');
 const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence } = require('../gateway/delivery');
 
 const getJsonBody = readJsonBody;
@@ -175,6 +175,29 @@ const routes = [
         if (channelName && pathSegments[4] === 'pins' && pathSegments.length === 5 && req.method === 'GET') {
           if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           return sendJson(res, 200, withPublicEmbeds(db.getPins(spaceName, channelName)));
+        }
+        // Threads (P2-22a): POST starts one from a message here (anyone who can
+        // post); GET lists them, newest activity first (?archived=1 for archived).
+        if (channelName && pathSegments[4] === 'threads' && pathSegments.length === 5 && (req.method === 'POST' || req.method === 'GET')) {
+          const type = db.channelType(spaceName, channelName);
+          if (!type) return sendJson(res, 404, { error: 'Channel not found' });
+          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          if (type !== 'text') return sendJson(res, 400, { error: 'Threads can only be started in text channels' });
+          if (req.method === 'GET') return sendJson(res, 200, db.getThreads(spaceName, channelName, parsedUrl.query.archived === '1'));
+          if (!canPostChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot post in this channel' });
+          const body = await getJsonBody(req);
+          const messageId = parseInt(body.messageId, 10);
+          const result = messageId > 0 ? db.createThread(spaceName, channelName, messageId, body.name, userId) : { error: 'not_found' };
+          if (result.error === 'not_found') return sendJson(res, 404, { error: 'Message not found in this channel' });
+          if (result.error) return sendJson(res, 400, { error: 'Thread name must be 1–80 characters' });
+          if (result.created) {
+            deliverToChannelViewers(spaceName, channelName, JSON.stringify({ type: 'thread_created', space: spaceName, channel: channelName, thread: result.thread }));
+          }
+          return sendJson(res, result.created ? 201 : 200, { thread: result.thread });
+        }
+        // Thread channels are managed through their parent, not as channels.
+        if (channelName && db.isThreadChannel(channelName) && (req.method === 'DELETE' || pathSegments[4] === 'permissions')) {
+          return sendJson(res, 404, { error: 'Channel not found' });
         }
         // PATCH channel permissions — view/post minimum ranks (managers only)
         if (channelName && pathSegments[4] === 'permissions' && req.method === 'PATCH') {

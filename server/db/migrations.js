@@ -315,6 +315,24 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 8,
+    name: 'threads',
+    up(db) {
+      // A thread is a hidden channel (type 'thread', named ~t<root id>) under a
+      // text channel. It goes with its parent; deleting the root message keeps it.
+      db.exec(`
+        ALTER TABLE channels ADD COLUMN parent_id INTEGER REFERENCES channels(id) ON DELETE CASCADE;
+        ALTER TABLE channels ADD COLUMN root_message_id INTEGER;
+        ALTER TABLE channels ADD COLUMN thread_name TEXT;
+        ALTER TABLE channels ADD COLUMN created_by INTEGER;
+        ALTER TABLE channels ADD COLUMN last_activity_at INTEGER;
+        ALTER TABLE channels ADD COLUMN archived_at INTEGER;
+        CREATE UNIQUE INDEX idx_threads_root ON channels(root_message_id) WHERE root_message_id IS NOT NULL;
+        CREATE INDEX idx_threads_parent ON channels(parent_id, last_activity_at);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

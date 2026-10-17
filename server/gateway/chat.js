@@ -8,6 +8,17 @@ const { userClients, deliverToChannelViewers } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
 const linkPreviews = require('../linkPreviews');
 
+// A thread's reply count changed: refresh the summary under its root message
+// for the parent channel's viewers.
+function threadUpdated(space, channel) {
+  if (!db.isThreadChannel(channel)) return;
+  const thread = db.getThread(space, channel);
+  if (!thread) return;
+  deliverToChannelViewers(space, thread.parentChannel, JSON.stringify({
+    type: 'thread_updated', space, channel: thread.parentChannel, rootMessageId: thread.rootMessageId, thread,
+  }));
+}
+
 // Cards for the links in a channel message, sent to whoever can see it.
 function previewChannelMessage(space, channel, id, content, userId, edited = false) {
   linkPreviews.handleMessage({
@@ -34,7 +45,8 @@ const ops = {
   },
   message({ ws, msg, userId }) {
     const space = db.getSpaceByName(msg.space);
-    if (!space || !db.isMember(space.id, userId) || db.channelType(msg.space, msg.channel) !== 'text') return;
+    const type = space ? db.channelType(msg.space, msg.channel) : null;
+    if (!space || !db.isMember(space.id, userId) || (type !== 'text' && type !== 'thread')) return;
     // Enforce channel view/post role gates.
     const mrole = db.getMemberRole(space.id, userId);
     if (!canViewChannel(msg.space, msg.channel, mrole) || !canPostChannel(msg.space, msg.channel, mrole)) return;
@@ -74,6 +86,7 @@ const ops = {
       timestamp: stored ? stored.timestamp : Date.now(),
     }));
     if (stored && content) previewChannelMessage(msg.space, msg.channel, stored.id, content, userId);
+    if (stored) threadUpdated(msg.space, msg.channel);
     return;
   },
   edit({ ws, msg, userId }) {
@@ -105,6 +118,7 @@ const ops = {
       deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
         type: 'message_delete', id, space: loc.space, channel: loc.channel,
       }));
+      threadUpdated(loc.space, loc.channel);
     }
     return;
   },
