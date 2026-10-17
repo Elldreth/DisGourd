@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "Keyboard shortcuts: ↑ to edit your last message"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #74)
 - **Effort:** S
 - **Depends on:** P3-05 (MessageList restructuring; editing state gets lifted)
 - **Serialize with:** Composer.jsx and MessageList.jsx units

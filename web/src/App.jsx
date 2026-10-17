@@ -41,6 +41,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false); // mobile nav drawer (rail + sidebar)
+  const [membersOpen, setMembersOpen] = useState(false); // member list drawer (below lg)
   const [authInfo, setAuthInfo] = useState(null); // { registration, setup } for the logged-out screen
 
   // When logged out, find out whether this is a brand-new install (show setup).
@@ -304,15 +305,22 @@ export default function App() {
               onTyping={chat.sendTyping}
               onOpenSearch={() => setSearchOpen(true)}
               onOpenNav={() => setNavOpen(true)}
+              onOpenMembers={() => setMembersOpen(true)}
+              membersOpen={membersOpen}
             />
           </div>
           <MemberList
             members={sp.members}
             currentUser={user}
             myRole={sp.role}
-            onMessageUser={startDm}
+            onMessageUser={(name) => {
+              setMembersOpen(false);
+              startDm(name);
+            }}
             onSetRole={sp.changeMemberRole}
             onKick={sp.kickMember}
+            open={membersOpen}
+            onClose={() => setMembersOpen(false)}
           />
         </>
       )}

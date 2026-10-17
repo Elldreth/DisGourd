@@ -1,9 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
+import Icon from './Icon.jsx';
 
 // Right-hand roster grouped by online status. Clicking a member opens a menu:
 // message them, and (with permission) promote/demote or remove them.
-export default function MemberList({ members, currentUser, myRole, onMessageUser, onSetRole, onKick }) {
+// The member list: a column on the right on desktop (lg and up), and a
+// slide-in drawer below that, opened from the chat header (`open` /
+// `onClose`). The drawer closes on Esc, the backdrop or its close button;
+// focus moves into it and goes back where it was when it closes.
+export default function MemberList({ members, currentUser, myRole, onMessageUser, onSetRole, onKick, open = false, onClose }) {
+  const panelRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const returnTo = document.activeElement;
+    requestAnimationFrame(() => panelRef.current?.querySelector('button')?.focus());
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (returnTo && document.contains(returnTo)) returnTo.focus();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const [menuFor, setMenuFor] = useState(null);
   const online = members.filter((m) => m.online);
   const offline = members.filter((m) => !m.online);
@@ -83,16 +104,35 @@ export default function MemberList({ members, currentUser, myRole, onMessageUser
   }
 
   return (
-    <aside className="hidden w-56 flex-col border-l border-ink-900/50 bg-ink-800 lg:flex">
-      <header className="flex h-12 items-center border-b border-ink-900/60 px-4 shadow-xs shadow-black/20">
-        <h3 className="text-sm font-semibold text-gray-300">Members — {members.length}</h3>
-      </header>
-      <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
-        {members.length === 0 && <p className="px-2 text-sm text-gray-500">No members to show.</p>}
-        {renderGroup('Online', online, 'online')}
-        {renderGroup('Offline', offline, 'offline')}
-      </div>
-    </aside>
+    <>
+      {open && <div data-testid="members-backdrop" className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={onClose} />}
+      <aside
+        ref={panelRef}
+        aria-label="Members"
+        className={`fixed inset-y-0 right-0 z-40 flex w-64 flex-col border-l border-ink-900/50 bg-ink-800 shadow-2xl duration-200 lg:visible lg:static lg:z-auto lg:w-56 lg:translate-x-0 lg:shadow-none lg:transition-none ${
+          // Opening: visible at once (so focus can move in), then slide.
+          // Closing: slide out, and only then become hidden.
+          open ? 'visible translate-x-0 transition-transform' : 'invisible translate-x-full transition-[transform,visibility]'
+        }`}
+      >
+        <header className="flex h-12 items-center border-b border-ink-900/60 px-4 shadow-xs shadow-black/20">
+          <h3 className="flex-1 text-sm font-semibold text-gray-300">Members — {members.length}</h3>
+          <button
+            onClick={onClose}
+            aria-label="Close member list"
+            title="Close"
+            className="-mr-1 rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg lg:hidden"
+          >
+            <Icon name="x" size={18} />
+          </button>
+        </header>
+        <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
+          {members.length === 0 && <p className="px-2 text-sm text-gray-500">No members to show.</p>}
+          {renderGroup('Online', online, 'online')}
+          {renderGroup('Offline', offline, 'offline')}
+        </div>
+      </aside>
+    </>
   );
 }
 
