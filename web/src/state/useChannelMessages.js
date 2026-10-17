@@ -8,6 +8,10 @@ import { mergeLastRead } from '../newMessages.js';
 // Key for per-channel maps (unread, mentions, voice state).
 export const unreadKey = (space, channel) => JSON.stringify([space, channel]);
 
+// A thread is a hidden channel named ~t<root message id> (P2-22).
+export const isThreadChannel = (channel) => typeof channel === 'string' && channel.startsWith('~t');
+export const threadRootId = (channel) => (isThreadChannel(channel) ? parseInt(channel.slice(2), 10) : null);
+
 // ---- Pure message-list reducer (no React; unit-testable) ----
 // Actions:
 //   { type: 'reset', messages }                       replace the transcript
@@ -17,6 +21,7 @@ export const unreadKey = (space, channel) => JSON.stringify([space, channel]);
 //   { type: 'reaction', id, emoji, count, users }     one emoji's new total
 //   { type: 'embeds', id, embeds }                    a message's link-preview cards
 //   { type: 'pinned', id, pinned }                    pinned or unpinned
+//   { type: 'thread', id, thread }                    a root message's thread summary
 //   { type: 'resynced', messages, full }              the newest page, refetched
 //       after a reconnect: it replaces what we had in its range (picking up
 //       edits, reactions and deletions) and keeps older loaded pages as they
@@ -44,6 +49,8 @@ export function messagesReducer(state, action) {
         : state;
     case 'pinned':
       return state.map((m) => (m.id === action.id ? { ...m, pinned: !!action.pinned } : m));
+    case 'thread':
+      return state.map((m) => (m.id === action.id ? { ...m, thread: action.thread || null } : m));
     case 'reaction':
       return state.map((m) => {
         if (m.id !== action.id) return m;
@@ -103,6 +110,9 @@ export function badgeCounts({ unread, mentions, spaces, currentSpace, channels }
   return { channelUnread, channelMentions, spaceUnread, spaceMentions };
 }
 
+// The part of a thread shown under its root message.
+const summaryOf = (t) => ({ id: t.id, channel: t.channel, name: t.name, messageCount: t.messageCount, lastActivityAt: t.lastActivityAt });
+
 // Remove one key from a map state, keeping the same object if it's absent.
 const withoutKey = (k) => (prev) => {
   if (!prev[k]) return prev;
@@ -117,12 +127,16 @@ const withoutKey = (k) => (prev) => {
 //   active: the server view is showing (not DMs)
 //   send:   a stable send (see useLateSend); status: the gateway status
 //   onIncoming(frame): told about every incoming message (notifications, sounds)
-export function useChannelMessages({ space, channel, active, user, send, status, onIncoming }) {
+//   threadOnly: this instance shows an open thread (channel = '~tN'). It only
+//     handles frames for that thread: no unread or mention counts, no
+//     notifications, and it doesn't take the gateway focus from the channel.
+export function useChannelMessages({ space, channel, active, user, send, status, onIncoming, threadOnly = false }) {
   const [messages, dispatch] = useReducer(messagesReducer, []);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const [typingUsers, setTypingUsers] = useState({}); // username -> expires-at ms
   const [pinsVersion, setPinsVersion] = useState(0); // bumps when this channel's pins change
+  const [threadsVersion, setThreadsVersion] = useState(0); // bumps when this channel's threads change
   const [unread, setUnread] = useState({}); // unreadKey -> count
   const [mentions, setMentions] = useState({}); // unreadKey -> mention count
   const paging = useHistoryPaging(unreadKey(space, channel));
@@ -147,9 +161,23 @@ export function useChannelMessages({ space, channel, active, user, send, status,
   userRef.current = user;
   const isOpen = (s, c) => s === spaceRef.current && c === channelRef.current;
 
+  // The thread summary under a root message changed (a thread started, or a
+  // reply came in or went).
+  const threadChanged = (space, channel, rootMessageId, thread) => {
+    if (!isOpen(space, channel)) return;
+    dispatch({ type: 'thread', id: rootMessageId, thread: thread && summaryOf(thread) });
+    setThreadsVersion((v) => v + 1); // an open threads list reloads
+  };
+
   const handlers = {
     message: (m) => {
-      onIncoming?.({ kind: 'message', ...m });
+      if (threadOnly) {
+        if (!isOpen(m.space, m.channel)) return;
+      } else if (isThreadChannel(m.channel)) {
+        // Replies in threads: unread counts and notifications come with
+        // following threads (P2-22c). The open thread's own instance shows them.
+        return;
+      } else onIncoming?.({ kind: 'message', ...m });
       if (isOpen(m.space, m.channel)) {
         // Reading older history: it's picked up by loadNewer / Jump to present.
         if (paging.hasNewerRef.current) return;
@@ -170,6 +198,7 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       }
     },
     unread: (f) => {
+      if (threadOnly) return;
       const map = {};
       const reads = {};
       for (const c of f.counts || []) {
@@ -202,6 +231,8 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     typing: (t) => {
       if (isOpen(t.space, t.channel)) setTypingUsers((prev) => ({ ...prev, [t.user]: Date.now() + 4000 }));
     },
+    thread_created: (f) => threadChanged(f.space, f.channel, f.thread?.rootMessageId, f.thread),
+    thread_updated: (f) => threadChanged(f.space, f.channel, f.rootMessageId, f.thread),
   };
 
   // Clear the transcript immediately when switching channels.
@@ -215,7 +246,8 @@ export function useChannelMessages({ space, channel, active, user, send, status,
   // Focus the active channel and (re)load its history — also on reconnect.
   useEffect(() => {
     if (!active || !space || !channel) return undefined;
-    send({ op: 'focus', space, channel });
+    // The channel keeps the gateway focus (typing indicators) while a thread is open.
+    if (!threadOnly) send({ op: 'focus', space, channel });
     // Reading older history (a jump): keep that window; Jump to present reloads.
     if (paging.hasNewerRef.current) return undefined;
     let cancelled = false;
@@ -314,6 +346,7 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     handlers,
     reset,
     pinsVersion,
+    threadsVersion,
     setPinned: (id, pinned) => send({ op: pinned ? 'pin' : 'unpin', id }),
     sendMessage: (content, attachments, spoiler, replyTo) =>
       send({ op: 'message', space, channel, content, attachments, spoiler, replyTo }),

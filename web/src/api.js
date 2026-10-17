@@ -185,6 +185,22 @@ export function getPins(space, channel) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/pins`);
 }
 
+// ---- Threads ----
+// Start a thread from a message in `channel` (or get the one it already has).
+// Resolves to { thread }; `name` is optional (the server takes it from the message).
+export function createThread(space, channel, messageId, name) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/threads`, {
+    method: 'POST',
+    body: { messageId, name },
+  });
+}
+// A channel's threads, most recently active first (archived ones if asked).
+export function getThreads(space, channel, archived = false) {
+  return request(
+    `/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/threads${archived ? '?archived=1' : ''}`
+  );
+}
+
 // ---- Search ----
 export function search(q) {
   return request(`/search?q=${encodeURIComponent(q)}`);

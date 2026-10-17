@@ -4,7 +4,7 @@ import Album from './Album.jsx';
 import Embed from './Embed.jsx';
 import Icon from './Icon.jsx';
 import { MessageToolbar, ActionMenu, ReactionPicker } from './MessageActions.jsx';
-import { formatTime, formatDay } from '../util.js';
+import { formatTime, formatDay, formatAgo } from '../util.js';
 import { renderMarkdown } from '../markdown.jsx';
 import { newDivider } from '../newMessages.js';
 
@@ -13,6 +13,9 @@ const JUMP_MAX_PAGES = 10; // how far back "Jump" will page before giving up
 const LONG_PRESS_SLOP_PX = 10;
 
 const MENTION_RE = /(@[A-Za-z0-9_.-]+)/g;
+
+// "No replies yet", "1 reply", "4 replies".
+const replyCount = (n) => (!n ? 'No replies yet' : n === 1 ? '1 reply' : `${n} replies`);
 
 // Whether a message mentions you (for the row highlight).
 function mentionsUser(content, me) {
@@ -32,10 +35,15 @@ function mentionsUser(content, me) {
 // `onEditDone` (optional) is called when an edit started by `startEditLast()`
 // (the composer's up arrow) ends, so the composer can take focus back.
 // `onPin(id, pinned)` (optional, only when you may pin) adds Pin / Unpin.
+// `onCreateThread(message)` (optional) adds Create thread to messages without
+// one; `onOpenThread(thread, message, opener)` (optional) draws the summary
+// under a message that has a thread, and adds Open thread. `opener` is the
+// element to give focus back to when the thread closes.
+// `label` (optional) names the list (default "Messages in #channel").
 // `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
 // an original that isn't loaded, and, while that older window is showing
 // (`history.hasNewer`), offers newer pages and "Jump to present".
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, history = null, onPin }, ref) {
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, history = null, onPin, onCreateThread, onOpenThread, label }, ref) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // The message being edited, and where focus goes when that edit ends: back
@@ -54,7 +62,12 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
     return true;
   }
   // jumpTo(id): go to a message (loading the history around it if needed).
-  useImperativeHandle(ref, () => ({ startEditLast, jumpTo: (id) => jumpToRef.current(id) }));
+  // rowElement(id): that message's row, if it's rendered (to give focus back to).
+  useImperativeHandle(ref, () => ({
+    startEditLast,
+    jumpTo: (id) => jumpToRef.current(id),
+    rowElement: (id) => containerRef.current?.querySelector(`[data-msg-id="${id}"]`) || null,
+  }));
   const jumpToRef = useRef(null);
 
   // Called by a row when its edit ends. Returns true if the row should take
@@ -333,7 +346,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
       )}
       <div
         role="log"
-        aria-label={simple ? 'Messages' : `Messages in #${channel}`}
+        aria-label={label || (simple ? 'Messages' : `Messages in #${channel}`)}
         className="flex min-h-full flex-col justify-end px-4 py-4"
       >
         <div ref={topSentinel} aria-hidden="true" />
@@ -351,9 +364,9 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               {simple ? <span className="text-5xl">💬</span> : <Icon name="hash" size={52} className="text-gray-600" />}
             </div>
             <p className="text-lg font-semibold text-gray-300">
-              {emptyHeading || `Welcome to #${channel}`}
+              {emptyHeading ?? `Welcome to #${channel}`}
             </p>
-            <p className="text-sm">{emptyBody || 'This is the start of the channel. Say hello! 👋'}</p>
+            {(emptyBody ?? 'This is the start of the channel. Say hello! 👋') && <p className="text-sm">{emptyBody ?? 'This is the start of the channel. Say hello! 👋'}</p>}
           </div>
         )}
 
@@ -388,6 +401,8 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               onReact={onReact}
               onReply={onReply}
               onPin={onPin}
+              onCreateThread={onCreateThread}
+              onOpenThread={onOpenThread}
               onJumpTo={jumpTo}
               flash={row.m.id === flashId}
               simple={simple}
@@ -424,7 +439,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
 
 export default MessageList;
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onPin, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onPin, onCreateThread, onOpenThread, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
   const [draft, setDraft] = useState(m.content || '');
   const editRef = useRef(null);
   // Entering edit mode (from this row or the composer's up arrow): start from
@@ -551,6 +566,21 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
         closePopup();
       },
     },
+    // A message has at most one thread: start it, or open the one it has.
+    onCreateThread && !m.thread && {
+      id: 'thread', label: 'Create thread', icon: 'thread',
+      onSelect: () => {
+        closePopup();
+        onCreateThread(m);
+      },
+    },
+    onOpenThread && m.thread && {
+      id: 'thread', label: 'Open thread', icon: 'thread',
+      onSelect: () => {
+        closePopup();
+        onOpenThread(m.thread, m, rowRef.current);
+      },
+    },
     // Your own messages, or others' when you can moderate them.
     canDelete && { id: 'delete', label: 'Delete message', icon: 'trash', danger: true, quick: true, onSelect: confirmDelete },
   ].filter(Boolean);
@@ -635,7 +665,8 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
 
   const hasAttachment = m.attachments?.length || m.attachment;
   const replyLabel = m.replyTo ? (m.replyTo.deleted ? 'replying to a deleted message, ' : `replying to ${m.replyTo.author}, `) : '';
-  const label = `${m.author || 'Unknown'}, ${formatTime(m.timestamp)}, ${replyLabel}${m.content || (hasAttachment ? 'attachment' : '')}`;
+  const threadLabel = m.thread ? `, has a thread: ${m.thread.name}` : '';
+  const label = `${m.author || 'Unknown'}, ${formatTime(m.timestamp)}, ${replyLabel}${m.content || (hasAttachment ? 'attachment' : '')}${threadLabel}`;
 
   return (
     <div
@@ -740,6 +771,22 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
               />
             )}
             {m.embeds?.map((e) => <Embed key={e.url} embed={e} />)}
+            {m.thread && onOpenThread && (
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={(e) => onOpenThread(m.thread, m, e.currentTarget)}
+                aria-label={`Open thread ${m.thread.name}, ${replyCount(m.thread.messageCount)}`}
+                className="mt-1.5 flex max-w-full items-center gap-2 rounded-md bg-ink-800/70 px-2 py-1 text-xs ring-1 ring-ink-500/60 transition hover:ring-brand-hi"
+              >
+                <Icon name="thread" size={14} className="shrink-0 text-brand-hi" />
+                <span className="truncate font-semibold text-gray-100">{m.thread.name}</span>
+                <span className="shrink-0 text-gray-400">
+                  · {replyCount(m.thread.messageCount)}
+                  {m.thread.messageCount > 0 && ` · last ${formatAgo(m.thread.lastActivityAt)}`}
+                </span>
+              </button>
+            )}
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1">
                 {reactions.map((r) => {

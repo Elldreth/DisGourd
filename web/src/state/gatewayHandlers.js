@@ -12,12 +12,30 @@ export function useHandlerTable() {
   if (!table.current) {
     const handlers = {};
     // Replace the table's contents with these { frameType: handler } maps.
-    // Later maps win if two define the same frame type.
+    // When several maps handle the same frame type (the open channel and the
+    // open thread both take `message`), each one runs, in the order given.
     const fill = (...maps) => {
       for (const k of Object.keys(handlers)) delete handlers[k];
-      Object.assign(handlers, ...maps);
+      Object.assign(handlers, composeHandlers(...maps));
     };
     table.current = { handlers, fill };
   }
   return table.current;
+}
+
+// One { frameType: handler } map from several: a frame type listed by more
+// than one map gets a handler that calls each of theirs in turn.
+export function composeHandlers(...maps) {
+  const lists = {};
+  for (const map of maps) {
+    for (const [type, fn] of Object.entries(map || {})) {
+      if (typeof fn !== 'function') continue;
+      (lists[type] ||= []).push(fn);
+    }
+  }
+  const out = {};
+  for (const [type, fns] of Object.entries(lists)) {
+    out[type] = fns.length === 1 ? fns[0] : (frame) => fns.forEach((fn) => fn(frame));
+  }
+  return out;
 }

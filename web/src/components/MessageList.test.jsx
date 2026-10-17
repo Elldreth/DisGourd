@@ -256,3 +256,38 @@ describe('pins (P2-13)', () => {
     expect(screen.queryByRole('menuitem', { name: /Pin message/ })).toBeNull();
   });
 });
+
+describe('threads (P2-22b)', () => {
+  const thread = { id: 3, channel: '~t2', name: 'Weekend plans', messageCount: 2, lastActivityAt: Date.now() - 5 * 60 * 1000 };
+  test('a root message shows its thread summary; clicking it opens the thread', () => {
+    const onOpenThread = vi.fn();
+    render(<MessageList messages={[msg(1), { ...msg(2), thread }]} channel="general" currentUser="sandy" onOpenThread={onOpenThread} />);
+    const summary = screen.getByRole('button', { name: 'Open thread Weekend plans, 2 replies' });
+    expect(summary.textContent).toContain('last 5 min ago');
+    expect(screen.getAllByRole('article')[1].getAttribute('aria-label')).toContain('has a thread: Weekend plans');
+    fireEvent.click(summary);
+    expect(onOpenThread).toHaveBeenCalledWith(thread, expect.objectContaining({ id: 2 }), summary);
+  });
+
+  test('the menu offers Create thread for a message without one, Open thread for one with', () => {
+    const onCreateThread = vi.fn();
+    const onOpenThread = vi.fn();
+    render(
+      <MessageList messages={[msg(1), { ...msg(2), thread }]} channel="general" currentUser="sandy" onCreateThread={onCreateThread} onOpenThread={onOpenThread} />
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[0]);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create thread' }));
+    expect(onCreateThread).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'More actions' })[1]);
+    expect(screen.queryByRole('menuitem', { name: 'Create thread' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open thread' }));
+    expect(onOpenThread).toHaveBeenCalledWith(thread, expect.objectContaining({ id: 2 }), screen.getAllByRole('article')[1]);
+  });
+
+  test('the summary updates with the message (a live thread_updated)', () => {
+    const { rerender } = render(<MessageList messages={[{ ...msg(2), thread: { ...thread, messageCount: 0 } }]} channel="general" currentUser="sandy" onOpenThread={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Open thread Weekend plans, No replies yet' })).toBeTruthy();
+    rerender(<MessageList messages={[{ ...msg(2), thread: { ...thread, messageCount: 1 } }]} channel="general" currentUser="sandy" onOpenThread={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Open thread Weekend plans, 1 reply' })).toBeTruthy();
+  });
+});

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { useHandlerTable } from './state/gatewayHandlers.js';
-import { useChannelMessages, badgeCounts, unreadKey } from './state/useChannelMessages.js';
+import { useChannelMessages, badgeCounts, unreadKey, threadRootId } from './state/useChannelMessages.js';
 import { useDms } from './state/useDms.js';
 import { useSpaces } from './state/useSpaces.js';
 import { useVoiceCall } from './state/useVoiceCall.js';
@@ -14,6 +14,7 @@ import ServerRail from './components/ServerRail.jsx';
 import ChannelList from './components/ChannelList.jsx';
 import Gourd from './components/Gourd.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
+import ThreadPanel from './components/ThreadPanel.jsx';
 import VideoStage from './components/VideoStage.jsx';
 import MemberList from './components/MemberList.jsx';
 import InviteDialog from './components/InviteDialog.jsx';
@@ -115,6 +116,47 @@ export default function App() {
     status,
     onIncoming: notifier.onIncoming,
   });
+  // The open thread (a side panel next to the channel), with its own copy of
+  // the channel machinery: { space, parentChannel, channel: '~tN', name,
+  // rootMessageId, root? } or null.
+  const [openThread, setOpenThread] = useState(null);
+  const threadOpener = useRef(null); // what to focus again when it closes
+  const thread = useChannelMessages({
+    space: openThread?.space || '',
+    channel: openThread?.channel || '',
+    active: view === 'server' && !!openThread,
+    user,
+    send,
+    status,
+    threadOnly: true,
+  });
+  // `t` is a thread from a message summary, the threads list or a search
+  // result; `root` is its root message when at hand, `opener` the element to
+  // focus when it closes. `space`/`parentChannel` default to the open channel.
+  function openThreadPanel(t, { root = null, opener = null, space = sp.currentSpace, parentChannel = sp.currentChannel } = {}) {
+    threadOpener.current = opener || document.activeElement;
+    setOpenThread({
+      space,
+      parentChannel: t.parentChannel || parentChannel,
+      channel: t.channel,
+      name: t.name,
+      rootMessageId: t.rootMessageId ?? threadRootId(t.channel),
+      root,
+    });
+  }
+  function closeThread() {
+    setOpenThread(null);
+    const el = threadOpener.current;
+    threadOpener.current = null;
+    if (el && document.contains(el)) el.focus();
+  }
+  // Leaving the thread's channel closes it (silently: nothing to focus back to).
+  useEffect(() => {
+    if (openThread && (openThread.space !== sp.currentSpace || openThread.parentChannel !== sp.currentChannel)) {
+      setOpenThread(null);
+      threadOpener.current = null;
+    }
+  }, [openThread, sp.currentSpace, sp.currentChannel]);
   // Notifications need to know what you're looking at, and how to open what
   // a clicked notification is about.
   notifier.update({
@@ -127,7 +169,7 @@ export default function App() {
     openChannel: (space, channel) => openChannelFromSearch(space, channel),
     openDm: (name) => selectDm(name),
   });
-  gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, dm.handlers, {
+  gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, thread.handlers, dm.handlers, {
     // You changed your status in another tab.
     my_presence: (f) => setProfile((p) => (p ? { ...p, presence: f.mode } : p)),
     // Your custom status changed elsewhere, or its time ran out.
@@ -142,12 +184,17 @@ export default function App() {
   chatMessagesRef.current = chat.messages;
   const dmMessagesRef = useRef(dm.messages);
   dmMessagesRef.current = dm.messages;
+  const threadMessagesRef = useRef(thread.messages);
+  threadMessagesRef.current = thread.messages;
   const deleteChatMessage = (id) =>
     undoDelete.request(`c:${id}`, { send: () => chat.deleteMessage(id), exists: () => chatMessagesRef.current.some((m) => m.id === id) });
+  const deleteThreadMessage = (id) =>
+    undoDelete.request(`t:${id}`, { send: () => thread.deleteMessage(id), exists: () => threadMessagesRef.current.some((m) => m.id === id) });
   const deleteDmMessage = (id) =>
     undoDelete.request(`d:${id}`, { send: () => dm.remove(id), exists: () => dmMessagesRef.current.some((m) => m.id === id) });
   const shownChatMessages = chat.messages.filter((m) => !undoDelete.isHidden(`c:${m.id}`));
   const shownDmMessages = dm.messages.filter((m) => !undoDelete.isHidden(`d:${m.id}`));
+  const shownThreadMessages = thread.messages.filter((m) => !undoDelete.isHidden(`t:${m.id}`));
 
   // ---- Navigation and session ----
   function logout() {
@@ -156,6 +203,8 @@ export default function App() {
     setToken('');
     sp.reset();
     chat.reset();
+    thread.reset();
+    setOpenThread(null);
     setProfile(null);
     setView('server');
     dm.reset();
@@ -181,6 +230,13 @@ export default function App() {
     setSearchOpen(false);
     setView('server');
     sp.openChannel(space, channel);
+  }
+  // A search hit inside a thread: go to its channel, then open the thread.
+  function openThreadFromSearch(space, t) {
+    setSearchOpen(false);
+    setView('server');
+    sp.openChannel(space, t.parentChannel);
+    openThreadPanel(t, { space, parentChannel: t.parentChannel });
   }
   function openDmFromSearch(username) {
     setSearchOpen(false);
@@ -423,8 +479,35 @@ export default function App() {
               onOpenNav={() => setNavOpen(true)}
               onOpenMembers={() => setMembersOpen(true)}
               membersOpen={membersOpen}
+              onOpenThread={openThreadPanel}
+              threadsVersion={chat.threadsVersion}
             />
           </div>
+          {openThread && (
+            <ThreadPanel
+              space={openThread.space}
+              thread={openThread}
+              status={status}
+              canPost={sp.canPostCurrent}
+              messages={shownThreadMessages}
+              currentUser={user}
+              typingUsers={thread.typingNames}
+              memberNames={sp.memberNames}
+              onSend={thread.sendMessage}
+              onEdit={thread.editMessage}
+              onDelete={deleteThreadMessage}
+              canModerate={sp.canModerate}
+              canPin={sp.canPin}
+              onSetPinned={thread.setPinned}
+              onReact={thread.react}
+              hasMore={thread.hasMore}
+              loadingOlder={thread.loadingOlder}
+              onLoadOlder={thread.loadOlder}
+              history={thread.history}
+              onTyping={thread.sendTyping}
+              onClose={closeThread}
+            />
+          )}
           <MemberList
             space={sp.currentSpace}
             members={sp.members}
@@ -460,6 +543,7 @@ export default function App() {
         <SearchOverlay
           onClose={() => setSearchOpen(false)}
           onOpenChannel={openChannelFromSearch}
+          onOpenThread={openThreadFromSearch}
           onOpenDm={openDmFromSearch}
         />
       )}

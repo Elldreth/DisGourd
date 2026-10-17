@@ -2,7 +2,7 @@
 // or logging errors. It catches bugs `vite build` can't, such as a value read
 // before it's declared (which blanked the app in P1-13).
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 const SPACE = {
   name: 'Smoke',
@@ -15,6 +15,7 @@ const SPACE = {
 
 // A fake server API; each test sets whether we're signed in.
 let signedIn = true;
+let smokeThread = null; // a thread summary on the smoke message, when a test wants one
 vi.mock('./api.js', () => ({
   getToken: () => (signedIn ? 'token' : ''),
   decodeToken: (t) => (t ? { sub: 1, name: 'tester' } : null),
@@ -25,7 +26,7 @@ vi.mock('./api.js', () => ({
   getMe: () => Promise.resolve({ id: 1, username: 'tester', avatar: null }),
   getMembers: () => Promise.resolve({ members: [{ username: 'tester', role: 'owner', online: true }] }),
   getMessages: () =>
-    Promise.resolve([{ id: 1, author: 'tester', content: 'hello from the smoke test', timestamp: Date.now(), reactions: [] }]),
+    Promise.resolve([{ id: 1, author: 'tester', content: 'hello from the smoke test', timestamp: Date.now(), reactions: [], thread: smokeThread }]),
   getDms: () => Promise.resolve([]),
   getDmMessages: () => Promise.resolve([]),
   previewInvite: () => Promise.resolve({ space: 'Book Club', members: 3, alreadyMember: false }),
@@ -110,4 +111,26 @@ test('invite link while already signed in: Join opens prefilled and the URL is c
   expect(screen.getByRole('textbox', { name: 'Invite code or link' }).value).toBe('abc123');
   expect(window.location.search).toBe('');
   expect(errors).toEqual([]);
+});
+
+test('threads: the summary opens the side panel, and Esc closes it and gives focus back to the summary', async () => {
+  signedIn = true;
+  smokeThread = { id: 3, channel: '~t1', name: 'Weekend plans', messageCount: 1, lastActivityAt: Date.now() };
+  try {
+    await renderApp();
+    const summary = await screen.findByRole('button', { name: 'Open thread Weekend plans, 1 reply' });
+    await act(async () => {
+      summary.click();
+    });
+    const panel = screen.getByRole('complementary', { name: 'Thread: Weekend plans' });
+    expect(panel.textContent).toContain('#general');
+    await act(async () => {
+      fireEvent.keyDown(panel, { key: 'Escape' });
+    });
+    expect(screen.queryByRole('complementary', { name: 'Thread: Weekend plans' })).toBeNull();
+    expect(document.activeElement).toBe(summary);
+    expect(errors).toEqual([]);
+  } finally {
+    smokeThread = null;
+  }
 });

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-22)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #97, 2026-10-17)
 - **Effort:** M
 - **Depends on:** P2-22 decisions (done), P2-10, P2-13
 - **Serialize with:** anything touching `server/db/index.js`, `server/gateway/chat.js`, `server/routes/spaces.js`

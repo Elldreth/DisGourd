@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import MessageList from './MessageList.jsx';
 import PinsPanel from './PinsPanel.jsx';
+import ThreadsList from './ThreadsList.jsx';
+import CreateThreadDialog from './CreateThreadDialog.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
@@ -36,9 +38,19 @@ export default function ChatPanel({
   canPin = false,
   onSetPinned,
   pinsVersion = 0,
+  // Threads: onOpenThread(thread, { root, opener }) opens one in the side
+  // panel; threadsVersion changes when this channel's threads change.
+  onOpenThread,
+  threadsVersion = 0,
 }) {
   const [pinsOpen, setPinsOpen] = useState(false);
-  useEffect(() => setPinsOpen(false), [space, channel]);
+  const [threadsOpen, setThreadsOpen] = useState(false);
+  const [threadFrom, setThreadFrom] = useState(null); // the message a new thread starts from
+  useEffect(() => {
+    setPinsOpen(false);
+    setThreadsOpen(false);
+    setThreadFrom(null);
+  }, [space, channel]);
   // The message being replied to ({ id, author }), shown above the composer.
   const [replyingTo, setReplyingTo] = useState(null);
   useEffect(() => setReplyingTo(null), [space, channel]);
@@ -93,6 +105,17 @@ export default function ChatPanel({
             <Icon name="users" size={18} />
           </button>
         )}
+        {onOpenThread && (
+          <IconButton
+            icon="thread"
+            size={18}
+            label="Threads"
+            aria-haspopup="dialog"
+            aria-expanded={threadsOpen}
+            onClick={() => setThreadsOpen(true)}
+            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+          />
+        )}
         <IconButton
           icon="pin"
           size={18}
@@ -129,6 +152,8 @@ export default function ChatPanel({
         canModerate={canModerate}
         onReact={onReact}
         onReply={canPost ? (m) => setReplyingTo({ id: m.id, author: m.author }) : null}
+        onCreateThread={onOpenThread && canPost ? (m) => setThreadFrom(m) : undefined}
+        onOpenThread={onOpenThread ? (t, m, opener) => onOpenThread(t, { root: m, opener }) : undefined}
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
@@ -157,6 +182,28 @@ export default function ChatPanel({
         <div className="mx-4 mb-5 mt-1 flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-3 text-center text-sm text-gray-400 ring-1 ring-ink-500/40">
           <Icon name="shield" size={15} className="shrink-0" /> You don’t have permission to post in this channel.
         </div>
+      )}
+      {threadsOpen && (
+        <ThreadsList
+          space={space}
+          channel={channel}
+          version={threadsVersion}
+          onOpen={(t) => onOpenThread(t, {})}
+          onClose={() => setThreadsOpen(false)}
+        />
+      )}
+      {threadFrom && (
+        <CreateThreadDialog
+          space={space}
+          channel={channel}
+          message={threadFrom}
+          onCreated={(t) => {
+            const root = threadFrom;
+            setThreadFrom(null);
+            onOpenThread(t, { root, opener: listRef.current?.rowElement?.(root.id) });
+          }}
+          onClose={() => setThreadFrom(null)}
+        />
       )}
       {pinsOpen && (
         <PinsPanel
