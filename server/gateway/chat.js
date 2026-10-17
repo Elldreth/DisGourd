@@ -2,7 +2,7 @@
 // reactions and typing.
 const WebSocket = require('ws');
 const db = require('../db');
-const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments } = require('../validate');
+const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments, parseReactionEmoji } = require('../validate');
 const { canViewChannel, canPostChannel, canView, canModerateMessage } = require('../permissions');
 const { userClients, deliverToChannelViewers } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
@@ -99,7 +99,7 @@ const ops = {
   },
   react({ msg, userId }) {
     const id = parseInt(msg.id, 10);
-    const emoji = typeof msg.emoji === 'string' ? msg.emoji.trim().slice(0, 16) : '';
+    const emoji = parseReactionEmoji(msg.emoji);
     if (!id || !emoji) return;
     const loc = db.getMessageLocation(id);
     if (!loc || !canView(loc.space, loc.channel, userId)) return;

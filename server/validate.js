@@ -51,7 +51,24 @@ function validateRegistration({ username, password, email }) {
   return null;
 }
 
+// A reaction must be exactly one emoji: a single grapheme (so ZWJ families,
+// skin tones, flags and keycaps all count as one) that contains a pictographic
+// character, regional indicator or keycap mark. Anything else (text, several
+// emoji) is refused rather than trimmed. The longest real emoji are ~15 UTF-16
+// units; 32 leaves room for new ones. Returns the emoji, or null.
+const MAX_REACTION_LENGTH = 32;
+const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
+const EMOJI_MARK = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
+function parseReactionEmoji(value) {
+  if (typeof value !== 'string') return null;
+  const emoji = value.trim();
+  if (!emoji || emoji.length > MAX_REACTION_LENGTH) return null;
+  let count = 0;
+  for (const _ of graphemes.segment(emoji)) if (++count > 1) return null;
+  return EMOJI_MARK.test(emoji) ? emoji : null;
+}
+
 module.exports = {
   MAX_MESSAGE_LENGTH, MAX_ATTACHMENTS, validateSpaceName, normalizeChannelName, validateChannelName,
-  parseMentionUsernames, normalizeAttachments, validateRegistration,
+  parseMentionUsernames, normalizeAttachments, validateRegistration, parseReactionEmoji,
 };
