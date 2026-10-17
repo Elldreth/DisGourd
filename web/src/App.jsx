@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { useHandlerTable } from './state/gatewayHandlers.js';
-import { useChannelMessages, badgeCounts } from './state/useChannelMessages.js';
+import { useChannelMessages, badgeCounts, unreadKey } from './state/useChannelMessages.js';
 import { useDms } from './state/useDms.js';
 import { useSpaces } from './state/useSpaces.js';
 import { useVoiceCall } from './state/useVoiceCall.js';
@@ -24,6 +24,8 @@ import SearchOverlay from './components/SearchOverlay.jsx';
 import ImageCropper from './components/ImageCropper.jsx';
 import { useToasts } from './components/Toasts.jsx';
 import { useUndoDelete } from './state/useUndoDelete.js';
+import QuickSwitcher, { itemKey, loadRecent, recordVisit } from './components/QuickSwitcher.jsx';
+import { useShortcuts, stepChannel } from './shortcuts.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
@@ -42,6 +44,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [switcher, setSwitcher] = useState(null); // { recent } while the Ctrl+K switcher is open
   const [navOpen, setNavOpen] = useState(false); // mobile nav drawer (rail + sidebar)
   const [membersOpen, setMembersOpen] = useState(false); // member list drawer (below lg)
   const [authInfo, setAuthInfo] = useState(null); // { registration, setup } for the logged-out screen
@@ -164,6 +167,55 @@ export default function App() {
   // Browser tab: "(N) DisGourd" + a favicon dot for mentions and unread DMs.
   const total = (counts) => Object.values(counts).reduce((a, b) => a + b, 0);
   useDocumentAttention({ mentions: total(spaceMentions), dms: dm.totalUnread, unread: total(spaceUnread) });
+
+  // ---- Keyboard shortcuts and the Ctrl+K quick switcher ----
+  // Remember where you've been, so the switcher can rank recent places first.
+  const here =
+    view === 'dm'
+      ? dm.current && itemKey({ kind: 'dm', username: dm.current })
+      : sp.currentSpace && sp.currentChannel && itemKey({ kind: 'channel', space: sp.currentSpace, channel: sp.currentChannel });
+  useEffect(() => {
+    if (here) recordVisit(here, myId);
+  }, [here, myId]);
+
+  useShortcuts((action) => {
+    if (!token) return;
+    if (action === 'switcher') {
+      if (dm.conversations.length === 0) dm.loadConversations(); // so DMs are listed too
+      setSwitcher({ recent: loadRecent(myId) });
+      return;
+    }
+    if (view !== 'server') return;
+    const dir = action.startsWith('prev') ? -1 : 1;
+    const want = action.endsWith('-unread') ? (c) => !!(channelUnread[c] || channelMentions[c]) : undefined;
+    const to = stepChannel(sp.channels, sp.currentChannel, dir, want);
+    if (to) sp.selectChannel(to);
+  });
+
+  const switcherItems = switcher
+    ? [
+        ...sp.orderedSpaces.flatMap((s) =>
+          s.channels.map((c) => ({
+            kind: 'channel',
+            space: s.name,
+            channel: c,
+            unread: chat.unread[unreadKey(s.name, c)] || 0,
+            mention: chat.mentions[unreadKey(s.name, c)] || 0,
+          }))
+        ),
+        ...sp.orderedSpaces.map((s) => ({ kind: 'server', name: s.name, unread: spaceUnread[s.name] || 0, mention: spaceMentions[s.name] || 0 })),
+        ...dm.conversations.map((d) => ({ kind: 'dm', username: d.username, unread: dm.unread[d.username] || 0 })),
+      ]
+    : [];
+  function goToPicked(it) {
+    setSwitcher(null);
+    setNavOpen(false);
+    if (it.kind === 'channel') {
+      setView('server');
+      sp.openChannel(it.space, it.channel);
+    } else if (it.kind === 'server') selectSpace(it.name);
+    else startDm(it.username);
+  }
 
   if (!token) {
     if (!authInfo) {
@@ -362,6 +414,9 @@ export default function App() {
           onOpenChannel={openChannelFromSearch}
           onOpenDm={openDmFromSearch}
         />
+      )}
+      {switcher && (
+        <QuickSwitcher items={switcherItems} recent={switcher.recent} onPick={goToPicked} onClose={() => setSwitcher(null)} />
       )}
       {sp.iconCrop && (
         <ImageCropper
