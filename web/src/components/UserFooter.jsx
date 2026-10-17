@@ -22,7 +22,10 @@ const DOT_CLASS = { online: 'bg-online', idle: 'bg-idle', dnd: 'bg-pink', offlin
 // The current-user strip at the bottom of the left sidebar: your avatar (click
 // it to set your status), your name and status (click for your profile), and
 // sign-out.
-export default function UserFooter({ user, avatar, status, presence = 'online', onSetPresence, onOpenProfile, onLogout }) {
+// statusText/statusEmoji: your custom status (shown under your name instead
+// of the plain status word), set from the menu via onEditStatus.
+export default function UserFooter({ user, avatar, status, presence = 'online', statusText, statusEmoji, onSetPresence, onEditStatus, onOpenProfile, onLogout }) {
+  const custom = [statusEmoji, statusText].filter(Boolean).join(' ');
   const mode = PRESENCE_MODES.find((m) => m.id === presence) || PRESENCE_MODES[0];
   const trouble = status !== 'open' ? CONNECTION[status] || CONNECTION.idle : null;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -46,7 +49,7 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
   }
 
   function onMenuKey(e) {
-    const items = [...(menuRef.current?.querySelectorAll('[role="menuitemradio"]') || [])];
+    const items = [...(menuRef.current?.querySelectorAll('[role="menuitemradio"], [role="menuitem"]') || [])];
     const i = items.indexOf(document.activeElement);
     const to = { ArrowDown: (i + 1) % items.length, ArrowUp: (i - 1 + items.length) % items.length, Home: 0, End: items.length - 1 }[e.key];
     if (to !== undefined) {
@@ -83,7 +86,7 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
         <span className="truncate text-sm font-semibold">{user}</span>
         <span className="flex items-center gap-1.5 text-xs text-gray-400">
           <span className={`h-2 w-2 rounded-full ${trouble ? trouble.color : DOT_CLASS[mode.dot]}`} />
-          {trouble ? trouble.text : mode.label}
+          <span className="truncate">{trouble ? trouble.text : custom || mode.label}</span>
         </span>
       </button>
       <IconButton
@@ -123,6 +126,24 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
               </span>
             </button>
           ))}
+          {onEditStatus && (
+            <>
+              <div className="my-1 h-px bg-ink-500/50" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onEditStatus();
+                }}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-gray-300 transition hover:bg-ink-600 focus-visible:bg-ink-600"
+              >
+                <span aria-hidden="true" className="w-2.5 text-center">✎</span>
+                Set a custom status
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

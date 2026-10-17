@@ -39,16 +39,24 @@ function effectiveStatus(userId) {
   return mode === 'invisible' ? 'offline' : mode;
 }
 
+// What others see of a user: their effective status, plus their custom status
+// text/emoji only while they appear online (hidden when invisible or away).
+function publicPresence(userId) {
+  const status = effectiveStatus(userId);
+  const custom = status === 'offline' ? { statusText: null, statusEmoji: null } : db.getUserStatus(userId);
+  return { status, statusText: custom.statusText, statusEmoji: custom.statusEmoji };
+}
+
 // Announce a user's current status to everyone who shares a server (or
 // friendship) with them, so member lists update live. Never reveals the
 // chosen mode itself (an invisible user just looks offline).
 function broadcastPresence(userId) {
   const user = db.getUserById(userId);
   if (!user) return;
-  const frame = JSON.stringify({ type: 'presence', user: user.username, userId, status: effectiveStatus(userId) });
+  const frame = JSON.stringify({ type: 'presence', user: user.username, userId, ...publicPresence(userId) });
   const targets = new Set(db.getCoMemberIds(userId));
   for (const f of db.getFriends(userId)) targets.add(f.id);
   targets.forEach((id) => sendToUser(id, frame));
 }
 
-module.exports = { userClients, sendToUser, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus };
+module.exports = { userClients, sendToUser, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus, publicPresence };

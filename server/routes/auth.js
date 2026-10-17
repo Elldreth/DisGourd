@@ -5,7 +5,19 @@ const { generateSalt, hashPassword, verifyPassword } = require('../auth/password
 const { createToken, authUserId } = require('../auth/tokens');
 const { rateLimitOk, safeEqual, clientIp } = require('../auth/rateLimit');
 const { sendJson, sanitizeCrop, readJsonBody } = require('../http/util');
-const { validateRegistration } = require('../validate');
+const { validateRegistration, parseReactionEmoji } = require('../validate');
+
+const MAX_STATUS_TEXT = 80;
+const STATUS_DURATIONS = { '30m': 30 * 60e3, '1h': 60 * 60e3, '4h': 4 * 60 * 60e3 };
+
+// When a status set to clear "today" should go: the next midnight where the
+// user is (tzOffset is minutes, as from the browser's Date#getTimezoneOffset).
+function endOfToday(now, tzOffset) {
+  const offset = Number.isFinite(tzOffset) && Math.abs(tzOffset) <= 14 * 60 ? tzOffset : 0;
+  const local = new Date(now - offset * 60e3); // their wall-clock, read as UTC
+  const midnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + 1);
+  return midnight + offset * 60e3;
+}
 const { broadcastPresence, sendToUser } = require('../gateway/delivery');
 
 const getJsonBody = readJsonBody;
@@ -135,6 +147,22 @@ const routes = [
           broadcastPresence(userId); // what others now see
           sendToUser(userId, JSON.stringify({ type: 'my_presence', mode: body.presence })); // your other tabs
         }
+        if ('statusText' in body || 'statusEmoji' in body) {
+          const { statusText = null, statusEmoji = null, statusExpiresIn = null, tzOffset } = body;
+          if (statusText !== null && typeof statusText !== 'string') return sendJson(res, 400, { error: 'Status must be text' });
+          const text = (statusText || '').trim();
+          if (text.length > MAX_STATUS_TEXT) return sendJson(res, 400, { error: `Status can be at most ${MAX_STATUS_TEXT} characters` });
+          const emoji = statusEmoji ? parseReactionEmoji(statusEmoji) : null;
+          if (statusEmoji && !emoji) return sendJson(res, 400, { error: 'Status emoji must be a single emoji' });
+          if (statusExpiresIn !== null && statusExpiresIn !== 'today' && !STATUS_DURATIONS[statusExpiresIn]) {
+            return sendJson(res, 400, { error: 'Clear after must be 30m, 1h, 4h, today or never' });
+          }
+          const now = Date.now();
+          const expiresAt = statusExpiresIn === 'today' ? endOfToday(now, Number(tzOffset)) : statusExpiresIn ? now + STATUS_DURATIONS[statusExpiresIn] : null;
+          db.setUserStatus(userId, text, emoji, expiresAt);
+          broadcastPresence(userId);
+          sendToUser(userId, JSON.stringify({ type: 'my_status', ...db.getUserStatus(userId) }));
+        }
         if ('avatar' in body || 'avatarOriginal' in body) {
           const { avatar, avatarOriginal, avatarCrop } = body;
           const okUrl = (v) => v == null || v === '' || (typeof v === 'string' && v.startsWith('/uploads/'));
@@ -155,6 +183,7 @@ const routes = [
         avatarCrop: u.avatar_crop ? JSON.parse(u.avatar_crop) : null,
         siteAdmin: !!u.site_admin,
         presence: db.getUserPresence(userId),
+        ...db.getUserStatus(userId),
       });
     },
   },

@@ -22,6 +22,7 @@ import DmSidebar from './components/DmSidebar.jsx';
 import DmPanel from './components/DmPanel.jsx';
 import SearchOverlay from './components/SearchOverlay.jsx';
 import ImageCropper from './components/ImageCropper.jsx';
+import StatusDialog from './components/StatusDialog.jsx';
 import { useToasts } from './components/Toasts.jsx';
 import { useUndoDelete } from './state/useUndoDelete.js';
 import QuickSwitcher, { itemKey, loadRecent, recordVisit } from './components/QuickSwitcher.jsx';
@@ -46,6 +47,12 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   // Your chosen status (online | idle | dnd | invisible), kept on your profile.
   const presence = profile?.presence || 'online';
+  // Your custom status ({ statusText, statusEmoji }), edited in a dialog.
+  const [statusOpen, setStatusOpen] = useState(false);
+  async function saveStatus({ statusText, statusEmoji, statusExpiresIn }) {
+    const me = await api.updateMe({ statusText, statusEmoji, statusExpiresIn, tzOffset: new Date().getTimezoneOffset() });
+    setProfile((p) => (p ? { ...p, statusText: me.statusText, statusEmoji: me.statusEmoji, statusExpiresAt: me.statusExpiresAt } : p));
+  }
   async function setPresence(mode) {
     const before = presence;
     setProfile((p) => (p ? { ...p, presence: mode } : p));
@@ -123,6 +130,9 @@ export default function App() {
   gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, dm.handlers, {
     // You changed your status in another tab.
     my_presence: (f) => setProfile((p) => (p ? { ...p, presence: f.mode } : p)),
+    // Your custom status changed elsewhere, or its time ran out.
+    my_status: (f) =>
+      setProfile((p) => (p ? { ...p, statusText: f.statusText, statusEmoji: f.statusEmoji, statusExpiresAt: f.statusExpiresAt } : p)),
   });
 
   // Deleting a message: hidden at once with an Undo toast, sent after 5s.
@@ -286,6 +296,9 @@ export default function App() {
             status={status}
             presence={presence}
             onSetPresence={setPresence}
+            statusText={profile?.statusText}
+            statusEmoji={profile?.statusEmoji}
+            onEditStatus={() => setStatusOpen(true)}
             onOpenProfile={() => setProfileOpen(true)}
             onLogout={logout}
           />
@@ -346,6 +359,9 @@ export default function App() {
             avatar={profile?.avatar}
             presence={presence}
             onSetPresence={setPresence}
+            statusText={profile?.statusText}
+            statusEmoji={profile?.statusEmoji}
+            onEditStatus={() => setStatusOpen(true)}
             onOpenProfile={() => setProfileOpen(true)}
             status={status}
             onLogout={logout}
@@ -446,6 +462,9 @@ export default function App() {
       )}
       {switcher && (
         <QuickSwitcher items={switcherItems} recent={switcher.recent} onPick={goToPicked} onClose={() => setSwitcher(null)} />
+      )}
+      {statusOpen && (
+        <StatusDialog current={profile || {}} onSave={saveStatus} onClose={() => setStatusOpen(false)} />
       )}
       {sp.iconCrop && (
         <ImageCropper

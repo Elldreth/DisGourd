@@ -64,6 +64,9 @@ export default function ChannelList({
   status,
   presence,
   onSetPresence,
+  statusText,
+  statusEmoji,
+  onEditStatus,
   onLogout,
 }) {
   const [adding, setAdding] = useState(false);
@@ -519,6 +522,9 @@ export default function ChannelList({
         status={status}
         presence={presence}
         onSetPresence={onSetPresence}
+        statusText={statusText}
+        statusEmoji={statusEmoji}
+        onEditStatus={onEditStatus}
         onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />
