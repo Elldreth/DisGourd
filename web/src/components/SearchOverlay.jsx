@@ -8,7 +8,9 @@ import Modal from './Modal.jsx';
 // A search palette over all messages the user can see (server channels + DMs).
 // A Modal dialog with a combobox: type, then ↓ / ↑ to move through the
 // results and Enter to open one; the mouse works too.
-export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm }) {
+// A result from a thread shows "Thread name (#parent)" and opens the thread
+// (`onOpenThread(space, thread)`) rather than switching channel.
+export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm, onOpenThread }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState({ channels: [], dms: [] });
   const [loading, setLoading] = useState(false);
@@ -39,10 +41,12 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm }) {
   const short = q.trim().length < 2;
   // Every result in display order, with what opening it does.
   const flat = [
-    ...results.channels.map((m) => ({ key: `c${m.id}`, m, open: () => onOpenChannel(m.space, m.channel) })),
+    ...results.channels.map((m) => ({ key: `c${m.id}`, m, open: () => openResult(m) })),
     ...results.dms.map((m) => ({ key: `d${m.id}`, m, open: () => onOpenDm(m.dmWith) })),
   ];
   const optionId = (i) => `${listId}-${i}`;
+  const openResult = (m) => (m.thread && onOpenThread ? onOpenThread(m.space, m.thread) : onOpenChannel(m.space, m.channel));
+  const whereOf = (m) => (m.thread ? `${m.thread.name} (#${m.thread.parentChannel}) · ${m.space}` : `#${m.channel} · ${m.space}`);
   useEffect(() => setActive(-1), [results]);
 
   function onKeyDown(e) {
@@ -106,8 +110,8 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm }) {
                   id={optionId(i)}
                   selected={active === i}
                   m={m}
-                  where={`#${m.channel} · ${m.space}`}
-                  onClick={() => onOpenChannel(m.space, m.channel)}
+                  where={whereOf(m)}
+                  onClick={() => openResult(m)}
                 />
               ))}
             </Section>

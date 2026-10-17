@@ -56,3 +56,22 @@ test('Enter with nothing highlighted does nothing; Esc closes once', async () =>
   fireEvent.keyDown(box, { key: 'Escape' });
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+test('a result from a thread says which thread, and opens it instead of switching channel', async () => {
+  const api = await import('../api.js');
+  const thread = { channel: '~t5', name: 'Weekend plans', parentChannel: 'general' };
+  api.search.mockResolvedValueOnce({
+    channels: [{ id: 9, author: 'bob', content: 'hello in a thread', space: 'S', channel: '~t5', thread, timestamp: 9 }],
+    dms: [],
+  });
+  const onOpenThread = vi.fn();
+  const onOpenChannel = vi.fn();
+  render(<SearchOverlay onClose={() => {}} onOpenChannel={onOpenChannel} onOpenDm={() => {}} onOpenThread={onOpenThread} />);
+  fireEvent.change(screen.getByRole('combobox', { name: 'Search messages' }), { target: { value: 'hello' } });
+  const [option] = await screen.findAllByRole('option', {}, { timeout: 2000 });
+  expect(option.textContent).toContain('Weekend plans (#general) · S');
+  expect(option.textContent).not.toContain('~t5');
+  fireEvent.click(option);
+  expect(onOpenThread).toHaveBeenCalledWith('S', thread);
+  expect(onOpenChannel).not.toHaveBeenCalled();
+});
