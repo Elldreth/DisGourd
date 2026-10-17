@@ -34,12 +34,12 @@ function ThreadSummary({ thread, badge, onOpen }) {
       }`}
     >
       <Icon name="thread" size={14} className="shrink-0 text-brand-hi" />
-      <span className={`truncate ${unread || mentions ? 'font-bold text-fg' : 'font-semibold text-gray-100'}`}>{thread.name}</span>
-      <span className="shrink-0 text-gray-400">
-        · {replyCount(thread.messageCount)}
-        {thread.messageCount > 0 && ` · last ${formatAgo(thread.lastActivityAt)}`}
-        {thread.archived && ' · archived'}
-      </span>
+      <span className={`min-w-0 flex-1 truncate text-left ${unread || mentions ? 'font-bold text-fg' : 'font-semibold text-gray-100'}`}>{thread.name}</span>
+      <span className="shrink-0 text-gray-400">· {replyCount(thread.messageCount)}</span>
+      {thread.messageCount > 0 && (
+        <span className="shrink-0 text-gray-400 max-[360px]:hidden">· last {formatAgo(thread.lastActivityAt)}</span>
+      )}
+      {thread.archived && <span className="shrink-0 text-gray-400">· archived</span>}
       {mentions > 0 ? (
         <span aria-hidden="true" className="shrink-0 rounded-full bg-pink px-1.5 text-[10px] font-bold leading-4 text-ink-900">{mentions}</span>
       ) : unread > 0 ? (
@@ -76,7 +76,7 @@ function mentionsUser(content, me) {
 // `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
 // an original that isn't loaded, and, while that older window is showing
 // (`history.hasNewer`), offers newer pages and "Jump to present".
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label }, ref) {
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, emptyIcon = 'hash', topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label }, ref) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // The message being edited, and where focus goes when that edit ends: back
@@ -380,7 +380,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
       <div
         role="log"
         aria-label={label || (simple ? 'Messages' : `Messages in #${channel}`)}
-        className="flex min-h-full flex-col justify-end px-4 py-4"
+        className={`flex min-h-full flex-col px-4 py-4 ${topAligned ? '' : 'justify-end'}`}
       >
         <div ref={topSentinel} aria-hidden="true" />
         {loadingOlder && (
@@ -394,7 +394,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
         {!hasMore && !loadingOlder && (
           <div className="py-10 text-center text-gray-500">
             <div className="mb-3 flex justify-center">
-              {simple ? <span className="text-5xl">💬</span> : <Icon name="hash" size={52} className="text-gray-600" />}
+              {simple ? <span className="text-5xl">💬</span> : <Icon name={emptyIcon} size={52} className="text-gray-600" />}
             </div>
             <p className="text-lg font-semibold text-gray-300">
               {emptyHeading ?? `Welcome to #${channel}`}
@@ -727,7 +727,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
         {grouped ? (
           // Out of the layout and on one line, so showing it on hover never
           // changes the row's height.
-          <span className="absolute right-0 top-1 hidden whitespace-nowrap text-[10px] leading-4 text-gray-500 group-hover:block group-focus-visible:block">
+          <span className="absolute right-0 top-1 hidden whitespace-nowrap text-[11px] leading-4 text-gray-400 group-hover:block group-focus-visible:block coarse:block">
             {formatTime(m.timestamp)}
           </span>
         ) : (
