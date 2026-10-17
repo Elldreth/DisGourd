@@ -11,6 +11,17 @@ vi.mock('../api.js', () => ({
     throw new Error('This invite is invalid or has expired');
   }),
 }));
+// The real cropper needs a canvas; this one "frames" straight away.
+vi.mock('./ImageCropper.jsx', () => ({
+  default: ({ title, onSave, onCancel }) => (
+    <div role="dialog" aria-label={title}>
+      <button onClick={() => onSave({ blob: new Blob(['framed'], { type: 'image/png' }), crop: { x: 1, y: 2, zoom: 1.5 } })}>Save framing</button>
+      <button onClick={onCancel}>Cancel framing</button>
+    </div>
+  ),
+}));
+globalThis.URL.createObjectURL ??= () => 'blob:preview';
+globalThis.URL.revokeObjectURL ??= () => {};
 const api = await import('../api.js');
 const { default: CreateServerDialog, extractInviteCode } = await import('./CreateServerDialog.jsx');
 
@@ -63,7 +74,7 @@ test('Create: Enter submits the name, the counter shows the limit, success close
   await act(async () => {
     fireEvent.submit(box.closest('form'));
   });
-  expect(onCreate).toHaveBeenCalledWith('Book Club');
+  expect(onCreate).toHaveBeenCalledWith('Book Club', { template: 'blank', icon: null });
   expect(onClose).toHaveBeenCalled();
 });
 
@@ -128,4 +139,56 @@ test('Join: opened with a code from an invite link, it is filled in and previewe
   });
   expect(onJoin).toHaveBeenCalledWith('abc123');
   expect(onClose).toHaveBeenCalled();
+});
+
+test('Create: pick a starter template; each card shows its channels', async () => {
+  const { onCreate } = setup();
+  const radios = screen.getAllByRole('radio');
+  expect(radios.map((r) => r.closest('label').textContent)).toEqual([
+    expect.stringMatching(/^Blank.*general/s),
+    expect.stringMatching(/^Friends.*memes.*lounge/s),
+    expect.stringMatching(/^Gaming.*lfg.*squad-1/s),
+    expect.stringMatching(/^Study.*resources.*study-room/s),
+  ]);
+  expect(screen.getByRole('radio', { name: /Blank/ }).checked).toBe(true);
+  fireEvent.click(screen.getByRole('radio', { name: /Gaming/ }));
+  const box = screen.getByRole('textbox', { name: 'Server name' });
+  fireEvent.change(box, { target: { value: 'Raid Night' } });
+  await act(async () => {
+    fireEvent.submit(box.closest('form'));
+  });
+  expect(onCreate).toHaveBeenCalledWith('Raid Night', { template: 'gaming', icon: null });
+});
+
+test('Create: add an icon (framed first), see it, and it is sent along', async () => {
+  const { onCreate } = setup();
+  const file = new File(['png'], 'logo.png', { type: 'image/png' });
+  fireEvent.click(screen.getByRole('button', { name: 'Add an icon' }));
+  fireEvent.change(document.querySelector('input[type=file]'), { target: { files: [file] } });
+  expect(screen.getByRole('dialog', { name: 'Position the server icon' })).toBeTruthy();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save framing' }));
+  });
+  expect(screen.getByAltText('Server icon preview')).toBeTruthy();
+  const box = screen.getByRole('textbox', { name: 'Server name' });
+  fireEvent.change(box, { target: { value: 'Art Club' } });
+  await act(async () => {
+    fireEvent.submit(box.closest('form'));
+  });
+  const [, opts] = onCreate.mock.calls[0];
+  expect(opts.icon.original).toBe(file);
+  expect(opts.icon.crop).toEqual({ x: 1, y: 2, zoom: 1.5 });
+  expect(opts.icon.blob).toBeInstanceOf(Blob);
+});
+
+test('Create: the icon can be removed, and a non-image is refused inline', () => {
+  setup();
+  fireEvent.click(screen.getByRole('button', { name: 'Add an icon' }));
+  fireEvent.change(document.querySelector('input[type=file]'), { target: { files: [new File(['x'], 'notes.txt', { type: 'text/plain' })] } });
+  expect(screen.getByRole('alert').textContent).toMatch(/image/i);
+  fireEvent.change(document.querySelector('input[type=file]'), { target: { files: [new File(['png'], 'a.png', { type: 'image/png' })] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save framing' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove icon' }));
+  expect(screen.queryByAltText('Server icon preview')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Add an icon' })).toBeTruthy();
 });

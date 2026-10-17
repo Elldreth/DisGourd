@@ -202,8 +202,20 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       saveServerOrder(myId, names);
     },
     // These two throw, so the Add a server dialog can show the error inline.
-    createSpace: async (name) => {
-      await api.createSpace(name);
+    // icon (optional): { original: File, blob, crop } from the cropper. It's set
+    // after the server exists; if only that part fails, the server is kept and
+    // the error says so (retrying the create would hit "name already exists").
+    createSpace: async (name, { template, icon } = {}) => {
+      await api.createSpace(name, template);
+      if (icon) {
+        try {
+          const original = await api.uploadFile(icon.original);
+          const framed = await api.uploadFile(icon.blob);
+          await api.setSpaceIcon(name, framed.url, original.url, icon.crop);
+        } catch {
+          setError('The server was created, but its icon could not be saved. Set it from the server menu.');
+        }
+      }
       await loadSpaces();
       setCurrentSpace(name);
       setCurrentChannel('general');

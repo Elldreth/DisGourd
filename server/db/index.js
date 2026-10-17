@@ -959,6 +959,34 @@ function getFriends(userId) {
 // Create a server, make its creator the owner, and add its starting channels.
 // Any failure part-way (e.g. a duplicate channel name) rolls the whole thing
 // back. Returns the new space id, or null if the name is already taken.
+// Starter channel sets for a new server. Names are already normalized (as a
+// user-made channel would be). Unknown keys fall back to 'blank'.
+const SERVER_TEMPLATES = {
+  blank: { channels: [{ name: 'general', type: 'text' }] },
+  friends: {
+    channels: [
+      { name: 'general', type: 'text' }, { name: 'memes', type: 'text' }, { name: 'media', type: 'text' },
+      { name: 'lounge', type: 'voice' },
+    ],
+  },
+  gaming: {
+    channels: [
+      { name: 'general', type: 'text' }, { name: 'lfg', type: 'text' }, { name: 'clips', type: 'text' },
+      { name: 'squad-1', type: 'voice' }, { name: 'squad-2', type: 'voice' },
+    ],
+  },
+  study: {
+    channels: [
+      { name: 'general', type: 'text' }, { name: 'resources', type: 'text' }, { name: 'questions', type: 'text' },
+      { name: 'study-room', type: 'voice' },
+    ],
+  },
+};
+function templateChannels(key) {
+  const t = Object.prototype.hasOwnProperty.call(SERVER_TEMPLATES, key) ? SERVER_TEMPLATES[key] : SERVER_TEMPLATES.blank;
+  return t.channels;
+}
+
 const createSpaceWithDefaults = db.transaction((name, ownerId, channels = [{ name: 'general', type: 'text' }]) => {
   const spaceId = createSpaceOwned(name, ownerId);
   if (!spaceId) return null;
@@ -1066,6 +1094,8 @@ module.exports = {
   getMessages,
   getMessagesAfter,
   createSpaceWithDefaults,
+  SERVER_TEMPLATES,
+  templateChannels,
   storeMessageWithMentions,
   redeemInvite,
   createUserRedeemingCode,
