@@ -6,7 +6,7 @@ import { unreadKey } from './useChannelMessages.js';
 const IDLE_CALL = {
   room: null, status: 'idle', muted: false, deafened: false, pttEnabled: false, micError: false,
   unstable: false, sharing: false, shareError: '', cameraOn: false, screenOn: false, videoError: '',
-  videos: [], participants: [],
+  videos: [], participants: [], notice: '',
 };
 
 // Voice and video calls (a WebRTC mesh via voice.js): your own call's state,
@@ -30,7 +30,12 @@ export function useVoiceCall({ send, myId }) {
     // Every connect starts with `ready`, followed by a voice_state for each
     // occupied room. Forget what we knew first, so rooms that emptied while
     // we were offline don't keep showing people.
-    ready: () => setStates({}),
+    // If we were in a call, the server dropped us from it when the old socket
+    // closed: join it again.
+    ready: () => {
+      setStates({});
+      v() && v().rejoin();
+    },
     voice_state: (f) => {
       setStates((prev) => ({ ...prev, [unreadKey(f.space, f.channel)]: f.participants || [] }));
       v() && v().handleState(f);
@@ -57,6 +62,7 @@ export function useVoiceCall({ send, myId }) {
     setShareVolume: (userId, vol) => v() && v().setShareVolume(userId, vol),
     toggleCamera: () => v() && v().toggleCamera(),
     toggleScreen: () => v() && v().toggleScreen(),
+    dismissNotice: () => v() && v().clearNotice(),
   };
 
   // Keyboard shortcuts, active only while in a call. Browsers only deliver these

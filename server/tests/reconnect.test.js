@@ -98,3 +98,35 @@ test('rooms you cannot see, servers you are not in, and empty rooms are left out
   expect(gb.frames.filter((f) => f.type === 'voice_state')).toEqual([]);
   expect(gc.frames.filter((f) => f.type === 'voice_state')).toEqual([]);
 });
+
+test('rejoining from a new socket while the old one lingers: others drop the stale link first', async () => {
+  const gb = gateway(users.bea.token);
+  await gb.ready;
+  gb.send({ op: 'voice_join', space: 'Echo', channel: 'lounge' });
+  const ga1 = gateway(users.ava.token);
+  await ga1.ready;
+  ga1.send({ op: 'voice_join', space: 'Echo', channel: 'lounge' });
+  await wait(100);
+  gb.frames.length = 0;
+
+  // Ava reconnects on a new socket before the server notices the old one died.
+  const ga2 = gateway(users.ava.token);
+  await ga2.ready;
+  ga2.send({ op: 'voice_join', space: 'Echo', channel: 'lounge' });
+  await wait(100);
+
+  const seq = gb.frames.filter((f) => f.type === 'voice_peer_left' || f.type === 'voice_peer_joined');
+  expect(seq.map((f) => f.type)).toEqual(['voice_peer_left', 'voice_peer_joined']);
+  expect(seq[0].userId).toBe(users.ava.id);
+  const roster = gb.frames.filter((f) => f.type === 'voice_state').pop();
+  expect(roster.participants.map((p) => p.username).sort()).toEqual(['ava', 'bea']);
+
+  // The old socket finally closes: it must not knock Ava out of the room.
+  ga1.close();
+  await wait(100);
+  const after = gb.frames.filter((f) => f.type === 'voice_state').pop();
+  expect(after.participants.map((p) => p.username).sort()).toEqual(['ava', 'bea']);
+  ga2.close();
+  gb.close();
+  await wait(100);
+});

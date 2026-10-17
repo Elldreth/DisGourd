@@ -69,6 +69,18 @@ const ops = {
     }
     const user = db.getUserById(userId);
     if (!user) return;
+    // Rejoining from a new socket (a reconnect) before we noticed the old one
+    // died: tell the others to drop their stale link to us first.
+    const stale = room.members.get(userId);
+    if (stale && stale.ws !== ws) {
+      stale.ws.voiceRoom = null;
+      room.members.delete(userId);
+      for (const p of room.members.values()) {
+        if (p.ws.readyState === WebSocket.OPEN) {
+          p.ws.send(JSON.stringify({ type: 'voice_peer_left', space: room.space, channel: room.channel, userId }));
+        }
+      }
+    }
     const existing = [...room.members.values()].map((p) => ({
       userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
     }));

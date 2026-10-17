@@ -54,5 +54,5 @@
 - Resync while in the DM view: shares the channel logic and isn't separately exercised in the sandbox.
 
 ## Discovered Work
-- If you're in a voice call when the connection drops, the server removes you from the room, and the client doesn't rejoin after reconnecting. Needs its own unit (rejoin, or tell the user the call ended).
+- ~~Voice call not rejoined after a reconnect~~: now P1-20.
 - ~~DM sidebar "No conversations yet" (from P2-04)~~: fixed on `claude/fix-dm-list-from-notification` (the list now loads whenever the DM view opens).
