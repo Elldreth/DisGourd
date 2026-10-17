@@ -41,7 +41,7 @@ Sandbox method: two real browser tabs in one WebRTC call (sandy on localhost:300
 | Pin a screen share: it fills the stage; fullscreen works and Esc exits | `VideoStage.test.jsx` covers pin/spotlight, click-to-pin, the full-screen button calling `requestFullscreen` on the tile, and "Exit full screen". Sandbox: a real click pinned "sandy (2)" (her share) and it filled the stage uncropped, with the other tiles in a row below. **Fullscreen not verified here:** a real click reaches `requestFullscreen()` on the tile, but the Browser pane holds the request and never settles it. To check in a normal browser. |
 | Unpinning restores the grid; a pinned tile that disappears unpins | Tests for both, plus a test that pinning restyles the tile rather than remounting its `<video>`. Sandbox: the pin button toggled spotlight then grid. With the share pinned on bob's side, sandy stopped sharing: within 2.5s bob's stage was back to the grid with the share gone. Camera off removed the camera tile the same way. |
 
-Web tests: 374 pass (8 new: 3 in voice.test.js, 6 in VideoStage.test.jsx, with one existing test extended). Build clean.
+Web tests: 374 pass (9 new: 3 in voice.test.js, 6 in VideoStage.test.jsx). Build clean.
 
 ### Scope change (required for AC 3), recorded
 Before this unit, a viewer's tile for a stopped camera or share **never went away**: the browser removes the track from the received stream, and voice.js only listened for the track's `ended` event, which doesn't fire for that. The sandbox showed a dead "sandy (2)" tile with zero tracks. `addRemoteVideo` now also drops the tile on the stream's `removetrack` once it has no video left. It's a small change in voice.js outside `buildVideoTiles`; signalling is untouched.
