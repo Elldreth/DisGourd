@@ -32,7 +32,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-12 | App split 1/3: channel-message hook | 1 | COMPLETE | M | none (after P1-11) | App.jsx, state/useChannelMessages.js |
 | P1-13 | App split 2/3: DM hook | 1 | COMPLETE | S–M | P1-12 | App.jsx, state/useDms.js |
 | P1-14 | App split 3/3: spaces + voice hooks | 1 | COMPLETE | M | P1-13 | App.jsx, state/useSpaces.js, state/useVoiceCall.js |
-| P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | REVIEW | S | none | Dockerfile, docker-compose.yml, README.md |
+| P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | COMPLETE | S | none | Dockerfile, docker-compose.yml, README.md |
 | P1-16 | Nightly VACUUM INTO backups | 1 | COMPLETE | S | none | backup.js (new), server.js (boot), README.md |
 | P1-17 | GitHub Actions CI | 1 | COMPLETE | S | none | .github/workflows/ci.yml |
 | P1-18 | Bump Vite | 1 | COMPLETE | S | none | web/package.json, vite.config.js |
