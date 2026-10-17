@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createRef } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -84,4 +84,48 @@ test('Esc closes the picker and returns to the message box', async () => {
   fireEvent.keyDown(search, { key: 'Escape' });
   expect(screen.queryByRole('dialog', { name: 'Emoji picker' })).toBeNull();
   await waitFor(() => expect(document.activeElement).toBe(box));
+});
+
+describe('up arrow edits your last message', () => {
+  const withEditLast = (found = true) => {
+    const onEditLast = vi.fn(() => found);
+    render(<Composer channel="general" disabled={false} onSend={() => {}} onTyping={() => {}} onEditLast={onEditLast} />);
+    return { onEditLast, box: screen.getByPlaceholderText('Message #general') };
+  };
+
+  test('in an empty box, up arrow asks to edit the last message', () => {
+    const { onEditLast, box } = withEditLast();
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+    box.dispatchEvent(ev);
+    expect(onEditLast).toHaveBeenCalled();
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  test('with text in the box, up arrow just moves the caret', () => {
+    const { onEditLast, box } = withEditLast();
+    fireEvent.change(box, { target: { value: 'line one\nline two' } });
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+    box.dispatchEvent(ev);
+    expect(onEditLast).not.toHaveBeenCalled();
+    expect(ev.defaultPrevented).toBe(false);
+  });
+
+  test('when there is nothing to edit, the key is left alone', () => {
+    const { onEditLast, box } = withEditLast(false);
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+    box.dispatchEvent(ev);
+    expect(onEditLast).toHaveBeenCalled();
+    expect(ev.defaultPrevented).toBe(false);
+  });
+
+  test('not while files are waiting to be sent', async () => {
+    const ref = createRef();
+    const onEditLast = vi.fn(() => true);
+    render(<Composer ref={ref} channel="random" disabled={false} onSend={() => {}} onTyping={() => {}} onEditLast={onEditLast} />);
+    await act(async () => {
+      await ref.current.addFiles([file('cat.png')]);
+    });
+    fireEvent.keyDown(screen.getByPlaceholderText('Message #random'), { key: 'ArrowUp' });
+    expect(onEditLast).not.toHaveBeenCalled();
+  });
 });

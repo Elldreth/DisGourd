@@ -8,7 +8,9 @@ import { insertAtCaret } from '../emoji.js';
 // The message box. Files can be attached with the + button, pasted (Ctrl+V a
 // screenshot), or dropped on the chat panel, which calls `addFiles` through
 // the ref.
-const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], replyingTo, onCancelReply }, ref) {
+// `onEditLast()` (optional): up arrow in an empty box edits your last message;
+// it returns whether there was one to edit.
+const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], replyingTo, onCancelReply, onEditLast }, ref) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState([]); // [{ url, name, size }] — an album
   const [spoilerPending, setSpoilerPending] = useState(false);
@@ -57,7 +59,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
     addFiles(files.map(pastedName));
   }
 
-  useImperativeHandle(ref, () => ({ addFiles }));
+  useImperativeHandle(ref, () => ({ addFiles, focus: () => taRef.current?.focus() }));
 
   // Put the cursor back in the message box (after a pick, or on close).
   function refocus(caret) {
@@ -148,6 +150,12 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       submit();
+      return;
+    }
+    // Up arrow in an empty box (nothing typed or attached) edits your last
+    // message, like Discord and Slack. Otherwise it moves the caret.
+    if (e.key === 'ArrowUp' && !text && !mentionMatch && pending.length === 0 && uploading === 0 && onEditLast?.()) {
+      e.preventDefault();
     }
   }
 

@@ -11,6 +11,7 @@ import { useFileDrop } from '../useFileDrop.js';
 export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, onTyping, onOpenSearch, onOpenNav }) {
   // Files dropped anywhere on the conversation go to the composer.
   const composerRef = useRef(null);
+  const listRef = useRef(null);
   const drop = useFileDrop({ enabled: !!username, onFiles: (files) => composerRef.current?.addFiles(files) });
 
   if (!username) {
@@ -58,6 +59,7 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
       </header>
 
       <MessageList
+        ref={listRef}
         messages={messages}
         currentUser={currentUser}
         onEdit={onEdit}
@@ -68,9 +70,10 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
         simple
         emptyHeading={`This is the beginning of your conversation with ${username}`}
         emptyBody="Say hi! 👋"
+        onEditDone={() => composerRef.current?.focus()}
       />
       <TypingIndicator names={typing} />
-      <Composer ref={composerRef} channel={username} disabled={false} onSend={onSend} onTyping={onTyping} placeholder={`Message @${username}`} />
+      <Composer ref={composerRef} onEditLast={() => listRef.current?.startEditLast() ?? false} channel={username} disabled={false} onSend={onSend} onTyping={onTyping} placeholder={`Message @${username}`} />
     </main>
   );
 }
