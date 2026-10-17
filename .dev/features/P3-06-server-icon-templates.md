@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (slice 2 of the create-server dialog)
 - **Phase:** 3 — "proper modal with tabs (name, icon, template)"
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S–M
 - **Depends on:** P3-04, P1-06 (`createSpaceWithDefaults` creates the template channels atomically)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 3
