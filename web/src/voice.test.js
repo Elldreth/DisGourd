@@ -176,3 +176,82 @@ test('only the joiner starts the connection; people already in the call wait for
   expect(pcs).toHaveLength(1); // the link is made when bob's offer arrives
   expect(sent.at(-1)).toMatchObject({ op: 'voice_signal', to: 2, data: { sdp: { type: 'answer' } } });
 });
+
+// ---- Video tiles (the voice stage) ----
+// A fake analyser whose loudness each test can set per stream.
+let loudness;
+class FakeAudioContext {
+  createAnalyser() {
+    const a = { fftSize: 0, frequencyBinCount: 4, getByteFrequencyData: (d) => d.fill(loudness[a.streamId] || 0) };
+    this.last = a;
+    return a;
+  }
+  createMediaStreamSource(stream) {
+    const ctx = this;
+    return { connect: (a) => (a.streamId = stream.id ?? ctx.last.streamId) };
+  }
+}
+const videoStream = (id, settings = {}) => {
+  const track = { kind: 'video', getSettings: () => settings, stop: vi.fn() };
+  return { stream: { id, getTracks: () => [track], getVideoTracks: () => [track], getAudioTracks: () => [] }, track };
+};
+const audioStream = (id) => {
+  const track = { kind: 'audio', enabled: true, stop: vi.fn() };
+  return { id, getTracks: () => [track], getAudioTracks: () => [track] };
+};
+
+test('remote video tiles say whose they are, whether it is a screen, and if that person is speaking', async () => {
+  loudness = {};
+  vi.stubGlobal('AudioContext', FakeAudioContext);
+  await inCallWithBob();
+  voice.handleState({ space: 'S', channel: 'lounge', participants: [{ userId: 1, username: 'sandy' }, { userId: 2, username: 'bob' }] });
+  const link = pcs[0];
+  const cam = videoStream('bob-cam');
+  link.ontrack({ track: cam.track, streams: [cam.stream] });
+  const scr = videoStream('bob-screen', { displaySurface: 'monitor' });
+  link.ontrack({ track: scr.track, streams: [scr.stream] });
+  const mic = audioStream('bob-mic');
+  link.ontrack({ track: mic.getAudioTracks()[0], streams: [mic] });
+
+  expect(state.videos.map((t) => [t.key, t.userId, t.kind, t.speaking])).toEqual([
+    ['bob-cam', 2, 'camera', false],
+    ['bob-screen', 2, 'screen', false],
+  ]);
+  // Two videos from one person get told apart (a received screen share often
+  // can't be recognised as one).
+  expect(state.videos.map((t) => t.label)).toEqual(['bob', 'bob (2)']);
+
+  loudness['bob-mic'] = 80; // bob starts talking
+  vi.advanceTimersByTime(250);
+  expect(state.videos.every((t) => t.speaking)).toBe(true);
+
+  loudness['bob-mic'] = 0;
+  vi.advanceTimersByTime(250);
+  expect(state.videos.some((t) => t.speaking)).toBe(false);
+});
+
+test('your own camera and screen tiles know their kind', async () => {
+  await inCallWithBob();
+  const cam = videoStream('my-cam');
+  getUserMedia.mockResolvedValueOnce(cam.stream);
+  await voice.toggleCamera();
+  const scr = videoStream('my-screen');
+  navigator.mediaDevices.getDisplayMedia = vi.fn(async () => scr.stream);
+  await voice.toggleScreen();
+  expect(state.videos.map((t) => [t.key, t.kind, t.self])).toEqual([
+    ['self-camera', 'camera', true],
+    ['self-screen', 'screen', true],
+  ]);
+});
+
+test('a remote video tile goes away when the sender stops it (the track is removed, not ended)', async () => {
+  await inCallWithBob();
+  const scr = videoStream('bob-screen');
+  let tracks = [scr.track];
+  scr.stream.getVideoTracks = () => tracks;
+  pcs[0].ontrack({ track: scr.track, streams: [scr.stream] });
+  expect(state.videos.map((t) => t.key)).toEqual(['bob-screen']);
+  tracks = []; // what a browser does when bob's renegotiation drops the track
+  scr.stream.onremovetrack?.({ track: scr.track });
+  expect(state.videos).toEqual([]);
+});
