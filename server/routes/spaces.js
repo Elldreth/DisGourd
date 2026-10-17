@@ -22,14 +22,21 @@ const routes = [
       if (pathSegments.length === 1 && req.method === 'GET') {
         return sendJson(res, 200, db.getUserSpaces(userId));
       }
-      // POST /spaces — create a server (creator becomes owner), with a #general channel
+      // POST /spaces { name, template? } — create a server (creator becomes
+      // owner) with a template's channels (default: just #general)
       if (pathSegments.length === 1 && req.method === 'POST') {
-        const { name } = await getJsonBody(req);
+        const { name, template } = await getJsonBody(req);
         const invalid = validateSpaceName(name);
         if (invalid) return sendJson(res, 400, { error: invalid });
-        const spaceId = db.createSpaceWithDefaults(name.trim(), userId);
+        const channels = db.templateChannels(template);
+        const spaceId = db.createSpaceWithDefaults(name.trim(), userId, channels);
         if (!spaceId) return sendJson(res, 409, { error: 'A server with that name already exists' });
-        return sendJson(res, 201, { name: name.trim(), role: 'owner', channels: ['general'] });
+        return sendJson(res, 201, {
+          name: name.trim(),
+          role: 'owner',
+          channels: channels.filter((c) => c.type !== 'voice').map((c) => c.name),
+          voiceChannels: channels.filter((c) => c.type === 'voice').map((c) => c.name),
+        });
       }
 
       const spaceName = pathSegments[1];

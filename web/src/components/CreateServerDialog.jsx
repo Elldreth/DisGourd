@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import * as api from '../api.js';
 import Modal from './Modal.jsx';
+import ImageCropper from './ImageCropper.jsx';
 
 const MAX_NAME = 60;
 
@@ -22,6 +23,15 @@ export function extractInviteCode(input) {
   }
 }
 
+// Starter channel sets (the server's SERVER_TEMPLATES decides; this is the
+// preview). 'voice' channels show with a speaker.
+const TEMPLATES = [
+  { id: 'blank', label: 'Blank', channels: ['#general'] },
+  { id: 'friends', label: 'Friends', channels: ['#general', '#memes', '#media', '🔊 lounge'] },
+  { id: 'gaming', label: 'Gaming', channels: ['#general', '#lfg', '#clips', '🔊 squad-1', '🔊 squad-2'] },
+  { id: 'study', label: 'Study', channels: ['#general', '#resources', '#questions', '🔊 study-room'] },
+];
+
 const TABS = [
   { id: 'create', label: 'Create' },
   { id: 'join', label: 'Join' },
@@ -30,7 +40,8 @@ const TABS = [
 // "Add a server": create a new one, or join one with an invite. Tabs follow
 // the ARIA tabs pattern (← → Home End move between them). Errors from the
 // server show inline and the dialog stays open; on success it closes.
-//   onCreate(name) / onJoin(code): resolve on success, throw with a message.
+//   onCreate(name, { template, icon }) / onJoin(code): resolve on success,
+//   throw with a message. icon: { original: File, blob, crop } or null.
 //   initialCode: fills the Join box (from an invite link).
 export default function CreateServerDialog({ initialTab = 'create', initialCode = '', onCreate, onJoin, onClose }) {
   const [tab, setTab] = useState(initialTab);
@@ -110,9 +121,29 @@ function Buttons({ busy, disabled, label, onCancel }) {
 
 function CreatePanel({ fieldRef, onCreate, onDone, onCancel }) {
   const [name, setName] = useState('');
+  const [template, setTemplate] = useState('blank');
+  const [icon, setIcon] = useState(null); // { original, blob, crop, preview }
+  const [framing, setFraming] = useState(null); // the picked File while it's being framed
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const fileRef = useRef(null);
   const id = useId();
+  const group = useId();
+
+  // Free the preview's object URL when it's replaced or the dialog closes.
+  useEffect(() => () => icon && URL.revokeObjectURL(icon.preview), [icon]);
+
+  function pick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image file for the icon');
+      return;
+    }
+    setError('');
+    setFraming(file);
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -121,7 +152,7 @@ function CreatePanel({ fieldRef, onCreate, onDone, onCancel }) {
     setBusy(true);
     setError('');
     try {
-      await onCreate(trimmed);
+      await onCreate(trimmed, { template, icon: icon ? { original: icon.original, blob: icon.blob, crop: icon.crop } : null });
       onDone();
     } catch (err) {
       setError(err.message || 'Could not create the server');
@@ -139,25 +170,91 @@ function CreatePanel({ fieldRef, onCreate, onDone, onCancel }) {
           {name.length}/{MAX_NAME}
         </span>
       </div>
-      <input
-        id={id}
-        ref={fieldRef}
-        value={name}
-        maxLength={MAX_NAME}
-        onChange={(e) => {
-          setName(e.target.value);
-          setError('');
-        }}
-        placeholder="My friends"
-        autoComplete="off"
-        className="input"
-      />
+      <div className="flex items-center gap-3">
+        {icon ? (
+          <img src={icon.preview} alt="Server icon preview" className="h-11 w-11 shrink-0 rounded-2xl object-cover ring-1 ring-ink-500" />
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-dashed border-ink-500 text-[10px] font-semibold uppercase leading-tight text-gray-400 transition hover:border-brand-hi hover:text-fg"
+            aria-label="Add an icon"
+            title="Add an icon"
+          >
+            Icon
+          </button>
+        )}
+        <input
+          id={id}
+          ref={fieldRef}
+          value={name}
+          maxLength={MAX_NAME}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError('');
+          }}
+          placeholder="My friends"
+          autoComplete="off"
+          className="input"
+        />
+      </div>
+      {icon && (
+        <div className="mt-1 flex gap-3 text-xs">
+          <button type="button" onClick={() => fileRef.current?.click()} className="text-brand-hi hover:underline">
+            Change icon
+          </button>
+          <button type="button" onClick={() => setIcon(null)} className="text-gray-400 hover:text-danger">
+            Remove icon
+          </button>
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
+
+      <fieldset className="mt-4">
+        <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Start with</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {TEMPLATES.map((t) => (
+            <label
+              key={t.id}
+              className={`flex cursor-pointer flex-col rounded-lg p-2 ring-1 transition ${
+                template === t.id ? 'bg-ink-700 ring-brand-hi' : 'ring-ink-500 hover:bg-ink-700/60'
+              }`}
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-gray-100">
+                <input
+                  type="radio"
+                  name={group}
+                  value={t.id}
+                  checked={template === t.id}
+                  onChange={() => setTemplate(t.id)}
+                  className="h-3.5 w-3.5 accent-brand"
+                />
+                {t.label}
+              </span>
+              <span className="mt-1 text-[11px] leading-snug text-gray-400">{t.channels.join(' · ')}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
       {error && (
         <p role="alert" className="mt-2 text-sm text-danger">
           {error}
         </p>
       )}
       <Buttons busy={busy} disabled={!name.trim()} label="Create" onCancel={onCancel} />
+      {framing && (
+        <ImageCropper
+          src={framing}
+          shape="square"
+          title="Position the server icon"
+          onCancel={() => setFraming(null)}
+          onSave={({ blob, crop }) => {
+            setIcon({ original: framing, blob, crop, preview: URL.createObjectURL(blob) });
+            setFraming(null);
+          }}
+        />
+      )}
     </form>
   );
 }

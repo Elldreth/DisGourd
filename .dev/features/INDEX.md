@@ -50,7 +50,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-09 | Replies in channels | 2 | COMPLETE | M | P1-01, P1-05, P3-05 | migrations.js, db/index.js, gateway/chat.js, Composer/MessageList |
 | P2-10 | Replies in DMs + jump (`around`) | 2 | PLANNED | S–M | P2-09, P1-08, P1-13 | db/index.js, gateway/dm.js, routes, MessageList |
 | P2-11 | SSRF-safe fetcher + OG parser | 2 | COMPLETE | M | none | net/safeFetch.js (new), integrations/unfurl.js (new) |
-| P2-12 | Link previews end-to-end | 2 | REVIEW | M | P2-11, P1-01, P1-05 (soft P2-01) | linkPreviews.js (new), migrations.js, gateway, Embed.jsx (new) |
+| P2-12 | Link previews end-to-end | 2 | COMPLETE | M | P2-11, P1-01, P1-05 (soft P2-01) | linkPreviews.js (new), migrations.js, gateway, Embed.jsx (new) |
 | P2-13 | Pins | 2 | PLANNED | M | P1-01, P1-04, P1-05, P3-05 | migrations.js, gateway/chat.js, routes/spaces.js, PinsPanel.jsx (new) |
 | P2-14 | DND / invisible presence | 2 | PLANNED | S–M | P1-01, P1-05 | migrations.js, gateway/delivery.js, routes/auth.js, UserFooter/Avatar/MemberList |
 | P2-15 | Custom status text | 2 | PLANNED | S | P2-14 | same as P2-14 |
@@ -66,7 +66,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-03 | Icon-button labels sweep | 3 | COMPLETE | S–M | P3-02, P3-05 | IconButton.jsx (new), ~12 components (exclusive) |
 | P3-04 | Create/Join server dialog | 3 | COMPLETE | S | P3-01 | CreateServerDialog.jsx (new), ServerRail.jsx, App.jsx |
 | P3-05 | Accessible message actions | 3 | COMPLETE | M | none | MessageList.jsx, MessageActions.jsx (new) |
-| P3-06 | Server icon + templates at creation | 3 | PLANNED | S–M | P3-04, P1-06 | routes/spaces.js, CreateServerDialog.jsx |
+| P3-06 | Server icon + templates at creation | 3 | REVIEW | S–M | P3-04, P1-06 | routes/spaces.js, CreateServerDialog.jsx |
 | P3-07 | Setup wizard improvements | 3 | COMPLETE | S | none | SetupWizard.jsx |
 | P3-08 | In-app confirm (kick, delete server) | 3 | COMPLETE | S | P3-01 | ConfirmDialog.jsx (new), MemberList.jsx, ChannelList.jsx |
 | P3-09 | Undo toast for message delete | 3 | COMPLETE | S–M | P3-05 | Toasts.jsx (new), App.jsx, MessageActions.jsx |

@@ -105,8 +105,9 @@ export function setSiteAdmin(username, admin) {
 export function getSpaces() {
   return request('/spaces');
 }
-export function createSpace(name) {
-  return request('/spaces', { method: 'POST', body: { name } });
+// template: 'blank' | 'friends' | 'gaming' | 'study' (the server falls back to blank).
+export function createSpace(name, template) {
+  return request('/spaces', { method: 'POST', body: { name, template } });
 }
 export function deleteSpace(space) {
   return request(`/spaces/${encodeURIComponent(space)}`, { method: 'DELETE' });
