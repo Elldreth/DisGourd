@@ -28,6 +28,7 @@ import { useToasts } from './components/Toasts.jsx';
 import { useUndoDelete } from './state/useUndoDelete.js';
 import QuickSwitcher, { itemKey, loadRecent, recordVisit, peopleItems } from './components/QuickSwitcher.jsx';
 import { useShortcuts, stepChannel } from './shortcuts.js';
+import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
@@ -153,6 +154,10 @@ export default function App() {
     threadOpener.current = null;
     if (el && document.contains(el)) el.focus();
   }
+  // Phones: the back button closes whichever of these is open (P4-07).
+  useOverlayHistory('thread', !!openThread, closeThread);
+  useOverlayHistory('members', membersOpen, () => setMembersOpen(false));
+  useOverlayHistory('nav', navOpen, () => setNavOpen(false));
   // Leaving the thread's channel closes it (silently: nothing to focus back to).
   useEffect(() => {
     if (openThread && (openThread.space !== sp.currentSpace || openThread.parentChannel !== sp.currentChannel)) {

@@ -91,6 +91,15 @@ export default function ThreadPanel({
       className="fixed inset-0 z-40 flex min-h-0 flex-col bg-ink-700 lg:static lg:z-auto lg:w-96 lg:shrink-0 lg:border-l lg:border-ink-900/60"
     >
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-xs shadow-black/20">
+        {/* Phones: the panel fills the screen, so a back button sits where the
+            thumb is; from lg up it is a side column and the × is enough. */}
+        <IconButton
+          icon="chevronLeft"
+          size={20}
+          label={`Back to #${thread.parentChannel}`}
+          onClick={onClose}
+          className="tap -ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg lg:hidden"
+        />
         <Icon name="thread" size={18} className="shrink-0 text-brand-hi" />
         <div className="min-w-0 flex-1">
           <h2 className="truncate font-bold leading-tight">{thread.name}</h2>

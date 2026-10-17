@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P4-00)
 - **Phase:** 4
-- **State:** REVIEW (branch `claude/p4-05-link-previews`, PR pending)
+- **State:** COMPLETE (merged in #107, 2026-10-17)
 - **Effort:** S
 - **Depends on:** none (P2-12, P2-23 are merged)
 - **Serialize with:** anything editing `Embed.jsx`
