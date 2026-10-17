@@ -7,6 +7,7 @@ const { sendJson, intParam, sanitizeCrop, readJsonBody } = require('../http/util
 const { validateSpaceName, normalizeChannelName, validateChannelName } = require('../validate');
 const { canViewChannel, canPostChannel } = require('../permissions');
 const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence, tellFollow } = require('../gateway/delivery');
+const { threadUpdated } = require('../gateway/chat');
 
 const getJsonBody = readJsonBody;
 
@@ -205,6 +206,15 @@ const routes = [
           const changed = followed ? db.followThread(userId, threadId) : db.unfollowThread(userId, threadId);
           if (changed) tellFollow(userId, spaceName, db.getThread(spaceName, channelName), followed);
           return sendJson(res, 200, { followed });
+        }
+        // PUT/DELETE archive — archive or reopen a thread by hand (people who
+        // may pin messages). Viewers are told with thread_updated.
+        if (channelName && db.isThreadChannel(channelName) && pathSegments[4] === 'archive' && pathSegments.length === 5 && (req.method === 'PUT' || req.method === 'DELETE')) {
+          if (!db.threadChannelId(spaceName, channelName)) return sendJson(res, 404, { error: 'Thread not found' });
+          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this thread' });
+          if (!db.canDo(space.id, role, 'pin_messages')) return sendJson(res, 403, { error: 'You are not allowed to archive threads here' });
+          if (db.setThreadArchived(spaceName, channelName, req.method === 'PUT')) threadUpdated(spaceName, channelName);
+          return sendJson(res, 200, { thread: db.getThread(spaceName, channelName) });
         }
         // Thread channels are managed through their parent, not as channels.
         if (channelName && db.isThreadChannel(channelName) && (req.method === 'DELETE' || pathSegments[4] === 'permissions')) {

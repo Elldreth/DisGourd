@@ -144,6 +144,7 @@ export default function App() {
       name: t.name,
       rootMessageId: t.rootMessageId ?? threadRootId(t.channel),
       root,
+      archived: !!t.archived,
     });
   }
   function closeThread() {
@@ -179,6 +180,9 @@ export default function App() {
     // Your custom status changed elsewhere, or its time ran out.
     my_status: (f) =>
       setProfile((p) => (p ? { ...p, statusText: f.statusText, statusEmoji: f.statusEmoji, statusExpiresAt: f.statusExpiresAt } : p)),
+    // The open thread was archived or reopened (by the sweep, a reply, or a moderator).
+    thread_updated: (f) =>
+      setOpenThread((t) => (t && t.space === f.space && t.channel === f.thread?.channel ? { ...t, archived: !!f.thread.archived, name: f.thread.name } : t)),
   });
 
   // Deleting a message: hidden at once with an Undo toast, sent after 5s.
@@ -518,6 +522,11 @@ export default function App() {
               onTyping={thread.sendTyping}
               onClose={closeThread}
               followed={!!chat.threads[unreadKey(openThread.space, openThread.channel)]?.followed}
+              onSetArchived={
+                sp.canPin
+                  ? (archived) => (archived ? api.archiveThread : api.reopenThread)(openThread.space, openThread.channel).catch(() => {})
+                  : undefined
+              }
               onToggleFollow={(follow) =>
                 (follow ? api.followThread : api.unfollowThread)(openThread.space, openThread.channel).catch(() => {})
               }

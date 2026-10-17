@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('../api.js', () => ({ getMessages: vi.fn() }));
@@ -86,4 +86,30 @@ test('Follow / Following toggles following the thread (P2-22c)', () => {
   expect(on.textContent).toBe('Following');
   fireEvent.click(on);
   expect(onToggleFollow).toHaveBeenLastCalledWith(false);
+});
+
+describe('archived threads (P2-22d)', () => {
+  test('an archived thread says so, stays readable, and a moderator can reopen it', () => {
+    const onSetArchived = vi.fn();
+    render(
+      <ThreadPanel space="S" thread={{ ...thread, archived: true }} status="open" messages={replies} currentUser="sandy" onSend={() => {}} onClose={() => {}} onSetArchived={onSetArchived} />
+    );
+    expect(screen.getByRole('status').textContent).toMatch(/This thread is archived. A reply reopens it./);
+    expect(screen.getByText('Hiking!')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Reply in Weekend plans')).toBeTruthy(); // replying reopens it
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen thread' }));
+    expect(onSetArchived).toHaveBeenCalledWith(false);
+  });
+
+  test('an open thread offers Archive to moderators, and nothing to others', () => {
+    const onSetArchived = vi.fn();
+    const { rerender } = render(
+      <ThreadPanel space="S" thread={thread} status="open" messages={replies} currentUser="sandy" onSend={() => {}} onClose={() => {}} onSetArchived={onSetArchived} />
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Archive thread' }));
+    expect(onSetArchived).toHaveBeenCalledWith(true);
+    rerender(<ThreadPanel space="S" thread={thread} status="open" messages={replies} currentUser="sandy" onSend={() => {}} onClose={() => {}} />);
+    expect(screen.queryByRole('button', { name: /Archive thread|Reopen thread/ })).toBeNull();
+  });
 });

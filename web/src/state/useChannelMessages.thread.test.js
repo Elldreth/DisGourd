@@ -53,7 +53,7 @@ test('the channel instance keeps root summaries live', async () => {
       thread: { id: 3, channel: '~t40', name: 'Plans', rootMessageId: 40, messageCount: 0, lastActivityAt: 1, parentChannel: 'general', createdBy: 'bob' },
     });
   });
-  expect(result.current.messages[0].thread).toEqual({ id: 3, channel: '~t40', name: 'Plans', messageCount: 0, lastActivityAt: 1 });
+  expect(result.current.messages[0].thread).toEqual({ id: 3, channel: '~t40', name: 'Plans', messageCount: 0, lastActivityAt: 1, archived: false });
   act(() => {
     result.current.handlers.thread_updated({ space: 'S', channel: 'general', rootMessageId: 40, thread: { id: 3, channel: '~t40', name: 'Plans', messageCount: 2, lastActivityAt: 9 } });
     result.current.handlers.thread_updated({ space: 'S', channel: 'other', rootMessageId: 40, thread: { id: 4, channel: '~t40', name: 'Not here', messageCount: 9 } });

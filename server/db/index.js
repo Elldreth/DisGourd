@@ -373,6 +373,7 @@ const MESSAGE_SELECT = `
          th.name AS threadChannel,
          th.thread_name AS threadName,
          th.last_activity_at AS threadLastActivityAt,
+         th.archived_at AS threadArchivedAt,
          CASE WHEN th.id IS NULL THEN NULL
               ELSE (SELECT COUNT(*) FROM messages tm WHERE tm.channel_id = th.id) END AS threadCount
   FROM messages m
@@ -421,7 +422,7 @@ function hydratePinned(row) {
   return row;
 }
 // `thread` is the summary under a root message, or null.
-const THREAD_COLUMNS = ['threadId', 'threadChannel', 'threadName', 'threadLastActivityAt', 'threadCount'];
+const THREAD_COLUMNS = ['threadId', 'threadChannel', 'threadName', 'threadLastActivityAt', 'threadArchivedAt', 'threadCount'];
 function hydrateThread(row) {
   if (!row || !('threadId' in row)) return row;
   const t = {};
@@ -431,6 +432,7 @@ function hydrateThread(row) {
   }
   row.thread = t.threadId == null ? null : {
     id: t.threadId, channel: t.threadChannel, name: t.threadName, messageCount: t.threadCount, lastActivityAt: t.threadLastActivityAt,
+    archived: t.threadArchivedAt != null,
   };
   return row;
 }
@@ -681,6 +683,27 @@ function getThreads(spaceName, parentName, archived = false, userId = null) {
     ORDER BY t.last_activity_at DESC, t.id DESC`)
     .all(spaceName, parentName, archived ? 1 : 0).map(shapeThread);
   return userId == null ? rows : rows.map((t) => ({ ...t, followed: isFollowingThread(userId, t.id) }));
+}
+
+// Archive (or reopen) a thread by hand. Returns whether it changed.
+function setThreadArchived(spaceName, channelName, archived) {
+  return db.prepare(`
+    UPDATE channels SET archived_at = ?
+    WHERE id = (SELECT c.id FROM channels c JOIN spaces s ON c.space_id = s.id WHERE s.name = ? AND c.name = ? AND c.type = 'thread')
+      AND (archived_at IS NULL) = ?
+  `).run(archived ? Date.now() : null, spaceName, channelName, archived ? 1 : 0).changes > 0;
+}
+
+// Archive every open thread with no activity since `before`. Returns the
+// archived threads, each with its `space`, so viewers can be told.
+function archiveQuietThreads(before, now = Date.now()) {
+  const rows = db.prepare(`
+    SELECT t.id, s.name AS space, t.name AS channel FROM channels t JOIN spaces s ON s.id = t.space_id
+    WHERE t.type = 'thread' AND t.archived_at IS NULL AND COALESCE(t.last_activity_at, 0) < ?
+  `).all(before);
+  if (!rows.length) return [];
+  db.prepare(`UPDATE channels SET archived_at = ? WHERE id IN (${rows.map(() => '?').join(',')})`).run(now, ...rows.map((r) => r.id));
+  return rows.map((r) => ({ space: r.space, ...getThread(r.space, r.channel) }));
 }
 
 // Start a thread from a message in `parentName` (or return the one it has).
@@ -1387,6 +1410,8 @@ module.exports = {
   getThread,
   getThreads,
   threadChannelId,
+  setThreadArchived,
+  archiveQuietThreads,
   followThread,
   unfollowThread,
   isFollowingThread,

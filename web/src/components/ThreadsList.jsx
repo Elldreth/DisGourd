@@ -88,6 +88,7 @@ export default function ThreadsList({ space, channel, version, badge, onOpen, on
                         {t.messageCount > 0 && ` · last ${formatAgo(t.lastActivityAt)}`}
                         {t.createdBy && ` · started by ${t.createdBy}`}
                         {t.followed && ' · following'}
+                        {t.archived && ' · archived'}
                       </span>
                     </span>
                     {b.mentions > 0 ? (

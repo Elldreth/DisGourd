@@ -30,6 +30,8 @@ let regMode = (process.env.REGISTRATION_MODE || config.registrationMode || '').t
 if (!['open', 'code', 'closed'].includes(regMode)) regMode = config.registrationCode ? 'code' : 'open';
 config.registrationMode = regMode;
 config.maxAccounts = parseInt(process.env.MAX_ACCOUNTS, 10) || parseInt(config.maxAccounts, 10) || 0;
+// Threads with no new reply for this many days are archived (reopened by a post).
+config.threadArchiveDays = parseInt(process.env.THREAD_ARCHIVE_DAYS, 10) || parseInt(config.threadArchiveDays, 10) || 7;
 config.siteAdmins = String(process.env.SITE_ADMINS || config.siteAdmins || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
 // Only trust X-Forwarded-For when a reverse proxy (e.g. SWAG/nginx) sits in

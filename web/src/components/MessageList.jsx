@@ -28,7 +28,7 @@ function ThreadSummary({ thread, badge, onOpen }) {
       type="button"
       tabIndex={-1}
       onClick={(e) => onOpen(e.currentTarget)}
-      aria-label={`Open thread ${thread.name}, ${replyCount(thread.messageCount)}${state}`}
+      aria-label={`Open thread ${thread.name}, ${replyCount(thread.messageCount)}${thread.archived ? ', archived' : ''}${state}`}
       className={`mt-1.5 flex max-w-full items-center gap-2 rounded-md bg-ink-800/70 px-2 py-1 text-xs ring-1 transition hover:ring-brand-hi ${
         unread || mentions ? 'ring-brand-hi/60' : 'ring-ink-500/60'
       }`}
@@ -38,6 +38,7 @@ function ThreadSummary({ thread, badge, onOpen }) {
       <span className="shrink-0 text-gray-400">
         · {replyCount(thread.messageCount)}
         {thread.messageCount > 0 && ` · last ${formatAgo(thread.lastActivityAt)}`}
+        {thread.archived && ' · archived'}
       </span>
       {mentions > 0 ? (
         <span aria-hidden="true" className="shrink-0 rounded-full bg-pink px-1.5 text-[10px] font-bold leading-4 text-ink-900">{mentions}</span>
