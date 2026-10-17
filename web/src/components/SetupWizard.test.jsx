@@ -66,6 +66,9 @@ test('the whole way: account, who can join, first server, then a message to send
   expect(message).toContain(location.origin);
   expect(message).toContain('REG456');
   expect(message).toContain('INV123');
+  // The invite goes out as a link that opens the Join dialog, with the code as a fallback.
+  expect(message).toContain(`${location.origin}/invite/INV123`);
+  expect(message).not.toMatch(/paste this invite/i);
   expect(screen.getByRole('button', { name: 'Copy message' })).toBeTruthy();
 
   await submit('Open DisGourd');

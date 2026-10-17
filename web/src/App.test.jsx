@@ -28,6 +28,7 @@ vi.mock('./api.js', () => ({
     Promise.resolve([{ id: 1, author: 'tester', content: 'hello from the smoke test', timestamp: Date.now(), reactions: [] }]),
   getDms: () => Promise.resolve([]),
   getDmMessages: () => Promise.resolve([]),
+  previewInvite: () => Promise.resolve({ space: 'Book Club', members: 3, alreadyMember: false }),
 }));
 
 // A WebSocket that never connects anywhere.
@@ -48,6 +49,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = () => {};
   vi.spyOn(console, 'error').mockImplementation((...args) => errors.push(args.map(String).join(' ')));
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -79,5 +81,33 @@ test('signed out: renders the sign-in screen', async () => {
   signedIn = false;
   await renderApp();
   expect(await screen.findByText(/sign in/i, { selector: 'button' })).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
+test('invite link: signed out, the code waits through sign-in; signed in, Join opens prefilled and the URL is cleaned', async () => {
+  window.history.replaceState(null, '', '/invite/abc123');
+  signedIn = false;
+  await renderApp();
+  expect(await screen.findByText(/sign in/i, { selector: 'button' })).toBeTruthy();
+  cleanup();
+
+  // Signing in reloads nothing, but a fresh render stands in for the signed-in app.
+  window.history.replaceState(null, '', '/');
+  signedIn = true;
+  await renderApp();
+  expect(screen.getByRole('dialog', { name: 'Add a server' })).toBeTruthy();
+  expect(screen.getByRole('textbox', { name: 'Invite code or link' }).value).toBe('abc123');
+  expect(await screen.findByText('Book Club')).toBeTruthy();
+  expect(window.location.pathname).toBe('/');
+  expect(sessionStorage.length).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('invite link while already signed in: Join opens prefilled and the URL is cleaned', async () => {
+  window.history.replaceState(null, '', '/?invite=abc123');
+  signedIn = true;
+  await renderApp();
+  expect(screen.getByRole('textbox', { name: 'Invite code or link' }).value).toBe('abc123');
+  expect(window.location.search).toBe('');
   expect(errors).toEqual([]);
 });

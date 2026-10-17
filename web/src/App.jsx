@@ -26,6 +26,7 @@ import { useToasts } from './components/Toasts.jsx';
 import { useUndoDelete } from './state/useUndoDelete.js';
 import QuickSwitcher, { itemKey, loadRecent, recordVisit } from './components/QuickSwitcher.jsx';
 import { useShortcuts, stepChannel } from './shortcuts.js';
+import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
@@ -48,6 +49,8 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false); // mobile nav drawer (rail + sidebar)
   const [membersOpen, setMembersOpen] = useState(false); // member list drawer (below lg)
   const [authInfo, setAuthInfo] = useState(null); // { registration, setup } for the logged-out screen
+  // An invite link's code; it waits through sign-in, then ServerRail opens Join with it.
+  const [pendingInvite, setPendingInvite] = useState(capturePendingInvite);
 
   // When logged out, find out whether this is a brand-new install (show setup).
   useEffect(() => {
@@ -248,6 +251,11 @@ export default function App() {
           onCreate={sp.createSpace}
           onJoin={sp.joinServer}
           onReorder={sp.reorder}
+          pendingInvite={pendingInvite}
+          onInviteOpened={() => {
+            clearPendingInvite();
+            setPendingInvite('');
+          }}
         />
         {view === 'dm' ? (
           <DmSidebar

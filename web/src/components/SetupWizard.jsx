@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import * as api from '../api.js';
 import { copyText } from '../util.js';
+import { inviteLink } from '../inviteLink.js';
 import AuthShell, { Field } from './AuthShell.jsx';
 
 // First-run wizard, shown when the server has no accounts yet:
@@ -255,10 +256,11 @@ function FinishStep({ mode, server, invite, onOpen }) {
   const { busy, error, run } = useStepAction();
   const address = window.location.origin;
 
-  const lines = [`Join me on DisGourd: ${address}`];
+  // With an invite, the link itself opens the Join dialog once they're signed in.
+  const lines = [`Join me on DisGourd: ${invite ? inviteLink(invite, address) : address}`];
   if (mode === 'code') lines.push(regCode ? `1. Create an account with this registration code: ${regCode}` : '1. Create an account (ask me for a registration code)');
   else if (mode === 'open') lines.push('1. Create an account');
-  if (invite) lines.push(`${mode === 'closed' ? '' : '2. '}Click "Join a server" (the arrow in the left rail) and paste this invite: ${invite}`);
+  if (invite) lines.push(`${mode === 'closed' ? 'Sign in, then' : '2. Then'} press Enter to join (invite code, if you need it: ${invite})`);
   const message = lines.join('\n');
 
   return (
