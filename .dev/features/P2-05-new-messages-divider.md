@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 3
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #62)
 - **Effort:** S–M
 - **Depends on:** P1-08 (jump must be able to page back to the first unread)
 - **Serialize with:** db/index.js units, MessageList.jsx units
