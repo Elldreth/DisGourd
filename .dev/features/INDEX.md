@@ -43,9 +43,9 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-03 | Tab title + favicon badge | 2 | COMPLETE | S | none | attention.js (new), App.jsx (+2 lines) |
 | P2-04 | Desktop notifications + sounds | 2 | COMPLETE | S–M | P1-13 | notify.js (new), sounds.js, audio.js, ProfileDialog.jsx |
 | P2-05 | New-messages divider + jump | 2 | COMPLETE | S–M | P1-08 | db/index.js, MessageList.jsx, useChannelMessages.js |
-| P2-06 | Emoji picker in composer | 2 | READY | S–M | none | EmojiPicker.jsx (new), emoji.js (new), Composer.jsx, web/package.json |
+| P2-06 | Emoji picker in composer | 2 | REVIEW | S–M | none | EmojiPicker.jsx (new), emoji.js (new), Composer.jsx, web/package.json |
 | P2-07 | Any emoji as reaction | 2 | PLANNED | S | P2-06, P3-05 | MessageActions.jsx |
-| P2-08 | Drag-drop + paste upload | 2 | REVIEW | S | none | Composer.jsx, ChatPanel.jsx, DmPanel.jsx |
+| P2-08 | Drag-drop + paste upload | 2 | COMPLETE | S | none | Composer.jsx, ChatPanel.jsx, DmPanel.jsx |
 | P2-09 | Replies in channels | 2 | COMPLETE | M | P1-01, P1-05, P3-05 | migrations.js, db/index.js, gateway/chat.js, Composer/MessageList |
 | P2-10 | Replies in DMs + jump (`around`) | 2 | PLANNED | S–M | P2-09, P1-08, P1-13 | db/index.js, gateway/dm.js, routes, MessageList |
 | P2-11 | SSRF-safe fetcher + OG parser | 2 | READY | M | none | net/safeFetch.js (new), integrations/unfurl.js (new) |

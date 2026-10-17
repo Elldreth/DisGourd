@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 5
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #67)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** Composer.jsx units (P2-06, P2-09, P3-12), ChatPanel.jsx units (P3-10, P1-10)

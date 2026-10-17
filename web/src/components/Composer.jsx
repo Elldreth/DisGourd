@@ -2,6 +2,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import * as api from '../api.js';
 import { attachmentInfo } from '../util.js';
 import Icon from './Icon.jsx';
+import EmojiPicker from './EmojiPicker.jsx';
+import { insertAtCaret } from '../emoji.js';
 
 // The message box. Files can be attached with the + button, pasted (Ctrl+V a
 // screenshot), or dropped on the chat panel, which calls `addFiles` through
@@ -14,6 +16,9 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   const [error, setError] = useState('');
   const [mentionMatch, setMentionMatch] = useState(null); // { query, candidates } | null
   const fileRef = useRef(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiBtnRef = useRef(null);
+  const emojiPopRef = useRef(null);
   const taRef = useRef(null);
   const lastTypingRef = useRef(0);
 
@@ -53,6 +58,41 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   }
 
   useImperativeHandle(ref, () => ({ addFiles }));
+
+  // Put the cursor back in the message box (after a pick, or on close).
+  function refocus(caret) {
+    requestAnimationFrame(() => {
+      const ta = taRef.current;
+      if (!ta) return;
+      ta.focus();
+      if (caret != null) ta.setSelectionRange(caret, caret);
+    });
+  }
+
+  // The textarea keeps its selection while the picker has focus, so the
+  // emoji goes where the cursor was (replacing any selected text).
+  function pickEmoji(emoji) {
+    const ta = taRef.current;
+    const { text: next, caret } = insertAtCaret(text, ta?.selectionStart, ta?.selectionEnd, emoji);
+    setText(next);
+    setEmojiOpen(false);
+    refocus(caret);
+  }
+
+  function closeEmoji() {
+    setEmojiOpen(false);
+    refocus();
+  }
+
+  // Clicking anywhere else closes the picker.
+  useEffect(() => {
+    if (!emojiOpen) return undefined;
+    const onDown = (e) => {
+      if (!emojiBtnRef.current?.contains(e.target) && !emojiPopRef.current?.contains(e.target)) setEmojiOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [emojiOpen]);
 
   async function addFiles(files) {
     if (!files.length || disabled) return;
@@ -138,7 +178,13 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   }
 
   return (
-    <div className="px-4 pb-5 pt-1">
+    <div className="relative px-4 pb-5 pt-1">
+      {/* Anchored to the whole composer (not the button) so it fits on phones. */}
+      {emojiOpen && (
+        <div ref={emojiPopRef} className="absolute bottom-full right-4 z-50 mb-1">
+          <EmojiPicker onPick={pickEmoji} onClose={closeEmoji} />
+        </div>
+      )}
       {error && <div className="mb-1 text-sm text-danger">{error}</div>}
 
       {(pending.length > 0 || uploading > 0) && (
@@ -257,6 +303,21 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
           placeholder={disabled ? 'Connecting…' : placeholder || `Message #${channel}`}
           className="max-h-52 flex-1 resize-none bg-transparent py-1.5 text-gray-100 outline-none placeholder:text-gray-500 disabled:opacity-60"
         />
+        <div ref={emojiBtnRef} className="shrink-0">
+          <button
+            type="button"
+            onClick={() => (emojiOpen ? closeEmoji() : setEmojiOpen(true))}
+            disabled={disabled}
+            title="Emoji"
+            aria-label="Emoji"
+            aria-expanded={emojiOpen}
+            className={`flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-ink-500 hover:text-white disabled:opacity-50 ${
+              emojiOpen ? 'bg-ink-500 text-white' : 'text-gray-400'
+            }`}
+          >
+            <Icon name="smile" size={18} />
+          </button>
+        </div>
         <button
           onClick={submit}
           disabled={disabled || (!text.trim() && pending.length === 0)}
