@@ -60,3 +60,28 @@ test('files keep their own names', async () => {
   });
   expect(api.uploadFile.mock.calls[0][0].name).toBe('cat.png');
 });
+
+test('the emoji button opens the picker and puts the emoji at the cursor', async () => {
+  const { box } = setup();
+  fireEvent.change(box, { target: { value: 'so hot right now' } });
+  box.setSelectionRange(6, 6); // after "so hot"
+  fireEvent.click(screen.getByRole('button', { name: 'Emoji' }));
+  const search = await screen.findByRole('searchbox', { name: 'Search emoji' });
+  await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(100));
+  fireEvent.change(search, { target: { value: 'fire' } });
+  fireEvent.keyDown(search, { key: 'Enter' });
+
+  expect(screen.queryByRole('dialog', { name: 'Emoji picker' })).toBeNull();
+  expect(box.value.replace(/️/g, '')).toBe('so hot🔥 right now');
+  await waitFor(() => expect(document.activeElement).toBe(box));
+  expect(box.selectionStart).toBe(6 + '🔥'.length);
+});
+
+test('Esc closes the picker and returns to the message box', async () => {
+  const { box } = setup();
+  fireEvent.click(screen.getByRole('button', { name: 'Emoji' }));
+  const search = await screen.findByRole('searchbox', { name: 'Search emoji' });
+  fireEvent.keyDown(search, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Emoji picker' })).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(box));
+});
