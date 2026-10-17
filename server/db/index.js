@@ -120,10 +120,13 @@ function canDo(spaceId, role, action) {
   return roleRank(role) >= (getSpacePermissions(spaceId)[action] || 3);
 }
 
+// A thread answers with its parent's roles (they're also copied onto the
+// thread row, so queries that filter on c.view_role stay right).
 function getChannelPerms(spaceName, channelName) {
   return db.prepare(`
-    SELECT c.view_role AS view, c.post_role AS post
+    SELECT COALESCE(p.view_role, c.view_role) AS view, COALESCE(p.post_role, c.post_role) AS post
     FROM channels c JOIN spaces s ON c.space_id = s.id
+    LEFT JOIN channels p ON p.id = c.parent_id
     WHERE s.name = ? AND c.name = ?
   `).get(spaceName, channelName) || null;
 }
@@ -132,10 +135,18 @@ function setChannelPerms(spaceName, channelName, viewRole, postRole) {
   const v = Math.min(3, Math.max(1, parseInt(viewRole, 10) || 1));
   // You can't post somewhere you can't see, so post threshold >= view threshold.
   const p = Math.min(3, Math.max(v, parseInt(postRole, 10) || 1));
-  return db.prepare(`
+  const ok = db.prepare(`
     UPDATE channels SET view_role = ?, post_role = ?
-    WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ?
+    WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ? AND type IS NOT 'thread'
   `).run(v, p, spaceName, channelName).changes > 0;
+  // Its threads follow at once.
+  if (ok) {
+    db.prepare(`
+      UPDATE channels SET view_role = ?, post_role = ?
+      WHERE parent_id = (SELECT c.id FROM channels c JOIN spaces s ON c.space_id = s.id WHERE s.name = ? AND c.name = ?)
+    `).run(v, p, spaceName, channelName);
+  }
+  return ok;
 }
 
 // Parse the stored attachments JSON into an array, falling back to the single
@@ -262,7 +273,7 @@ function getUserSpaces(userId) {
     ORDER BY s.name COLLATE NOCASE
   `).all(userId);
   const channelStmt = db.prepare(
-    'SELECT name, type, view_role AS view, post_role AS post FROM channels WHERE space_id = ? ORDER BY id'
+    "SELECT name, type, view_role AS view, post_role AS post FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
   );
   return spaces.map((s) => {
     const rank = roleRank(s.role);
@@ -331,6 +342,9 @@ function storeMessage(spaceName, channelName, content, authorId, attachments = [
   const info = db.prepare(
     'INSERT INTO messages(channel_id, content, author_id, attachment_url, attachments, attachment_spoiler, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(channel.id, content, authorId || null, first, json, spoiler ? 1 : 0, createdAt, replyTo || null);
+  // Posting in a thread counts as activity and reopens it if it was archived.
+  db.prepare("UPDATE channels SET last_activity_at = ?, archived_at = NULL WHERE id = ? AND type = 'thread'")
+    .run(createdAt, channel.id);
   return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 
@@ -354,7 +368,13 @@ const MESSAGE_SELECT = `
          p.attachments AS replyAttachments,
          p.author_id AS replyAuthorId,
          pu.username AS replyAuthor,
-         (pin.message_id IS NOT NULL) AS pinned
+         (pin.message_id IS NOT NULL) AS pinned,
+         th.id AS threadId,
+         th.name AS threadChannel,
+         th.thread_name AS threadName,
+         th.last_activity_at AS threadLastActivityAt,
+         CASE WHEN th.id IS NULL THEN NULL
+              ELSE (SELECT COUNT(*) FROM messages tm WHERE tm.channel_id = th.id) END AS threadCount
   FROM messages m
   JOIN channels c ON m.channel_id = c.id
   JOIN spaces s ON c.space_id = s.id
@@ -362,6 +382,7 @@ const MESSAGE_SELECT = `
   LEFT JOIN messages p ON p.id = m.reply_to
   LEFT JOIN users pu ON pu.id = p.author_id
   LEFT JOIN pins pin ON pin.message_id = m.id
+  LEFT JOIN channels th ON th.root_message_id = m.id AND th.type = 'thread'
 `;
 
 // The short quote shown above a reply: the first 100 characters with
@@ -399,7 +420,21 @@ function hydratePinned(row) {
   if (row && 'pinned' in row) row.pinned = !!row.pinned;
   return row;
 }
-const hydrateMessage = (row) => hydratePinned(hydrateReply(hydrateAttachments(row)));
+// `thread` is the summary under a root message, or null.
+const THREAD_COLUMNS = ['threadId', 'threadChannel', 'threadName', 'threadLastActivityAt', 'threadCount'];
+function hydrateThread(row) {
+  if (!row || !('threadId' in row)) return row;
+  const t = {};
+  for (const k of THREAD_COLUMNS) {
+    t[k] = row[k];
+    delete row[k];
+  }
+  row.thread = t.threadId == null ? null : {
+    id: t.threadId, channel: t.threadChannel, name: t.threadName, messageCount: t.threadCount, lastActivityAt: t.threadLastActivityAt,
+  };
+  return row;
+}
+const hydrateMessage = (row) => hydrateThread(hydratePinned(hydrateReply(hydrateAttachments(row))));
 
 // The quote for a new reply, if `messageId` is in that same channel (so a
 // reply can never reveal a message from another, possibly private, channel).
@@ -608,6 +643,66 @@ function getPins(spaceName, channelName) {
   return attachEmbeds('channel', attachReactions(rows.map(hydrateMessage)));
 }
 
+// ---- Threads ----
+// A thread is a hidden channel named ~t<root message id> under a text channel.
+const isThreadChannel = (name) => typeof name === 'string' && name.startsWith('~t');
+
+// "First 40 characters" of the root message, cut at 39 plus an ellipsis.
+function defaultThreadName(content) {
+  const text = replySnippet(content, false);
+  if (!text) return 'Thread';
+  return text.length > 40 ? `${text.slice(0, 39).trimEnd()}…` : text;
+}
+
+const THREAD_SELECT = `
+  SELECT t.id, t.name AS channel, t.thread_name AS name, t.root_message_id AS rootMessageId,
+         pc.name AS parentChannel, t.last_activity_at AS lastActivityAt, t.archived_at AS archivedAt,
+         cu.username AS createdBy,
+         (SELECT COUNT(*) FROM messages tm WHERE tm.channel_id = t.id) AS messageCount
+  FROM channels t
+  JOIN channels pc ON pc.id = t.parent_id
+  JOIN spaces s ON s.id = t.space_id
+  LEFT JOIN users cu ON cu.id = t.created_by
+  WHERE t.type = 'thread'`;
+function shapeThread(row) {
+  if (!row) return null;
+  const { archivedAt, ...t } = row;
+  return { ...t, archived: archivedAt != null };
+}
+
+function getThread(spaceName, channelName) {
+  return shapeThread(db.prepare(`${THREAD_SELECT} AND s.name = ? AND t.name = ?`).get(spaceName, channelName));
+}
+
+// A channel's threads, newest activity first; archived ones only if asked.
+function getThreads(spaceName, parentName, archived = false) {
+  return db.prepare(`${THREAD_SELECT} AND s.name = ? AND pc.name = ? AND (t.archived_at IS NOT NULL) = ?
+    ORDER BY t.last_activity_at DESC, t.id DESC`)
+    .all(spaceName, parentName, archived ? 1 : 0).map(shapeThread);
+}
+
+// Start a thread from a message in `parentName` (or return the one it has).
+// Returns { thread, created } or { error: 'not_found' | 'bad_name' }.
+const createThread = db.transaction((spaceName, parentName, messageId, name, userId) => {
+  const parent = db.prepare(`
+    SELECT c.id, c.space_id AS spaceId, c.view_role AS view, c.post_role AS post
+    FROM channels c JOIN spaces s ON c.space_id = s.id
+    WHERE s.name = ? AND c.name = ? AND c.type = 'text'
+  `).get(spaceName, parentName);
+  const root = parent && db.prepare('SELECT id, content FROM messages WHERE id = ? AND channel_id = ?').get(messageId, parent.id);
+  if (!root) return { error: 'not_found' };
+  const existing = db.prepare(`${THREAD_SELECT} AND t.root_message_id = ?`).get(root.id);
+  if (existing) return { thread: shapeThread(existing), created: false };
+  const title = typeof name === 'string' && name.trim() ? name.trim() : defaultThreadName(root.content);
+  if (title.length > 80) return { error: 'bad_name' };
+  const channel = `~t${root.id}`;
+  db.prepare(`
+    INSERT INTO channels(space_id, name, type, view_role, post_role, parent_id, root_message_id, thread_name, created_by, last_activity_at)
+    VALUES (?, ?, 'thread', ?, ?, ?, ?, ?, ?, ?)
+  `).run(parent.spaceId, channel, parent.view, parent.post, parent.id, root.id, title, userId, Date.now());
+  return { thread: getThread(spaceName, channel), created: true };
+});
+
 function getMessageLocation(messageId) {
   return db.prepare(`
     SELECT s.name AS space, c.name AS channel, m.author_id AS authorId
@@ -643,7 +738,7 @@ function getUnreadCounts(userId) {
       COALESCE(rs.last_read_id, 0) AS lastReadId
     FROM space_members sm
     JOIN spaces s ON sm.space_id = s.id
-    JOIN channels c ON c.space_id = s.id AND c.view_role <= ${memberRankSql('sm')}
+    JOIN channels c ON c.space_id = s.id AND c.view_role <= ${memberRankSql('sm')} AND c.type IS NOT 'thread'
     LEFT JOIN read_state rs ON rs.user_id = sm.user_id AND rs.space = s.name AND rs.channel = c.name
     LEFT JOIN messages m ON m.channel_id = c.id AND m.id > COALESCE(rs.last_read_id, 0)
     WHERE sm.user_id = ?
@@ -683,7 +778,7 @@ function getMentionCounts(userId) {
     JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = mn.user_id
       AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN read_state rs ON rs.user_id = ? AND rs.space = s.name AND rs.channel = c.name
-    WHERE mn.user_id = ? AND m.id > COALESCE(rs.last_read_id, 0)
+    WHERE mn.user_id = ? AND c.type IS NOT 'thread' AND m.id > COALESCE(rs.last_read_id, 0)
     GROUP BY s.name, c.name
     HAVING count > 0
   `).all(userId, userId);
@@ -855,17 +950,21 @@ function searchMessages(userId, query, limit = 40) {
     SELECT m.id, m.content,
            COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) AS timestamp,
            u.username AS author, u.avatar_url AS authorAvatar,
-           s.name AS space, c.name AS channel
+           s.name AS space, c.name AS channel, c.thread_name AS threadName, pc.name AS parentChannel
     FROM messages m
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
     JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = ?
       AND c.view_role <= ${memberRankSql('sm')}
+    LEFT JOIN channels pc ON pc.id = c.parent_id
     LEFT JOIN users u ON m.author_id = u.id
     WHERE m.content LIKE ? ESCAPE '\\'
     ORDER BY m.id DESC
     LIMIT ?
-  `).all(userId, like, limit);
+  `).all(userId, like, limit).map(({ threadName, parentChannel, ...r }) => ({
+    ...r,
+    thread: parentChannel ? { channel: r.channel, name: threadName, parentChannel } : null,
+  }));
 
   const dms = db.prepare(`
     SELECT m.id, m.content, COALESCE(m.created_at, 0) AS timestamp,
@@ -1229,6 +1328,10 @@ module.exports = {
   getReaction,
   isMessageInChannel,
   getMessageLocation,
+  isThreadChannel,
+  createThread,
+  getThread,
+  getThreads,
   getReplyTarget,
   deleteMessageById,
   getCoMemberIds,
