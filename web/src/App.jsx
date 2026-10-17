@@ -352,6 +352,7 @@ export default function App() {
           hasMore={dm.hasMore}
           loadingOlder={dm.loadingOlder}
           onLoadOlder={dm.loadOlder}
+          history={dm.history}
           onTyping={dm.sendTyping}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenNav={() => setNavOpen(true)}
@@ -377,6 +378,7 @@ export default function App() {
               hasMore={chat.hasMore}
               loadingOlder={chat.loadingOlder}
               onLoadOlder={chat.loadOlder}
+              history={chat.history}
               newMessages={chat.newMessages}
               onTyping={chat.sendTyping}
               onOpenSearch={() => setSearchOpen(true)}

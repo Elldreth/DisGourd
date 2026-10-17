@@ -25,6 +25,7 @@ export default function ChatPanel({
   hasMore,
   loadingOlder,
   onLoadOlder,
+  history,
   newMessages,
   onTyping,
   onOpenSearch,
@@ -115,6 +116,7 @@ export default function ChatPanel({
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
+        history={history}
         newMessages={newMessages}
         onEditDone={() => composerRef.current?.focus()}
       />

@@ -48,7 +48,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-07 | Any emoji as reaction | 2 | COMPLETE | S | P2-06, P3-05 | MessageActions.jsx |
 | P2-08 | Drag-drop + paste upload | 2 | COMPLETE | S | none | Composer.jsx, ChatPanel.jsx, DmPanel.jsx |
 | P2-09 | Replies in channels | 2 | COMPLETE | M | P1-01, P1-05, P3-05 | migrations.js, db/index.js, gateway/chat.js, Composer/MessageList |
-| P2-10 | Replies in DMs + jump (`around`) | 2 | PLANNED | S–M | P2-09, P1-08, P1-13 | db/index.js, gateway/dm.js, routes, MessageList |
+| P2-10 | Replies in DMs + jump (`around`) | 2 | REVIEW | S–M | P2-09, P1-08, P1-13 | db/index.js, gateway/dm.js, routes, MessageList |
 | P2-11 | SSRF-safe fetcher + OG parser | 2 | COMPLETE | M | none | net/safeFetch.js (new), integrations/unfurl.js (new) |
 | P2-12 | Link previews end-to-end | 2 | COMPLETE | M | P2-11, P1-01, P1-05 (soft P2-01) | linkPreviews.js (new), migrations.js, gateway, Embed.jsx (new) |
 | P2-13 | Pins | 2 | PLANNED | M | P1-01, P1-04, P1-05, P3-05 | migrations.js, gateway/chat.js, routes/spaces.js, PinsPanel.jsx (new) |

@@ -31,7 +31,10 @@ const ops = {
     const spoiler = !!msg.spoiler && attachments.length > 0;
     const from = db.getUserById(userId);
     if (!from) return;
-    const stored = db.storeDm(userId, to.id, content, attachments, spoiler);
+    // A reply quotes a message from this same conversation; anything else is ignored.
+    const replyId = parseInt(msg.replyTo, 10);
+    const replyTo = replyId > 0 ? db.getDmReplyTarget(userId, to.id, replyId) : null;
+    const stored = db.storeDm(userId, to.id, content, attachments, spoiler, replyTo ? replyTo.id : null);
     db.markDmRead(userId, to.id, stored.id); // sender has read their own message
     const frame = JSON.stringify({
       type: 'dm',
@@ -45,6 +48,7 @@ const ops = {
       attachment: attachments[0],
       attachments,
       spoiler,
+      replyTo,
       timestamp: stored.timestamp,
     });
     sendToUser(userId, frame);

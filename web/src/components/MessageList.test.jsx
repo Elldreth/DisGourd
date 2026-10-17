@@ -184,3 +184,51 @@ test('deleting a message does not ask with the browser popup (the undo toast cov
   expect(onDelete).toHaveBeenCalledWith(1);
   confirmSpy.mockRestore();
 });
+
+describe('jumping to an original that is not loaded (P2-10)', () => {
+  const reply = (id, to) => ({ ...msg(id, 'cat'), replyTo: { id: to, author: 'bob', snippet: `message ${to}` } });
+
+  test('clicking the quote loads the history around it and highlights the original', async () => {
+    vi.stubGlobal('requestAnimationFrame', (cb) => setTimeout(cb, 0));
+    let messages = [msg(98), msg(99), reply(100, 12)];
+    const history = { hasNewer: false, jumpAround: vi.fn(), jumpToPresent: vi.fn(), loadNewer: vi.fn() };
+    const view = () => <MessageList messages={messages} channel="general" currentUser="sandy" history={history} />;
+    history.jumpAround.mockImplementation(async (id) => {
+      messages = Array.from({ length: 11 }, (_, i) => msg(id - 5 + i)); // 7-17
+      history.hasNewer = true;
+      rerender(view());
+      return true;
+    });
+    const { rerender, container } = render(view());
+    fireEvent.click(screen.getByTitle('Jump to the original message')); // the quote line
+    await waitFor(() => expect(container.querySelector('[data-msg-id="12"]').className).toMatch(/ring-brand-hi/));
+    expect(history.jumpAround).toHaveBeenCalledWith(12);
+    expect(container.querySelector('[data-msg-id="12"]').scrollIntoView).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  test('if the original cannot be loaded, a short note says so', async () => {
+    const history = { hasNewer: false, jumpAround: vi.fn(async () => false), jumpToPresent: vi.fn(), loadNewer: vi.fn() };
+    render(<MessageList messages={[reply(100, 12)]} channel="general" currentUser="sandy" history={history} />);
+    fireEvent.click(screen.getByTitle('Jump to the original message')); // the quote line
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/couldn.t load the original/i));
+  });
+
+  test('while reading old history: Jump to present, and a way to load newer messages', async () => {
+    const history = { hasNewer: true, loadingNewer: false, jumpAround: vi.fn(), jumpToPresent: vi.fn(async () => {}), loadNewer: vi.fn() };
+    render(<MessageList messages={[msg(10), msg(11)]} channel="general" currentUser="sandy" history={history} />);
+    expect(screen.getByText(/older messages/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Load newer messages' }));
+    expect(history.loadNewer).toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Jump to present' }));
+    });
+    expect(history.jumpToPresent).toHaveBeenCalled();
+  });
+
+  test('at the present there is no bar', () => {
+    const history = { hasNewer: false, jumpAround: vi.fn(), jumpToPresent: vi.fn(), loadNewer: vi.fn() };
+    render(<MessageList messages={[msg(10)]} channel="general" currentUser="sandy" history={history} />);
+    expect(screen.queryByRole('button', { name: 'Jump to present' })).toBeNull();
+  });
+});

@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import * as api from '../api.js';
 import { messagesReducer, pruneExpired, hasGap } from './useChannelMessages.js';
 import { useHistoryPaging, PAGE_SIZE } from './useHistoryPaging.js';
+import { historyWindow } from './historyWindow.js';
 
 // Normalize a live `dm` frame to the shared message shape (author/authorAvatar).
 function dmFrameToMessage(m) {
@@ -13,6 +14,7 @@ function dmFrameToMessage(m) {
     attachment: m.attachment,
     attachments: m.attachments,
     spoiler: m.spoiler,
+    replyTo: m.replyTo ?? null,
     timestamp: m.timestamp,
   };
 }
@@ -64,8 +66,11 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
       const partner = m.from === me ? m.to : m.from;
       const viewing = activeRef.current && currentRef.current === partner;
       if (viewing) {
-        dispatch({ type: 'merged', messages: [dmFrameToMessage(m)] });
-        if (m.id) send({ op: 'dm_read', with: partner, lastId: m.id });
+        // Reading older history: it's picked up by loadNewer / Jump to present.
+        if (!paging.hasNewerRef.current) {
+          dispatch({ type: 'merged', messages: [dmFrameToMessage(m)] });
+          if (m.id) send({ op: 'dm_read', with: partner, lastId: m.id });
+        }
       } else if (m.from !== me) {
         setUnread((prev) => ({ ...prev, [partner]: (prev[partner] || 0) + 1 }));
       }
@@ -96,6 +101,8 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     }
     send({ op: 'focus' }); // clear any channel focus
     send({ op: 'dm_focus', with: current });
+    // Reading older history (a jump): keep that window; Jump to present reloads.
+    if (paging.hasNewerRef.current) return undefined;
     let cancelled = false;
     api
       .getDmMessages(current)
@@ -175,7 +182,22 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     setTyping({});
   }
 
+  const key = `dm:${current}`;
+  const history = historyWindow({
+    key,
+    isCurrent: () => `dm:${currentRef.current}` === key,
+    fetchPage: (opts) => api.getDmMessages(current, opts),
+    messages,
+    dispatch,
+    paging,
+    onPresent: (rows) => {
+      const maxId = rows.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
+      send({ op: 'dm_read', with: current, lastId: maxId });
+    },
+  });
+
   return {
+    history,
     conversations,
     current,
     select: setCurrent,
@@ -190,8 +212,8 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     loadOlder,
     handlers,
     reset,
-    send: (content, attachments, spoiler) => {
-      if (current) send({ op: 'dm', to: current, content, attachments, spoiler });
+    send: (content, attachments, spoiler, replyTo) => {
+      if (current) send({ op: 'dm', to: current, content, attachments, spoiler, replyTo });
     },
     edit: (id, content) => send({ op: 'dm_edit', id, content }),
     remove: (id) => send({ op: 'dm_delete', id }),

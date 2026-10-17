@@ -169,8 +169,12 @@ export function joinInvite(code) {
 
 // ---- Messages ----
 // Latest page by default; `before` (a message id) gets the page just older.
-export function getMessages(space, channel, { limit = 50, offset = 0, before } = {}) {
-  const qs = new URLSearchParams(before ? { limit, before } : { limit, offset });
+// One of: the newest page, a page `before` an id, the page `after` an id, or a
+// window `around` one message (25 either side; rejects if it isn't there).
+export function getMessages(space, channel, { limit = 50, offset = 0, before, after, around } = {}) {
+  const qs = new URLSearchParams(
+    around ? { around } : after ? { limit, after } : before ? { limit, before } : { limit, offset }
+  );
   return request(
     `/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages?${qs}`
   );
@@ -185,8 +189,8 @@ export function search(q) {
 export function getDms() {
   return request('/dms');
 }
-export function getDmMessages(username, { limit = 50, before } = {}) {
-  const qs = new URLSearchParams(before ? { limit, before } : { limit });
+export function getDmMessages(username, { limit = 50, before, after, around } = {}) {
+  const qs = new URLSearchParams(around ? { around } : after ? { limit, after } : before ? { limit, before } : { limit });
   return request(`/dms/${encodeURIComponent(username)}/messages?${qs}`);
 }
 

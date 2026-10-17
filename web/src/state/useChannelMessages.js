@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import * as api from '../api.js';
 import { mergeMessages } from '../util.js';
 import { useHistoryPaging, PAGE_SIZE } from './useHistoryPaging.js';
+import { historyWindow } from './historyWindow.js';
 import { mergeLastRead } from '../newMessages.js';
 
 // Key for per-channel maps (unread, mentions, voice state).
@@ -146,6 +147,8 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     message: (m) => {
       onIncoming?.({ kind: 'message', ...m });
       if (isOpen(m.space, m.channel)) {
+        // Reading older history: it's picked up by loadNewer / Jump to present.
+        if (paging.hasNewerRef.current) return;
         dispatch({ type: 'merged', messages: [m] });
         if (m.id) {
           send({ op: 'read', space: m.space, channel: m.channel, lastId: m.id });
@@ -204,6 +207,8 @@ export function useChannelMessages({ space, channel, active, user, send, status,
   useEffect(() => {
     if (!active || !space || !channel) return undefined;
     send({ op: 'focus', space, channel });
+    // Reading older history (a jump): keep that window; Jump to present reloads.
+    if (paging.hasNewerRef.current) return undefined;
     let cancelled = false;
     api
       .getMessages(space, channel)
@@ -270,11 +275,29 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     );
   }
 
+  const key = unreadKey(space, channel);
+  const history = historyWindow({
+    key,
+    isCurrent: () => unreadKey(spaceRef.current, channelRef.current) === key,
+    fetchPage: (opts) => api.getMessages(space, channel, opts),
+    messages,
+    dispatch,
+    paging,
+    onPresent: (rows) => {
+      const maxId = rows.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
+      send({ op: 'read', space, channel, lastId: maxId });
+      noteRead(key, maxId);
+      setUnread(withoutKey(key));
+      setMentions(withoutKey(key));
+    },
+  });
+
   return {
     messages,
     hasMore: paging.hasMore,
     loadingOlder: paging.loadingOlder,
     loadOlder,
+    history,
     newMessages,
     typingNames: Object.keys(typingUsers).filter((u) => u !== user),
     unread,
