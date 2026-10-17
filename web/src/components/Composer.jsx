@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as api from '../api.js';
 import { attachmentInfo } from '../util.js';
 import Icon from './Icon.jsx';
 
-export default function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], replyingTo, onCancelReply }) {
+// The message box. Files can be attached with the + button, pasted (Ctrl+V a
+// screenshot), or dropped on the chat panel, which calls `addFiles` through
+// the ref.
+const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], replyingTo, onCancelReply }, ref) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState([]); // [{ url, name, size }] — an album
   const [spoilerPending, setSpoilerPending] = useState(false);
@@ -27,10 +30,32 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
     taRef.current?.focus();
   }
 
-  async function pickFile(e) {
+  function pickFile(e) {
     const files = [...(e.target.files || [])];
     e.target.value = '';
+    return addFiles(files);
+  }
+
+  // Pasted images often come without a useful name; give them one.
+  function pastedName(file) {
+    if (file.name && file.name !== 'image.png') return file;
+    const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    return new File([file], `pasted-image-${Date.now()}.${ext}`, { type: file.type });
+  }
+
+  // Pasting files (a screenshot, files copied in Explorer) attaches them;
+  // pasting text works as usual.
+  function onPaste(e) {
+    const files = [...(e.clipboardData?.files || [])];
     if (!files.length) return;
+    e.preventDefault();
+    addFiles(files.map(pastedName));
+  }
+
+  useImperativeHandle(ref, () => ({ addFiles }));
+
+  async function addFiles(files) {
+    if (!files.length || disabled) return;
     setError('');
     const room = MAX_ATTACHMENTS - pending.length - uploading;
     if (room <= 0) {
@@ -227,6 +252,7 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
           value={text}
           onChange={grow}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           disabled={disabled}
           placeholder={disabled ? 'Connecting…' : placeholder || `Message #${channel}`}
           className="max-h-52 flex-1 resize-none bg-transparent py-1.5 text-gray-100 outline-none placeholder:text-gray-500 disabled:opacity-60"
@@ -241,4 +267,6 @@ export default function Composer({ channel, disabled, onSend, onTyping, placehol
       </div>
     </div>
   );
-}
+});
+
+export default Composer;
