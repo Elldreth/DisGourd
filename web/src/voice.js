@@ -558,29 +558,51 @@ export function createVoiceController({ send, myId, onChange }) {
   // ---- Video: camera & screen share ----
   function nameFor(userId) {
     const p = participants.find((x) => x.userId === userId);
-    return p ? p.username : '';
+    return p?.username || '';
+  }
+
+  // Whether a remote video track is a screen share. Browsers rarely say so for
+  // received tracks (there's no signalling for it), so this defaults to camera.
+  function remoteKind(track) {
+    try {
+      if (track?.getSettings?.().displaySurface) return 'screen';
+    } catch {
+      /* not supported */
+    }
+    return track?.contentHint === 'detail' || track?.contentHint === 'text' ? 'screen' : 'camera';
   }
 
   // The tiles the video grid should render: our own camera/screen previews plus
-  // every remote video stream.
+  // every remote video stream. `speaking` lights the tile's ring.
   function buildVideoTiles() {
     const tiles = [];
+    const talking = (userId) => speaking.has(userId);
     if (cameraStream) {
-      tiles.push({ key: 'self-camera', userId: myId, label: 'You', stream: cameraStream, self: true, mirror: true });
+      tiles.push({ key: 'self-camera', userId: myId, label: 'You', stream: cameraStream, self: true, mirror: true, kind: 'camera', speaking: talking(myId) });
     }
     if (screenStream) {
-      tiles.push({ key: 'self-screen', userId: myId, label: 'You — screen', stream: screenStream, self: true, mirror: false });
+      tiles.push({ key: 'self-screen', userId: myId, label: 'You — screen', stream: screenStream, self: true, mirror: false, kind: 'screen', speaking: talking(myId) });
     }
+    const seen = new Map(); // userId -> videos of theirs so far, to number extras
     for (const [sid, v] of remoteVideos) {
-      tiles.push({ key: sid, userId: v.userId, label: nameFor(v.userId), stream: v.stream, self: false, mirror: false });
+      const n = (seen.get(v.userId) || 0) + 1;
+      seen.set(v.userId, n);
+      const label = n > 1 ? `${nameFor(v.userId)} (${n})` : nameFor(v.userId);
+      tiles.push({ key: sid, userId: v.userId, label, stream: v.stream, self: false, mirror: false, kind: v.kind, speaking: talking(v.userId) });
     }
     return tiles;
   }
 
   function addRemoteVideo(userId, stream, track) {
-    remoteVideos.set(stream.id, { userId, stream });
-    track.onended = () => {
+    remoteVideos.set(stream.id, { userId, stream, kind: remoteKind(track) });
+    const drop = () => {
       if (remoteVideos.delete(stream.id)) emit();
+    };
+    track.onended = drop;
+    // When the sender stops a camera/share, the browser removes the track from
+    // our copy of the stream rather than ending it.
+    stream.onremovetrack = () => {
+      if (!stream.getVideoTracks().length) drop();
     };
     emit();
   }
