@@ -69,7 +69,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-06 | Server icon + templates at creation | 3 | PLANNED | S–M | P3-04, P1-06 | routes/spaces.js, CreateServerDialog.jsx |
 | P3-07 | Setup wizard improvements | 3 | READY | S | none | SetupWizard.jsx |
 | P3-08 | In-app confirm (kick, delete server) | 3 | COMPLETE | S | P3-01 | ConfirmDialog.jsx (new), MemberList.jsx, ChannelList.jsx |
-| P3-09 | Undo toast for message delete | 3 | PLANNED | S–M | P3-05 | Toasts.jsx (new), App.jsx, MessageActions.jsx |
+| P3-09 | Undo toast for message delete | 3 | REVIEW | S–M | P3-05 | Toasts.jsx (new), App.jsx, MessageActions.jsx |
 | P3-10 | Mobile member-list drawer | 3 | COMPLETE | S | none | ChatPanel.jsx, MemberList.jsx, App.jsx |
 | P3-11 | Ctrl+K switcher + Alt+↑/↓ | 3 | PLANNED | S–M | P3-01 (soft P1-14) | QuickSwitcher.jsx (new), shortcuts.js (new), App.jsx |
 | P3-12 | ↑ edits last message | 3 | COMPLETE | S | P3-05 | Composer.jsx, MessageList.jsx |
