@@ -28,6 +28,8 @@ export default function ChatPanel({
   onTyping,
   onOpenSearch,
   onOpenNav,
+  onOpenMembers,
+  membersOpen = false,
 }) {
   // The message being replied to ({ id, author }), shown above the composer.
   const [replyingTo, setReplyingTo] = useState(null);
@@ -72,6 +74,17 @@ export default function ChatPanel({
         <Icon name="hash" size={20} className="text-gray-500" />
         <h2 className="font-bold">{channel}</h2>
         <div className="flex-1" />
+        {onOpenMembers && (
+          <button
+            onClick={onOpenMembers}
+            title="Members"
+            aria-label="Members"
+            aria-expanded={membersOpen}
+            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg lg:hidden"
+          >
+            <Icon name="users" size={18} />
+          </button>
+        )}
         <button
           onClick={onOpenSearch}
           title="Search messages"
