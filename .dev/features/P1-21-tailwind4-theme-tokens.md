@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 (ops: last npm audit findings) + 2 rank 9 slice 1 (P2-16)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #70)
 - **Effort:** M
 - **Depends on:** P1-18 (Vite 8, merged in #69)
 - **Serialize with:** anything editing `web/src/index.css`, `tailwind.config.js`, `web/package.json`, or class names across components (the upgrader touches many files)
