@@ -113,3 +113,14 @@ describe('archived threads (P2-22d)', () => {
     expect(screen.queryByRole('button', { name: /Archive thread|Reopen thread/ })).toBeNull();
   });
 });
+
+// P4-07: on phones the panel fills the screen, so it gets a back button at the
+// left of its header (hidden from lg up, where the × stays).
+test('phones get a back button to the parent channel', () => {
+  const { onClose } = setup();
+  const back = screen.getByRole('button', { name: 'Back to #general' });
+  expect(back.className).toMatch(/\blg:hidden\b/);
+  expect(back.className).toMatch(/\btap\b/);
+  fireEvent.click(back);
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
