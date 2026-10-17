@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (slice 2 of the create-server dialog)
 - **Phase:** 3 — "proper modal with tabs (name, icon, template)"
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S–M
 - **Depends on:** P3-04, P1-06 (`createSpaceWithDefaults` creates the template channels atomically)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 3
@@ -46,4 +46,4 @@ Web 401 pass (3 new and 1 updated in CreateServerDialog.test.jsx; the cropper is
 - The setup wizard's first server still uses blank (it sends no template).
 
 ## Discovered Work (not done)
-- Offer the templates in the setup wizard's "first server" step too.
+- Offer the templates in the setup wizard's "first server" step too. → done in P3-15.

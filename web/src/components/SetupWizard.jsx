@@ -3,6 +3,7 @@ import * as api from '../api.js';
 import { copyText } from '../util.js';
 import { inviteLink } from '../inviteLink.js';
 import AuthShell, { Field } from './AuthShell.jsx';
+import TemplatePicker from './TemplatePicker.jsx';
 
 // First-run wizard, shown when the server has no accounts yet:
 //   1. the admin account (the first account is the owner & site admin)
@@ -220,6 +221,7 @@ function ModeStep({ reg, mode, setMode, onDone }) {
 
 function ServerStep({ onDone }) {
   const [name, setName] = useState('My Community');
+  const [template, setTemplate] = useState('blank');
   const { busy, error, run } = useStepAction();
 
   function submit(e) {
@@ -227,7 +229,7 @@ function ServerStep({ onDone }) {
     const trimmed = name.trim();
     if (!trimmed) return;
     run(async () => {
-      await api.createSpace(trimmed);
+      await api.createSpace(trimmed, template);
       // The invite is a nice-to-have; a server without one is still a success.
       const inv = await api.createInvite(trimmed).catch(() => null);
       onDone(trimmed, inv?.code || '');
@@ -239,6 +241,7 @@ function ServerStep({ onDone }) {
       <Field label="Server name" hint={`${name.length}/60`}>
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="My Community" />
       </Field>
+      <TemplatePicker value={template} onChange={setTemplate} />
       <ErrorNote error={error} />
       <Primary busy={busy} busyLabel="Creating…" disabled={busy || !name.trim()}>
         Create server

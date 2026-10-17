@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import * as api from '../api.js';
 import Modal from './Modal.jsx';
 import ImageCropper from './ImageCropper.jsx';
+import TemplatePicker from './TemplatePicker.jsx';
 
 const MAX_NAME = 60;
 
@@ -22,15 +23,6 @@ export function extractInviteCode(input) {
     return text; // not a URL: it's the code itself
   }
 }
-
-// Starter channel sets (the server's SERVER_TEMPLATES decides; this is the
-// preview). 'voice' channels show with a speaker.
-const TEMPLATES = [
-  { id: 'blank', label: 'Blank', channels: ['#general'] },
-  { id: 'friends', label: 'Friends', channels: ['#general', '#memes', '#media', '🔊 lounge'] },
-  { id: 'gaming', label: 'Gaming', channels: ['#general', '#lfg', '#clips', '🔊 squad-1', '🔊 squad-2'] },
-  { id: 'study', label: 'Study', channels: ['#general', '#resources', '#questions', '🔊 study-room'] },
-];
 
 const TABS = [
   { id: 'create', label: 'Create' },
@@ -128,7 +120,6 @@ function CreatePanel({ fieldRef, onCreate, onDone, onCancel }) {
   const [error, setError] = useState('');
   const fileRef = useRef(null);
   const id = useId();
-  const group = useId();
 
   // Free the preview's object URL when it's replaced or the dialog closes.
   useEffect(() => () => icon && URL.revokeObjectURL(icon.preview), [icon]);
@@ -210,32 +201,9 @@ function CreatePanel({ fieldRef, onCreate, onDone, onCancel }) {
       )}
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
 
-      <fieldset className="mt-4">
-        <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Start with</legend>
-        <div className="grid grid-cols-2 gap-2">
-          {TEMPLATES.map((t) => (
-            <label
-              key={t.id}
-              className={`flex cursor-pointer flex-col rounded-lg p-2 ring-1 transition ${
-                template === t.id ? 'bg-ink-700 ring-brand-hi' : 'ring-ink-500 hover:bg-ink-700/60'
-              }`}
-            >
-              <span className="flex items-center gap-2 text-sm font-semibold text-gray-100">
-                <input
-                  type="radio"
-                  name={group}
-                  value={t.id}
-                  checked={template === t.id}
-                  onChange={() => setTemplate(t.id)}
-                  className="h-3.5 w-3.5 accent-brand"
-                />
-                {t.label}
-              </span>
-              <span className="mt-1 text-[11px] leading-snug text-gray-400">{t.channels.join(' · ')}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <div className="mt-4">
+        <TemplatePicker value={template} onChange={setTemplate} />
+      </div>
 
       {error && (
         <p role="alert" className="mt-2 text-sm text-danger">

@@ -56,7 +56,7 @@ test('the whole way: account, who can join, first server, then a message to send
   expect(screen.getByText(/Step 3 of 4/)).toBeTruthy();
   type('Server name', 'Book Club');
   await submit('Create server');
-  expect(api.createSpace).toHaveBeenCalledWith('Book Club');
+  expect(api.createSpace).toHaveBeenCalledWith('Book Club', 'blank');
   expect(api.createInvite).toHaveBeenCalledWith('Book Club');
 
   expect(screen.getByText(/Step 4 of 4/)).toBeTruthy();
@@ -130,4 +130,17 @@ test('an account error stays on step 1', async () => {
   await submit('Create admin account');
   expect(screen.getByRole('alert').textContent).toBe('Password must be at least 8 characters');
   expect(screen.getByText(/Step 1 of 4/)).toBeTruthy();
+});
+
+test('the first server can start from a template, the same cards as Add a server', async () => {
+  await throughAccount();
+  await submit('Continue');
+  const radios = screen.getAllByRole('radio', { name: /Blank|Friends|Gaming|Study/ });
+  expect(radios.map((r) => r.value)).toEqual(['blank', 'friends', 'gaming', 'study']);
+  expect(screen.getByRole('radio', { name: /Blank/ }).checked).toBe(true);
+  expect(screen.getByText(/#lfg/)).toBeTruthy(); // each card previews its channels
+  fireEvent.click(screen.getByRole('radio', { name: /Gaming/ }));
+  type('Server name', 'Raid Night');
+  await submit('Create server');
+  expect(api.createSpace).toHaveBeenCalledWith('Raid Night', 'gaming');
 });
