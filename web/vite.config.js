@@ -12,6 +12,11 @@ const apiPaths = ['/register', '/login', '/auth-info', '/uploads', '/spaces', '/
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // The emoji data (emojibase, ~570 kB of JSON) is its own chunk, loaded only
+    // when the picker opens, so it's fine for it to be big.
+    chunkSizeWarningLimit: 600,
+  },
   server: {
     port: 5173,
     proxy: {

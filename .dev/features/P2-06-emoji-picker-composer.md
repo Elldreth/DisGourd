@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 2, rank 4 (part 1)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #68)
 - **Effort:** S–M
 - **Depends on:** none
 - **Serialize with:** Composer.jsx units (P2-08, P2-09, P3-12), web/package.json units (P1-18, P1-19, P2-02)
