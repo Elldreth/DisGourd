@@ -13,6 +13,10 @@ import {
 } from './audio.js';
 import { playSelfJoin, playSelfLeave, playPeerJoin, playPeerLeave } from './sounds.js';
 
+// How long to wait for the server to take us back into the call after a
+// reconnect before giving up.
+const REJOIN_TIMEOUT_MS = 5000;
+
 const ICE_SERVERS =
   (typeof window !== 'undefined' && window.__DISGOURD_ICE__) || [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -49,6 +53,9 @@ export function createVoiceController({ send, myId, onChange }) {
   let speakTimer = null;
   const pendingPlay = new Set(); // audio elements blocked by autoplay policy
   let autoplayArmed = false;
+  let rejoining = false; // sent voice_join again after a reconnect; awaiting voice_peers
+  let rejoinTimer = null;
+  let notice = ''; // why the call ended on its own, for the UI
 
   // A peer link is "unstable" once it has dropped and is trying to recover.
   function unstable() {
@@ -66,7 +73,8 @@ export function createVoiceController({ send, myId, onChange }) {
       deafened,
       pttEnabled: getPttEnabled(),
       micError,
-      unstable: unstable(),
+      unstable: unstable() || rejoining,
+      notice,
       sharing,
       shareError,
       cameraOn: !!cameraStream,
@@ -273,7 +281,7 @@ export function createVoiceController({ send, myId, onChange }) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     // Deterministic, opposite roles per pair so simultaneous offers resolve.
     const polite = Number(myId) < Number(userId);
-    const st = { pc, polite, makingOffer: false, ignoreOffer: false, state: 'new' };
+    const st = { pc, polite, makingOffer: false, ignoreOffer: false, answerPending: false, state: 'new' };
     pcs.set(userId, st);
 
     // Our outgoing media. With a mic we send it; without one we still add a
@@ -339,6 +347,7 @@ export function createVoiceController({ send, myId, onChange }) {
 
   async function join(space, channel) {
     if (room) leave();
+    notice = '';
     room = { space, channel };
     status = 'connecting';
     micError = false;
@@ -363,6 +372,9 @@ export function createVoiceController({ send, myId, onChange }) {
   }
 
   function leave() {
+    if (rejoinTimer) clearTimeout(rejoinTimer);
+    rejoinTimer = null;
+    rejoining = false;
     if (sharing || shareTrack) stopShare();
     if (cameraStream) {
       cameraStream.getTracks().forEach((t) => t.stop());
@@ -659,26 +671,82 @@ export function createVoiceController({ send, myId, onChange }) {
     else startScreen();
   }
 
+  // After the gateway reconnects: the server dropped us from the room when the
+  // old socket closed, and everyone else closed their links to us. Drop ours
+  // too and join again, keeping our own mic / shared audio / camera / screen
+  // (no new permission prompts). The server forgets mute and share state on
+  // join, so send those again. If it doesn't take us back (the channel was
+  // deleted or hidden meanwhile), end the call and say why.
+  function rejoin() {
+    if (!room || status !== 'connected') return; // a join still in progress sends its own voice_join
+    for (const userId of [...pcs.keys()]) handlePeerLeft(userId);
+    knownIds = null; // no join/leave chimes for the roster that comes back
+    rejoining = true;
+    send({ op: 'voice_join', space: room.space, channel: room.channel });
+    if (muted) send({ op: 'voice_mute', muted: true });
+    if (sharing) send({ op: 'voice_share', sharing: true });
+    if (rejoinTimer) clearTimeout(rejoinTimer);
+    rejoinTimer = setTimeout(() => {
+      const channel = room ? room.channel : '';
+      leave();
+      notice = `Your call ended: couldn't rejoin #${channel}.`;
+      emit();
+    }, REJOIN_TIMEOUT_MS);
+    emit();
+  }
+
+  function clearNotice() {
+    notice = '';
+    emit();
+  }
+
   // ---- Gateway frames ----
-  // Both sides proactively create the peer connection (the joiner from the peer
-  // list, existing members from peer-joined); perfect negotiation resolves the
-  // resulting simultaneous offers.
+  // Only the joiner starts each connection (from the peer list); people
+  // already in the call create theirs when the joiner's offer arrives
+  // (handleSignal). When both sides offered at once, resolving the clash
+  // rolled one side back, and Chrome could then stall gathering network
+  // candidates on that link, so it never connected (seen on rejoin after a
+  // reconnect). Perfect negotiation still covers later renegotiation.
   function handlePeers(peers) {
+    if (rejoining) {
+      rejoining = false;
+      clearTimeout(rejoinTimer);
+      rejoinTimer = null;
+      emit();
+    }
     for (const p of peers) newPeer(p.userId);
   }
-  function handlePeerJoined(peer) {
-    if (peer && peer.userId != null) newPeer(peer.userId);
+  function handlePeerJoined() {
+    // Nothing to do: the joiner sends the offer (see above).
   }
-  async function handleSignal(from, data) {
+  // Signals from one peer are applied one at a time, in arrival order. Run
+  // concurrently, an ICE candidate can land while its offer is still being
+  // applied; the browser rejects it, it's lost, and the link may never connect.
+  function handleSignal(from, data) {
     const st = pcs.get(from) || newPeer(from);
+    const run = (st.signals || Promise.resolve()).then(() => applySignal(st, from, data));
+    st.signals = run.catch(() => {});
+    return run;
+  }
+  async function applySignal(st, from, data) {
     const { pc } = st;
     try {
       if (data.sdp) {
         const desc = data.sdp;
-        const collision = desc.type === 'offer' && (st.makingOffer || pc.signalingState !== 'stable');
+        // An offer that arrives while we're still applying the answer to our
+        // own offer isn't a collision: the other side sent its answer and then
+        // a fresh offer, and we'd be stable a moment later. Treating it as one
+        // drops it, and the link never connects ("perfect negotiation", MDN).
+        const readyForOffer = !st.makingOffer && (pc.signalingState === 'stable' || st.answerPending);
+        const collision = desc.type === 'offer' && !readyForOffer;
         st.ignoreOffer = !st.polite && collision;
         if (st.ignoreOffer) return; // impolite peer keeps its own offer
-        await pc.setRemoteDescription(desc);
+        st.answerPending = desc.type === 'answer';
+        try {
+          await pc.setRemoteDescription(desc);
+        } finally {
+          st.answerPending = false;
+        }
         if (desc.type === 'offer') {
           await pc.setLocalDescription();
           send({ op: 'voice_signal', to: from, data: { sdp: pc.localDescription } });
@@ -741,6 +809,8 @@ export function createVoiceController({ send, myId, onChange }) {
   return {
     join,
     leave,
+    rejoin,
+    clearNotice,
     toggleMute,
     toggleDeafen,
     setPttActive,

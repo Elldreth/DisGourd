@@ -37,6 +37,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-17 | GitHub Actions CI | 1 | COMPLETE | S | none | .github/workflows/ci.yml |
 | P1-18 | Bump Vite | 1 | READY | S | none | web/package.json, vite.config.js |
 | P1-19 | Web test harness (Vitest) | 1 | COMPLETE | S | P1-18 | web/package.json, vite.config.js |
+| P1-20 | Voice rejoin after reconnect | 1 | REVIEW | S–M | P1-09 | voice.js, useVoiceCall.js, gateway/voice.js |
 | P2-01 | Markdown core | 2 | COMPLETE | S–M | P1-19 | markdown.jsx (new), MessageList.jsx, index.css |
 | P2-02 | Syntax highlighting (lazy) | 2 | COMPLETE | S | P2-01 | markdown.jsx, highlight.js (new), index.css |
 | P2-03 | Tab title + favicon badge | 2 | COMPLETE | S | none | attention.js (new), App.jsx (+2 lines) |

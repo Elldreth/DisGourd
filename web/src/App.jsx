@@ -214,6 +214,8 @@ export default function App() {
             voiceUnstable={call.unstable}
             voiceSharing={call.sharing}
             voiceShareError={call.shareError}
+            voiceNotice={call.notice}
+            onDismissVoiceNotice={voice.dismissNotice}
             voiceCameraOn={call.cameraOn}
             voiceScreenOn={call.screenOn}
             voiceVideoError={call.videoError}

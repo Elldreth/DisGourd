@@ -24,6 +24,8 @@ export default function ChannelList({
   voiceUnstable,
   voiceSharing,
   voiceShareError,
+  voiceNotice,
+  onDismissVoiceNotice,
   voiceCameraOn,
   voiceScreenOn,
   voiceVideoError,
@@ -369,6 +371,15 @@ export default function ChannelList({
         )}
       </div>
 
+      {!myVoice && voiceNotice && (
+        <div role="status" className="flex items-start gap-2 border-t border-ink-900/60 bg-idle/10 px-3 py-2 text-xs text-idle">
+          <Icon name="volume" size={15} className="mt-px shrink-0" />
+          <span className="min-w-0 flex-1">{voiceNotice}</span>
+          <button onClick={onDismissVoiceNotice} title="Dismiss" className="shrink-0 rounded px-1 hover:bg-ink-600">
+            ✕
+          </button>
+        </div>
+      )}
       {myVoice && (
         <div className="border-t border-ink-900/60 bg-ink-900/40 px-3 py-2">
           <div className="flex items-center gap-2">
