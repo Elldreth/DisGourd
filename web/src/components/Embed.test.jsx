@@ -65,3 +65,39 @@ test('other relative or odd paths are still refused', () => {
     expect(img()).toBeNull();
   }
 });
+
+// P4-05: calmer cards. The card is capped at 420px, a banner image at 176px
+// tall, and a small or square image becomes a 72px thumbnail beside the text
+// instead of a banner. The shape is decided once the image has loaded.
+function loadImage(el, width, height) {
+  Object.defineProperty(el, 'naturalWidth', { value: width, configurable: true });
+  Object.defineProperty(el, 'naturalHeight', { value: height, configurable: true });
+  fireEvent.load(el);
+}
+
+test('the card is capped at 420px and a banner image at 176px tall', () => {
+  render(<Embed embed={card} />);
+  const article = screen.getByRole('article');
+  expect(article.className).toMatch(/max-w-\[420px\]/);
+  expect(article.className).not.toMatch(/\bmax-w-md\b/);
+  loadImage(img(), 1200, 600);
+  expect(img().className).toMatch(/\bmax-h-44\b/);
+  expect(img().className).toMatch(/\bobject-cover\b/);
+  expect(img().className).not.toMatch(/\bsize-18\b/);
+});
+
+test('a square or small image becomes a thumbnail beside the text', () => {
+  render(<Embed embed={card} />);
+  loadImage(img(), 400, 400);
+  expect(img().className).toMatch(/\bsize-18\b/);
+  expect(img().className).not.toMatch(/\bmax-h-44\b/);
+  // The thumbnail sits in a row with the text, after it.
+  const row = img().parentElement;
+  expect(row.className).toMatch(/\bflex\b/);
+  expect(row.lastElementChild).toBe(img());
+  expect(screen.getByRole('link', { name: 'A big story' })).toBeTruthy();
+  cleanup();
+  render(<Embed embed={card} />);
+  loadImage(img(), 240, 100); // wide but tiny: still a thumbnail
+  expect(img().className).toMatch(/\bsize-18\b/);
+});

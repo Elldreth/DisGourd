@@ -8,18 +8,29 @@ const httpUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : n
 const imageUrl = (u) => (typeof u === 'string' && /^\/media\/preview\/[\w-]+\/[\w-]+$/.test(u) ? u : httpUrl(u));
 const hexColor = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : null);
 
+// Shape of the card's image, known once it has loaded: a wide picture is a
+// banner under the text (capped at 176px tall so one card never fills a
+// screen); a small or square one is a 72px thumbnail beside the text.
+function shapeFor(width, height) {
+  if (!width || !height) return 'banner';
+  return width < 300 || width / height < 1.4 ? 'thumb' : 'banner';
+}
+
 export default function Embed({ embed }) {
   const [imageOk, setImageOk] = useState(true);
+  const [shape, setShape] = useState('banner');
   const url = httpUrl(embed.url);
   const image = imageOk ? imageUrl(embed.image) : null;
   const color = hexColor(embed.themeColor);
+  const thumb = image && shape === 'thumb';
 
   return (
     <article
-      className="mt-1.5 max-w-md overflow-hidden rounded-lg border-l-4 border-ink-500 bg-ink-800/80 ring-1 ring-ink-500/40"
+      className="mt-1.5 max-w-[420px] overflow-hidden rounded-lg border-l-4 border-ink-500 bg-ink-800/80 ring-1 ring-ink-500/40"
       style={color ? { borderLeftColor: color } : undefined}
     >
-      <div className="p-3">
+      <div className={`p-3 ${thumb ? 'flex items-start gap-3' : ''}`}>
+        <div className="min-w-0 flex-1">
         {embed.siteName && <div className="mb-0.5 truncate text-xs text-gray-400">{embed.siteName}</div>}
         {embed.title &&
           (url ? (
@@ -29,7 +40,8 @@ export default function Embed({ embed }) {
           ) : (
             <div className="line-clamp-2 font-semibold text-gray-100">{embed.title}</div>
           ))}
-        {embed.description && <p className="mt-1 line-clamp-3 text-sm text-gray-300">{embed.description}</p>}
+        {embed.description && <p className="mt-1 line-clamp-2 text-sm text-gray-300">{embed.description}</p>}
+        </div>
         {image && (
           <img
             src={image}
@@ -37,7 +49,8 @@ export default function Embed({ embed }) {
             loading="lazy"
             referrerPolicy="no-referrer"
             onError={() => setImageOk(false)}
-            className="mt-2 max-h-64 w-full rounded-md object-cover"
+            onLoad={(e) => setShape(shapeFor(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight))}
+            className={thumb ? 'size-18 shrink-0 rounded-md object-cover' : 'mt-2 max-h-44 w-full rounded-md object-cover'}
           />
         )}
       </div>
