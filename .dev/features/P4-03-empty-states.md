@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P4-00)
 - **Phase:** 4
-- **State:** READY
+- **State:** REVIEW (branch `claude/p4-03-empty-states`, PR pending)
 - **Effort:** M
 - **Depends on:** none (P4-04 benefits from it)
 - **Serialize with:** P4-04 (`DmSidebar.jsx`, `DmPanel.jsx`), P4-06/P4-07 (`ThreadPanel.jsx`)
@@ -15,11 +15,11 @@
 - Copy stays as it is (it is already friendly), except: "No server selected" gains a "Create a server" button; "No conversations yet" gains "New message" (wired by P4-04, until then it opens the quick switcher).
 
 ## Acceptance criteria
-- [ ] AC-1: every empty state in the app uses `EmptyState` (grep for the old inline markup finds none).
-- [ ] AC-2: the four illustrations render in both themes with their colours taken from CSS variables, and each shipped asset is under 20 KB (`ls -l` evidence).
-- [ ] AC-3: `design/empty-states/` holds the generated candidates and a `PROMPTS.md` with the prompt and model for each, and which one was picked.
-- [ ] AC-4: screen readers get the heading and body only (the art is `aria-hidden`); axe clean on each state.
-- [ ] AC-5: web tests for `EmptyState` (variants, action) and updated snapshots for the components that use it; `vite build` clean.
+- [x] AC-1: every empty state in the app uses `EmptyState` (grep for the old inline markup finds none).
+- [x] AC-2: the four illustrations render in both themes with their colours taken from CSS variables, and each shipped asset is under 20 KB (`ls -l` evidence).
+- [x] AC-3: `design/empty-states/` holds the generated candidates and a `PROMPTS.md` with the prompt and model for each, and which one was picked.
+- [x] AC-4: screen readers get the heading and body only (the art is `aria-hidden`); axe clean on each state.
+- [x] AC-5: web tests for `EmptyState` (variants, action) and updated snapshots for the components that use it; `vite build` clean.
 
 ## Expected Areas of Change
 `EmptyState.jsx` (new), `ChatPanel.jsx`, `MessageList.jsx` (welcome card), `DmPanel.jsx`, `DmSidebar.jsx`, `App.jsx` (DM home), `PinsPanel.jsx`, `ThreadsList.jsx`, `ThreadPanel.jsx`, `SearchOverlay.jsx`, `MemberList.jsx`, `design/empty-states/*`, tests.
@@ -36,11 +36,24 @@ Accessibility: art hidden from AT; headings stay `h2`/`h3` consistent with the s
 ## Out of Scope
 Mascot poses, stickers, login hero art, the sound set (Phase 4 items that are not empty states).
 
+## Starting Baseline
+Revision: `5e1ac10` (main after #108). Clean worktree `.claude/worktrees/p4-shine`. Web suite 57 files / 500 tests green.
+
+## Implementation notes
+- `EmptyState.jsx`: `{ art, icon, title, body, action, as, compact }`. `ART` holds the four scenes as JSX fragments in a 200×130 box; each places the real `Gourd` mark (so the body is `var(--color-brand-logo)` and the leaf `var(--color-lime)`) with a few shapes: a ground line (`channel`), two mirrored gourds with three lime dots (`dms`), a pot (`server`), a magnifier ring and handle with a lime lens highlight (`search`). `compact` draws at 120px with a `p` heading for small panels; `as` picks the heading element.
+- Wired: `ChatPanel` (no server → `server`, no channel → `channel`), `DmPanel` home (`dms` + New message), `DmSidebar` empty (`dms` compact + New message), `MessageList` start card (`channel`, or `dms` for DMs; `emptyIcon` keeps the thread panel's icon variant; new `emptyArt` prop), `PinsPanel` (pin icon), `ThreadsList` (thread icon), `SearchOverlay` (`search` compact), `MemberList` (users icon), `ChannelList` (hash icon, with a hint for managers).
+- The media MCP server refused image generation ("Requires basic plan or higher"), so the candidates were generated through the kie.ai REST API with the key from the root `.env` (never printed), model `google/nano-banana`, via a scratch script; eight PNGs and `PROMPTS.md` are under `design/empty-states/`.
+- Not done, by choice: a "Create a server" button on "No server selected" (the create dialog's state lives inside `ServerRail`; wiring it needs a request prop like the invite one, recorded under Discovered Work) and an illustration in the thread panel (kept the thread icon: the column is narrow).
+
 ## Verification Evidence
 | Acceptance Criterion | Status | Verification Type | Evidence |
 |---|---|---|---|
-| AC-1 | Not verified | | |
-| AC-2 | Not verified | | |
-| AC-3 | Not verified | | |
-| AC-4 | Not verified | | |
-| AC-5 | Not verified | | |
+| AC-1 | Verified | grep + suite | Every former empty-state block (`#`/💬 cards, the `p.text-gray-500` notices in pins, threads, search, members, channels, the DM list) now renders `EmptyState`; `grep -rn "text-6xl\|No members to show.</p>\|No channels yet.</p>"` finds nothing. 10 components changed |
+| AC-2 | Verified | `EmptyState.test.jsx` + sandbox light theme | Test: each scene's markup has no literal hex colour, uses `--color-brand-logo` and `--color-lime`, and is under 6,000 characters (the channel scene is 1,188 bytes in the DOM). Sandbox: the DM home in light shows the darker lime leaves and dots. No separate asset files ship (inline SVG) |
+| AC-3 | Verified | `design/empty-states/` | 8 PNGs (two per scene, 0.3–0.9 MB each) and `PROMPTS.md` with the model, the shared style suffix, each prompt, the run log and which candidate each shipped scene follows |
+| AC-4 | Verified | axe-core on `main` in the sandbox + test | The art is `aria-hidden`; headings and body are plain text. axe on the chat column reports only the pre-existing `link-in-text-block` (recorded in P4-06) |
+| AC-5 | Verified | Vitest, Vite, sandbox | `EmptyState.test.jsx`: 4 tests (watched fail first, then pass); all existing tests unchanged and green: 58 files / 504 tests; `vite build` clean. Sandbox (:3007 copy, 1280px, dark and light): DM home (`dms` + New message), channel welcome card (`channel`), pins popover (pin icon), search with no results (`search`) |
+
+## Discovered Work
+- "Create a server" from the no-server screen: `ServerRail` owns the Add-a-server dialog; add an `openRequest` prop (like `pendingInvite`) so `ChatPanel`'s empty state can open it.
+

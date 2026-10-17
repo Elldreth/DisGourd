@@ -7,7 +7,7 @@ import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
-import Gourd from './Gourd.jsx';
+import EmptyState from './EmptyState.jsx';
 import DropOverlay from './DropOverlay.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 
@@ -91,6 +91,7 @@ export default function ChatPanel({
     return (
       <Empty
         onOpenNav={onOpenNav}
+        art="server"
         title="No server selected"
         body="Pick a server on the left, or press + to create one and invite your friends."
       />
@@ -100,6 +101,7 @@ export default function ChatPanel({
     return (
       <Empty
         onOpenNav={onOpenNav}
+        art="channel"
         title={`Welcome to ${space}`}
         body="Create a text channel with the + next to “Text channels” to start talking."
       />
@@ -321,7 +323,7 @@ export default function ChatPanel({
   );
 }
 
-function Empty({ title, body, onOpenNav }) {
+function Empty({ art, title, body, onOpenNav }) {
   return (
     <main className="anim-fade relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
       {onOpenNav && (
@@ -333,11 +335,7 @@ function Empty({ title, body, onOpenNav }) {
           className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         />
       )}
-      <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-brand/10 ring-1 ring-brand/15">
-        <Gourd size={58} />
-      </div>
-      <h2 className="text-xl font-bold tracking-tight">{title}</h2>
-      <p className="mt-1.5 max-w-sm text-gray-400">{body}</p>
+      <EmptyState art={art} as="h2" title={title} body={body} />
     </main>
   );
 }

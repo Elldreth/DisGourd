@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P4-00)
 - **Phase:** 4
-- **State:** REVIEW (branch `claude/p4-07-thread-back`, PR pending)
+- **State:** COMPLETE (merged in #108, 2026-10-17)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P4-01 and P4-06 (`ThreadPanel.jsx`, `ChatPanel.jsx`, `App.jsx`)

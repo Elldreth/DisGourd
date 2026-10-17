@@ -1,3 +1,4 @@
+import EmptyState from './EmptyState.jsx';
 import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
@@ -316,7 +317,7 @@ export default function ChannelList({
         })}
 
         {space && channels.length === 0 && !adding && (
-          <p className="px-2 py-1 text-sm text-gray-500">No channels yet.</p>
+          <EmptyState compact icon="hash" title="No channels yet" body={canManage ? 'Add one with the + above.' : undefined} />
         )}
 
         {/* Voice channels */}

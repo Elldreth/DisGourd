@@ -1,3 +1,4 @@
+import EmptyState from './EmptyState.jsx';
 import { useEffect, useId, useRef, useState } from 'react';
 import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
@@ -100,7 +101,7 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm, onOpen
         <div id={listId} role="listbox" aria-label="Results" className="flex-1 overflow-y-auto p-2">
           {short && <p className="p-4 text-center text-sm text-gray-500">Type at least 2 characters to search.</p>}
           {!short && !loading && total === 0 && (
-            <p className="p-4 text-center text-sm text-gray-500">No messages found.</p>
+            <EmptyState compact art="search" title="No messages found" body="Try another word, or a name." />
           )}
           {results.channels.length > 0 && (
             <Section label="In servers">

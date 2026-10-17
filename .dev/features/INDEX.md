@@ -81,14 +81,14 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | COMPLETE | S–M | none | VideoStage.jsx, voice.js |
 | P3-14 | Invite deep link (`/invite/<code>`) | 3 | COMPLETE | S | none (follow-up to P3-07) | inviteLink.js (new), App.jsx, ServerRail.jsx, CreateServerDialog.jsx, InviteDialog.jsx, SetupWizard.jsx |
 | P3-15 | Server templates in the setup wizard | 3 | COMPLETE | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
-| P4-00 | "Shine" polish round (Container: 01–07) | 4 | PLANNED | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
+| P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
 | P4-02 | Settings with section navigation | 4 | COMPLETE | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |
-| P4-03 | Empty states with flat illustrations | 4 | READY | M | none | EmptyState.jsx (new), design/empty-states/*, ~10 components |
+| P4-03 | Empty states with flat illustrations | 4 | REVIEW | M | none | EmptyState.jsx (new), design/empty-states/*, ~10 components |
 | P4-04 | New message from the DM view | 4 | COMPLETE | S | none (soft P4-03) | DmSidebar.jsx, QuickSwitcher.jsx, App.jsx, shortcuts.js |
 | P4-05 | Calmer link previews | 4 | COMPLETE | S | none | Embed.jsx |
 | P4-06 | Hierarchy and a11y polish (10 small items) | 4 | COMPLETE | S | none | ServerRail.jsx, ChannelList.jsx, MessageList.jsx, MessageActions.jsx, AuthShell.jsx, ThreadPanel.jsx, AudioSettings.jsx, Gourd.jsx |
-| P4-07 | Thread panel on phones: back + hardware back | 4 | REVIEW | S | none | overlayHistory.js (new), ThreadPanel.jsx, App.jsx, MemberList.jsx |
+| P4-07 | Thread panel on phones: back + hardware back | 4 | COMPLETE | S | none | overlayHistory.js (new), ThreadPanel.jsx, App.jsx, MemberList.jsx |
 
 ## Dependency map (hard dependencies)
 

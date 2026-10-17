@@ -3,6 +3,7 @@ import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
 import Embed from './Embed.jsx';
 import Icon from './Icon.jsx';
+import EmptyState from './EmptyState.jsx';
 import { MessageToolbar, ActionMenu, ReactionPicker } from './MessageActions.jsx';
 import { formatTime, formatDay, formatAgo } from '../util.js';
 import { renderMarkdown } from '../markdown.jsx';
@@ -76,7 +77,7 @@ function mentionsUser(content, me) {
 // `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
 // an original that isn't loaded, and, while that older window is showing
 // (`history.hasNewer`), offers newer pages and "Jump to present".
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, emptyIcon = 'hash', topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label }, ref) {
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, emptyIcon = null, emptyArt = null, topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label }, ref) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // The message being edited, and where focus goes when that edit ends: back
@@ -392,15 +393,14 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
         {/* The start of the conversation: shown when empty, or once you've
             scrolled back to the very first message. */}
         {!hasMore && !loadingOlder && (
-          <div className="py-10 text-center text-gray-500">
-            <div className="mb-3 flex justify-center">
-              {simple ? <span className="text-5xl">💬</span> : <Icon name={emptyIcon} size={52} className="text-gray-600" />}
-            </div>
-            <p className="text-lg font-semibold text-gray-300">
-              {emptyHeading ?? `Welcome to #${channel}`}
-            </p>
-            {(emptyBody ?? 'This is the start of the channel. Say hello! 👋') && <p className="text-sm">{emptyBody ?? 'This is the start of the channel. Say hello! 👋'}</p>}
-          </div>
+          <EmptyState
+            as="p"
+            icon={emptyIcon || undefined}
+            art={emptyIcon ? undefined : emptyArt || (simple ? 'dms' : 'channel')}
+            compact={!!emptyIcon}
+            title={emptyHeading ?? `Welcome to #${channel}`}
+            body={emptyBody ?? 'This is the start of the channel. Say hello! 👋'}
+          />
         )}
 
         {rows.map((row) =>
