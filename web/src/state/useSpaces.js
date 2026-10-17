@@ -201,18 +201,19 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       setServerOrder(names);
       saveServerOrder(myId, names);
     },
-    createSpace: attempt('Could not create server', async (name) => {
+    // These two throw, so the Add a server dialog can show the error inline.
+    createSpace: async (name) => {
       await api.createSpace(name);
       await loadSpaces();
       setCurrentSpace(name);
       setCurrentChannel('general');
-    }),
-    joinServer: attempt('Could not join server', async (code) => {
+    },
+    joinServer: async (code) => {
       const res = await api.joinInvite(code.trim());
       const next = await loadSpaces();
       const s = next.find((x) => x.name === res.name);
       goTo(res.name, next, s && s.channels[0] ? s.channels[0] : 'general');
-    }),
+    },
     createChannel: attempt('Could not create channel', async (name, type = 'text') => {
       if (!currentSpace) return;
       const created = await api.createChannel(currentSpace, name, type);

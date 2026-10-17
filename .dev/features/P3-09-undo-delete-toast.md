@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "or better, an undo toast"
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #79)
 - **Effort:** S–M
 - **Depends on:** P3-05 (Delete lives in MessageActions)
 - **Serialize with:** App.jsx units (toast host), MessageList/MessageActions units
