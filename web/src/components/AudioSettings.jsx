@@ -197,7 +197,7 @@ export default function AudioSettings({ onOutputChange, onPttChange, onMicChange
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Speaker</span>
           <button
             onClick={() => playTestTone()}
-            className="rounded bg-ink-600 px-2 py-1 text-xs font-semibold text-gray-200 hover:bg-ink-500"
+            className="rounded-sm bg-ink-600 px-2 py-1 text-xs font-semibold text-gray-200 hover:bg-ink-500"
           >
             Test
           </button>
@@ -268,10 +268,10 @@ export default function AudioSettings({ onOutputChange, onPttChange, onMicChange
           <div className="mt-2 text-xs text-idle">Choose a key or you won't be able to talk.</div>
         )}
         <div className="mt-2 text-xs text-gray-500">
-          Shortcuts (while the DisGourd window is focused): mute <kbd className="rounded bg-ink-700 px-1">Ctrl</kbd>+
-          <kbd className="rounded bg-ink-700 px-1">Shift</kbd>+<kbd className="rounded bg-ink-700 px-1">M</kbd>, deafen{' '}
-          <kbd className="rounded bg-ink-700 px-1">Ctrl</kbd>+<kbd className="rounded bg-ink-700 px-1">Shift</kbd>+
-          <kbd className="rounded bg-ink-700 px-1">D</kbd>.
+          Shortcuts (while the DisGourd window is focused): mute <kbd className="rounded-sm bg-ink-700 px-1">Ctrl</kbd>+
+          <kbd className="rounded-sm bg-ink-700 px-1">Shift</kbd>+<kbd className="rounded-sm bg-ink-700 px-1">M</kbd>, deafen{' '}
+          <kbd className="rounded-sm bg-ink-700 px-1">Ctrl</kbd>+<kbd className="rounded-sm bg-ink-700 px-1">Shift</kbd>+
+          <kbd className="rounded-sm bg-ink-700 px-1">D</kbd>.
         </div>
       </div>
 

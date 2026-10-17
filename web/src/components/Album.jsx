@@ -47,7 +47,7 @@ function Grid({ media, onOpen }) {
             {info.isVideo ? (
               <>
                 <video src={info.url} muted preload="metadata" className="h-full w-full object-cover" />
-                <span className="absolute inset-0 flex items-center justify-center text-3xl text-white/90 drop-shadow">▶</span>
+                <span className="absolute inset-0 flex items-center justify-center text-3xl text-white/90 drop-shadow-sm">▶</span>
               </>
             ) : (
               <img src={info.url} alt={info.name} loading="lazy" className="h-full w-full object-cover" />

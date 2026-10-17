@@ -69,13 +69,13 @@ export default function Lightbox({ items, index, onClose, onIndex }) {
             src={info.url}
             controls
             autoPlay
-            className="max-h-[92vh] max-w-[92vw] rounded"
+            className="max-h-[92vh] max-w-[92vw] rounded-sm"
           />
         ) : (
           <img
             src={info.url}
             alt={info.name}
-            className="max-h-[92vh] max-w-[92vw] rounded object-contain"
+            className="max-h-[92vh] max-w-[92vw] rounded-sm object-contain"
           />
         )}
       </div>

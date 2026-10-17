@@ -1,19 +1,95 @@
-@import '@fontsource-variable/inter';
-@import '@fontsource-variable/space-grotesk';
+@import '@fontsource-variable/inter' layer(base);
+@import '@fontsource-variable/space-grotesk' layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* The "Neon Calabash" theme. Tailwind 4 turns each of these into a CSS
+   variable on :root (e.g. --color-brand) that every utility reads at runtime,
+   so a theme can be swapped by overriding the variables (see P2-17). */
+@theme {
+  /* Deep violet-black surfaces, layered for depth. 900 deepest (server rail,
+     inputs), 800 sidebars, 700 main chat, 600 raised / hover, 500 borders. */
+  --color-ink-500: #2c2550;
+  --color-ink-600: #252047;
+  --color-ink-700: #1d1838;
+  --color-ink-800: #151129;
+  --color-ink-900: #0e0b1a;
+
+  /* Violet-tinted greys replace Tailwind's neutral ones, so text-gray-* picks
+     up the palette. 100 primary text, 400 muted, 500 hints and timestamps;
+     500 and up stay >= 4.5:1 on ink-700 and ink-600 (WCAG AA). 600 is
+     decorative only, not for text. */
+  --color-gray-100: #f2eeff;
+  --color-gray-200: #e2dcf7;
+  --color-gray-300: #cec6ec;
+  --color-gray-400: #b7aedb;
+  --color-gray-500: #9a90c2;
+  --color-gray-600: #6e6596;
+  --color-gray-700: #4a4370;
+  --color-gray-800: #2c2550;
+  --color-gray-900: #1d1838;
+
+  /* Violet. brand: fills (white text on it is 5.5:1); hi: text, icons and the
+     focus ring on dark (5.9:1); logo: the gourd body; soft: a solid soft-accent
+     surface. */
+  --color-brand: #7444f0;
+  --color-brand-hover: #6535de;
+  --color-brand-hi: #a684ff;
+  --color-brand-logo: #9466ff;
+  --color-brand-soft: #2a2160;
+
+  /* Accents: lime highlight and presence, pink hot accent and danger, amber
+     for away. Pair lime / pink fills with ink-900 text. */
+  --color-lime: #b8f34a;
+  --color-pink: #ff5fa2;
+  --color-online: #b8f34a;
+  --color-idle: #ffc24a;
+  --color-danger: #ff5fa2;
+
+  --font-sans:
+    'Inter Variable', Inter, ui-sans-serif, system-ui, Segoe UI, Roboto,
+    sans-serif;
+  --font-display:
+    'Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', ui-sans-serif,
+    system-ui, sans-serif;
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+/* Tailwind 4 no longer gives buttons a pointer cursor; keep v3's behaviour. */
+@layer base {
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+  :disabled {
+    cursor: default;
+  }
+}
+
+@utility input {
+  @apply w-full rounded-lg bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-hidden ring-1 ring-ink-500/60 transition placeholder:text-gray-500 focus:ring-2 focus:ring-brand-hi;
+}
 
 :root {
   color-scheme: dark;
-  accent-color: theme('colors.brand.DEFAULT'); /* native checkboxes, ranges */
-}
-
-@layer components {
-  .input {
-    @apply w-full rounded-lg bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none ring-1 ring-ink-500/60 transition placeholder:text-gray-500 focus:ring-2 focus:ring-brand-hi;
-  }
+  accent-color: var(--color-brand); /* native checkboxes, ranges */
 }
 
 html,
@@ -37,31 +113,31 @@ h3 {
 /* Slim, unobtrusive scrollbars that match the dark theme. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: theme('colors.ink.500') transparent;
+  scrollbar-color: var(--color-ink-500) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: theme('colors.ink.500');
+  background-color: var(--color-ink-500);
   border-radius: 9999px;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background-color: theme('colors.gray.700');
+  background-color: var(--color-gray-700);
 }
 
 /* Visible keyboard focus everywhere; mouse clicks stay clean. */
 :focus-visible {
-  outline: 2px solid theme('colors.brand.hi');
+  outline: 2px solid var(--color-brand-hi);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: theme('colors.brand.DEFAULT / 45%');
+  background: color-mix(in srgb, var(--color-brand) 45%, transparent);
 }
 
 /* --- Motion --------------------------------------------------------------
@@ -152,21 +228,21 @@ h3 {
   padding-left: 0.65rem;
   border-left: 3px solid rgb(255 255 255 / 0.2);
 }
-.md-link { color: theme('colors.brand.hi'); text-decoration: none; word-break: break-all; }
+.md-link { color: var(--color-brand-hi); text-decoration: none; word-break: break-all; }
 .md-link:hover { text-decoration: underline; }
 
 /* Syntax highlighting tokens (highlight.js / lowlight), Neon Calabash colours.
    Contrast on the code-block background (#131024): violet 6.5:1, lime 14.2:1,
    pink 6.6:1, amber 11.6:1, comments 9.0:1. */
-.md-codeblock code.hljs { color: theme('colors.gray.100'); }
+.md-codeblock code.hljs { color: var(--color-gray-100); }
 .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type, .hljs-doctag, .hljs-built_in,
-.hljs-section, .hljs-name, .hljs-tag { color: theme('colors.brand.hi'); }
+.hljs-section, .hljs-name, .hljs-tag { color: var(--color-brand-hi); }
 .hljs-string, .hljs-regexp, .hljs-addition, .hljs-symbol, .hljs-template-tag,
-.hljs-selector-attr, .hljs-selector-pseudo { color: theme('colors.lime'); }
-.hljs-number, .hljs-deletion, .hljs-meta, .hljs-bullet, .hljs-link { color: theme('colors.pink'); }
+.hljs-selector-attr, .hljs-selector-pseudo { color: var(--color-lime); }
+.hljs-number, .hljs-deletion, .hljs-meta, .hljs-bullet, .hljs-link { color: var(--color-pink); }
 .hljs-title, .hljs-attr, .hljs-attribute, .hljs-property, .hljs-selector-id,
-.hljs-selector-class { color: theme('colors.idle'); }
-.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-subst { color: theme('colors.gray.200'); }
-.hljs-comment, .hljs-quote { color: theme('colors.gray.400'); font-style: italic; }
+.hljs-selector-class { color: var(--color-idle); }
+.hljs-variable, .hljs-template-variable, .hljs-params, .hljs-subst { color: var(--color-gray-200); }
+.hljs-comment, .hljs-quote { color: var(--color-gray-400); font-style: italic; }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 600; }

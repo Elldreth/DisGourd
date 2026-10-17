@@ -17,7 +17,7 @@ function Tile({ tile }) {
         muted={tile.self}
         className={`h-full w-full object-contain ${tile.mirror ? '-scale-x-100' : ''}`}
       />
-      <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
+      <span className="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-xs text-white">
         {tile.label || 'Video'}
       </span>
     </div>

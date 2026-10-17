@@ -193,7 +193,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
             {pending.map((p) => {
               const info = attachmentInfo(p.url);
               return (
-                <div key={p.url} className="group relative h-16 w-16 overflow-hidden rounded bg-ink-900">
+                <div key={p.url} className="group relative h-16 w-16 overflow-hidden rounded-sm bg-ink-900">
                   {info?.isImage ? (
                     <img src={info.url} alt={p.name} className="h-full w-full object-cover" />
                   ) : info?.isVideo ? (
@@ -215,7 +215,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
               );
             })}
             {uploading > 0 && (
-              <div className="flex h-16 w-16 items-center justify-center rounded bg-ink-900 text-xs text-gray-400">
+              <div className="flex h-16 w-16 items-center justify-center rounded-sm bg-ink-900 text-xs text-gray-400">
                 Uploading…
               </div>
             )}
@@ -273,7 +273,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
             onClick={onCancelReply}
             title="Cancel reply"
             aria-label="Cancel reply"
-            className="rounded p-0.5 text-gray-400 hover:bg-ink-600 hover:text-white"
+            className="rounded-sm p-0.5 text-gray-400 hover:bg-ink-600 hover:text-white"
           >
             <Icon name="x" size={14} />
           </button>
@@ -301,7 +301,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
           onPaste={onPaste}
           disabled={disabled}
           placeholder={disabled ? 'Connecting…' : placeholder || `Message #${channel}`}
-          className="max-h-52 flex-1 resize-none bg-transparent py-1.5 text-gray-100 outline-none placeholder:text-gray-500 disabled:opacity-60"
+          className="max-h-52 flex-1 resize-none bg-transparent py-1.5 text-gray-100 outline-hidden placeholder:text-gray-500 disabled:opacity-60"
         />
         <div ref={emojiBtnRef} className="shrink-0">
           <button

@@ -51,7 +51,7 @@ export function MessageToolbar({ actions, onOpenMenu, forceVisible }) {
           onClick={(e) => a.onSelect(e)}
           title={a.label}
           aria-label={a.label}
-          className={`rounded p-1 text-gray-400 hover:bg-ink-600 ${a.danger ? 'hover:text-danger' : 'hover:text-white'}`}
+          className={`rounded-sm p-1 text-gray-400 hover:bg-ink-600 ${a.danger ? 'hover:text-danger' : 'hover:text-white'}`}
         >
           <Icon name={a.icon} size={16} />
         </button>
@@ -63,7 +63,7 @@ export function MessageToolbar({ actions, onOpenMenu, forceVisible }) {
         title="More actions"
         aria-label="More actions"
         aria-haspopup="menu"
-        className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
+        className="rounded-sm p-1 text-gray-400 hover:bg-ink-600 hover:text-white"
       >
         <Icon name="more" size={16} />
       </button>
@@ -95,7 +95,7 @@ export function ActionMenu({ actions, sheet, above, onClose, label }) {
       role="menuitem"
       data-menu-item
       onClick={(e) => a.onSelect(e)}
-      className={`flex w-full items-center gap-3 rounded-md text-left outline-none focus-visible:bg-ink-600 hover:bg-ink-600 ${
+      className={`flex w-full items-center gap-3 rounded-md text-left outline-hidden focus-visible:bg-ink-600 hover:bg-ink-600 ${
         sheet ? 'px-4 py-3 text-base' : 'px-3 py-1.5 text-sm'
       } ${a.danger ? 'text-danger' : 'text-gray-200'}`}
     >
@@ -130,7 +130,7 @@ export function ActionMenu({ actions, sheet, above, onClose, label }) {
         role="menu"
         aria-label={label}
         onKeyDown={onKeyDown}
-        className={`anim-pop absolute right-3 z-30 min-w-[11rem] rounded-lg border border-ink-500/60 bg-ink-900 p-1 shadow-xl ${
+        className={`anim-pop absolute right-3 z-30 min-w-44 rounded-lg border border-ink-500/60 bg-ink-900 p-1 shadow-xl ${
           above ? 'bottom-full mb-4' : 'top-6'
         }`}
       >
@@ -163,7 +163,7 @@ export function ReactionPicker({ onPick, onClose, sheet, above }) {
       data-menu-item
       aria-label={`React with ${emoji}`}
       onClick={() => onPick(emoji)}
-      className={`rounded outline-none hover:bg-ink-600 focus-visible:bg-ink-600 focus-visible:ring-2 focus-visible:ring-brand-hi ${
+      className={`rounded outline-hidden hover:bg-ink-600 focus-visible:bg-ink-600 focus-visible:ring-2 focus-visible:ring-brand-hi ${
         sheet ? 'p-2 text-2xl' : 'p-1 text-lg'
       }`}
     >

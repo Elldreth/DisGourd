@@ -73,8 +73,8 @@ function Spoiler({ children }) {
     <span
       className={`md-spoiler ${
         revealed
-          ? 'rounded bg-ink-600/40 px-0.5'
-          : 'cursor-pointer select-none rounded bg-ink-500 px-0.5 text-transparent hover:bg-ink-600 [&_*]:text-transparent'
+          ? 'rounded-sm bg-ink-600/40 px-0.5'
+          : 'cursor-pointer select-none rounded-sm bg-ink-500 px-0.5 text-transparent hover:bg-ink-600 **:text-transparent'
       }`}
       onClick={revealed ? undefined : reveal}
       onKeyDown={revealed ? undefined : (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), reveal())}

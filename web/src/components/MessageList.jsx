@@ -520,9 +520,9 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
       onPointerLeave={cancelPress}
       onClickCapture={onClickCapture}
       onContextMenu={onContextMenu}
-      className={`group relative flex gap-3 px-2 py-0.5 outline-none transition-colors hover:bg-ink-600/40 focus-visible:bg-ink-600/40 focus-visible:ring-1 focus-visible:ring-brand-hi [-webkit-touch-callout:none] [@media(hover:none)]:select-none ${
+      className={`group relative flex gap-3 px-2 py-0.5 outline-hidden transition-colors hover:bg-ink-600/40 focus-visible:bg-ink-600/40 focus-visible:ring-1 focus-visible:ring-brand-hi [-webkit-touch-callout:none] [@media(hover:none)]:select-none ${
         grouped ? '' : 'mt-3'
-      } ${mentionsMe ? 'border-l-2 border-pink bg-pink/10' : ''} ${flash ? '!bg-brand/20 ring-1 ring-brand-hi/60' : ''}`}
+      } ${mentionsMe ? 'border-l-2 border-pink bg-pink/10' : ''} ${flash ? 'bg-brand/20! ring-1 ring-brand-hi/60' : ''}`}
     >
       <div className="relative w-10 shrink-0">
         {grouped ? (
@@ -573,7 +573,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
               onKeyDown={onEditKeyDown}
               rows={1}
               aria-label="Edit message"
-              className="w-full resize-none rounded-lg bg-ink-800 px-3 py-2 text-gray-100 outline-none ring-1 ring-ink-500 focus:ring-brand-hi"
+              className="w-full resize-none rounded-lg bg-ink-800 px-3 py-2 text-gray-100 outline-hidden ring-1 ring-ink-500 focus:ring-brand-hi"
             />
             <div className="mt-1 text-xs text-gray-500">
               escape to{' '}
@@ -589,7 +589,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
         ) : (
           <>
             {m.content && (
-              <div className="whitespace-pre-wrap break-words text-gray-200">
+              <div className="whitespace-pre-wrap wrap-break-word text-gray-200">
                 {renderMarkdown(m.content, { me: currentUser, mentions: !simple })}
                 {m.editedAt && <span className="ml-1 text-[10px] text-gray-500">(edited)</span>}
               </div>

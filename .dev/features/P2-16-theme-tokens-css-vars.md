@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (slice 1 of rank 9, "Light theme and a theme picker")
 - **Phase:** 2, rank 9
-- **State:** READY
+- **State:** REVIEW (delivered by P1-21: Tailwind 4 makes the theme CSS variables natively, so this packet's Tailwind 3 workaround is replaced; acceptance criteria tracked there)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** index.css / tailwind.config.js units (P2-01, P2-02, P2-17)

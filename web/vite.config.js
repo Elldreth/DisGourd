@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 // The backend to proxy API + WebSocket traffic to during development. Override
 // with DISGOURD_SERVER when the server runs elsewhere.
@@ -11,7 +12,7 @@ const wsServer = server.replace(/^http/, 'ws');
 const apiPaths = ['/register', '/login', '/auth-info', '/uploads', '/spaces', '/friends', '/admin'];
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   build: {
     // The emoji data (emojibase, ~570 kB of JSON) is its own chunk, loaded only
     // when the picker opens, so it's fine for it to be big.

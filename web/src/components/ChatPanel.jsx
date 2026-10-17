@@ -60,7 +60,7 @@ export default function ChatPanel({
   return (
     <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700" {...drop.dropProps}>
       {drop.dragging && <DropOverlay target={`#${channel}`} />}
-      <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-sm shadow-black/20 md:px-4">
+      <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-xs shadow-black/20 md:px-4">
         <button
           onClick={onOpenNav}
           title="Channels"
