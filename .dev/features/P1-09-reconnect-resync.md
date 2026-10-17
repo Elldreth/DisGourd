@@ -55,4 +55,4 @@
 
 ## Discovered Work
 - If you're in a voice call when the connection drops, the server removes you from the room, and the client doesn't rejoin after reconnecting. Needs its own unit (rejoin, or tell the user the call ended).
-- DM sidebar "No conversations yet" (from P2-04): opening a DM from a notification uses `selectDm`, which doesn't load the conversation list (`openDms` does). Small fix.
+- ~~DM sidebar "No conversations yet" (from P2-04)~~: fixed on `claude/fix-dm-list-from-notification` (the list now loads whenever the DM view opens).

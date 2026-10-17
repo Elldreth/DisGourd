@@ -42,8 +42,19 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
   const userRef = useRef(user);
   userRef.current = user;
 
+  // The server only lists conversations that have messages, so keep the one
+  // you've just started (open() adds it) until its first message is sent.
   function loadConversations() {
-    api.getDms().then(setConversations).catch(() => {});
+    api
+      .getDms()
+      .then((list) =>
+        setConversations((prev) => {
+          const open = currentRef.current;
+          const keep = open && !list.some((d) => d.username === open) ? prev.filter((d) => d.username === open) : [];
+          return [...keep, ...list];
+        })
+      )
+      .catch(() => {});
   }
 
   const handlers = {
@@ -113,6 +124,14 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, current, status, send]);
+
+  // Load the conversation list whenever the DM view opens, whichever way you
+  // got there: the rail button, a notification, a restored view on reload,
+  // or starting a DM from the member list.
+  useEffect(() => {
+    if (active) loadConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   // After a reconnect, refresh the conversation list (new DMs, previews) if
   // it's showing or was loaded.
