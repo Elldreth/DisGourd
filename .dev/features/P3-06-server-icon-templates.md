@@ -46,4 +46,4 @@ Web 401 pass (3 new and 1 updated in CreateServerDialog.test.jsx; the cropper is
 - The setup wizard's first server still uses blank (it sends no template).
 
 ## Discovered Work (not done)
-- Offer the templates in the setup wizard's "first server" step too.
+- Offer the templates in the setup wizard's "first server" step too. → done in P3-15.

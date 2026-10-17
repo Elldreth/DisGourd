@@ -75,6 +75,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-12 | ↑ edits last message | 3 | COMPLETE | S | P3-05 | Composer.jsx, MessageList.jsx |
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | COMPLETE | S–M | none | VideoStage.jsx, voice.js |
 | P3-14 | Invite deep link (`/invite/<code>`) | 3 | COMPLETE | S | none (follow-up to P3-07) | inviteLink.js (new), App.jsx, ServerRail.jsx, CreateServerDialog.jsx, InviteDialog.jsx, SetupWizard.jsx |
+| P3-15 | Server templates in the setup wizard | 3 | REVIEW | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
 
 ## Dependency map (hard dependencies)
 
@@ -139,4 +140,4 @@ Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at 
 - P2-18: iOS install requirement for push; push message previews?
 - P2-20: kie.ai models, endpoints, cost, quota defaults, NSFW policy (unknown; do not invent).
 - P2-21: bitset permissions versus named thresholds. P2-22: thread model.
-- P3-06: the template channel sets.
+- ~~P3-06: the template channel sets.~~ Approved as proposed (2026-10-17).
