@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "Icon buttons need aria-label"
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S–M (mechanical, but wide)
 - **Depends on:** P3-02 and P3-05 (those units restructure the files that hold most icon buttons; sweeping after them avoids rework)
 - **Serialize with:** **effectively exclusive.** It touches about 12 component files, so run it when no other client unit is in flight.

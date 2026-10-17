@@ -63,7 +63,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-22 | Threads (Container) | 2 | PLANNED | L | P2-10 | TBD after P2-10 |
 | P3-01 | Modal primitive + simple dialogs | 3 | COMPLETE | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
 | P3-02 | Remaining overlays → Modal | 3 | COMPLETE | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
-| P3-03 | Icon-button labels sweep | 3 | REVIEW | S–M | P3-02, P3-05 | IconButton.jsx (new), ~12 components (exclusive) |
+| P3-03 | Icon-button labels sweep | 3 | COMPLETE | S–M | P3-02, P3-05 | IconButton.jsx (new), ~12 components (exclusive) |
 | P3-04 | Create/Join server dialog | 3 | COMPLETE | S | P3-01 | CreateServerDialog.jsx (new), ServerRail.jsx, App.jsx |
 | P3-05 | Accessible message actions | 3 | COMPLETE | M | none | MessageList.jsx, MessageActions.jsx (new) |
 | P3-06 | Server icon + templates at creation | 3 | PLANNED | S–M | P3-04, P1-06 | routes/spaces.js, CreateServerDialog.jsx |
