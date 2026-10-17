@@ -35,7 +35,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-15 | Docker: non-root, HEALTHCHECK, npm ci | 1 | READY | S | none | Dockerfile, docker-compose.yml, README.md |
 | P1-16 | Nightly VACUUM INTO backups | 1 | COMPLETE | S | none | backup.js (new), server.js (boot), README.md |
 | P1-17 | GitHub Actions CI | 1 | COMPLETE | S | none | .github/workflows/ci.yml |
-| P1-18 | Bump Vite | 1 | REVIEW | S | none | web/package.json, vite.config.js |
+| P1-18 | Bump Vite | 1 | COMPLETE | S | none | web/package.json, vite.config.js |
 | P1-19 | Web test harness (Vitest) | 1 | COMPLETE | S | P1-18 | web/package.json, vite.config.js |
 | P1-20 | Voice rejoin after reconnect | 1 | COMPLETE | S–M | P1-09 | voice.js, useVoiceCall.js, gateway/voice.js |
 | P2-01 | Markdown core | 2 | COMPLETE | S–M | P1-19 | markdown.jsx (new), MessageList.jsx, index.css |

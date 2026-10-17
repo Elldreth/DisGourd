@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 — Ops ("Bump vite")
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #69)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** any unit editing `web/package.json` or the lockfile (P1-19, P2-02, P2-06)
