@@ -81,6 +81,7 @@ const DEFAULT_PERMISSIONS = {
   kick: 2,
   edit_server: 2,
   delete_others_messages: 2,
+  pin_messages: 2,
   manage_roles: 3,
 };
 
@@ -352,13 +353,15 @@ const MESSAGE_SELECT = `
          p.attachment_url AS replyAttachment,
          p.attachments AS replyAttachments,
          p.author_id AS replyAuthorId,
-         pu.username AS replyAuthor
+         pu.username AS replyAuthor,
+         (pin.message_id IS NOT NULL) AS pinned
   FROM messages m
   JOIN channels c ON m.channel_id = c.id
   JOIN spaces s ON c.space_id = s.id
   LEFT JOIN users u ON m.author_id = u.id
   LEFT JOIN messages p ON p.id = m.reply_to
   LEFT JOIN users pu ON pu.id = p.author_id
+  LEFT JOIN pins pin ON pin.message_id = m.id
 `;
 
 // The short quote shown above a reply: the first 100 characters with
@@ -391,7 +394,12 @@ function hydrateReply(row) {
   }
   return row;
 }
-const hydrateMessage = (row) => hydrateReply(hydrateAttachments(row));
+// `pinned` comes from the pins join (channel messages only; DMs have none).
+function hydratePinned(row) {
+  if (row && 'pinned' in row) row.pinned = !!row.pinned;
+  return row;
+}
+const hydrateMessage = (row) => hydratePinned(hydrateReply(hydrateAttachments(row)));
 
 // The quote for a new reply, if `messageId` is in that same channel (so a
 // reply can never reveal a message from another, possibly private, channel).
@@ -569,6 +577,37 @@ function isMessageInChannel(messageId, spaceName, channelName) {
 
 // Where a message lives — { space, channel } — used to route edit/delete/react
 // events from the single gateway socket to the right server's members.
+// ---- Pins ----
+const MAX_PINS_PER_CHANNEL = 50;
+
+// Pin a channel message. Returns 'pinned' | 'already' | 'full' | 'missing'.
+const pinMessage = db.transaction((messageId, userId) => {
+  const msg = db.prepare('SELECT channel_id AS channelId FROM messages WHERE id = ?').get(messageId);
+  if (!msg) return 'missing';
+  if (db.prepare('SELECT 1 FROM pins WHERE message_id = ?').get(messageId)) return 'already';
+  const count = db.prepare('SELECT COUNT(*) AS n FROM pins WHERE channel_id = ?').get(msg.channelId).n;
+  if (count >= MAX_PINS_PER_CHANNEL) return 'full';
+  db.prepare('INSERT INTO pins(message_id, channel_id, pinned_by, pinned_at) VALUES (?, ?, ?, ?)').run(messageId, msg.channelId, userId, Date.now());
+  return 'pinned';
+});
+
+function unpinMessage(messageId) {
+  return db.prepare('DELETE FROM pins WHERE message_id = ?').run(messageId).changes > 0;
+}
+
+// A channel's pinned messages, most recently pinned first, each with who
+// pinned it and when.
+function getPins(spaceName, channelName) {
+  const rows = db.prepare(`
+    SELECT x.*, pin.pinned_at AS pinnedAt, pb.username AS pinnedBy
+    FROM (${MESSAGE_SELECT} WHERE s.name = ? AND c.name = ?) x
+    JOIN pins pin ON pin.message_id = x.id
+    LEFT JOIN users pb ON pb.id = pin.pinned_by
+    ORDER BY pin.pinned_at DESC, pin.message_id DESC
+  `).all(spaceName, channelName);
+  return attachEmbeds('channel', attachReactions(rows.map(hydrateMessage)));
+}
+
 function getMessageLocation(messageId) {
   return db.prepare(`
     SELECT s.name AS space, c.name AS channel, m.author_id AS authorId
@@ -1216,6 +1255,10 @@ module.exports = {
   setSiteAdminByUsername,
   listSiteAdmins,
   getSetting,
+  pinMessage,
+  unpinMessage,
+  getPins,
+  MAX_PINS_PER_CHANNEL,
   PRESENCE_MODES,
   getUserPresence,
   setUserPresence,

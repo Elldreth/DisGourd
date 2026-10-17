@@ -10,6 +10,7 @@ export const PERMISSION_ACTIONS = [
   { key: 'invite', label: 'Invite people' },
   { key: 'kick', label: 'Remove members' },
   { key: 'delete_others_messages', label: "Delete others' messages" },
+  { key: 'pin_messages', label: 'Pin messages' },
   { key: 'edit_server', label: 'Edit server (name, icon)' },
   { key: 'manage_roles', label: 'Manage roles' },
 ];

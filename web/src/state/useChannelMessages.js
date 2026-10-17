@@ -16,6 +16,7 @@ export const unreadKey = (space, channel) => JSON.stringify([space, channel]);
 //   { type: 'deleted', id }
 //   { type: 'reaction', id, emoji, count, users }     one emoji's new total
 //   { type: 'embeds', id, embeds }                    a message's link-preview cards
+//   { type: 'pinned', id, pinned }                    pinned or unpinned
 //   { type: 'resynced', messages, full }              the newest page, refetched
 //       after a reconnect: it replaces what we had in its range (picking up
 //       edits, reactions and deletions) and keeps older loaded pages as they
@@ -41,6 +42,8 @@ export function messagesReducer(state, action) {
       return state.some((m) => m.id === action.id)
         ? state.map((m) => (m.id === action.id ? { ...m, embeds: action.embeds || [] } : m))
         : state;
+    case 'pinned':
+      return state.map((m) => (m.id === action.id ? { ...m, pinned: !!action.pinned } : m));
     case 'reaction':
       return state.map((m) => {
         if (m.id !== action.id) return m;
@@ -119,6 +122,7 @@ export function useChannelMessages({ space, channel, active, user, send, status,
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const [typingUsers, setTypingUsers] = useState({}); // username -> expires-at ms
+  const [pinsVersion, setPinsVersion] = useState(0); // bumps when this channel's pins change
   const [unread, setUnread] = useState({}); // unreadKey -> count
   const [mentions, setMentions] = useState({}); // unreadKey -> mention count
   const paging = useHistoryPaging(unreadKey(space, channel));
@@ -186,6 +190,11 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     },
     reaction: (r) => {
       if (isOpen(r.space, r.channel)) dispatch({ type: 'reaction', id: r.id, emoji: r.emoji, count: r.count, users: r.users });
+    },
+    message_pinned: (p) => {
+      if (!isOpen(p.space, p.channel)) return;
+      dispatch({ type: 'pinned', id: p.id, pinned: p.pinned });
+      setPinsVersion((v) => v + 1); // an open pins panel reloads
     },
     message_embeds: (e) => {
       if (isOpen(e.space, e.channel)) dispatch({ type: 'embeds', id: e.id, embeds: e.embeds });
@@ -304,6 +313,8 @@ export function useChannelMessages({ space, channel, active, user, send, status,
     mentions,
     handlers,
     reset,
+    pinsVersion,
+    setPinned: (id, pinned) => send({ op: pinned ? 'pin' : 'unpin', id }),
     sendMessage: (content, attachments, spoiler, replyTo) =>
       send({ op: 'message', space, channel, content, attachments, spoiler, replyTo }),
     editMessage: (id, content) => send({ op: 'edit', id, content }),

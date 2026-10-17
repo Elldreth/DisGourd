@@ -171,6 +171,11 @@ const routes = [
           const offset = intParam(parsedUrl.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
           return sendJson(res, 200, withPublicEmbeds(db.getMessages(spaceName, channelName, limit, offset)));
         }
+        // GET pins — the channel's pinned messages, newest pin first (viewers only).
+        if (channelName && pathSegments[4] === 'pins' && pathSegments.length === 5 && req.method === 'GET') {
+          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          return sendJson(res, 200, withPublicEmbeds(db.getPins(spaceName, channelName)));
+        }
         // PATCH channel permissions — view/post minimum ranks (managers only)
         if (channelName && pathSegments[4] === 'permissions' && req.method === 'PATCH') {
           if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel access' });

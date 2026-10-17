@@ -103,3 +103,11 @@ test('messagesReducer: link-preview cards replace a message\'s embeds (an empty 
   expect(messagesReducer(withCard, { type: 'embeds', id: 2, embeds: [] })[1].embeds).toEqual([]);
   expect(messagesReducer(start, { type: 'embeds', id: 99, embeds: [card] })).toEqual(start);
 });
+
+test('messagesReducer: pinning flags the message; others untouched', () => {
+  const start = [{ id: 1 }, { id: 2 }];
+  const next = messagesReducer(start, { type: 'pinned', id: 2, pinned: true });
+  expect(next[1].pinned).toBe(true);
+  expect(next[0]).toBe(start[0]);
+  expect(messagesReducer(next, { type: 'pinned', id: 2, pinned: false })[1].pinned).toBe(false);
+});

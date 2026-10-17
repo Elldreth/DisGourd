@@ -31,10 +31,11 @@ function mentionsUser(content, me) {
 // bar to jump back to it when it's out of view.
 // `onEditDone` (optional) is called when an edit started by `startEditLast()`
 // (the composer's up arrow) ends, so the composer can take focus back.
+// `onPin(id, pinned)` (optional, only when you may pin) adds Pin / Unpin.
 // `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
 // an original that isn't loaded, and, while that older window is showing
 // (`history.hasNewer`), offers newer pages and "Jump to present".
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, history = null }, ref) {
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, history = null, onPin }, ref) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
   // The message being edited, and where focus goes when that edit ends: back
@@ -52,7 +53,9 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
     containerRef.current?.querySelector(`[data-msg-id="${last.id}"]`)?.scrollIntoView?.({ block: 'nearest' });
     return true;
   }
-  useImperativeHandle(ref, () => ({ startEditLast }));
+  // jumpTo(id): go to a message (loading the history around it if needed).
+  useImperativeHandle(ref, () => ({ startEditLast, jumpTo: (id) => jumpToRef.current(id) }));
+  const jumpToRef = useRef(null);
 
   // Called by a row when its edit ends. Returns true if the row should take
   // focus back itself.
@@ -170,6 +173,8 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
     for (let i = 0; i < 20 && !containerRef.current?.querySelector(`[data-msg-id="${id}"]`); i++) await nextFrame();
     if (!showMessage(id)) note("Couldn't load the original message.");
   }
+
+  jumpToRef.current = jumpTo;
 
   async function jumpToPresent() {
     pendingInitialScroll.current = true; // the newest page lands at the bottom
@@ -382,6 +387,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               canDelete={!!onDelete && (row.m.author === currentUser || !!canModerate?.(row.m.author))}
               onReact={onReact}
               onReply={onReply}
+              onPin={onPin}
               onJumpTo={jumpTo}
               flash={row.m.id === flashId}
               simple={simple}
@@ -418,7 +424,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
 
 export default MessageList;
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onPin, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
   const [draft, setDraft] = useState(m.content || '');
   const editRef = useRef(null);
   // Entering edit mode (from this row or the composer's up arrow): start from
@@ -535,6 +541,13 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
       id: 'copy', label: 'Copy text', icon: 'copy',
       onSelect: () => {
         navigator.clipboard?.writeText(m.content).catch(() => {});
+        closePopup();
+      },
+    },
+    onPin && {
+      id: 'pin', label: m.pinned ? 'Unpin message' : 'Pin message', icon: 'pin',
+      onSelect: () => {
+        onPin(m.id, !m.pinned);
         closePopup();
       },
     },
@@ -709,6 +722,11 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
           </div>
         ) : (
           <>
+            {m.pinned && (
+              <div className="flex items-center gap-1 text-[11px] font-medium text-gray-500">
+                <Icon name="pin" size={11} /> Pinned
+              </div>
+            )}
             {m.content && (
               <div className="whitespace-pre-wrap wrap-break-word text-gray-200">
                 {renderMarkdown(m.content, { me: currentUser, mentions: !simple })}

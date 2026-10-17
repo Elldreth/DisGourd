@@ -232,3 +232,27 @@ describe('jumping to an original that is not loaded (P2-10)', () => {
     expect(screen.queryByRole('button', { name: 'Jump to present' })).toBeNull();
   });
 });
+
+describe('pins (P2-13)', () => {
+  test('with permission, the menu offers Pin / Unpin; a pinned message is marked', () => {
+    const onPin = vi.fn();
+    const { container } = render(
+      <MessageList messages={[msg(1), { ...msg(2), pinned: true }]} channel="general" currentUser="sandy" onPin={onPin} />
+    );
+    const row = (id) => container.querySelector(`[data-msg-id="${id}"]`);
+    expect(row(2).textContent).toMatch(/Pinned/);
+    expect(row(1).textContent).not.toMatch(/Pinned/);
+    fireEvent.contextMenu(row(1));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin message' }));
+    expect(onPin).toHaveBeenCalledWith(1, true);
+    fireEvent.contextMenu(row(2));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unpin message' }));
+    expect(onPin).toHaveBeenCalledWith(2, false);
+  });
+
+  test('without permission there is no pin action', () => {
+    const { container } = render(<MessageList messages={[msg(1)]} channel="general" currentUser="sandy" />);
+    fireEvent.contextMenu(container.querySelector('[data-msg-id="1"]'));
+    expect(screen.queryByRole('menuitem', { name: /Pin message/ })).toBeNull();
+  });
+});

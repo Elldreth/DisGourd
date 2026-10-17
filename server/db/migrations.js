@@ -299,6 +299,22 @@ const MIGRATIONS = [
       db.exec('ALTER TABLE users ADD COLUMN status_expires_at INTEGER');
     },
   },
+  {
+    version: 7,
+    name: 'pinned messages',
+    up(db) {
+      // One row per pinned channel message; it goes when the message does.
+      db.exec(`
+        CREATE TABLE pins (
+          message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+          channel_id INTEGER NOT NULL,
+          pinned_by INTEGER,
+          pinned_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_pins_channel ON pins(channel_id, pinned_at);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -108,6 +108,14 @@ const ops = {
     }
     return;
   },
+  // Pin / unpin a channel message (needs the server's pin_messages permission
+  // and access to the channel). Viewers are told with `message_pinned`.
+  pin({ ws, msg, userId }) {
+    return setPinned(ws, msg, userId, true);
+  },
+  unpin({ ws, msg, userId }) {
+    return setPinned(ws, msg, userId, false);
+  },
   react({ msg, userId }) {
     const id = parseInt(msg.id, 10);
     const emoji = parseReactionEmoji(msg.emoji);
@@ -143,5 +151,28 @@ const ops = {
     return;
   },
 };
+
+function setPinned(ws, msg, userId, pinned) {
+  const id = parseInt(msg.id, 10);
+  if (!id) return;
+  const loc = db.getMessageLocation(id);
+  if (!loc || !canView(loc.space, loc.channel, userId)) return;
+  const space = db.getSpaceByName(loc.space);
+  const op = pinned ? 'pin' : 'unpin';
+  if (!db.canDo(space.id, db.getMemberRole(space.id, userId), 'pin_messages')) {
+    return rejectFrame(ws, op, "You don't have permission to pin messages here");
+  }
+  if (pinned) {
+    const result = db.pinMessage(id, userId);
+    if (result === 'full') return rejectFrame(ws, op, `This channel already has ${db.MAX_PINS_PER_CHANNEL} pinned messages`);
+    if (result !== 'pinned') return;
+  } else if (!db.unpinMessage(id)) {
+    return;
+  }
+  const by = db.getUserById(userId);
+  deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
+    type: 'message_pinned', id, space: loc.space, channel: loc.channel, pinned, pinnedBy: by ? by.username : null,
+  }));
+}
 
 module.exports = { ops };

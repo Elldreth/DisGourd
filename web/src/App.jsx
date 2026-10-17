@@ -409,6 +409,9 @@ export default function App() {
               onEdit={chat.editMessage}
               onDelete={deleteChatMessage}
               canModerate={sp.canModerate}
+              canPin={sp.canPin}
+              onSetPinned={chat.setPinned}
+              pinsVersion={chat.pinsVersion}
               onReact={chat.react}
               hasMore={chat.hasMore}
               loadingOlder={chat.loadingOlder}
