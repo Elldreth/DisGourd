@@ -304,3 +304,10 @@ describe('thread badges (P2-22c)', () => {
     expect(screen.getByRole('button', { name: 'Open thread Weekend plans, 2 replies' })).toBeTruthy();
   });
 });
+
+test('an archived thread is marked in its summary (P2-22d)', () => {
+  const thread = { id: 3, channel: '~t2', name: 'Weekend plans', messageCount: 2, lastActivityAt: Date.now(), archived: true };
+  render(<MessageList messages={[{ ...msg(2), thread }]} channel="general" currentUser="sandy" onOpenThread={() => {}} />);
+  const summary = screen.getByRole('button', { name: 'Open thread Weekend plans, 2 replies, archived' });
+  expect(summary.textContent).toContain('· archived');
+});

@@ -193,4 +193,4 @@ function setPinned(ws, msg, userId, pinned) {
   }));
 }
 
-module.exports = { ops };
+module.exports = { ops, threadUpdated };

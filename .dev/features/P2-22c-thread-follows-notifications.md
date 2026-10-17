@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-22)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #99, 2026-10-17)
 - **Effort:** M
 - **Depends on:** P2-22a, P2-22b
 - **Serialize with:** `notify.js`, `useChannelMessages.js`, `server/db/index.js` units

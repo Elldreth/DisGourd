@@ -180,6 +180,7 @@ All settings are optional and provided via environment variables (or
 | `BACKUP_DIR`       | `backups/` next to the database | Where automatic database backups go. Set to `off` to disable them |
 | `BACKUP_INTERVAL_HOURS` | `24`                | How often to take a backup                         |
 | `BACKUP_KEEP`      | `7`                      | How many backups to keep (oldest are deleted)      |
+| `THREAD_ARCHIVE_DAYS` | `7`                   | Threads with no new reply for this many days are archived (a new reply reopens them) |
 
 Example (Linux/macOS):
 

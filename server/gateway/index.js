@@ -4,6 +4,8 @@ const { verifyToken } = require('../auth/tokens');
 const { userClients, broadcastPresence, sendToUser } = require('./delivery');
 const { voiceLeave, voiceStatesFor } = require('./voice');
 const { handleGatewayMessage } = require('./router');
+const { threadUpdated } = require('./chat');
+const { config } = require('../config');
 
 // Per-connection lifecycle chatter is silenced under test to keep output clean
 // and to avoid "log after teardown" noise; warnings and errors still print.
@@ -32,6 +34,15 @@ function sweepExpiredStatuses() {
   return ids;
 }
 
+// Archive threads quiet for longer than THREAD_ARCHIVE_DAYS and tell the
+// parent channels' viewers (run hourly and at start-up; also exported for
+// tests). Returns the archived threads.
+function sweepQuietThreads(now = Date.now()) {
+  const archived = db.archiveQuietThreads(now - config.threadArchiveDays * 24 * 60 * 60 * 1000, now);
+  for (const t of archived) threadUpdated(t.space, t.channel);
+  return archived;
+}
+
 // Wire the gateway onto the HTTP server: authenticate the /gateway upgrade,
 // send the connect frames, route incoming frames, and run the heartbeat.
 function attachGateway(httpServer, wss) {
@@ -54,9 +65,13 @@ function attachGateway(httpServer, wss) {
   heartbeatTimer.unref(); // don't keep the process (or tests) alive just for this
   const statusTimer = setInterval(sweepExpiredStatuses, 60000);
   statusTimer.unref();
+  const threadTimer = setInterval(sweepQuietThreads, 60 * 60 * 1000);
+  threadTimer.unref();
+  setImmediate(sweepQuietThreads); // catch up after a restart
   wss.on('close', () => {
     clearInterval(heartbeatTimer);
     clearInterval(statusTimer);
+    clearInterval(threadTimer);
   });
 
   httpServer.on('upgrade', (request, socket, head) => {
@@ -109,4 +124,4 @@ function attachGateway(httpServer, wss) {
   });
 }
 
-module.exports = { attachGateway, sweepExpiredStatuses };
+module.exports = { attachGateway, sweepExpiredStatuses, sweepQuietThreads };

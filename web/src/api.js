@@ -202,6 +202,13 @@ export function followThread(space, channel) {
 export function unfollowThread(space, channel) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/follow`, { method: 'DELETE' });
 }
+// Archive or reopen a thread by hand (people who may pin messages).
+export function archiveThread(space, channel) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/archive`, { method: 'PUT' });
+}
+export function reopenThread(space, channel) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/archive`, { method: 'DELETE' });
+}
 // A channel's threads, most recently active first (archived ones if asked).
 export function getThreads(space, channel, archived = false) {
   return request(

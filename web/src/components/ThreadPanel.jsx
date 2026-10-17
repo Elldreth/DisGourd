@@ -12,8 +12,10 @@ import { formatDay, formatTime } from '../util.js';
 // An open thread: the message it started from, its replies and a composer.
 // It sits to the right of the channel on wide screens and fills the screen on
 // phones. Esc closes it (App gives focus back to the summary it came from).
-//   thread: { channel: '~tN', name, parentChannel, rootMessageId, root? } —
+//   thread: { channel: '~tN', name, parentChannel, rootMessageId, root?, archived? } —
 //     `root` is the root message when it's at hand; otherwise it's fetched.
+//   An archived thread (quiet for a while) stays readable; a reply reopens it,
+//   and `onSetArchived(archived)` (moderators) archives or reopens by hand.
 export default function ThreadPanel({
   space,
   thread,
@@ -38,6 +40,7 @@ export default function ThreadPanel({
   onClose,
   followed = false, // you follow this thread (it counts as unread and notifies)
   onToggleFollow, // (follow: boolean)
+  onSetArchived, // (archived: boolean), only when you may
 }) {
   const [root, setRoot] = useState(thread.root || null); // null while loading; false = deleted
   const [replyingTo, setReplyingTo] = useState(null);
@@ -93,6 +96,17 @@ export default function ThreadPanel({
           <h2 className="truncate font-bold leading-tight">{thread.name}</h2>
           <p className="truncate text-xs leading-tight text-gray-500">#{thread.parentChannel}</p>
         </div>
+        {onSetArchived && (
+          <button
+            type="button"
+            onClick={() => onSetArchived(!thread.archived)}
+            aria-label={thread.archived ? 'Reopen thread' : 'Archive thread'}
+            title={thread.archived ? 'Put this thread back in the active list' : 'Move this thread to the archived list (a reply brings it back)'}
+            className="shrink-0 rounded-md px-2 py-1 text-xs text-gray-400 ring-1 ring-ink-500/60 transition hover:text-fg"
+          >
+            {thread.archived ? 'Reopen' : 'Archive'}
+          </button>
+        )}
         {onToggleFollow && (
           <button
             type="button"
@@ -118,6 +132,11 @@ export default function ThreadPanel({
 
       {degraded && (
         <div className="bg-idle/20 px-4 py-1 text-center text-xs text-idle">Reconnecting… replies you send will go once you’re back online.</div>
+      )}
+      {thread.archived && (
+        <div role="status" className="flex items-center justify-center gap-2 bg-ink-800/80 px-4 py-1 text-center text-xs text-gray-400">
+          <Icon name="thread" size={12} className="shrink-0" /> This thread is archived. {canPost ? 'A reply reopens it.' : ''}
+        </div>
       )}
 
       <RootMessage root={root} currentUser={currentUser} />

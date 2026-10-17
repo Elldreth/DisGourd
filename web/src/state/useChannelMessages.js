@@ -125,7 +125,7 @@ export function badgeCounts({ unread, mentions, spaces, currentSpace, channels, 
 }
 
 // The part of a thread shown under its root message.
-const summaryOf = (t) => ({ id: t.id, channel: t.channel, name: t.name, messageCount: t.messageCount, lastActivityAt: t.lastActivityAt });
+const summaryOf = (t) => ({ id: t.id, channel: t.channel, name: t.name, messageCount: t.messageCount, lastActivityAt: t.lastActivityAt, archived: !!t.archived });
 
 // Remove one key from a map state, keeping the same object if it's absent.
 const withoutKey = (k) => (prev) => {

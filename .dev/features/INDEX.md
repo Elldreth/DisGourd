@@ -63,8 +63,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-22 | Threads (Container: a–d) | 2 | PLANNED | L | P2-10, P2-13 | see children |
 | P2-22a | Thread data model + server API | 2 | COMPLETE | M | P2-22 decisions | db, gateway/chat.js, routes/spaces.js |
 | P2-22b | Thread panel + summaries, composable gateway handlers | 2 | COMPLETE | M | P2-22a | gatewayHandlers.js, App.jsx, ThreadPanel.jsx (new) |
-| P2-22c | Thread follows, unread, notifications | 2 | REVIEW | M | P2-22a, P2-22b | db unread queries, notify.js, ThreadPanel.jsx |
-| P2-22d | Auto-archive threads after 7 quiet days | 2 | PLANNED | S | P2-22a | gateway/index.js, routes/spaces.js |
+| P2-22c | Thread follows, unread, notifications | 2 | COMPLETE | M | P2-22a, P2-22b | db unread queries, notify.js, ThreadPanel.jsx |
+| P2-22d | Auto-archive threads after 7 quiet days | 2 | REVIEW | S | P2-22a | gateway/index.js, routes/spaces.js |
 | P2-23 | Link-preview image proxy | 2 | COMPLETE | S–M | P2-11, P2-12 | net/imageProxy.js (new), net/safeFetch.js, routes, linkPreviews.js, Embed.jsx |
 | P3-01 | Modal primitive + simple dialogs | 3 | COMPLETE | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
 | P3-02 | Remaining overlays → Modal | 3 | COMPLETE | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
