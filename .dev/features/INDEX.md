@@ -60,11 +60,11 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-19 | Custom server emoji (Container: a, b) | 2 | PLANNED | M | see packet | migrations, routes/spaces, markdown, picker |
 | P2-20 | /imagine via kie.ai (Container: a, b, c) | 2 | PLANNED | M+ | see packet | integrations/kie.js, bot user |
 | P2-21 | Custom roles (Container: a–d) | 2 | PLANNED | L | see packet | permissions.js, migrations, UI |
-| P2-22 | Threads (Container: a–d) | 2 | PLANNED | L | P2-10, P2-13 | see children |
+| P2-22 | Threads (Container: a–d) | 2 | COMPLETE | L | P2-10, P2-13 | see children |
 | P2-22a | Thread data model + server API | 2 | COMPLETE | M | P2-22 decisions | db, gateway/chat.js, routes/spaces.js |
 | P2-22b | Thread panel + summaries, composable gateway handlers | 2 | COMPLETE | M | P2-22a | gatewayHandlers.js, App.jsx, ThreadPanel.jsx (new) |
 | P2-22c | Thread follows, unread, notifications | 2 | COMPLETE | M | P2-22a, P2-22b | db unread queries, notify.js, ThreadPanel.jsx |
-| P2-22d | Auto-archive threads after 7 quiet days | 2 | REVIEW | S | P2-22a | gateway/index.js, routes/spaces.js |
+| P2-22d | Auto-archive threads after 7 quiet days | 2 | COMPLETE | S | P2-22a | gateway/index.js, routes/spaces.js |
 | P2-23 | Link-preview image proxy | 2 | COMPLETE | S–M | P2-11, P2-12 | net/imageProxy.js (new), net/safeFetch.js, routes, linkPreviews.js, Embed.jsx |
 | P3-01 | Modal primitive + simple dialogs | 3 | COMPLETE | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
 | P3-02 | Remaining overlays → Modal | 3 | COMPLETE | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
@@ -81,6 +81,14 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | COMPLETE | S–M | none | VideoStage.jsx, voice.js |
 | P3-14 | Invite deep link (`/invite/<code>`) | 3 | COMPLETE | S | none (follow-up to P3-07) | inviteLink.js (new), App.jsx, ServerRail.jsx, CreateServerDialog.jsx, InviteDialog.jsx, SetupWizard.jsx |
 | P3-15 | Server templates in the setup wizard | 3 | COMPLETE | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
+| P4-00 | "Shine" polish round (Container: 01–07) | 4 | PLANNED | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
+| P4-01 | Phone touch targets and header | 4 | READY | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
+| P4-02 | Settings with section navigation | 4 | READY | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |
+| P4-03 | Empty states with flat illustrations | 4 | READY | M | none | EmptyState.jsx (new), design/empty-states/*, ~10 components |
+| P4-04 | New message from the DM view | 4 | READY | S | none (soft P4-03) | DmSidebar.jsx, QuickSwitcher.jsx, App.jsx, shortcuts.js |
+| P4-05 | Calmer link previews | 4 | READY | S | none | Embed.jsx |
+| P4-06 | Hierarchy and a11y polish (10 small items) | 4 | READY | S | none | ServerRail.jsx, ChannelList.jsx, MessageList.jsx, MessageActions.jsx, AuthShell.jsx, ThreadPanel.jsx, AudioSettings.jsx, Gourd.jsx |
+| P4-07 | Thread panel on phones: back + hardware back | 4 | READY | S | none | overlayHistory.js (new), ThreadPanel.jsx, App.jsx, MemberList.jsx |
 
 ## Dependency map (hard dependencies)
 
@@ -133,6 +141,7 @@ Units inside a lane run **sequentially**, because they share hot files. Differen
 | **D. Dialogs** | P3-01 → P3-02 → P3-08 → P3-06 (⟵ P3-04, P1-06) → P3-03 (last, exclusive) |
 | **E. Tooling and infra** | P1-17 → P1-18 → P1-19, plus P1-15 at any time (it serializes with P1-16 on README/compose) |
 | **F. Independent** | P2-11, P3-13, P3-07, P2-16 → (later, in a quiet window) P2-17 |
+| **G. Shine (Phase 4 polish, one at a time: shared files)** | P4-01 → P4-02 → P4-03 → P4-04 → P4-05 → P4-06 → P4-07 (order is the review's priority; the user picks the first) |
 
 Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at the same time as another lane-C unit.
 
