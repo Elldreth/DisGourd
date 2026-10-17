@@ -61,7 +61,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-20 | /imagine via kie.ai (Container: a, b, c) | 2 | PLANNED | M+ | see packet | integrations/kie.js, bot user |
 | P2-21 | Custom roles (Container: a–d) | 2 | PLANNED | L | see packet | permissions.js, migrations, UI |
 | P2-22 | Threads (Container) | 2 | PLANNED | L | P2-10 | TBD after P2-10 |
-| P3-01 | Modal primitive + simple dialogs | 3 | READY | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
+| P3-01 | Modal primitive + simple dialogs | 3 | REVIEW | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
 | P3-02 | Remaining overlays → Modal | 3 | PLANNED | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
 | P3-03 | Icon-button labels sweep | 3 | PLANNED | S–M | P3-02, P3-05 | IconButton.jsx (new), ~12 components (exclusive) |
 | P3-04 | Create/Join server dialog | 3 | PLANNED | S | P3-01 | CreateServerDialog.jsx (new), ServerRail.jsx, App.jsx |
@@ -70,7 +70,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-07 | Setup wizard improvements | 3 | READY | S | none | SetupWizard.jsx |
 | P3-08 | In-app confirm (kick, delete server) | 3 | PLANNED | S | P3-01 | ConfirmDialog.jsx (new), MemberList.jsx, ChannelList.jsx |
 | P3-09 | Undo toast for message delete | 3 | PLANNED | S–M | P3-05 | Toasts.jsx (new), App.jsx, MessageActions.jsx |
-| P3-10 | Mobile member-list drawer | 3 | REVIEW | S | none | ChatPanel.jsx, MemberList.jsx, App.jsx |
+| P3-10 | Mobile member-list drawer | 3 | COMPLETE | S | none | ChatPanel.jsx, MemberList.jsx, App.jsx |
 | P3-11 | Ctrl+K switcher + Alt+↑/↓ | 3 | PLANNED | S–M | P3-01 (soft P1-14) | QuickSwitcher.jsx (new), shortcuts.js (new), App.jsx |
 | P3-12 | ↑ edits last message | 3 | COMPLETE | S | P3-05 | Composer.jsx, MessageList.jsx |
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | READY | S–M | none | VideoStage.jsx, voice.js |

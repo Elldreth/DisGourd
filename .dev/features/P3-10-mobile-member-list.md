@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "Mobile has no way to see the member list" (`MemberList.jsx:86`)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #75)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** App.jsx units (one state value and a prop), ChatPanel.jsx units (P2-08), MemberList.jsx units (P3-08)
