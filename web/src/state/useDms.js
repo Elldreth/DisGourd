@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import * as api from '../api.js';
-import { messagesReducer, pruneExpired } from './useChannelMessages.js';
-import { useHistoryPaging } from './useHistoryPaging.js';
+import { messagesReducer, pruneExpired, hasGap } from './useChannelMessages.js';
+import { useHistoryPaging, PAGE_SIZE } from './useHistoryPaging.js';
 
 // Normalize a live `dm` frame to the shared message shape (author/authorAvatar).
 function dmFrameToMessage(m) {
@@ -23,13 +23,16 @@ function dmFrameToMessage(m) {
 //   active: the DM view is showing (not a server)
 //   send:   gateway send; status: the gateway status
 //   onIncoming(frame): told about every incoming DM (notifications, sounds)
-export function useDms({ active, user, send, status, onIncoming }) {
+export function useDms({ active, user, send, status, reconnects = 0, onIncoming }) {
   const [conversations, setConversations] = useState([]);
   const [current, setCurrent] = useState(''); // partner username
   const [messages, dispatch] = useReducer(messagesReducer, []);
   const [unread, setUnread] = useState({}); // username -> count
   const [typing, setTyping] = useState({}); // username -> expires-at ms
   const paging = useHistoryPaging(`dm:${current}`);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const loadedFor = useRef(null); // the partner whose messages are showing
 
   // Handlers run outside render, so they read the latest state from refs.
   const activeRef = useRef(active);
@@ -74,6 +77,7 @@ export function useDms({ active, user, send, status, onIncoming }) {
   // Focus + load the open conversation (also on reconnect).
   useEffect(() => {
     if (!active || !current) {
+      loadedFor.current = null;
       dispatch({ type: 'reset', messages: [] });
       setTyping({});
       return undefined;
@@ -85,8 +89,15 @@ export function useDms({ active, user, send, status, onIncoming }) {
       .getDmMessages(current)
       .then((msgs) => {
         if (cancelled) return;
-        dispatch({ type: 'reset', messages: msgs });
-        paging.pageLoaded(`dm:${current}`, msgs.length);
+        // Same merge-or-reload rule as channels (see useChannelMessages).
+        if (loadedFor.current === current && !hasGap(messagesRef.current, msgs, PAGE_SIZE)) {
+          dispatch({ type: 'resynced', messages: msgs, full: msgs.length >= PAGE_SIZE });
+          if (msgs.length < PAGE_SIZE) paging.pageLoaded(`dm:${current}`, msgs.length);
+        } else {
+          dispatch({ type: 'reset', messages: msgs });
+          paging.pageLoaded(`dm:${current}`, msgs.length);
+        }
+        loadedFor.current = current;
         const maxId = msgs.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
         send({ op: 'dm_read', with: current, lastId: maxId });
         setUnread((prev) => {
@@ -102,6 +113,14 @@ export function useDms({ active, user, send, status, onIncoming }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, current, status, send]);
+
+  // After a reconnect, refresh the conversation list (new DMs, previews) if
+  // it's showing or was loaded.
+  const listLoaded = conversations.length > 0;
+  useEffect(() => {
+    if (reconnects && (active || listLoaded)) loadConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reconnects]);
 
   // Expire typing indicators a few seconds after the last keystroke event.
   useEffect(() => {

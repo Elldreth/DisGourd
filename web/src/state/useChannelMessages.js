@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import * as api from '../api.js';
 import { mergeMessages } from '../util.js';
-import { useHistoryPaging } from './useHistoryPaging.js';
+import { useHistoryPaging, PAGE_SIZE } from './useHistoryPaging.js';
 import { mergeLastRead } from '../newMessages.js';
 
 // Key for per-channel maps (unread, mentions, voice state).
@@ -14,10 +14,21 @@ export const unreadKey = (space, channel) => JSON.stringify([space, channel]);
 //   { type: 'updated', id, content, editedAt }        an edit
 //   { type: 'deleted', id }
 //   { type: 'reaction', id, emoji, count, users }     one emoji's new total
+//   { type: 'resynced', messages, full }              the newest page, refetched
+//       after a reconnect: it replaces what we had in its range (picking up
+//       edits, reactions and deletions) and keeps older loaded pages as they
+//       were. `full` = a whole page came back, so there's older history; a
+//       short page is the entire conversation.
 export function messagesReducer(state, action) {
   switch (action.type) {
     case 'reset':
       return action.messages || [];
+    case 'resynced': {
+      const rows = action.messages || [];
+      if (!action.full || !rows.length) return rows;
+      const from = rows.reduce((mn, m) => Math.min(mn, m.id), Infinity);
+      return mergeMessages(state.filter((m) => m.id < from), rows);
+    }
     case 'merged':
       return mergeMessages(state, action.messages);
     case 'updated':
@@ -34,6 +45,16 @@ export function messagesReducer(state, action) {
     default:
       return state;
   }
+}
+
+// After a reconnect: did more than a page arrive while we were away? Then the
+// refetched newest page doesn't reach back to what we had, and merging would
+// leave a hole, so reload from scratch instead.
+export function hasGap(state, rows, pageSize) {
+  if (!state.length || rows.length < pageSize) return false;
+  const newestHad = state.reduce((mx, m) => Math.max(mx, m.id), 0);
+  const oldestNew = rows.reduce((mn, m) => Math.min(mn, m.id), Infinity);
+  return oldestNew > newestHad;
 }
 
 // Drop entries whose expiry time has passed (typing indicators).
@@ -89,6 +110,8 @@ const withoutKey = (k) => (prev) => {
 //   onIncoming(frame): told about every incoming message (notifications, sounds)
 export function useChannelMessages({ space, channel, active, user, send, status, onIncoming }) {
   const [messages, dispatch] = useReducer(messagesReducer, []);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const [typingUsers, setTypingUsers] = useState({}); // username -> expires-at ms
   const [unread, setUnread] = useState({}); // unreadKey -> count
   const [mentions, setMentions] = useState({}); // unreadKey -> mention count
@@ -178,9 +201,18 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       .getMessages(space, channel)
       .then((msgs) => {
         if (cancelled) return;
-        dispatch({ type: 'reset', messages: msgs });
         const k = unreadKey(space, channel);
-        paging.pageLoaded(k, msgs.length);
+        // Reloading the channel we're already showing (a reconnect, or coming
+        // back from DMs): merge, so older pages you scrolled to stay loaded.
+        // Otherwise (or if too much arrived meanwhile to merge) start fresh.
+        const reload = capturedFor.current === k;
+        if (reload && !hasGap(messagesRef.current, msgs, PAGE_SIZE)) {
+          dispatch({ type: 'resynced', messages: msgs, full: msgs.length >= PAGE_SIZE });
+          if (msgs.length < PAGE_SIZE) paging.pageLoaded(k, msgs.length);
+        } else {
+          dispatch({ type: 'reset', messages: msgs });
+          paging.pageLoaded(k, msgs.length);
+        }
         // Note what was new before marking it read. Only on the first load of
         // this visit: a reconnect reload keeps the divider where it was.
         if (capturedFor.current !== k) {

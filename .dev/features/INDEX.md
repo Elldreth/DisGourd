@@ -26,7 +26,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P1-06 | Transactions (space create, msg+mentions, invite, registration) | 1 | COMPLETE | S–M | P1-03, P1-04, P1-05 | db/index.js, routes/*, gateway/chat.js |
 | P1-07 | Cursor pagination API (`before`) | 1 | COMPLETE | S | none (soft P1-01) | db/index.js, server.js (2 handlers) |
 | P1-08 | Load older messages UI | 1 | COMPLETE | M | P1-07, P1-12 | MessageList.jsx, api.js, state hooks |
-| P1-09 | Reconnect resync | 1 | PLANNED | S–M | P1-05, P1-08, P1-14 | gateway/index.js, state hooks, useSocket.js |
+| P1-09 | Reconnect resync | 1 | REVIEW | S–M | P1-05, P1-08, P1-14 | gateway/index.js, state hooks, useSocket.js |
 | P1-10 | Moderation: delete_others_messages | 1 | COMPLETE | S | P3-05 (soft P1-05) | permissions.js, db/index.js, gateway/chat.js, MessageActions.jsx |
 | P1-11 | Fix dm_unread key mismatch | 1 | COMPLETE | S | none | server.js (1 line) |
 | P1-12 | App split 1/3: channel-message hook | 1 | COMPLETE | M | none (after P1-11) | App.jsx, state/useChannelMessages.js |
@@ -41,7 +41,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-02 | Syntax highlighting (lazy) | 2 | COMPLETE | S | P2-01 | markdown.jsx, highlight.js (new), index.css |
 | P2-03 | Tab title + favicon badge | 2 | COMPLETE | S | none | attention.js (new), App.jsx (+2 lines) |
 | P2-04 | Desktop notifications + sounds | 2 | COMPLETE | S–M | P1-13 | notify.js (new), sounds.js, audio.js, ProfileDialog.jsx |
-| P2-05 | New-messages divider + jump | 2 | REVIEW | S–M | P1-08 | db/index.js, MessageList.jsx, useChannelMessages.js |
+| P2-05 | New-messages divider + jump | 2 | COMPLETE | S–M | P1-08 | db/index.js, MessageList.jsx, useChannelMessages.js |
 | P2-06 | Emoji picker in composer | 2 | READY | S–M | none | EmojiPicker.jsx (new), emoji.js (new), Composer.jsx, web/package.json |
 | P2-07 | Any emoji as reaction | 2 | PLANNED | S | P2-06, P3-05 | MessageActions.jsx |
 | P2-08 | Drag-drop + paste upload | 2 | READY | S | none | Composer.jsx, ChatPanel.jsx, DmPanel.jsx |

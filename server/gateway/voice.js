@@ -22,6 +22,20 @@ function broadcastVoiceState(room) {
   }));
 }
 
+// Who is in each voice room this user can see, as voice_state frames. Sent on
+// connect, so a (re)connecting client doesn't show stale or empty rooms.
+function voiceStatesFor(userId) {
+  const frames = [];
+  for (const room of voiceRooms.values()) {
+    if (room.members.size === 0) continue;
+    const space = db.getSpaceByName(room.space);
+    if (!space || !db.isMember(space.id, userId)) continue;
+    if (!canViewChannel(room.space, room.channel, db.getMemberRole(space.id, userId))) continue;
+    frames.push({ type: 'voice_state', space: room.space, channel: room.channel, participants: voiceParticipants(room) });
+  }
+  return frames;
+}
+
 function voiceLeave(ws) {
   const key = ws.voiceRoom;
   if (!key) return;
@@ -109,4 +123,4 @@ const ops = {
   },
 };
 
-module.exports = { ops, voiceLeave };
+module.exports = { ops, voiceLeave, voiceStatesFor };
