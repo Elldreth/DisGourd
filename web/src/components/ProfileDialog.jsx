@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
 import AudioSettings from './AudioSettings.jsx';
@@ -6,9 +6,11 @@ import NotificationSettings from './NotificationSettings.jsx';
 import AppearanceSettings from './AppearanceSettings.jsx';
 import RegistrationAdmin from './RegistrationAdmin.jsx';
 import ImageCropper from './ImageCropper.jsx';
+import Modal from './Modal.jsx';
 
 // User settings: avatar/profile and audio devices.
 export default function ProfileDialog({ profile, onClose, onUpdated, onOutputChange, onPttChange, onMicChange, inCall }) {
+  const bodyRef = useRef(null); // focus starts on the first setting, not the header's Close
   const [avatar, setAvatar] = useState(profile?.avatar || null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -67,93 +69,89 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
   }
 
   return (
-    <div
-      className="anim-fade absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
+    <Modal
+      onClose={onClose}
+      initialFocusRef={bodyRef}
+      panelClassName="flex max-h-[85vh] w-full max-w-md flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
     >
-      <div
-        className="anim-scale-in flex max-h-[85vh] w-full max-w-md flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
-          <h3 className="text-lg font-bold">Settings</h3>
-          <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">
-            Close
-          </button>
-        </div>
+      <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
+        <Modal.Title>Settings</Modal.Title>
+        <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">
+          Close
+        </button>
+      </div>
 
-        <div className="space-y-6 overflow-y-auto p-6">
-          <section>
-            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Profile</h4>
-            <div className="flex items-center gap-4">
-              <Avatar name={profile?.username} size={64} src={avatar} />
-              <div className="min-w-0">
-                <div className="truncate font-semibold">{profile?.username}</div>
-                <div className="truncate text-sm text-gray-400">{profile?.email}</div>
-              </div>
+      <div ref={bodyRef} className="space-y-6 overflow-y-auto p-6">
+        <section>
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Profile</h4>
+          <div className="flex items-center gap-4">
+            <Avatar name={profile?.username} size={64} src={avatar} />
+            <div className="min-w-0">
+              <div className="truncate font-semibold">{profile?.username}</div>
+              <div className="truncate text-sm text-gray-400">{profile?.email}</div>
             </div>
-            {error && <div className="mt-3 text-sm text-danger">{error}</div>}
-            <div className="mt-4 flex items-center gap-2">
-              <label
-                className={`cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover ${
-                  busy ? 'pointer-events-none opacity-60' : ''
-                }`}
+          </div>
+          {error && <div className="mt-3 text-sm text-danger">{error}</div>}
+          <div className="mt-4 flex items-center gap-2">
+            <label
+              className={`cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover ${
+                busy ? 'pointer-events-none opacity-60' : ''
+              }`}
+            >
+              {busy ? 'Saving…' : avatar ? 'Change avatar' : 'Upload avatar'}
+              <input type="file" accept="image/*" hidden onChange={pickFile} disabled={busy} />
+            </label>
+            {profile?.avatarOriginal && (
+              <button
+                onClick={reframe}
+                disabled={busy}
+                className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-fg"
               >
-                {busy ? 'Saving…' : avatar ? 'Change avatar' : 'Upload avatar'}
-                <input type="file" accept="image/*" hidden onChange={pickFile} disabled={busy} />
-              </label>
-              {profile?.avatarOriginal && (
-                <button
-                  onClick={reframe}
-                  disabled={busy}
-                  className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-fg"
-                >
-                  Reposition
-                </button>
-              )}
-              {avatar && (
-                <button
-                  onClick={removeAvatar}
-                  disabled={busy}
-                  className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:text-fg"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          </section>
+                Reposition
+              </button>
+            )}
+            {avatar && (
+              <button
+                onClick={removeAvatar}
+                disabled={busy}
+                className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:text-fg"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </section>
 
+        <section>
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Voice &amp; audio
+          </h4>
+          <AudioSettings
+            onOutputChange={onOutputChange}
+            onPttChange={onPttChange}
+            onMicChange={onMicChange}
+            inCall={inCall}
+          />
+        </section>
+
+        <section>
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Appearance</h4>
+          <AppearanceSettings />
+        </section>
+
+        <section>
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Notifications</h4>
+          <NotificationSettings />
+        </section>
+
+        {profile?.siteAdmin && (
           <section>
             <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Voice &amp; audio
+              Registration &amp; access (site admin)
             </h4>
-            <AudioSettings
-              onOutputChange={onOutputChange}
-              onPttChange={onPttChange}
-              onMicChange={onMicChange}
-              inCall={inCall}
-            />
+            <RegistrationAdmin />
           </section>
-
-          <section>
-            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Appearance</h4>
-            <AppearanceSettings />
-          </section>
-
-          <section>
-            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Notifications</h4>
-            <NotificationSettings />
-          </section>
-
-          {profile?.siteAdmin && (
-            <section>
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Registration &amp; access (site admin)
-              </h4>
-              <RegistrationAdmin />
-            </section>
-          )}
-        </div>
+        )}
       </div>
 
       {crop && (
@@ -166,6 +164,6 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
           onSave={saveAvatar}
         />
       )}
-    </div>
+    </Modal>
   );
 }

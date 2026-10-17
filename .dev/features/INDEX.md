@@ -61,8 +61,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-20 | /imagine via kie.ai (Container: a, b, c) | 2 | PLANNED | M+ | see packet | integrations/kie.js, bot user |
 | P2-21 | Custom roles (Container: a–d) | 2 | PLANNED | L | see packet | permissions.js, migrations, UI |
 | P2-22 | Threads (Container) | 2 | PLANNED | L | P2-10 | TBD after P2-10 |
-| P3-01 | Modal primitive + simple dialogs | 3 | REVIEW | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
-| P3-02 | Remaining overlays → Modal | 3 | PLANNED | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
+| P3-01 | Modal primitive + simple dialogs | 3 | COMPLETE | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
+| P3-02 | Remaining overlays → Modal | 3 | REVIEW | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
 | P3-03 | Icon-button labels sweep | 3 | PLANNED | S–M | P3-02, P3-05 | IconButton.jsx (new), ~12 components (exclusive) |
 | P3-04 | Create/Join server dialog | 3 | PLANNED | S | P3-01 | CreateServerDialog.jsx (new), ServerRail.jsx, App.jsx |
 | P3-05 | Accessible message actions | 3 | COMPLETE | M | none | MessageList.jsx, MessageActions.jsx (new) |

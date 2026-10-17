@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
+import Modal from './Modal.jsx';
 
 // Lets you frame a non-square image before it becomes an avatar or server icon.
 // The preview window IS the final mask (a circle for avatars, a rounded square
@@ -130,71 +131,64 @@ export default function ImageCropper({ src, shape = 'circle', title = 'Position 
   const mask = shape === 'circle' ? 'rounded-full' : 'rounded-2xl';
 
   return (
-    <div
-      className="anim-fade absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={(e) => {
-        e.stopPropagation();
-        onCancel();
-      }}
+    <Modal
+      onClose={onCancel}
+      backdropClassName="flex items-center justify-center bg-black/70 p-4"
+      panelClassName="w-full max-w-sm rounded-xl bg-ink-800 p-6 shadow-2xl ring-1 ring-ink-500/50"
     >
-      <div
-        className="anim-scale-in w-full max-w-sm rounded-xl bg-ink-800 p-6 shadow-2xl ring-1 ring-ink-500/50"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="mb-1 text-lg font-bold">{title}</h3>
-        <p className="mb-4 text-sm text-gray-400">Drag to reposition, and zoom to frame it just right.</p>
+      <Modal.Title className="mb-1 text-lg font-bold">{title}</Modal.Title>
+      <p className="mb-4 text-sm text-gray-400">Drag to reposition, and zoom to frame it just right.</p>
 
-        <div className="flex justify-center">
-          <div
-            ref={boxRef}
-            className={`relative touch-none select-none overflow-hidden bg-ink-900 ring-2 ring-brand/40 ${mask}`}
-            style={{ width: V, height: V, cursor: drag.current ? 'grabbing' : 'grab' }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-          >
-            {url && (
-              <img
-                ref={imgRef}
-                src={url}
-                alt=""
-                draggable={false}
-                onLoad={onImgLoad}
-                className="pointer-events-none absolute max-w-none"
-                style={{ width: dispW, height: dispH, left: offset.x, top: offset.y }}
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-3">
-          <Icon name="image" size={16} className="shrink-0 text-gray-500" />
-          <input
-            type="range"
-            min="1"
-            max="3"
-            step="0.01"
-            value={zoom}
-            onChange={(e) => applyZoom(parseFloat(e.target.value))}
-            aria-label="Zoom"
-            className="h-1 flex-1 accent-brand"
-          />
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onCancel} className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-fg">
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            disabled={busy || !nat}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover active:scale-95 disabled:opacity-60 disabled:active:scale-100"
-          >
-            {busy ? 'Saving…' : 'Save'}
-          </button>
+      <div className="flex justify-center">
+        <div
+          ref={boxRef}
+          className={`relative touch-none select-none overflow-hidden bg-ink-900 ring-2 ring-brand/40 ${mask}`}
+          style={{ width: V, height: V, cursor: drag.current ? 'grabbing' : 'grab' }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
+          {url && (
+            <img
+              ref={imgRef}
+              src={url}
+              alt=""
+              draggable={false}
+              onLoad={onImgLoad}
+              className="pointer-events-none absolute max-w-none"
+              style={{ width: dispW, height: dispH, left: offset.x, top: offset.y }}
+            />
+          )}
         </div>
       </div>
-    </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <Icon name="image" size={16} className="shrink-0 text-gray-500" />
+        <input
+          type="range"
+          min="1"
+          max="3"
+          step="0.01"
+          value={zoom}
+          onChange={(e) => applyZoom(parseFloat(e.target.value))}
+          aria-label="Zoom"
+          className="h-1 flex-1 accent-brand"
+        />
+      </div>
+
+      <div className="mt-5 flex justify-end gap-2">
+        <button onClick={onCancel} className="rounded-lg px-3 py-2 text-sm text-gray-300 transition hover:text-fg">
+          Cancel
+        </button>
+        <button
+          onClick={save}
+          disabled={busy || !nat}
+          className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover active:scale-95 disabled:opacity-60 disabled:active:scale-100"
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </Modal>
   );
 }
