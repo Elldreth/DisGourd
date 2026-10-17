@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 1 (reliability; found while doing P1-09)
-- **State:** REVIEW (PR open)
+- **State:** COMPLETE (merged in #66)
 - **Effort:** S–M
 - **Depends on:** P1-09 (`ready` frame handling, `voice_state` on connect)
 - **Requirement Source:** P1-09 Discovered Work; user request 2026-10-16 ("plan and do the voice-call rejoin after a reconnect")
