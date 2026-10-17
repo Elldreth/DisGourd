@@ -60,7 +60,11 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-19 | Custom server emoji (Container: a, b) | 2 | PLANNED | M | see packet | migrations, routes/spaces, markdown, picker |
 | P2-20 | /imagine via kie.ai (Container: a, b, c) | 2 | PLANNED | M+ | see packet | integrations/kie.js, bot user |
 | P2-21 | Custom roles (Container: a–d) | 2 | PLANNED | L | see packet | permissions.js, migrations, UI |
-| P2-22 | Threads (Container) | 2 | PLANNED | L | P2-10 | TBD after P2-10 |
+| P2-22 | Threads (Container: a–d) | 2 | PLANNED | L | P2-10, P2-13 | see children |
+| P2-22a | Thread data model + server API | 2 | READY | M | P2-22 decisions | db, gateway/chat.js, routes/spaces.js |
+| P2-22b | Thread panel + summaries, composable gateway handlers | 2 | PLANNED | M | P2-22a | gatewayHandlers.js, App.jsx, ThreadPanel.jsx (new) |
+| P2-22c | Thread follows, unread, notifications | 2 | PLANNED | M | P2-22a, P2-22b | db unread queries, notify.js, ThreadPanel.jsx |
+| P2-22d | Auto-archive threads after 7 quiet days | 2 | PLANNED | S | P2-22a | gateway/index.js, routes/spaces.js |
 | P2-23 | Link-preview image proxy | 2 | COMPLETE | S–M | P2-11, P2-12 | net/imageProxy.js (new), net/safeFetch.js, routes, linkPreviews.js, Embed.jsx |
 | P3-01 | Modal primitive + simple dialogs | 3 | COMPLETE | S–M | none | Modal.jsx (new), Invite/ChannelSettings/ServerPermissions dialogs |
 | P3-02 | Remaining overlays → Modal | 3 | COMPLETE | S–M | P3-01 | ProfileDialog, ImageCropper, SearchOverlay, Lightbox |
@@ -84,7 +88,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 Server split:   P1-02 -> P1-03 -> P1-04 -> P1-05
                                   |        |
                          P1-06 <--+--------+   (also needs P1-03)
-Migrations:     P1-01 --+--> P2-09 -> P2-10 -> P2-22 (threads)
+Migrations:     P1-01 --+--> P2-09 -> P2-10 -> P2-22a -> P2-22b -> P2-22c;  P2-22a -> P2-22d
                         +--> P2-12 <- P2-11
                         +--> P2-13, P2-14 -> P2-15, P2-18b, P2-19a, P2-20a, P2-21a
                         (each of those also needs P1-05; P2-13 and P2-19a need P1-04)
@@ -140,5 +144,6 @@ Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at 
 - ~~P2-12: proxy og:images to hide viewer IPs (v1 assumes no)?~~ Yes, built in P2-23 (2026-10-17).
 - P2-18: iOS install requirement for push; push message previews?
 - P2-20: kie.ai models, endpoints, cost, quota defaults, NSFW policy (unknown; do not invent).
-- P2-21: bitset permissions versus named thresholds. P2-22: thread model.
+- P2-21: bitset permissions versus named thresholds.
+- ~~P2-22: thread model.~~ Decided 2026-10-17: hidden child channels; anyone who can post starts one; auto-archive after 7 quiet days; follow model (see P2-22-threads.md).
 - ~~P3-06: the template channel sets.~~ Approved as proposed (2026-10-17).
