@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "Voice stage"
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S–M
 - **Depends on:** none
 - **Serialize with:** voice.js units (none planned)

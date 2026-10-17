@@ -1,104 +1,313 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import * as api from '../api.js';
+import { copyText } from '../util.js';
 import AuthShell, { Field } from './AuthShell.jsx';
 
-// First-run wizard, shown when the server has no accounts yet. The account it
-// creates is the site admin (the server owner). It optionally spins up a first
-// community so you land somewhere usable instead of an empty screen.
-export default function SetupWizard({ onAuthed }) {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [serverName, setServerName] = useState('My Community');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+// First-run wizard, shown when the server has no accounts yet:
+//   1. the admin account (the first account is the owner & site admin)
+//   2. who can create accounts here (the registration mode)
+//   3. an optional first server
+//   4. a ready-to-send message for friends (address, codes), then into the app
+// The account is signed in after step 1, but the app only opens at the end.
 
-  async function submit(e) {
-    e.preventDefault();
+const MODES = [
+  {
+    v: 'code',
+    title: 'Invite code',
+    badge: 'Recommended for friend groups',
+    text: 'People need a registration code from you to create an account.',
+  },
+  { v: 'open', title: 'Open', text: 'Anyone who can reach this address can create an account.' },
+  {
+    v: 'closed',
+    title: 'Closed',
+    text: 'No one else can create an account. Use this for a server only you use, or to lock it later.',
+  },
+];
+
+const STEPS = 4;
+
+export default function SetupWizard({ onAuthed }) {
+  const [step, setStep] = useState(1);
+  const [token, setTokenState] = useState('');
+  const [reg, setReg] = useState(null); // { mode, envCodeActive } as the server had it
+  const [mode, setMode] = useState('open');
+  const [server, setServer] = useState(''); // name of the server created in step 3
+  const [invite, setInvite] = useState('');
+
+  const titles = {
+    1: 'Set up your DisGourd server',
+    2: 'Who can join?',
+    3: 'Create your first server',
+    4: 'You’re all set',
+  };
+  const subtitles = {
+    1: (
+      <>
+        This is a brand-new server. Create the first account; it becomes the
+        <span className="font-semibold text-gray-300"> owner &amp; site admin</span>.
+      </>
+    ),
+    2: 'Choose who can create an account here. You can change this any time in Settings → Registration & access.',
+    3: 'A server is where your channels live. You can make more later.',
+    4: server ? 'Send this to your friends so they can join you.' : 'You can create a server and invite people from the app.',
+  };
+
+  return (
+    <AuthShell title={titles[step]} subtitle={subtitles[step]}>
+      <p className="mb-4 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
+        Step {step} of {STEPS}
+      </p>
+      {step === 1 && (
+        <AccountStep
+          onDone={async (tok) => {
+            setTokenState(tok);
+            const r = await api.getAdminRegistration().catch(() => ({ mode: 'open' }));
+            setReg(r);
+            setMode(r.mode || 'open');
+            setStep(2);
+          }}
+        />
+      )}
+      {step === 2 && <ModeStep reg={reg} mode={mode} setMode={setMode} onDone={() => setStep(3)} />}
+      {step === 3 && (
+        <ServerStep
+          onDone={(name, code) => {
+            setServer(name);
+            setInvite(code);
+            setStep(4);
+          }}
+        />
+      )}
+      {step === 4 && <FinishStep mode={mode} server={server} invite={invite} onOpen={() => onAuthed(token)} />}
+    </AuthShell>
+  );
+}
+
+function ErrorNote({ error }) {
+  if (!error) return null;
+  return (
+    <div role="alert" className="rounded-lg bg-danger/15 px-3 py-2 text-sm text-danger">
+      {error}
+    </div>
+  );
+}
+
+function Primary({ busy, busyLabel, children, ...rest }) {
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      className="w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-hover active:scale-[.98] disabled:opacity-60 disabled:active:scale-100"
+      {...rest}
+    >
+      {busy ? busyLabel : children}
+    </button>
+  );
+}
+
+// Run an async step action with busy + inline error handling.
+function useStepAction() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function run(fn, fallback) {
     setError('');
     setBusy(true);
     try {
+      await fn();
+    } catch (err) {
+      setError(err.message || fallback);
+    }
+    setBusy(false);
+  }
+  return { busy, error, run };
+}
+
+function AccountStep({ onDone }) {
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { busy, error, run } = useStepAction();
+
+  function submit(e) {
+    e.preventDefault();
+    run(async () => {
       const res = await api.register(username.trim(), password, email.trim());
       api.setToken(res.token);
-      const name = serverName.trim();
-      if (name) {
-        // Best-effort: create the first server. Don't block finishing setup if it fails.
-        await api.createSpace(name).catch(() => {});
-      }
-      onAuthed(res.token);
-    } catch (err) {
-      setError(err.message || 'Could not complete setup');
-      setBusy(false);
-    }
+      await onDone(res.token);
+    }, 'Could not create the account');
   }
 
   return (
-    <AuthShell
-      title="Set up your DisGourd server"
-      subtitle={
-        <>
-          This is a brand-new server. Create the first account — it becomes the
-          <span className="font-semibold text-gray-300"> owner &amp; site admin</span>.
-        </>
-      }
-    >
-      <form onSubmit={submit} className="space-y-4">
-          <Field label="Admin username">
-            <input
-              autoFocus
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="input"
-              placeholder="your_name"
-              autoComplete="username"
-            />
-          </Field>
-          <Field label="Email">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input"
-              placeholder="you@example.com"
-              autoComplete="email"
-            />
-          </Field>
-          <Field label="Password" hint="At least 8 characters">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input"
-              placeholder="••••••••"
-              autoComplete="new-password"
-            />
-          </Field>
-          <Field label="First community name" hint="optional">
-            <input
-              value={serverName}
-              onChange={(e) => setServerName(e.target.value)}
-              className="input"
-              placeholder="My Community"
-            />
-          </Field>
+    <form onSubmit={submit} className="space-y-4">
+      <Field label="Admin username">
+        <input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} className="input" placeholder="your_name" autoComplete="username" />
+      </Field>
+      <Field label="Email">
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@example.com" autoComplete="email" />
+      </Field>
+      <Field label="Password" hint="At least 8 characters">
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input" placeholder="••••••••" autoComplete="new-password" />
+      </Field>
+      <ErrorNote error={error} />
+      <Primary busy={busy} busyLabel="Creating account…">Create admin account</Primary>
+    </form>
+  );
+}
 
-          {error && (
-            <div className="rounded-lg bg-danger/15 px-3 py-2 text-sm text-danger">{error}</div>
-          )}
+function ModeStep({ reg, mode, setMode, onDone }) {
+  const { busy, error, run } = useStepAction();
+  const name = useId();
+  // The mode starts as 'open' unless REGISTRATION_MODE / REGISTRATION_CODE seeded it.
+  const preset = reg && (reg.mode !== 'open' || reg.envCodeActive);
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-hover active:scale-[.98] disabled:opacity-60 disabled:active:scale-100"
+  function submit(e) {
+    e.preventDefault();
+    run(async () => {
+      if (mode !== reg?.mode) await api.setRegistrationMode(mode);
+      onDone();
+    }, 'Could not save that choice');
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <fieldset className="space-y-2">
+        <legend className="sr-only">Who can create an account</legend>
+        {MODES.map((m) => (
+          <label
+            key={m.v}
+            className={`flex cursor-pointer gap-3 rounded-lg p-3 ring-1 transition ${
+              mode === m.v ? 'bg-ink-700 ring-brand-hi' : 'ring-ink-500 hover:bg-ink-700/60'
+            }`}
           >
-            {busy ? 'Setting up…' : 'Create admin account & finish setup'}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-xs text-gray-500">
-          Afterwards, control who can register (open / invite code / closed) in
-          <span className="text-gray-400"> Settings → Registration &amp; access</span>.
+            <input
+              type="radio"
+              name={name}
+              value={m.v}
+              checked={mode === m.v}
+              onChange={() => setMode(m.v)}
+              className="mt-1 h-4 w-4 shrink-0 accent-brand"
+            />
+            <span className="min-w-0">
+              <span className="flex flex-wrap items-center gap-2 font-semibold text-gray-100">
+                {m.title}
+                {m.badge && (
+                  <span className="rounded-full bg-brand/20 px-2 py-0.5 text-[11px] font-semibold text-brand-hi">{m.badge}</span>
+                )}
+              </span>
+              <span className="mt-0.5 block text-sm text-gray-400">{m.text}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      {preset && (
+        <p className="rounded-lg bg-ink-900 px-3 py-2 text-xs text-gray-400">
+          Your server config set the starting choice (<code>REGISTRATION_MODE</code>
+          {reg.envCodeActive && (
+            <>
+              {' '}/ <code>REGISTRATION_CODE</code>, which also keeps working as a code
+            </>
+          )}
+          ). That only applies on first run; what you pick here wins from now on.
         </p>
-    </AuthShell>
+      )}
+      <ErrorNote error={error} />
+      <Primary busy={busy} busyLabel="Saving…">Continue</Primary>
+    </form>
+  );
+}
+
+function ServerStep({ onDone }) {
+  const [name, setName] = useState('My Community');
+  const { busy, error, run } = useStepAction();
+
+  function submit(e) {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    run(async () => {
+      await api.createSpace(trimmed);
+      // The invite is a nice-to-have; a server without one is still a success.
+      const inv = await api.createInvite(trimmed).catch(() => null);
+      onDone(trimmed, inv?.code || '');
+    }, 'Could not create the server');
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <Field label="Server name" hint={`${name.length}/60`}>
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="My Community" />
+      </Field>
+      <ErrorNote error={error} />
+      <Primary busy={busy} busyLabel="Creating…" disabled={busy || !name.trim()}>
+        Create server
+      </Primary>
+      <button type="button" onClick={() => onDone('', '')} className="w-full rounded-lg px-4 py-2 text-sm text-gray-400 transition hover:text-fg">
+        Skip for now
+      </button>
+    </form>
+  );
+}
+
+function FinishStep({ mode, server, invite, onOpen }) {
+  const [regCode, setRegCode] = useState('');
+  const [copied, setCopied] = useState(false);
+  const { busy, error, run } = useStepAction();
+  const address = window.location.origin;
+
+  const lines = [`Join me on DisGourd: ${address}`];
+  if (mode === 'code') lines.push(regCode ? `1. Create an account with this registration code: ${regCode}` : '1. Create an account (ask me for a registration code)');
+  else if (mode === 'open') lines.push('1. Create an account');
+  if (invite) lines.push(`${mode === 'closed' ? '' : '2. '}Click "Join a server" (the arrow in the left rail) and paste this invite: ${invite}`);
+  const message = lines.join('\n');
+
+  return (
+    <div className="space-y-4">
+      {server && (
+        <>
+          <p className="text-sm text-gray-300">
+            <span className="font-semibold text-gray-100">{server}</span> is ready.
+          </p>
+          {mode === 'closed' && (
+            <p className="rounded-lg bg-idle/10 px-3 py-2 text-xs text-idle">
+              Registration is closed, so only people who already have an account here can use the invite.
+            </p>
+          )}
+          {mode === 'code' && !regCode && (
+            <button
+              type="button"
+              onClick={() => run(async () => setRegCode((await api.createRegCode({})).code), 'Could not create a code')}
+              disabled={busy}
+              className="w-full rounded-lg bg-ink-600 px-4 py-2 text-sm font-semibold text-gray-100 transition hover:bg-ink-500 disabled:opacity-60"
+            >
+              {busy ? 'Creating…' : 'Create a registration code'}
+            </button>
+          )}
+          <ErrorNote error={error} />
+          {invite && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Message for your friends
+                <textarea readOnly value={message} rows={6} className="input mt-1 resize-none font-mono text-xs normal-case tracking-normal" />
+              </label>
+              <button
+                type="button"
+                onClick={async () => setCopied(await copyText(message))}
+                className="mt-2 rounded-lg bg-ink-600 px-3 py-1.5 text-sm font-semibold text-gray-100 transition hover:bg-ink-500"
+              >
+                {copied ? 'Copied' : 'Copy message'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-hover active:scale-[.98]"
+      >
+        Open DisGourd
+      </button>
+    </div>
   );
 }
