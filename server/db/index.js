@@ -82,8 +82,38 @@ const DEFAULT_PERMISSIONS = {
   edit_server: 2,
   delete_others_messages: 2,
   pin_messages: 2,
+  manage_emoji: 2,
   manage_roles: 3,
 };
+
+// ---- Custom server emoji (P2-19) ----
+const EMOJI_NAME_RE = /^[a-z0-9_]{2,32}$/;
+const MAX_EMOJI_PER_SPACE = 50;
+
+// A server's emoji, by name: [{ id, name, url, createdBy }].
+function getSpaceEmoji(spaceId) {
+  return db.prepare(`
+    SELECT e.id, e.name, e.url, u.username AS createdBy
+    FROM space_emoji e LEFT JOIN users u ON u.id = e.created_by
+    WHERE e.space_id = ? ORDER BY e.name
+  `).all(spaceId);
+}
+
+// Add one. Returns the row, or { error: 'bad_name' | 'taken' | 'full' }.
+const addSpaceEmoji = db.transaction((spaceId, rawName, url, userId) => {
+  const name = String(rawName || '').trim().toLowerCase();
+  if (!EMOJI_NAME_RE.test(name)) return { error: 'bad_name' };
+  if (db.prepare('SELECT 1 FROM space_emoji WHERE space_id = ? AND name = ?').get(spaceId, name)) return { error: 'taken' };
+  const count = db.prepare('SELECT COUNT(*) AS n FROM space_emoji WHERE space_id = ?').get(spaceId).n;
+  if (count >= MAX_EMOJI_PER_SPACE) return { error: 'full' };
+  const info = db.prepare('INSERT INTO space_emoji(space_id, name, url, created_by, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(spaceId, name, url, userId || null, Date.now());
+  return getSpaceEmoji(spaceId).find((e) => e.id === info.lastInsertRowid);
+});
+
+function deleteSpaceEmoji(spaceId, name) {
+  return db.prepare('DELETE FROM space_emoji WHERE space_id = ? AND name = ?').run(spaceId, String(name || '').toLowerCase()).changes > 0;
+}
 
 // Merge a space's stored permission overrides onto the defaults.
 function getSpacePermissions(spaceId) {
@@ -275,6 +305,7 @@ function getUserSpaces(userId) {
   const channelStmt = db.prepare(
     "SELECT name, type, view_role AS view, post_role AS post FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
   );
+  const emojiStmt = db.prepare('SELECT id, name, url FROM space_emoji WHERE space_id = ? ORDER BY name');
   return spaces.map((s) => {
     const rank = roleRank(s.role);
     // Members only see channels their rank is allowed to view.
@@ -288,6 +319,8 @@ function getUserSpaces(userId) {
       iconCrop: s.iconCrop ? JSON.parse(s.iconCrop) : null,
       role: s.role,
       permissions: getSpacePermissions(s.id),
+      // The server's own emoji, so :name: can render client-side.
+      emoji: emojiStmt.all(s.id),
       channels: chans.filter((c) => c.type !== 'voice').map((c) => c.name),
       voiceChannels: chans.filter((c) => c.type === 'voice').map((c) => c.name),
       channelMeta,
@@ -1382,6 +1415,10 @@ module.exports = {
   canDo,
   getChannelPerms,
   setChannelPerms,
+  getSpaceEmoji,
+  addSpaceEmoji,
+  deleteSpaceEmoji,
+  MAX_EMOJI_PER_SPACE,
   getSpaceMembers,
   createInvite,
   getInvite,

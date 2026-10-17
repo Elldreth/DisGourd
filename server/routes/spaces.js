@@ -8,6 +8,13 @@ const { validateSpaceName, normalizeChannelName, validateChannelName } = require
 const { canViewChannel, canPostChannel } = require('../permissions');
 const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence, tellFollow } = require('../gateway/delivery');
 const { threadUpdated } = require('../gateway/chat');
+const fs = require('fs');
+const path = require('path');
+const { uploadFilePath } = require('./uploads');
+
+// Custom emoji images: these types, at most this big.
+const EMOJI_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+const MAX_EMOJI_BYTES = 256 * 1024;
 
 const getJsonBody = readJsonBody;
 
@@ -144,6 +151,38 @@ const routes = [
         db.setSpacePermissions(space.id, body.permissions || body);
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
         return sendJson(res, 200, { permissions: db.getSpacePermissions(space.id) });
+      }
+
+      // /spaces/:name/emoji — the server's custom emoji (P2-19a).
+      if (pathSegments[2] === 'emoji') {
+        if (pathSegments.length === 3 && req.method === 'GET') return sendJson(res, 200, db.getSpaceEmoji(space.id));
+        if (!db.canDo(space.id, role, 'manage_emoji')) return sendJson(res, 403, { error: 'You are not allowed to manage emoji here' });
+        if (pathSegments.length === 3 && req.method === 'POST') {
+          const body = await getJsonBody(req);
+          const filePath = uploadFilePath(body.url);
+          if (!filePath) return sendJson(res, 400, { error: 'The image must be one of this server’s uploads' });
+          if (!EMOJI_EXTENSIONS.has(path.extname(filePath).toLowerCase())) return sendJson(res, 400, { error: 'Emoji must be a PNG, JPG, GIF or WebP image' });
+          let stat;
+          try {
+            stat = fs.statSync(filePath);
+          } catch {
+            return sendJson(res, 400, { error: 'That upload was not found' });
+          }
+          if (!stat.isFile()) return sendJson(res, 400, { error: 'That upload was not found' });
+          if (stat.size > MAX_EMOJI_BYTES) return sendJson(res, 413, { error: 'Emoji images must be 256 KB or smaller' });
+          const result = db.addSpaceEmoji(space.id, body.name, body.url, userId);
+          if (result.error === 'bad_name') return sendJson(res, 400, { error: 'Names are 2–32 letters, numbers or underscores' });
+          if (result.error === 'taken') return sendJson(res, 409, { error: 'That name is already used on this server' });
+          if (result.error === 'full') return sendJson(res, 409, { error: `A server can have at most ${db.MAX_EMOJI_PER_SPACE} emoji` });
+          deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+          return sendJson(res, 201, result);
+        }
+        if (pathSegments.length === 4 && req.method === 'DELETE') {
+          if (!db.deleteSpaceEmoji(space.id, pathSegments[3])) return sendJson(res, 404, { error: 'No emoji by that name' });
+          deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+          return sendJson(res, 200, { ok: true });
+        }
+        return sendJson(res, 404, { error: 'Not found' });
       }
 
       // /spaces/:name/channels ...

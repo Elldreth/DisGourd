@@ -52,6 +52,22 @@ function sanitizeFilename(name) {
   return cleaned.slice(0, 200) || 'file';
 }
 
+// The file behind one of our own upload URLs (/uploads/<token>/<name>), or
+// null if the URL doesn't point inside the uploads directory. Used by
+// features that attach an existing upload (server emoji).
+function uploadFilePath(url) {
+  if (typeof url !== 'string' || !url.startsWith('/uploads/')) return null;
+  let rest;
+  try {
+    rest = decodeURIComponent(url.slice('/uploads/'.length));
+  } catch {
+    return null;
+  }
+  const filePath = path.join(UPLOADS_DIR, path.normalize(rest).replace(/^(\.\.[\/\\])+/, ''));
+  if (filePath === UPLOADS_DIR || !filePath.startsWith(UPLOADS_DIR + path.sep)) return null;
+  return filePath;
+}
+
 function uploadTooLargeError() {
   return `File exceeds the ${MAX_UPLOAD_MB} MB limit`;
 }
@@ -190,4 +206,4 @@ async function handle(ctx) {
   return false;
 }
 
-module.exports = { handle };
+module.exports = { handle, uploadFilePath, CONTENT_TYPES };
