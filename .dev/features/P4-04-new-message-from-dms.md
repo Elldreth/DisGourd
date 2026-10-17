@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P4-00)
 - **Phase:** 4
-- **State:** REVIEW (branch `claude/p4-04-new-dm`, PR pending)
+- **State:** COMPLETE (merged in #106, 2026-10-17)
 - **Effort:** S
 - **Depends on:** none (uses `EmptyState` from P4-03 if it has landed, otherwise edits the text in place)
 - **Serialize with:** P4-03 (`DmSidebar.jsx`), anything editing `QuickSwitcher.jsx` or `App.jsx`
