@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { createRef } from 'react';
+import { createRef, useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Modal from './Modal.jsx';
 import InviteDialog from './InviteDialog.jsx';
@@ -109,4 +109,101 @@ test.each([
 ])('%s dialog is a modal dialog with its title as the name', (_, make, name) => {
   render(make());
   expect(screen.getByRole('dialog', { name }).getAttribute('aria-modal')).toBe('true');
+});
+
+// ---- P3-02: options for the remaining overlays, and nesting ----
+
+test('a dialog with no visible heading can be named with `label`', () => {
+  render(
+    <Modal onClose={() => {}} label="Image viewer" backdropClassName="bg-black/90">
+      <button>Close</button>
+    </Modal>
+  );
+  const dialog = screen.getByRole('dialog', { name: 'Image viewer' });
+  expect(screen.getByTestId('modal-backdrop').className).toContain('bg-black/90');
+  expect(dialog.getAttribute('aria-labelledby')).toBeNull();
+});
+
+test('a key a control already handled (like a key-capture field) is left alone, Tab included', () => {
+  const onClose = vi.fn();
+  render(
+    <Modal onClose={onClose}>
+      <Modal.Title>T</Modal.Title>
+      <button>Only</button>
+    </Modal>
+  );
+  // Like AudioSettings while recording a push-to-talk key: a capture-phase
+  // window listener swallows every key.
+  const swallow = (e) => e.preventDefault();
+  window.addEventListener('keydown', swallow, true);
+  const only = screen.getByRole('button', { name: 'Only' });
+  only.focus();
+  fireEvent.keyDown(only, { key: 'Escape' });
+  fireEvent.keyDown(only, { key: 'Tab' });
+  window.removeEventListener('keydown', swallow, true);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(only);
+});
+
+test('nested: Esc closes only the top dialog, and focus returns into the one below', async () => {
+  const outerClose = vi.fn();
+  function Outer() {
+    const [inner, setInner] = useState(false);
+    return (
+      <Modal onClose={outerClose}>
+        <Modal.Title>Settings</Modal.Title>
+        <button onClick={() => setInner(true)}>Change avatar</button>
+        {inner && (
+          <Modal onClose={() => setInner(false)}>
+            <Modal.Title>Crop</Modal.Title>
+            <button>Zoom</button>
+          </Modal>
+        )}
+      </Modal>
+    );
+  }
+  render(<Outer />);
+  const opener = screen.getByRole('button', { name: 'Change avatar' });
+  opener.focus();
+  fireEvent.click(opener);
+  const zoom = await screen.findByRole('button', { name: 'Zoom' });
+  await waitFor(() => expect(document.activeElement).toBe(zoom));
+  // Tab stays in the top dialog.
+  fireEvent.keyDown(zoom, { key: 'Tab' });
+  expect(document.activeElement).toBe(zoom);
+  fireEvent.keyDown(zoom, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Crop' })).toBeNull();
+  expect(outerClose).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog', { name: 'Settings' }).contains(document.activeElement)).toBe(true);
+});
+
+test('clicking the backdrop of a nested dialog closes only that one', () => {
+  const outerClose = vi.fn();
+  const innerClose = vi.fn();
+  render(
+    <Modal onClose={outerClose}>
+      <Modal.Title>Outer</Modal.Title>
+      <Modal onClose={innerClose}>
+        <Modal.Title>Inner</Modal.Title>
+        <button>x</button>
+      </Modal>
+    </Modal>
+  );
+  const innerBackdrop = screen.getByRole('dialog', { name: 'Inner' }).parentElement;
+  fireEvent.click(innerBackdrop);
+  expect(innerClose).toHaveBeenCalledTimes(1);
+  expect(outerClose).not.toHaveBeenCalled();
+});
+
+test('`fill`: the panel covers the screen and a click on its empty area closes', () => {
+  const onClose = vi.fn();
+  render(
+    <Modal onClose={onClose} label="Viewer" fill>
+      <img alt="cat" src="cat.png" />
+    </Modal>
+  );
+  fireEvent.click(screen.getByAltText('cat'));
+  expect(onClose).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('dialog', { name: 'Viewer' }));
+  expect(onClose).toHaveBeenCalledTimes(1);
 });

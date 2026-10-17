@@ -12,17 +12,42 @@ import { createPortal } from 'react-dom';
 //     like a key-capture field
 //   - clicking the backdrop closes (`closeOnBackdrop`), clicking inside doesn't
 //   - the page behind doesn't scroll while it's open
-// Rendered in a portal on <body>, above the app.
+// Rendered in a portal on <body>, above the app. Dialogs can nest (the avatar
+// cropper over Settings): each one only handles keys from inside its own
+// panel, and closing the top one returns focus into the one below.
+//
+// Options for overlays that aren't a plain centred card:
+//   label             accessible name when there's no visible <Modal.Title>
+//   backdropClassName replaces the backdrop's layout and colour
+//                     (default "flex items-center justify-center bg-black/60 p-4")
+//   fill              the panel covers the screen (a media viewer); a click on
+//                     its own empty area counts as a backdrop click
+//   animate           the panel's scale-in animation (default true)
 
 const TitleId = createContext(null);
 
 const FOCUSABLE =
   'a[href], button:not(:disabled), input:not(:disabled):not([type=hidden]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
-const focusables = (root) =>
-  [...root.querySelectorAll(FOCUSABLE)].filter((el) => !el.closest('[hidden]') && getComputedStyle(el).visibility !== 'hidden');
+// Shown and focusable: not inside [hidden] or display:none, not invisible.
+function shown(el, root) {
+  if (el.closest('[hidden]') || getComputedStyle(el).visibility === 'hidden') return false;
+  for (let e = el; e && e !== root; e = e.parentElement) if (getComputedStyle(e).display === 'none') return false;
+  return true;
+}
+const focusables = (root) => [...root.querySelectorAll(FOCUSABLE)].filter((el) => shown(el, root));
 
-export default function Modal({ onClose, children, panelClassName = '', initialFocusRef, closeOnBackdrop = true }) {
+export default function Modal({
+  onClose,
+  children,
+  panelClassName = '',
+  initialFocusRef,
+  closeOnBackdrop = true,
+  label,
+  backdropClassName = 'flex items-center justify-center bg-black/60 p-4',
+  fill = false,
+  animate = true,
+}) {
   const titleId = useId();
   const panelRef = useRef(null);
 
@@ -39,14 +64,20 @@ export default function Modal({ onClose, children, panelClassName = '', initialF
     });
     return () => {
       document.body.style.overflow = overflow;
+      // Back to the opener; if it's gone or can't take focus (a control that
+      // closed with a menu, a hidden file input), into the dialog below.
       if (opener && document.contains(opener)) opener.focus();
+      if (document.activeElement !== opener) opener?.closest?.('[role=dialog]')?.focus();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function onKeyDown(e) {
+    // Keys from a dialog stacked on top of this one bubble here through React;
+    // they're not ours. Neither is a key a control already handled (the
+    // push-to-talk key capture swallows every key, Esc and Tab included).
+    if (e.defaultPrevented || !panelRef.current?.contains(e.target)) return;
     if (e.key === 'Escape') {
-      if (e.defaultPrevented) return; // a control inside claimed it
       e.preventDefault();
       e.stopPropagation();
       onClose();
@@ -72,18 +103,25 @@ export default function Modal({ onClose, children, panelClassName = '', initialF
   return createPortal(
     <div
       data-testid="modal-backdrop"
-      className="anim-fade fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={closeOnBackdrop ? onClose : undefined}
+      className={`anim-fade fixed inset-0 z-50 ${backdropClassName}`}
+      onClick={(e) => {
+        e.stopPropagation(); // a nested dialog's backdrop closes only that dialog
+        if (closeOnBackdrop) onClose();
+      }}
     >
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={titleId}
+        aria-labelledby={label ? undefined : titleId}
+        aria-label={label}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        onClick={(e) => e.stopPropagation()}
-        className={`anim-scale-in outline-hidden ${panelClassName}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (fill && closeOnBackdrop && e.target === e.currentTarget) onClose();
+        }}
+        className={`${animate ? 'anim-scale-in' : ''} outline-hidden ${fill ? 'fixed inset-0' : ''} ${panelClassName}`}
       >
         <TitleId.Provider value={titleId}>{children}</TitleId.Provider>
       </div>
