@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** none (SetupWizard.jsx is only used here)
