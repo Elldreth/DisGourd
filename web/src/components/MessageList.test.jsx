@@ -291,3 +291,16 @@ describe('threads (P2-22b)', () => {
     expect(screen.getByRole('button', { name: 'Open thread Weekend plans, 1 reply' })).toBeTruthy();
   });
 });
+
+describe('thread badges (P2-22c)', () => {
+  const thread = { id: 3, channel: '~t2', name: 'Weekend plans', messageCount: 2, lastActivityAt: Date.now() };
+  test('the summary says when the thread has unread replies or mentions for you', () => {
+    const badge = (c) => (c === '~t2' ? { unread: 2, mentions: 0 } : null);
+    const { rerender } = render(<MessageList messages={[{ ...msg(2), thread }]} channel="general" currentUser="sandy" onOpenThread={() => {}} threadBadge={badge} />);
+    expect(screen.getByRole('button', { name: 'Open thread Weekend plans, 2 replies, unread' })).toBeTruthy();
+    rerender(<MessageList messages={[{ ...msg(2), thread }]} channel="general" currentUser="sandy" onOpenThread={() => {}} threadBadge={() => ({ unread: 2, mentions: 1 })} />);
+    expect(screen.getByRole('button', { name: 'Open thread Weekend plans, 2 replies, 1 mention' })).toBeTruthy();
+    rerender(<MessageList messages={[{ ...msg(2), thread }]} channel="general" currentUser="sandy" onOpenThread={() => {}} threadBadge={() => ({ unread: 0, mentions: 0 })} />);
+    expect(screen.getByRole('button', { name: 'Open thread Weekend plans, 2 replies' })).toBeTruthy();
+  });
+});

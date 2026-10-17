@@ -5,9 +5,11 @@ import { useEffect, useRef } from 'react';
 import { getNotifyLevel, getMessageSounds } from './audio.js';
 import { playMessage, playMention } from './sounds.js';
 
-// A frame is { kind: 'message', author, space, channel, mentions } or
+// A frame is { kind: 'message', author, space, channel, mentions, thread? }
+// (thread: { name, parentChannel } for a reply in a thread) or
 // { kind: 'dm', from, to }. ctx is where you are and what you've chosen:
-// { me, focused, view: 'server'|'dm', space, channel, dm, level, sounds }.
+// { me, focused, view: 'server'|'dm', space, channel, thread, dm, level, sounds }
+// (thread: the '~tN' channel open in the thread panel, if any).
 
 // What an incoming message is to you: 'mention' | 'dm' | 'message', or null
 // when it's yours or you're looking right at it (window focused, that
@@ -19,7 +21,8 @@ export function attentionKind(frame, ctx) {
     return 'dm';
   }
   if (frame.author === ctx.me) return null;
-  if (ctx.focused && ctx.view === 'server' && ctx.space === frame.space && ctx.channel === frame.channel) return null;
+  const looking = ctx.channel === frame.channel || (!!ctx.thread && ctx.thread === frame.channel);
+  if (ctx.focused && ctx.view === 'server' && ctx.space === frame.space && looking) return null;
   return (frame.mentions || []).includes(ctx.me) ? 'mention' : 'message';
 }
 
@@ -59,12 +62,19 @@ export function notificationText(content, attachments = []) {
   return text.length > 120 ? `${text.slice(0, 119)}…` : text;
 }
 
+// Where a channel message is, for the title: "#general · Server", or for a
+// reply in a thread "Thread name (#general) · Server".
+export function notificationPlace(frame) {
+  const where = frame.thread ? `${frame.thread.name} (#${frame.thread.parentChannel})` : `#${frame.channel}`;
+  return `${where} · ${frame.space}`;
+}
+
 const canNotify = () => typeof Notification !== 'undefined' && Notification.permission === 'granted';
 
 // Hook: returns onIncoming(frame) for the channel and DM hooks to call with
 // every incoming message. App keeps `update(...)` current with where you are
 // and how to open a conversation when a notification is clicked:
-//   update({ me, view, space, channel, dm, dnd, openChannel(space, channel), openDm(name) })
+//   update({ me, view, space, channel, thread, dm, dnd, openChannel(space, channel), openDm(name), openThread(space, thread) })
 // (dnd: your status is Do Not Disturb, so no notifications or sounds)
 export function useNotifications() {
   const where = useRef({});
@@ -100,7 +110,7 @@ export function useNotifications() {
     const isDm = frame.kind === 'dm';
     const author = isDm ? frame.from : frame.author;
     try {
-      const n = new Notification(isDm ? `${author}` : `${author} in #${frame.channel} · ${frame.space}`, {
+      const n = new Notification(isDm ? `${author}` : `${author} in ${notificationPlace(frame)}`, {
         body: notificationText(frame.content, frame.attachments || []),
         icon: '/icon-192.png',
         // One notification per conversation: a newer one replaces the older.
@@ -111,6 +121,7 @@ export function useNotifications() {
       n.onclick = () => {
         window.focus();
         if (isDm) w.openDm?.(author);
+        else if (frame.thread) w.openThread?.(frame.space, { channel: frame.channel, name: frame.thread.name, parentChannel: frame.thread.parentChannel });
         else w.openChannel?.(frame.space, frame.channel);
         n.close();
       };

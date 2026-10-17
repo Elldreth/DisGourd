@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-22)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #98, 2026-10-17)
 - **Effort:** M
 - **Depends on:** P2-22a
 - **Serialize with:** `App.jsx`, `ChatPanel.jsx`, `MessageList.jsx`, `state/*` units

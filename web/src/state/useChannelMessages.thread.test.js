@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 
 // P2-22b: a second useChannelMessages shows the open thread ('~tN'). It only
@@ -7,7 +7,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 vi.mock('../api.js', () => ({
   getMessages: vi.fn(() => Promise.resolve([{ id: 40, space: 'S', channel: '~t7', author: 'bob', content: 'a reply', timestamp: 40 }])),
 }));
-const { useChannelMessages, messagesReducer, isThreadChannel, threadRootId } = await import('./useChannelMessages.js');
+const { useChannelMessages, messagesReducer, isThreadChannel, threadRootId, unreadKey } = await import('./useChannelMessages.js');
 
 afterEach(cleanup);
 
@@ -40,21 +40,12 @@ test('the thread instance posts and reads with channel ~tN, and leaves the gatew
   expect(onIncoming).not.toHaveBeenCalled();
 });
 
-test('the channel instance ignores thread replies and keeps root summaries live', async () => {
+test('the channel instance keeps root summaries live', async () => {
   const send = vi.fn();
-  const onIncoming = vi.fn();
   const { result } = renderHook(() =>
-    useChannelMessages({ space: 'S', channel: 'general', active: true, user: 'sandy', send, status: 'open', onIncoming })
+    useChannelMessages({ space: 'S', channel: 'general', active: true, user: 'sandy', send, status: 'open' })
   );
   await waitFor(() => expect(result.current.messages).toHaveLength(1));
-  act(() => {
-    // A reply in a thread: no notification, no unread (that comes with P2-22c).
-    result.current.handlers.message({ id: 50, space: 'S', channel: '~t40', author: 'bob', content: 'reply', mentions: ['sandy'], timestamp: 50 });
-  });
-  expect(onIncoming).not.toHaveBeenCalled();
-  expect(result.current.unread).toEqual({});
-  expect(result.current.mentions).toEqual({});
-
   const before = result.current.threadsVersion;
   act(() => {
     result.current.handlers.thread_created({
@@ -69,6 +60,70 @@ test('the channel instance ignores thread replies and keeps root summaries live'
   });
   expect(result.current.messages[0].thread).toMatchObject({ messageCount: 2, lastActivityAt: 9, name: 'Plans' });
   expect(result.current.threadsVersion).toBe(before + 2);
+});
+
+describe('following threads (P2-22c)', () => {
+  const reply = (over = {}) => ({ id: 50, space: 'S', channel: '~t40', author: 'bob', content: 'reply', mentions: [], timestamp: 50, thread: { name: 'Plans', parentChannel: 'general' }, ...over });
+  const K = unreadKey('S', '~t40');
+  async function channelHook(props = {}) {
+    const onIncoming = vi.fn();
+    const hook = renderHook((p) => useChannelMessages({ space: 'S', channel: 'general', active: true, user: 'sandy', send: vi.fn(), status: 'open', onIncoming, ...props, ...p }));
+    await waitFor(() => expect(hook.result.current.messages).toHaveLength(1));
+    return { ...hook, onIncoming };
+  }
+
+  test('a reply in a thread you do not follow is nothing to you, unless it mentions you', async () => {
+    const { result, onIncoming } = await channelHook();
+    act(() => result.current.handlers.message(reply()));
+    expect(onIncoming).not.toHaveBeenCalled();
+    expect(result.current.unread).toEqual({});
+    act(() => result.current.handlers.message(reply({ id: 51, mentions: ['sandy'] })));
+    expect(onIncoming).toHaveBeenCalledWith(expect.objectContaining({ kind: 'message', channel: '~t40', thread: { name: 'Plans', parentChannel: 'general' } }));
+    expect(result.current.mentions).toEqual({ [K]: 1 });
+    expect(result.current.unread).toEqual({}); // a mention badge, but not "unread" (you don't follow it)
+    expect(result.current.threads[K]).toEqual({ parent: 'general', name: 'Plans', followed: false });
+  });
+
+  test('once you follow it, replies count as unread and notify; unfollowing drops the badge', async () => {
+    const { result, onIncoming } = await channelHook();
+    act(() => result.current.handlers.thread_follow({ space: 'S', channel: '~t40', parentChannel: 'general', name: 'Plans', followed: true }));
+    expect(result.current.threads[K]).toEqual({ parent: 'general', name: 'Plans', followed: true });
+    act(() => result.current.handlers.message(reply()));
+    act(() => result.current.handlers.message(reply({ id: 51 })));
+    expect(onIncoming).toHaveBeenCalledTimes(2);
+    expect(result.current.unread).toEqual({ [K]: 2 });
+    act(() => result.current.handlers.thread_follow({ space: 'S', channel: '~t40', parentChannel: 'general', name: 'Plans', followed: false }));
+    expect(result.current.unread).toEqual({});
+    act(() => result.current.handlers.message(reply({ id: 52 })));
+    expect(onIncoming).toHaveBeenCalledTimes(2);
+  });
+
+  test('replies in the thread open in the panel never count as unread (the panel reads them)', async () => {
+    const { result, onIncoming } = await channelHook({ openThread: '~t40' });
+    act(() => result.current.handlers.thread_follow({ space: 'S', channel: '~t40', parentChannel: 'general', name: 'Plans', followed: true }));
+    act(() => result.current.handlers.message(reply({ mentions: ['sandy'] })));
+    expect(onIncoming).toHaveBeenCalledTimes(1); // the notifier decides, by whether the window is focused
+    expect(result.current.unread).toEqual({});
+    expect(result.current.mentions).toEqual({});
+  });
+
+  test('the connect-time unread frame brings followed threads, thread counts and their parents', async () => {
+    const { result } = await channelHook();
+    act(() =>
+      result.current.handlers.unread({
+        counts: [{ space: 'S', channel: 'random', count: 1 }, { space: 'S', channel: '~t40', parent: 'general', count: 3 }],
+        mentions: [{ space: 'S', channel: '~t41', parent: 'general', count: 1 }],
+        threads: [{ space: 'S', channel: '~t40', parent: 'general', name: 'Plans' }],
+      })
+    );
+    expect(result.current.unread).toEqual({ [unreadKey('S', 'random')]: 1, [K]: 3 });
+    expect(result.current.threads).toEqual({
+      [K]: { parent: 'general', name: 'Plans', followed: true },
+      [unreadKey('S', '~t41')]: { parent: 'general', followed: false },
+    });
+    act(() => result.current.clearUnread('S', '~t40'));
+    expect(result.current.unread).toEqual({ [unreadKey('S', 'random')]: 1 });
+  });
 });
 
 test('the reducer sets and clears a thread summary', () => {

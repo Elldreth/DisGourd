@@ -84,7 +84,12 @@ function attachGateway(httpServer, wss) {
       logInfo(`Gateway connected for user ${ws.userId} (${set.size} socket(s))`);
 
       ws.send(JSON.stringify({ type: 'ready' }));
-      ws.send(JSON.stringify({ type: 'unread', counts: db.getUnreadCounts(ws.userId), mentions: db.getMentionCounts(ws.userId) }));
+      ws.send(JSON.stringify({
+        type: 'unread',
+        counts: db.getUnreadCounts(ws.userId),
+        mentions: db.getMentionCounts(ws.userId),
+        threads: db.getThreadFollows(ws.userId), // the threads you follow
+      }));
       // Keyed by `with`, like the other DM ops (getDmUnreadCounts names it `other`).
       const dmCounts = db.getDmUnreadCounts(ws.userId).map((c) => ({ with: c.other, count: c.count }));
       ws.send(JSON.stringify({ type: 'dm_unread', counts: dmCounts }));

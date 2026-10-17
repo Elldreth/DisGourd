@@ -111,3 +111,18 @@ describe('Do Not Disturb (P2-14)', () => {
     expect(shouldNotify(dmFrame(), ctx({ level: 'all', focused: false }))).toBe('dm');
   });
 });
+
+describe('threads (P2-22c)', () => {
+  const inThread = (over = {}) => msg({ channel: '~t5', thread: { name: 'Weekend plans', parentChannel: 'general' }, ...over });
+  test('a reply in the thread open in the panel is "looking" while the window is focused', () => {
+    expect(attentionKind(inThread(), ctx({ thread: '~t5' }))).toBeNull();
+    expect(attentionKind(inThread(), ctx({ thread: '~t5', focused: false }))).toBe('message');
+    expect(attentionKind(inThread(), ctx({ thread: '~t6' }))).toBe('message');
+    expect(attentionKind(inThread({ mentions: ['sandy'] }), ctx())).toBe('mention');
+  });
+  test('the title names the thread and its channel', async () => {
+    const { notificationPlace } = await import('./notify.js');
+    expect(notificationPlace(inThread())).toBe('Weekend plans (#general) · Home');
+    expect(notificationPlace(msg())).toBe('#random · Home');
+  });
+});

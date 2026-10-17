@@ -59,4 +59,11 @@ function broadcastPresence(userId) {
   targets.forEach((id) => sendToUser(id, frame));
 }
 
-module.exports = { userClients, sendToUser, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus, publicPresence };
+// Tell a user they now follow (or no longer follow) a thread (P2-22c).
+function tellFollow(userId, space, thread, followed) {
+  sendToUser(userId, JSON.stringify({
+    type: 'thread_follow', space, channel: thread.channel, parentChannel: thread.parentChannel, name: thread.name, followed,
+  }));
+}
+
+module.exports = { userClients, sendToUser, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus, publicPresence, tellFollow };

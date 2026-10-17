@@ -36,6 +36,8 @@ export default function ThreadPanel({
   history,
   onTyping,
   onClose,
+  followed = false, // you follow this thread (it counts as unread and notifies)
+  onToggleFollow, // (follow: boolean)
 }) {
   const [root, setRoot] = useState(thread.root || null); // null while loading; false = deleted
   const [replyingTo, setReplyingTo] = useState(null);
@@ -91,6 +93,20 @@ export default function ThreadPanel({
           <h2 className="truncate font-bold leading-tight">{thread.name}</h2>
           <p className="truncate text-xs leading-tight text-gray-500">#{thread.parentChannel}</p>
         </div>
+        {onToggleFollow && (
+          <button
+            type="button"
+            onClick={() => onToggleFollow(!followed)}
+            aria-pressed={followed}
+            aria-label={followed ? 'Unfollow thread' : 'Follow thread'}
+            title={followed ? 'Stop getting unread badges and notifications for this thread' : 'Get unread badges and notifications for this thread'}
+            className={`shrink-0 rounded-md px-2 py-1 text-xs ring-1 transition ${
+              followed ? 'bg-brand/20 text-fg ring-brand-hi' : 'text-gray-400 ring-ink-500/60 hover:text-fg'
+            }`}
+          >
+            {followed ? 'Following' : 'Follow'}
+          </button>
+        )}
         <IconButton
           icon="x"
           size={18}

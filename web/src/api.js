@@ -194,6 +194,14 @@ export function createThread(space, channel, messageId, name) {
     body: { messageId, name },
   });
 }
+// Follow or unfollow a thread by hand (you auto-follow ones you start, post
+// in or are mentioned in).
+export function followThread(space, channel) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/follow`, { method: 'PUT' });
+}
+export function unfollowThread(space, channel) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/follow`, { method: 'DELETE' });
+}
 // A channel's threads, most recently active first (archived ones if asked).
 export function getThreads(space, channel, archived = false) {
   return request(

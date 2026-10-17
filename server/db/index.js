@@ -675,10 +675,12 @@ function getThread(spaceName, channelName) {
 }
 
 // A channel's threads, newest activity first; archived ones only if asked.
-function getThreads(spaceName, parentName, archived = false) {
-  return db.prepare(`${THREAD_SELECT} AND s.name = ? AND pc.name = ? AND (t.archived_at IS NOT NULL) = ?
+// With `userId`, each says whether that user follows it.
+function getThreads(spaceName, parentName, archived = false, userId = null) {
+  const rows = db.prepare(`${THREAD_SELECT} AND s.name = ? AND pc.name = ? AND (t.archived_at IS NOT NULL) = ?
     ORDER BY t.last_activity_at DESC, t.id DESC`)
     .all(spaceName, parentName, archived ? 1 : 0).map(shapeThread);
+  return userId == null ? rows : rows.map((t) => ({ ...t, followed: isFollowingThread(userId, t.id) }));
 }
 
 // Start a thread from a message in `parentName` (or return the one it has).
@@ -700,7 +702,9 @@ const createThread = db.transaction((spaceName, parentName, messageId, name, use
     INSERT INTO channels(space_id, name, type, view_role, post_role, parent_id, root_message_id, thread_name, created_by, last_activity_at)
     VALUES (?, ?, 'thread', ?, ?, ?, ?, ?, ?, ?)
   `).run(parent.spaceId, channel, parent.view, parent.post, parent.id, root.id, title, userId, Date.now());
-  return { thread: getThread(spaceName, channel), created: true };
+  const thread = getThread(spaceName, channel);
+  followThread(userId, thread.id); // you follow what you start
+  return { thread, created: true };
 });
 
 function getMessageLocation(messageId) {
@@ -731,25 +735,31 @@ const memberRankSql = (alias) =>
   `(CASE ${alias}.role WHEN 'owner' THEN 3 WHEN 'admin' THEN 2 WHEN 'member' THEN 1 ELSE 0 END)`;
 
 // Unread message counts per channel across all of the user's servers
-// (only channels the user is allowed to view).
+// (only channels the user is allowed to view). Threads count only when the
+// user follows them; a thread row names its `parent` channel.
 function getUnreadCounts(userId) {
   return db.prepare(`
-    SELECT s.name AS space, c.name AS channel, COUNT(m.id) AS count,
+    SELECT s.name AS space, c.name AS channel, pc.name AS parent, COUNT(m.id) AS count,
       COALESCE(rs.last_read_id, 0) AS lastReadId
     FROM space_members sm
     JOIN spaces s ON sm.space_id = s.id
-    JOIN channels c ON c.space_id = s.id AND c.view_role <= ${memberRankSql('sm')} AND c.type IS NOT 'thread'
+    JOIN channels c ON c.space_id = s.id AND c.view_role <= ${memberRankSql('sm')}
+    LEFT JOIN channels pc ON pc.id = c.parent_id
+    LEFT JOIN thread_follows tf ON tf.channel_id = c.id AND tf.user_id = sm.user_id
     LEFT JOIN read_state rs ON rs.user_id = sm.user_id AND rs.space = s.name AND rs.channel = c.name
     LEFT JOIN messages m ON m.channel_id = c.id AND m.id > COALESCE(rs.last_read_id, 0)
-    WHERE sm.user_id = ?
-    GROUP BY s.name, c.name
+    WHERE sm.user_id = ? AND (c.type IS NOT 'thread' OR tf.user_id IS NOT NULL)
+    GROUP BY s.name, c.name, pc.name
     HAVING count > 0
-  `).all(userId);
+  `).all(userId).map(withParent);
 }
+// Only thread rows name a parent channel.
+const withParent = ({ parent, ...row }) => (parent ? { ...row, parent } : row);
 
 // Record which server members a message mentions (only real members count).
 // Returns the resolved usernames so the sender's client can highlight them.
-function addMentions(messageId, spaceId, usernames) {
+// `ids` (optional) collects the mentioned users' ids.
+function addMentions(messageId, spaceId, usernames, ids = []) {
   if (!usernames.length) return [];
   const memberByName = db.prepare(
     'SELECT u.id, u.username FROM users u JOIN space_members sm ON sm.user_id = u.id WHERE sm.space_id = ? AND u.username = ?'
@@ -761,27 +771,63 @@ function addMentions(messageId, spaceId, usernames) {
     if (row) {
       insert.run(messageId, row.id);
       resolved.push(row.username);
+      ids.push(row.id);
     }
   }
   return resolved;
 }
 
 // Unread mentions of the user, per channel (mentions in messages newer than the
-// user's read marker for that channel).
+// user's read marker for that channel). Mentions in any thread the user can
+// see count, followed or not; a thread row names its `parent` channel.
 function getMentionCounts(userId) {
   return db.prepare(`
-    SELECT s.name AS space, c.name AS channel, COUNT(m.id) AS count
+    SELECT s.name AS space, c.name AS channel, pc.name AS parent, COUNT(m.id) AS count
     FROM mentions mn
     JOIN messages m ON mn.message_id = m.id
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
     JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = mn.user_id
       AND c.view_role <= ${memberRankSql('sm')}
+    LEFT JOIN channels pc ON pc.id = c.parent_id
     LEFT JOIN read_state rs ON rs.user_id = ? AND rs.space = s.name AND rs.channel = c.name
-    WHERE mn.user_id = ? AND c.type IS NOT 'thread' AND m.id > COALESCE(rs.last_read_id, 0)
-    GROUP BY s.name, c.name
+    WHERE mn.user_id = ? AND m.id > COALESCE(rs.last_read_id, 0)
+    GROUP BY s.name, c.name, pc.name
     HAVING count > 0
-  `).all(userId, userId);
+  `).all(userId, userId).map(withParent);
+}
+
+// ---- Thread follows ----
+// The channel id of a thread (null if that name isn't a thread here).
+function threadChannelId(spaceName, channelName) {
+  const row = db.prepare(`
+    SELECT c.id FROM channels c JOIN spaces s ON c.space_id = s.id
+    WHERE s.name = ? AND c.name = ? AND c.type = 'thread'
+  `).get(spaceName, channelName);
+  return row ? row.id : null;
+}
+// Both return whether anything changed.
+function followThread(userId, channelId) {
+  return db.prepare('INSERT OR IGNORE INTO thread_follows(user_id, channel_id, followed_at) VALUES (?, ?, ?)')
+    .run(userId, channelId, Date.now()).changes > 0;
+}
+function unfollowThread(userId, channelId) {
+  return db.prepare('DELETE FROM thread_follows WHERE user_id = ? AND channel_id = ?').run(userId, channelId).changes > 0;
+}
+function isFollowingThread(userId, channelId) {
+  return !!db.prepare('SELECT 1 FROM thread_follows WHERE user_id = ? AND channel_id = ?').get(userId, channelId);
+}
+// Every thread the user follows: { space, channel, parent, name }.
+function getThreadFollows(userId) {
+  return db.prepare(`
+    SELECT s.name AS space, t.name AS channel, pc.name AS parent, t.thread_name AS name
+    FROM thread_follows tf
+    JOIN channels t ON t.id = tf.channel_id
+    JOIN channels pc ON pc.id = t.parent_id
+    JOIN spaces s ON s.id = t.space_id
+    WHERE tf.user_id = ?
+    ORDER BY t.id
+  `).all(userId);
 }
 
 // Mark every channel of a server read up to its latest message (used on join so
@@ -1224,8 +1270,16 @@ const storeMessageWithMentions = db.transaction(
     const stored = storeMessage(spaceName, channelName, content, authorId, attachments, spoiler, replyTo);
     if (!stored) return null;
     markRead(authorId, spaceName, channelName, stored.id);
-    const mentions = mentionNames.length ? addMentions(stored.id, spaceId, mentionNames) : [];
-    return { ...stored, mentions };
+    const mentionedIds = [];
+    const mentions = mentionNames.length ? addMentions(stored.id, spaceId, mentionNames, mentionedIds) : [];
+    // In a thread, posting or being mentioned makes you a follower.
+    // `newFollows` lists who just became one, so they can be told.
+    const newFollows = [];
+    const threadId = threadChannelId(spaceName, channelName);
+    if (threadId) {
+      for (const uid of [authorId, ...mentionedIds]) if (uid && followThread(uid, threadId)) newFollows.push(uid);
+    }
+    return { ...stored, mentions, newFollows };
   }
 );
 
@@ -1332,6 +1386,11 @@ module.exports = {
   createThread,
   getThread,
   getThreads,
+  threadChannelId,
+  followThread,
+  unfollowThread,
+  isFollowingThread,
+  getThreadFollows,
   getReplyTarget,
   deleteMessageById,
   getCoMemberIds,
