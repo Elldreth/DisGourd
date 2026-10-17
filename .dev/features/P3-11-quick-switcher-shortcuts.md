@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3 — "Keyboard shortcuts"
-- **State:** REVIEW
+- **State:** COMPLETE
 - **Effort:** S–M
 - **Depends on:** P3-01
 - **Soft-depends on:** P1-14 (navigation actions in `useSpaces`, which is cleaner)

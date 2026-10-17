@@ -4,6 +4,7 @@ import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
+import IconButton from './IconButton.jsx';
 import DropOverlay from './DropOverlay.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 
@@ -18,13 +19,13 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
     return (
       <main className="relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
         {onOpenNav && (
-          <button
+          <IconButton
+            icon="menu"
+            size={22}
+            label="Conversations"
             onClick={onOpenNav}
-            title="Conversations"
             className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
-          >
-            <Icon name="menu" size={22} />
-          </button>
+          />
         )}
         <div className="mb-3 text-6xl">💬</div>
         <h2 className="text-xl font-bold">Your messages</h2>
@@ -39,23 +40,23 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
     <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700" {...drop.dropProps}>
       {drop.dragging && <DropOverlay target={`@${username}`} />}
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-xs shadow-black/20 md:px-4">
-        <button
+        <IconButton
+          icon="menu"
+          size={20}
+          label="Conversations"
           onClick={onOpenNav}
-          title="Conversations"
           className="-ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
-        >
-          <Icon name="menu" size={20} />
-        </button>
+        />
         <Avatar name={username} size={24} />
         <h2 className="font-bold">{username}</h2>
         <div className="flex-1" />
-        <button
+        <IconButton
+          icon="search"
+          size={18}
+          label="Search messages"
           onClick={onOpenSearch}
-          title="Search messages"
           className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
-        >
-          <Icon name="search" size={18} />
-        </button>
+        />
       </header>
 
       <MessageList

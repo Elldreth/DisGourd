@@ -1,5 +1,6 @@
 import Avatar from './Avatar.jsx';
 import UserFooter from './UserFooter.jsx';
+import { unreadLabel } from '../util.js';
 
 // The second column when in Direct Messages mode: a list of conversations.
 export default function DmSidebar({
@@ -45,8 +46,9 @@ export default function DmSidebar({
                 </div>
                 {preview && <div className="truncate text-xs text-gray-500">{preview}</div>}
               </div>
+              {hasUnread && <span className="sr-only">, {unreadLabel({ unread: count })}</span>}
               {hasUnread && (
-                <span className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-ink-900">
+                <span aria-hidden="true" className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-ink-900">
                   {count}
                 </span>
               )}

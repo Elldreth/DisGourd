@@ -1,5 +1,6 @@
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
+import IconButton from './IconButton.jsx';
 
 const STATUS_LABEL = {
   idle: { text: 'Not connected', color: 'bg-gray-500' },
@@ -29,13 +30,13 @@ export default function UserFooter({ user, avatar, status, onOpenProfile, onLogo
           </div>
         </div>
       </button>
-      <button
+      <IconButton
+        icon="logout"
+        size={17}
+        label="Sign out"
         onClick={onLogout}
-        title="Sign out"
         className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
-      >
-        <Icon name="logout" size={17} />
-      </button>
+      />
     </div>
   );
 }

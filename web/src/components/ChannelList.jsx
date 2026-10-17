@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
+import IconButton from './IconButton.jsx';
+import { unreadLabel } from '../util.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import UserFooter from './UserFooter.jsx';
 import ServerPermissionsDialog from './ServerPermissionsDialog.jsx';
@@ -77,6 +79,7 @@ export default function ChannelList({
   };
   const [permsOpen, setPermsOpen] = useState(false);
   const [channelSettings, setChannelSettings] = useState(null); // channel name or null
+  const gearRefs = useRef({}); // channel -> its settings gear, to return focus to
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const iconInputRef = useRef(null);
@@ -232,6 +235,8 @@ export default function ChannelList({
             <button
               onClick={() => setAdding((v) => !v)}
               title="Create channel"
+              aria-label="Create channel"
+              aria-expanded={adding}
               className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
             >
               <Icon name="plus" size={16} />
@@ -243,6 +248,7 @@ export default function ChannelList({
           <form onSubmit={submit} className="mb-1 px-1">
             <input
               autoFocus
+              aria-label="New channel name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={() => !name && setAdding(false)}
@@ -271,23 +277,31 @@ export default function ChannelList({
               >
                 <Icon name="hash" size={17} className="shrink-0 text-gray-500" />
                 <span className="flex-1 truncate">{c}</span>
+                {(hasUnread || mentionCount > 0) && (
+                  <span className="sr-only">, {unreadLabel({ unread: hasUnread ? unread[c] : 0, mentions: mentionCount })}</span>
+                )}
                 {restricted && <span title="Restricted access" className="shrink-0 text-gray-500"><Icon name="shield" size={13} /></span>}
                 {mentionCount > 0 ? (
-                  <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-ink-900 tabular-nums">
+                  <span aria-hidden="true" className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-ink-900 tabular-nums">
                     {mentionCount}
                   </span>
                 ) : hasUnread ? (
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-gray-300" />
+                  <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-gray-300" />
                 ) : null}
               </button>
               {canManage && (
-                <button
-                  onClick={() => setChannelSettings(c)}
+                <IconButton
+                  icon="settings"
+                  size={15}
+                  label={`Channel settings for ${c}`}
                   title="Channel settings"
-                  className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex"
-                >
-                  <Icon name="settings" size={15} />
-                </button>
+                  ref={(el) => (gearRefs.current[c] = el)}
+                  onClick={() => setChannelSettings(c)}
+                  className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
+                  // stays shown while its dialog is open, so focus can come back to it
+                  channelSettings === c ? 'flex' : 'hidden'
+                }`}
+                />
               )}
             </div>
           );
@@ -308,6 +322,8 @@ export default function ChannelList({
                 <button
                   onClick={() => setAddingVoice((v) => !v)}
                   title="Create voice channel"
+                  aria-label="Create voice channel"
+                  aria-expanded={addingVoice}
                   className="flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
                 >
                   <Icon name="plus" size={16} />
@@ -318,6 +334,7 @@ export default function ChannelList({
               <form onSubmit={submitVoice} className="mb-1 px-1">
                 <input
                   autoFocus
+                  aria-label="New voice channel name"
                   value={voiceName}
                   onChange={(e) => setVoiceName(e.target.value)}
                   onBlur={() => !voiceName && setAddingVoice(false)}
@@ -345,13 +362,18 @@ export default function ChannelList({
                       )}
                     </button>
                     {canManage && (
-                      <button
-                        onClick={() => setChannelSettings(vc)}
+                      <IconButton
+                        icon="settings"
+                        size={15}
+                        label={`Channel settings for ${vc}`}
                         title="Channel settings"
-                        className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex"
-                      >
-                        <Icon name="settings" size={15} />
-                      </button>
+                        ref={(el) => (gearRefs.current[vc] = el)}
+                        onClick={() => setChannelSettings(vc)}
+                        className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
+                  // stays shown while its dialog is open, so focus can come back to it
+                  channelSettings === vc ? 'flex' : 'hidden'
+                }`}
+                      />
                     )}
                   </div>
                   {people.map((p) => (
@@ -383,7 +405,7 @@ export default function ChannelList({
         <div role="status" className="flex items-start gap-2 border-t border-ink-900/60 bg-idle/10 px-3 py-2 text-xs text-idle">
           <Icon name="volume" size={15} className="mt-px shrink-0" />
           <span className="min-w-0 flex-1">{voiceNotice}</span>
-          <button onClick={onDismissVoiceNotice} title="Dismiss" className="shrink-0 rounded-sm px-1 hover:bg-ink-600">
+          <button onClick={onDismissVoiceNotice} title="Dismiss" aria-label="Dismiss" className="shrink-0 rounded-sm px-1 hover:bg-ink-600">
             ✕
           </button>
         </div>
@@ -412,49 +434,58 @@ export default function ChannelList({
           </div>
           <div className="mt-2 flex items-center gap-1.5">
             {!voiceMicError && (
-              <button
-                onClick={onToggleMute}
+              <IconButton
+                icon={voiceMuted ? 'micOff' : 'mic'}
+                size={17}
+                label="Mute (Ctrl+Shift+M)"
                 title={voiceMuted ? 'Unmute (Ctrl+Shift+M)' : 'Mute (Ctrl+Shift+M)'}
+                pressed={!!voiceMuted}
+                onClick={onToggleMute}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                   voiceMuted ? 'bg-danger/80 text-ink-900 hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
                 }`}
-              >
-                <Icon name={voiceMuted ? 'micOff' : 'mic'} size={17} />
-              </button>
+              />
             )}
-            <button
-              onClick={onToggleDeafen}
+            <IconButton
+              icon={voiceDeafened ? 'headphonesOff' : 'headphones'}
+              size={17}
+              label="Deafen (Ctrl+Shift+D)"
               title={voiceDeafened ? 'Undeafen (Ctrl+Shift+D)' : 'Deafen (Ctrl+Shift+D)'}
+              pressed={!!voiceDeafened}
+              onClick={onToggleDeafen}
               className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                 voiceDeafened ? 'bg-danger/80 text-ink-900 hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
               }`}
-            >
-              <Icon name={voiceDeafened ? 'headphonesOff' : 'headphones'} size={17} />
-            </button>
-            <button
-              onClick={onToggleCamera}
+            />
+            <IconButton
+              icon="video"
+              size={17}
+              label="Camera"
               title={voiceCameraOn ? 'Turn camera off' : 'Turn camera on'}
+              pressed={!!voiceCameraOn}
+              onClick={onToggleCamera}
               className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                 voiceCameraOn ? 'bg-brand text-white hover:bg-brand-hover' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
               }`}
-            >
-              <Icon name="video" size={17} />
-            </button>
+            />
             {displayCaptureSupported() && (
-              <button
-                onClick={onToggleScreen}
+              <IconButton
+                icon="screen"
+                size={17}
+                label="Share your screen"
                 title={voiceScreenOn ? 'Stop sharing your screen' : 'Share your screen'}
+                pressed={!!voiceScreenOn}
+                onClick={onToggleScreen}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                   voiceScreenOn ? 'bg-brand text-white hover:bg-brand-hover' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'
                 }`}
-              >
-                <Icon name="screen" size={17} />
-              </button>
+              />
             )}
           </div>
           {displayCaptureSupported() && (
             <button
               onClick={onToggleShare}
+              aria-pressed={!!voiceSharing}
               className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
                 voiceSharing
                   ? 'bg-danger/80 text-ink-900 hover:bg-danger'
@@ -515,7 +546,11 @@ export default function ChannelList({
           space={space}
           channel={channelSettings}
           meta={channelMeta[channelSettings]}
-          onClose={() => setChannelSettings(null)}
+          onClose={() => {
+            // Focus the gear while it's still shown; focus keeps it shown after.
+            gearRefs.current[channelSettings]?.focus();
+            setChannelSettings(null);
+          }}
           onSaved={onPermsChanged}
         />
       )}
@@ -543,15 +578,18 @@ function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
             value={vol}
             onChange={(e) => onVolume(parseFloat(e.target.value))}
             title="Volume (only for you)"
+            aria-label={`${p.username}’s audio volume (only for you)`}
             className="h-1 w-14 accent-brand"
           />
-          <button
-            onClick={onToggleMute}
+          <IconButton
+            icon={p.shareMutedLocally ? 'volumeOff' : 'volume'}
+            size={14}
+            label={`Mute ${p.username}’s audio for me`}
             title={p.shareMutedLocally ? 'Unmute for me' : 'Mute for me'}
+            pressed={!!p.shareMutedLocally}
+            onClick={onToggleMute}
             className={`flex h-6 w-6 items-center justify-center rounded-sm ${p.shareMutedLocally ? 'text-danger' : 'text-gray-400 hover:text-fg'}`}
-          >
-            <Icon name={p.shareMutedLocally ? 'volumeOff' : 'volume'} size={14} />
-          </button>
+          />
         </>
       )}
     </div>

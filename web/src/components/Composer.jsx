@@ -215,6 +215,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
                   <button
                     onClick={() => removePending(p.url)}
                     title="Remove"
+                    aria-label={`Remove ${p.name}`}
                     className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-bl bg-black/70 text-white hover:bg-danger hover:text-ink-900"
                   >
                     <Icon name="x" size={13} strokeWidth={2.2} />
@@ -295,6 +296,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
           onClick={() => fileRef.current?.click()}
           disabled={disabled}
           title="Attach files (images, videos, and more)"
+          aria-label="Attach files"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-500 text-gray-200 transition hover:bg-brand hover:text-white active:scale-90 disabled:opacity-50"
         >
           <Icon name="plus" size={18} />
@@ -309,6 +311,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
           onPaste={onPaste}
           disabled={disabled}
           placeholder={disabled ? 'Connecting…' : placeholder || `Message #${channel}`}
+          aria-label={placeholder || `Message #${channel}`}
           className="max-h-52 flex-1 resize-none bg-transparent py-1.5 text-gray-100 outline-hidden placeholder:text-gray-500 disabled:opacity-60"
         />
         <div ref={emojiBtnRef} className="shrink-0">

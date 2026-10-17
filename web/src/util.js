@@ -183,3 +183,11 @@ export async function copyText(text) {
     return false;
   }
 }
+
+// Words for an unread/mention badge, for screen readers: "5 unread, 2 mentions".
+export function unreadLabel({ unread = 0, mentions = 0 }) {
+  const parts = [];
+  if (unread > 0) parts.push(`${unread} unread`);
+  if (mentions > 0) parts.push(`${mentions} mention${mentions === 1 ? '' : 's'}`);
+  return parts.join(', ');
+}

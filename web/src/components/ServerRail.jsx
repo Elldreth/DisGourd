@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { initials, colorForName } from '../util.js';
+import { initials, colorForName, unreadLabel } from '../util.js';
 import Icon from './Icon.jsx';
 import Gourd from './Gourd.jsx';
 import CreateServerDialog from './CreateServerDialog.jsx';
@@ -38,13 +38,14 @@ export default function ServerRail({
       <button
         onClick={onSelectDms}
         title="Direct Messages"
+        aria-label={['Direct Messages', dmActive ? '' : unreadLabel({ unread: dmUnread })].filter(Boolean).join(', ')}
         className={`relative mb-1 flex h-12 w-12 items-center justify-center transition-all hover:rounded-2xl active:scale-90 ${
           dmActive ? 'rounded-2xl bg-brand text-white' : 'rounded-[26px] bg-ink-700 text-fg hover:bg-brand hover:text-white'
         }`}
       >
         <Gourd size={34} color="currentColor" title="Direct Messages" />
         {dmUnread > 0 && !dmActive && (
-          <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
+          <span aria-hidden="true" className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
             {dmUnread > 99 ? '99+' : dmUnread}
           </span>
         )}
@@ -61,6 +62,8 @@ export default function ServerRail({
               key={s.name}
               onClick={() => onSelect(s.name)}
               title={`${s.name} — drag to reorder`}
+              aria-label={[s.name, active ? '' : unreadLabel({ unread: count, mentions: mentionCount })].filter(Boolean).join(', ')}
+              aria-current={active ? 'page' : undefined}
               draggable
               onDragStart={() => setDragIndex(i)}
               onDragOver={(e) => { e.preventDefault(); if (dropIndex !== i) setDropIndex(i); }}
@@ -82,7 +85,7 @@ export default function ServerRail({
                 initials(s.name)
               )}
               {mentionCount > 0 && !active && (
-                <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
+                <span aria-hidden="true" className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
                   {mentionCount > 99 ? '99+' : mentionCount}
                 </span>
               )}
