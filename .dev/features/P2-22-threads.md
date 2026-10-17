@@ -1,18 +1,35 @@
 # P2-22 — Threads (Container, L)
 
-- **Unit Type:** Container
+- **Unit Type:** Container (decomposed 2026-10-17 into P2-22a–d)
 - **Phase:** 2, rank 14
-- **State:** PLANNED
-- **Effort:** L
-- **Depends on:** P2-09 and P2-10 (the reply infrastructure and `around` pagination), P1-08, P1-09
+- **State:** PLANNED (children below; P2-22a is READY)
+- **Effort:** L in total
+- **Depends on:** P2-09 and P2-10 (replies, `around` jump, newer-page loading), P1-08, P1-09, P2-13 (pins, now reused by threads)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #14
 
-## Why it isn't decomposed further now
-The thread model depends on decisions that replies (P2-09) will settle: how `reply_to` renders and how jump/pagination works. Decompose once P2-10 has landed. The preliminary slices:
-1. Data model: either `threads(id, channel_id, root_message_id, name, archived)` with `messages.thread_id`, or threads modelled as hidden child channels (reuses all of the channel machinery, including unread, permissions and pagination). **The recommended option is child channels.** Flag this for the human.
-2. Server ops and REST: create a thread from a message, post, and list active threads.
-3. Client: a thread side panel, a thread summary under the root message, and unread state for threads.
-4. Notifications and unread integration.
+## Decisions (user, 2026-10-17)
+| Question | Decision |
+|---|---|
+| Data model | **Hidden child channels.** A thread is a `channels` row with `type = 'thread'`, a `parent_id` and a `root_message_id`, named `~t<id>`. User channel names are normalised to `a-z0-9_-`, so this name can never collide. |
+| Who can start a thread | **Anyone who can post** in the parent channel, from any message there. |
+| Archiving | **After 7 quiet days.** Archived threads drop out of the active list but stay readable; posting in one reopens it. |
+| Notifications | **Follow threads.** You auto-follow threads you start, post in or are @mentioned in. Followed threads show unread and notify at your normal level, and you can unfollow. |
 
-## Open questions
-- FLAG: auto-archive policy? Thread membership and notification semantics?
+Non-goals: threads in DMs, threads inside threads, forum channels.
+
+## Why child channels fit this codebase
+Everything about messages is keyed by *(server, channel name)*: history and paging, `around`, pins, reactions, link previews, replies, edits and deletes, read markers, mentions, typing, and permission-filtered delivery (`deliverToChannelViewers`). A thread that *is* a channel gets all of that unchanged. The cost is a few targeted changes:
+- `getChannelPerms` resolves a thread to its **parent's** view/post roles, so private channels' threads stay private, and changing the parent's permissions applies to its threads with no syncing.
+- `getUserSpaces` and the channel-management routes **leave threads out** of channel lists.
+- `gateway/chat.js` accepts `type = 'thread'` where it checks `'text'`.
+- Display: anything that shows a channel name (notifications, search results, the quick switcher) shows a thread as "Thread name (#parent)".
+
+Client snag found during planning: `state/gatewayHandlers.js` keeps **one handler per frame type** (`Object.assign`), so a second `useChannelMessages` (the thread panel) would replace the channel's handlers. P2-22b makes the table compose handlers.
+
+## Children (run in order a → b → c; d after a)
+| ID | Title | Effort | Depends on |
+|---|---|---|---|
+| P2-22a | Thread data model + server API | M | — |
+| P2-22b | Thread panel and summaries (client), with composable gateway handlers | M | P2-22a |
+| P2-22c | Following, unread and notifications for threads | M | P2-22a, P2-22b |
+| P2-22d | Auto-archive after 7 quiet days | S | P2-22a |
