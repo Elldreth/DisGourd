@@ -310,6 +310,7 @@ export default function App() {
             />
           </div>
           <MemberList
+            space={sp.currentSpace}
             members={sp.members}
             currentUser={user}
             myRole={sp.role}
