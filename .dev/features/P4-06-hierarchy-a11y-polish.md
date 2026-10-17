@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P4-00)
 - **Phase:** 4
-- **State:** REVIEW (branch `claude/p4-06-polish`, PR pending)
+- **State:** COMPLETE (merged in #104, 2026-10-17)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P4-01 (`ChatPanel.jsx`, `MessageList.jsx`, `index.css`), P4-07 (`ThreadPanel.jsx`)
