@@ -27,7 +27,7 @@ function deliverToChannelViewers(spaceName, channelName, frameStr) {
   const space = db.getSpaceByName(spaceName);
   if (!space) return;
   for (const m of db.getSpaceMembers(space.id)) {
-    if (canViewChannel(spaceName, channelName, m.role)) sendToUser(m.userId, frameStr);
+    if (canViewChannel(spaceName, channelName, m.userId)) sendToUser(m.userId, frameStr);
   }
 }
 

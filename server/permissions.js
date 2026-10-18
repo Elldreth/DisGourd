@@ -1,82 +1,67 @@
 const db = require('./db');
 
-// Per-channel role gates. Unknown channels return true so normal 404 handling
-// applies elsewhere.
-function canViewChannel(spaceName, channelName, role) {
-  const cp = db.getChannelPerms(spaceName, channelName);
-  return !cp || db.roleRank(role) >= (cp.view || 1);
-}
-function canPostChannel(spaceName, channelName, role) {
-  const cp = db.getChannelPerms(spaceName, channelName);
-  return !cp || db.roleRank(role) >= (cp.post || 1);
+// Permission checks, answered from the roles tables (P2-21b). Everything that
+// gates a user goes through here or through db.resolveAccess, so private
+// channels never leak and a role change applies everywhere at once.
+
+// What `userId` may do in a server: null for a non-member; otherwise
+// { owner, actions (a Set of action names), position (their highest role's,
+// Infinity for the owner) } and, with `channelId`, view / post for that channel.
+function resolvePermissions(spaceId, userId, channelId = null) {
+  const access = db.resolveAccess(spaceId, userId);
+  if (!access) return null;
+  const out = { owner: access.owner, actions: access.actions, position: access.position };
+  if (channelId != null) Object.assign(out, access.channel(channelId));
+  return out;
 }
 
-// Whether a user may see a channel: a member of its server whose role meets the
-// channel's view threshold. Every channel-scoped event goes through this (or
+// The ids behind a (server name, channel name) pair, or null if unknown.
+function channelRef(spaceName, channelName) {
+  return db.channelRef(spaceName, channelName);
+}
+
+// Per-channel gates. Unknown channels return true so normal 404 handling
+// applies elsewhere; non-members are always refused.
+function canViewChannel(spaceName, channelName, userId) {
+  const ref = channelRef(spaceName, channelName);
+  if (!ref) return true;
+  const access = db.resolveAccess(ref.spaceId, userId);
+  return !!access && access.channel(ref.channelId).view;
+}
+function canPostChannel(spaceName, channelName, userId) {
+  const ref = channelRef(spaceName, channelName);
+  if (!ref) return true;
+  const access = db.resolveAccess(ref.spaceId, userId);
+  return !!access && access.channel(ref.channelId).post;
+}
+
+// Whether a member may perform a server action (create channels, pin, kick…).
+function canDoAction(spaceId, userId, action) {
+  const access = db.resolveAccess(spaceId, userId);
+  return !!access && access.actions.has(action);
+}
+
+// Whether a user may see a channel: a member of its server whose roles allow
+// viewing it. Every channel-scoped event goes through this (or
 // deliverToChannelViewers) so private channels never leak.
 function canView(spaceName, channelName, userId) {
   const space = db.getSpaceByName(spaceName);
   if (!space) return false;
-  const role = db.getMemberRole(space.id, userId);
-  return !!role && canViewChannel(spaceName, channelName, role);
+  return db.isMember(space.id, userId) && canViewChannel(spaceName, channelName, userId);
 }
 
 // Whether `actorId` may delete someone else's message in a channel: they must
-// be able to view it, their role must meet the server's
-// `delete_others_messages` threshold, and the author must rank strictly below
-// them (like kicking). Authors who left the server or deleted their account
-// rank 0, so their messages can be cleaned up.
+// be able to view it, hold `delete_others_messages`, and the author must sit
+// strictly below them (like kicking). Authors who left the server or deleted
+// their account sit below everyone, so their messages can be cleaned up.
 function canModerateMessage(spaceName, channelName, actorId, authorId) {
   const space = db.getSpaceByName(spaceName);
   if (!space) return false;
-  const actorRole = db.getMemberRole(space.id, actorId);
-  if (!actorRole || !canViewChannel(spaceName, channelName, actorRole)) return false;
-  if (!db.canDo(space.id, actorRole, 'delete_others_messages')) return false;
-  const authorRole = authorId == null ? null : db.getMemberRole(space.id, authorId);
-  return db.roleRank(authorRole) < db.roleRank(actorRole);
+  const actor = db.resolveAccess(space.id, actorId);
+  if (!actor || !canViewChannel(spaceName, channelName, actorId)) return false;
+  if (!actor.actions.has('delete_others_messages')) return false;
+  const author = authorId == null ? null : db.resolveAccess(space.id, authorId);
+  return (author ? author.position : -1) < actor.position;
 }
 
-// ---- Roles (P2-21a) ----
-// What `userId` may do in a server, read from the roles tables. null for a
-// non-member; otherwise { owner, actions (a Set of action names), position
-// (their highest role's, Infinity for the owner), and with `channelId`,
-// view / post }. The owner may do everything. Channel access: the
-// @everyone override first, then the member's own roles: an allow from any
-// of them wins, else a deny from any, else what @everyone said (default
-// allowed). Posting needs viewing.
-// Not used by the live checks yet (P2-21b); P2-21a proves it agrees with them.
-function resolvePermissions(spaceId, userId, channelId = null) {
-  const space = db.getSpaceById(spaceId);
-  if (!space || !db.isMember(spaceId, userId)) return null;
-  const owner = Number(space.owner_id) === Number(userId);
-  const roles = db.getRoles(spaceId);
-  const everyone = roles.find((r) => r.isDefault) || null;
-  const mineIds = new Set(db.getMemberRoleIds(spaceId, userId));
-  const mine = roles.filter((r) => mineIds.has(r.id));
-  const actions = new Set();
-  for (const r of [everyone, ...mine]) if (r) for (const a of r.permissions) actions.add(a);
-  if (owner) for (const a of Object.keys(db.DEFAULT_PERMISSIONS)) actions.add(a);
-  const position = owner ? Infinity : mine.reduce((top, r) => Math.max(top, r.position), everyone ? everyone.position : 0);
-  const out = { owner, actions, position };
-  if (channelId != null) {
-    if (owner) {
-      out.view = true;
-      out.post = true;
-    } else {
-      const overrides = db.getChannelOverrides(channelId);
-      const decide = (field) => {
-        const base = everyone ? overrides.find((o) => o.roleId === everyone.id)?.[field] : null;
-        let allowed = base == null ? true : base === 1;
-        const own = overrides.filter((o) => mineIds.has(o.roleId)).map((o) => o[field]).filter((v) => v != null);
-        if (own.includes(1)) allowed = true;
-        else if (own.includes(0)) allowed = false;
-        return allowed;
-      };
-      out.view = decide('view');
-      out.post = out.view && decide('post');
-    }
-  }
-  return out;
-}
-
-module.exports = { canViewChannel, canPostChannel, canView, canModerateMessage, resolvePermissions };
+module.exports = { canViewChannel, canPostChannel, canView, canModerateMessage, canDoAction, resolvePermissions };

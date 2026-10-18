@@ -53,11 +53,14 @@ const routes = [
       if (!space) return sendJson(res, 404, { error: 'Server not found' });
       const role = db.getMemberRole(space.id, userId);
       if (!role) return sendJson(res, 403, { error: 'You are not a member of this server' });
-      const canManage = role === 'owner' || role === 'admin';
+      // What this member may do here, from their roles (P2-21b).
+      const access = db.resolveAccess(space.id, userId);
+      if (!access) return sendJson(res, 403, { error: 'You are not a member of this server' });
+      const canManage = access.owner || access.actions.has('edit_server');
 
       // PATCH /spaces/:name — update server settings (icon). Owner/admin only.
       if (pathSegments.length === 2 && req.method === 'PATCH') {
-        if (!db.canDo(space.id, role, 'edit_server')) return sendJson(res, 403, { error: 'You are not allowed to change server settings' });
+        if (!access.actions.has('edit_server')) return sendJson(res, 403, { error: 'You are not allowed to change server settings' });
         const body = await getJsonBody(req);
         if ('icon' in body) {
           const icon = body.icon;
@@ -86,7 +89,7 @@ const routes = [
 
       // DELETE /spaces/:name — owner only
       if (pathSegments.length === 2 && req.method === 'DELETE') {
-        if (role !== 'owner') return sendJson(res, 403, { error: 'Only the owner can delete this server' });
+        if (!access.owner) return sendJson(res, 403, { error: 'Only the owner can delete this server' });
         // Notify members over the gateway before the space (and its membership) is gone.
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_deleted', space: spaceName }));
         db.deleteSpace(spaceName);
@@ -97,14 +100,16 @@ const routes = [
       if (pathSegments[2] === 'members' && pathSegments.length === 3 && req.method === 'GET') {
         const members = db.getSpaceMembers(space.id).map((m) => {
           const p = publicPresence(m.userId); // status online | idle | dnd | offline, plus custom status
-          return { username: m.username, avatar: m.avatar, role: m.role, ...p, online: p.status !== 'offline' };
+          const a = db.resolveAccess(space.id, m.userId);
+          const position = a ? (a.owner ? db.OWNER_POSITION : a.position) : 0;
+          return { username: m.username, avatar: m.avatar, role: m.role, position, ...p, online: p.status !== 'offline' };
         });
         return sendJson(res, 200, { members });
       }
 
       // PATCH /spaces/:name/members/:username — change a member's role
       if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'PATCH') {
-        if (!db.canDo(space.id, role, 'manage_roles')) return sendJson(res, 403, { error: 'You are not allowed to change roles' });
+        if (!access.actions.has('manage_roles')) return sendJson(res, 403, { error: 'You are not allowed to change roles' });
         const target = db.getUserByUsername(pathSegments[3]);
         if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
         if (target.id === space.owner_id) return sendJson(res, 400, { error: "The owner's role can't be changed" });
@@ -118,13 +123,13 @@ const routes = [
       // DELETE /spaces/:name/members/:username — remove a member (owner: anyone but
       // the owner; admin: members only)
       if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'DELETE') {
-        if (!db.canDo(space.id, role, 'kick')) return sendJson(res, 403, { error: 'You are not allowed to remove members' });
+        if (!access.actions.has('kick')) return sendJson(res, 403, { error: 'You are not allowed to remove members' });
         const target = db.getUserByUsername(pathSegments[3]);
         if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
         if (target.id === userId) return sendJson(res, 400, { error: "You can't remove yourself" });
-        const targetRole = db.getMemberRole(space.id, target.id);
-        // You can only remove someone ranked strictly below you (never the owner).
-        if (db.roleRank(targetRole) >= db.roleRank(role)) return sendJson(res, 403, { error: 'You cannot remove this member' });
+        // You can only remove someone positioned strictly below you (never the owner).
+        const targetAccess = db.resolveAccess(space.id, target.id);
+        if (!targetAccess || targetAccess.position >= access.position) return sendJson(res, 403, { error: 'You cannot remove this member' });
         db.removeMember(space.id, target.id);
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
         sendToUser(target.id, JSON.stringify({ type: 'space_left', space: spaceName }));
@@ -133,7 +138,7 @@ const routes = [
 
       // POST /spaces/:name/invites — gated by the "invite" threshold
       if (pathSegments[2] === 'invites' && pathSegments.length === 3 && req.method === 'POST') {
-        if (!db.canDo(space.id, role, 'invite')) return sendJson(res, 403, { error: 'You are not allowed to invite people here' });
+        if (!access.actions.has('invite')) return sendJson(res, 403, { error: 'You are not allowed to invite people here' });
         const code = crypto.randomBytes(6).toString('base64url');
         db.createInvite(code, space.id, userId, null, null);
         return sendJson(res, 201, { code });
@@ -146,7 +151,7 @@ const routes = [
       }
       // PUT /spaces/:name/permissions — change server action thresholds (owner only)
       if (pathSegments[2] === 'permissions' && pathSegments.length === 3 && req.method === 'PUT') {
-        if (role !== 'owner') return sendJson(res, 403, { error: 'Only the owner can change permissions' });
+        if (!access.owner) return sendJson(res, 403, { error: 'Only the owner can change permissions' });
         const body = await getJsonBody(req);
         db.setSpacePermissions(space.id, body.permissions || body);
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
@@ -156,7 +161,7 @@ const routes = [
       // /spaces/:name/emoji — the server's custom emoji (P2-19a).
       if (pathSegments[2] === 'emoji') {
         if (pathSegments.length === 3 && req.method === 'GET') return sendJson(res, 200, db.getSpaceEmoji(space.id));
-        if (!db.canDo(space.id, role, 'manage_emoji')) return sendJson(res, 403, { error: 'You are not allowed to manage emoji here' });
+        if (!access.actions.has('manage_emoji')) return sendJson(res, 403, { error: 'You are not allowed to manage emoji here' });
         if (pathSegments.length === 3 && req.method === 'POST') {
           const body = await getJsonBody(req);
           const filePath = uploadFilePath(body.url);
@@ -194,7 +199,7 @@ const routes = [
         // newer (up to 200 unless ?limit=), ?before=<id> pages back
         // (around > after > before > offset).
         if (channelName && pathSegments[4] === 'messages' && req.method === 'GET') {
-          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           const around = intParam(parsedUrl.query.around, 0, 0, Number.MAX_SAFE_INTEGER);
           if (around > 0) {
             const rows = db.getMessagesAround(spaceName, channelName, around);
@@ -213,7 +218,7 @@ const routes = [
         }
         // GET pins — the channel's pinned messages, newest pin first (viewers only).
         if (channelName && pathSegments[4] === 'pins' && pathSegments.length === 5 && req.method === 'GET') {
-          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           return sendJson(res, 200, withPublicEmbeds(db.getPins(spaceName, channelName)));
         }
         // Threads (P2-22a): POST starts one from a message here (anyone who can
@@ -221,10 +226,10 @@ const routes = [
         if (channelName && pathSegments[4] === 'threads' && pathSegments.length === 5 && (req.method === 'POST' || req.method === 'GET')) {
           const type = db.channelType(spaceName, channelName);
           if (!type) return sendJson(res, 404, { error: 'Channel not found' });
-          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           if (type !== 'text') return sendJson(res, 400, { error: 'Threads can only be started in text channels' });
           if (req.method === 'GET') return sendJson(res, 200, db.getThreads(spaceName, channelName, parsedUrl.query.archived === '1', userId));
-          if (!canPostChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot post in this channel' });
+          if (!canPostChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot post in this channel' });
           const body = await getJsonBody(req);
           const messageId = parseInt(body.messageId, 10);
           const result = messageId > 0 ? db.createThread(spaceName, channelName, messageId, body.name, userId) : { error: 'not_found' };
@@ -240,7 +245,7 @@ const routes = [
         if (channelName && db.isThreadChannel(channelName) && pathSegments[4] === 'follow' && pathSegments.length === 5 && (req.method === 'PUT' || req.method === 'DELETE')) {
           const threadId = db.threadChannelId(spaceName, channelName);
           if (!threadId) return sendJson(res, 404, { error: 'Thread not found' });
-          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this thread' });
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this thread' });
           const followed = req.method === 'PUT';
           const changed = followed ? db.followThread(userId, threadId) : db.unfollowThread(userId, threadId);
           if (changed) tellFollow(userId, spaceName, db.getThread(spaceName, channelName), followed);
@@ -250,8 +255,8 @@ const routes = [
         // may pin messages). Viewers are told with thread_updated.
         if (channelName && db.isThreadChannel(channelName) && pathSegments[4] === 'archive' && pathSegments.length === 5 && (req.method === 'PUT' || req.method === 'DELETE')) {
           if (!db.threadChannelId(spaceName, channelName)) return sendJson(res, 404, { error: 'Thread not found' });
-          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this thread' });
-          if (!db.canDo(space.id, role, 'pin_messages')) return sendJson(res, 403, { error: 'You are not allowed to archive threads here' });
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this thread' });
+          if (!access.actions.has('pin_messages')) return sendJson(res, 403, { error: 'You are not allowed to archive threads here' });
           if (db.setThreadArchived(spaceName, channelName, req.method === 'PUT')) threadUpdated(spaceName, channelName);
           return sendJson(res, 200, { thread: db.getThread(spaceName, channelName) });
         }
@@ -262,7 +267,7 @@ const routes = [
         // PATCH channel permissions — view/post minimum ranks (managers only)
         if (channelName && pathSegments[4] === 'permissions' && req.method === 'PATCH') {
           if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel access' });
-          if (!canViewChannel(spaceName, channelName, role)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           const body = await getJsonBody(req);
           const ok = db.setChannelPerms(spaceName, channelName, body.view, body.post);
           if (!ok) return sendJson(res, 404, { error: 'Channel not found' });
@@ -271,7 +276,7 @@ const routes = [
         }
         // POST create channel — gated by the "create_channel" threshold
         if (!channelName && req.method === 'POST') {
-          if (!db.canDo(space.id, role, 'create_channel')) return sendJson(res, 403, { error: 'You are not allowed to create channels here' });
+          if (!access.actions.has('create_channel')) return sendJson(res, 403, { error: 'You are not allowed to create channels here' });
           const { name, type } = await getJsonBody(req);
           const invalid = validateChannelName(name);
           if (invalid) return sendJson(res, 400, { error: invalid });
@@ -283,7 +288,7 @@ const routes = [
         }
         // DELETE channel — gated by the "delete_channel" threshold
         if (channelName && pathSegments.length === 4 && req.method === 'DELETE') {
-          if (!db.canDo(space.id, role, 'delete_channel')) return sendJson(res, 403, { error: 'You are not allowed to delete channels here' });
+          if (!access.actions.has('delete_channel')) return sendJson(res, 403, { error: 'You are not allowed to delete channels here' });
           deliverToChannelViewers(spaceName, channelName, JSON.stringify({ type: 'channel_deleted', space: spaceName, channel: channelName }));
           db.deleteChannel(spaceName, channelName);
           return sendJson(res, 200, { ok: true });

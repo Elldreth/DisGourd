@@ -3,6 +3,8 @@
 // Role hierarchy: member < admin < owner. Permissions are "minimum rank to act".
 export const ROLE_RANK = { member: 1, admin: 2, owner: 3 };
 export const roleRank = (role) => ROLE_RANK[role] || 0;
+// The position the server reports for an owner (above every role).
+export const OWNER_POSITION = 1e9;
 // Server actions the owner can gate, with friendly labels (order = display order).
 export const PERMISSION_ACTIONS = [
   { key: 'create_channel', label: 'Create channels' },

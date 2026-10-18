@@ -42,6 +42,9 @@ beforeAll(() => {
 });
 
 const members = () => ['owner', 'adm1', 'adm2', 'mem1', 'mem2', 'mem3'];
+// The old tier maths for a channel gate (what canViewChannel / canPostChannel did before P2-21b).
+const tierView = (name, role) => db.roleRank(role) >= (db.getChannelPerms(SPACE, name)?.view || 1);
+const tierPost = (name, role) => db.roleRank(role) >= (db.getChannelPerms(SPACE, name)?.post || 1);
 const channelId = (name) => db.raw.prepare('SELECT id FROM channels WHERE space_id = ? AND name = ?').get(spaceId, name).id;
 
 // The resolver must agree with the old checks for everyone, everywhere
@@ -56,7 +59,7 @@ function expectAgreement(label, skip = []) {
     }
     for (const [name] of CHANNELS.concat([['general', 1, 1]])) {
       const c = perms.resolvePermissions(spaceId, users[who], channelId(name));
-      expect([label, who, name, c.view, c.post]).toEqual([label, who, name, perms.canViewChannel(SPACE, name, role), perms.canPostChannel(SPACE, name, role)]);
+      expect([label, who, name, c.view, c.post]).toEqual([label, who, name, tierView(name, role), tierPost(name, role)]);
     }
   }
   // Rank order (for kick / moderation): the same strict ordering as roleRank.
@@ -109,7 +112,7 @@ test('it keeps agreeing as tiers, permissions, channel access and threads change
   const root = db.storeMessage(SPACE, 'staff', 'root', users.owner).id;
   const { thread } = db.createThread(SPACE, 'staff', root, 'Private thread', users.owner);
   const t = perms.resolvePermissions(spaceId, users.mem2, thread.id);
-  expect([t.view, t.post]).toEqual([perms.canViewChannel(SPACE, thread.channel, 'member'), perms.canPostChannel(SPACE, thread.channel, 'member')]);
+  expect([t.view, t.post]).toEqual([tierView(thread.channel, 'member'), tierPost(thread.channel, 'member')]);
   expect(t.view).toBe(false);
   db.setChannelPerms(SPACE, 'staff', 1, 1); // the thread follows its parent
   const t2 = perms.resolvePermissions(spaceId, users.mem2, thread.id);

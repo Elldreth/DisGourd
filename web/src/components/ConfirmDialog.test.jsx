@@ -68,7 +68,7 @@ const members = [
 
 test('kicking a member asks in-app, then removes them only if you confirm', async () => {
   const onKick = vi.fn();
-  render(<MemberList space="Tx Check" members={members} currentUser="sandy" myRole="owner" onMessageUser={() => {}} onSetRole={() => {}} onKick={onKick} />);
+  render(<MemberList space="Tx Check" members={members} currentUser="sandy" myRole="owner" canKickMembers myPosition={1e9} onMessageUser={() => {}} onSetRole={() => {}} onKick={onKick} />);
   fireEvent.click(screen.getByText('bob'));
   fireEvent.click(screen.getByRole('button', { name: 'Remove from server' }));
   const dialog = screen.getByRole('dialog', { name: 'Remove @bob from Tx Check?' });

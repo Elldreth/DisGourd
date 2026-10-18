@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-21)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #115, 2026-10-18)
 - **Effort:** M
 - **Depends on:** P1-01 (migrations), P1-06 (permission thresholds)
 - **Serialize with:** `server/db/index.js`, `server/db/migrations.js`, `server/permissions.js`

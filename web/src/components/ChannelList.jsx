@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
-import { roleRank, unreadLabel } from '../util.js';
+import { unreadLabel } from '../util.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import UserFooter from './UserFooter.jsx';
 import ServerPermissionsDialog from './ServerPermissionsDialog.jsx';
@@ -59,6 +59,7 @@ export default function ChannelList({
   role,
   permissions,
   emoji = [], // the server's custom emoji (for the Server emoji dialog)
+  canManageEmoji = false,
   channelMeta = {},
   onPermsChanged,
   user,
@@ -87,7 +88,6 @@ export default function ChannelList({
   };
   const [permsOpen, setPermsOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const canManageEmoji = roleRank(role) >= (permissions?.manage_emoji ?? 2);
   const [channelSettings, setChannelSettings] = useState(null); // channel name or null
   const gearRefs = useRef({}); // channel -> its settings gear, to return focus to
   const [renaming, setRenaming] = useState(false);

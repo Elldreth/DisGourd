@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../api.js';
 import {
-  roleRank,
+  OWNER_POSITION,
   loadViewState,
   saveViewState,
   loadServerOrder,
@@ -37,20 +37,25 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const channels = activeSpace ? activeSpace.channels : [];
   const voiceChannels = activeSpace ? activeSpace.voiceChannels || [] : [];
   const role = activeSpace ? activeSpace.role : null;
-  const canManage = role === 'owner' || role === 'admin';
-  const myRank = roleRank(role);
+  // What the server says I may do here (my roles' abilities; the owner can do
+  // everything). The server checks too; these only decide what to offer.
+  const abilities = activeSpace?.abilities || [];
+  const can = (action) => !!activeSpace?.owner || abilities.includes(action);
+  const canManage = can('edit_server');
+  const myPosition = activeSpace?.owner ? OWNER_POSITION : activeSpace?.position ?? 0;
   const channelMeta = activeSpace ? activeSpace.channelMeta || {} : {};
-  const canPostCurrent = myRank >= (channelMeta[currentChannel]?.post ?? 1);
-  // Whether I may delete someone else's message: my role meets the server's
-  // "delete others' messages" threshold and the author ranks below me (people
-  // who left rank 0). Mirrors the server check, which has the final say.
-  const moderationThreshold = activeSpace?.permissions?.delete_others_messages ?? 2;
-  const canModerate = myRank >= moderationThreshold
-    ? (author) => roleRank(members.find((mb) => mb.username === author)?.role) < myRank
+  const canPostCurrent = channelMeta[currentChannel]?.canPost ?? true;
+  // Whether I may delete someone else's message: I hold "delete others'
+  // messages" and the author sits strictly below me (people who left sit
+  // below everyone). Mirrors the server check, which has the final say.
+  const canModerate = can('delete_others_messages')
+    ? (author) => (members.find((mb) => mb.username === author)?.position ?? -1) < myPosition
     : null;
 
-  // Whether I may pin and unpin messages here (the server checks too).
-  const canPin = myRank >= (activeSpace?.permissions?.pin_messages ?? 2);
+  // Whether I may pin and unpin messages here, manage emoji, or remove members.
+  const canPin = can('pin_messages');
+  const canManageEmoji = can('manage_emoji');
+  const canKick = can('kick');
 
   async function loadSpaces() {
     try {
@@ -331,6 +336,9 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     canPostCurrent,
     canModerate,
     canPin,
+    canManageEmoji,
+    canKick,
+    myPosition,
     members,
     memberNames: members.map((m) => m.username),
     error,
