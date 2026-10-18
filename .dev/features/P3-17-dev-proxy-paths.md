@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (dev-tooling fix)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #123)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** `web/vite.config.js`

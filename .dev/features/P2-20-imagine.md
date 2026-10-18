@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 2, rank 12
-- **State:** PLANNED (design agreed with the user 2026-10-18; P2-20a COMPLETE #121; P2-20b COMPLETE #122; P2-20d COMPLETE #124; P2-20c ACTIVE)
+- **State:** COMPLETE (a #121, b #122, d #124, c #126)
 - **Effort:** L in total (four children)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #12, reshaped in conversation with the user on 2026-10-18 (this packet replaces the earlier kie.ai-only sketch)
 
