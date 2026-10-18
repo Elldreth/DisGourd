@@ -1,7 +1,10 @@
 {
   "name": "DisGourd",
   "short_name": "DisGourd",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
+  "description": "Your own chat server for friends: text, voice and video.",
   "display": "standalone",
   "background_color": "#0E0B1A",
   "theme_color": "#0E0B1A",

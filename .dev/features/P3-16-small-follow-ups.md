@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (bundle of noted follow-ups)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #112, 2026-10-18)
 - **Effort:** S
 - **Depends on:** P2-22b (threads), P2-17 (light theme), P1-14 (view state)
 - **Serialize with:** `server/gateway/chat.js`, `state/useChannelMessages.js`, `App.jsx`, `Gourd.jsx`

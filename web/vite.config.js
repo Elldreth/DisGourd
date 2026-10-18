@@ -1,6 +1,21 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { readFileSync } from 'fs';
+
+// Emits the hand-written service worker (sw.js, next to this file) as
+// dist/sw.js with a build id stamped in, so every build is a new worker and
+// the app can offer "Update available" (P2-18a).
+function serviceWorker() {
+  return {
+    name: 'disgourd-service-worker',
+    apply: 'build',
+    generateBundle() {
+      const source = readFileSync(new URL('./sw.js', import.meta.url), 'utf8').replace("'__BUILD__'", `'${Date.now().toString(36)}'`);
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source });
+    },
+  };
+}
 
 // The backend to proxy API + WebSocket traffic to during development. Override
 // with DISGOURD_SERVER when the server runs elsewhere.
@@ -12,7 +27,7 @@ const wsServer = server.replace(/^http/, 'ws');
 const apiPaths = ['/register', '/login', '/auth-info', '/uploads', '/media', '/spaces', '/friends', '/admin'];
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), serviceWorker()],
   build: {
     // The emoji data (emojibase, ~570 kB of JSON) is its own chunk, loaded only
     // when the picker opens, so it's fine for it to be big.
