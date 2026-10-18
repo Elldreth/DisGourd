@@ -470,6 +470,18 @@ const MIGRATIONS = [
       db.exec('ALTER TABLE channels ADD COLUMN topic TEXT');
     },
   },
+  {
+    version: 15,
+    name: 'hidden link previews',
+    up(db) {
+      // A message whose link cards were removed keeps them off, even when
+      // it's edited (P3-20c).
+      db.exec(`
+        ALTER TABLE messages ADD COLUMN embeds_hidden INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE dm_messages ADD COLUMN embeds_hidden INTEGER NOT NULL DEFAULT 0;
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

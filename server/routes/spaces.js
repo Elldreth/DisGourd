@@ -5,7 +5,7 @@ const db = require('../db');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateSpaceName, normalizeChannelName, validateChannelName } = require('../validate');
-const { canViewChannel, canPostChannel } = require('../permissions');
+const { canViewChannel, canPostChannel, canModerateMessage } = require('../permissions');
 const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence, tellFollow } = require('../gateway/delivery');
 const { threadUpdated } = require('../gateway/chat');
 const fs = require('fs');
@@ -241,6 +241,20 @@ const routes = [
           if (before > 0) return sendJson(res, 200, withPublicEmbeds(db.getMessagesBefore(spaceName, channelName, before, limit)));
           const offset = intParam(parsedUrl.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
           return sendJson(res, 200, withPublicEmbeds(db.getMessages(spaceName, channelName, limit, offset)));
+        }
+        // DELETE …/messages/:id/preview — remove a message's link cards (P3-20c):
+        // its author, or anyone who may delete it. Viewers drop them live.
+        if (channelName && pathSegments[4] === 'messages' && pathSegments[6] === 'preview' && pathSegments.length === 7 && req.method === 'DELETE') {
+          const id = parseInt(pathSegments[5], 10);
+          const loc = id > 0 ? db.getMessageLocation(id) : null;
+          if (!loc || loc.space !== spaceName || loc.channel !== channelName) return sendJson(res, 404, { error: 'Message not found in this channel' });
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          if (loc.authorId !== userId && !canModerateMessage(spaceName, channelName, userId, loc.authorId)) {
+            return sendJson(res, 403, { error: 'Only the author or a moderator can remove a preview' });
+          }
+          db.hideEmbeds('channel', id);
+          deliverToChannelViewers(spaceName, channelName, JSON.stringify({ type: 'message_embeds', id, space: spaceName, channel: channelName, embeds: [] }));
+          return sendJson(res, 200, { ok: true });
         }
         // GET pins — the channel's pinned messages, newest pin first (viewers only).
         if (channelName && pathSegments[4] === 'pins' && pathSegments.length === 5 && req.method === 'GET') {

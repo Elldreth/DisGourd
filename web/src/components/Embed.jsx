@@ -16,7 +16,8 @@ function shapeFor(width, height) {
   return width < 300 || width / height < 1.4 ? 'thumb' : 'banner';
 }
 
-export default function Embed({ embed }) {
+// `onHide` (optional): shows a × that removes the message's link cards (P3-20c).
+export default function Embed({ embed, onHide }) {
   const [imageOk, setImageOk] = useState(true);
   const [shape, setShape] = useState('banner');
   const url = httpUrl(embed.url);
@@ -26,9 +27,20 @@ export default function Embed({ embed }) {
 
   return (
     <article
-      className="mt-1.5 max-w-[420px] overflow-hidden rounded-lg border-l-4 border-ink-500 bg-ink-800/80 ring-1 ring-ink-500/40"
+      className="group/embed relative mt-1.5 max-w-[420px] overflow-hidden rounded-lg border-l-4 border-ink-500 bg-ink-800/80 ring-1 ring-ink-500/40"
       style={color ? { borderLeftColor: color } : undefined}
     >
+      {onHide && (
+        <button
+          type="button"
+          onClick={onHide}
+          aria-label="Remove preview"
+          title="Remove preview"
+          className="absolute right-1 top-1 z-10 rounded-sm bg-ink-900/80 px-1.5 text-sm leading-6 text-gray-300 opacity-0 transition hover:text-fg focus-visible:opacity-100 group-hover/embed:opacity-100 coarse:opacity-100"
+        >
+          ×
+        </button>
+      )}
       <div className={`p-3 ${thumb ? 'flex items-start gap-3' : ''}`}>
         <div className="min-w-0 flex-1">
         {embed.siteName && <div className="mb-0.5 truncate text-xs text-gray-400">{embed.siteName}</div>}

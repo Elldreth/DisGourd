@@ -3,6 +3,7 @@ const { withPublicEmbeds } = require('../net/imageProxy');
 const db = require('../db');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, readJsonBody } = require('../http/util');
+const { sendToUser } = require('../gateway/delivery');
 
 const getJsonBody = readJsonBody;
 
@@ -21,6 +22,20 @@ const routes = [
         for (const u of db.getDmUnreadCounts(userId)) unread[u.other] = u.count;
         const convos = db.getDmConversations(userId).map((c) => ({ ...c, unread: unread[c.username] || 0 }));
         return sendJson(res, 200, convos);
+      }
+      // DELETE /dms/:username/messages/:id/preview — the author removes a DM's
+      // link cards (P3-20c); both people's copies drop them live.
+      if (pathSegments[2] === 'messages' && pathSegments[4] === 'preview' && pathSegments.length === 5 && req.method === 'DELETE') {
+        const other = db.getUserByUsername(pathSegments[1]);
+        const dm = other ? db.getDmById(parseInt(pathSegments[3], 10) || 0) : null;
+        const between = dm && [dm.user_a, dm.user_b].includes(userId) && [dm.user_a, dm.user_b].includes(other.id);
+        if (!between) return sendJson(res, 404, { error: 'Message not found in this conversation' });
+        if (dm.author_id !== userId) return sendJson(res, 403, { error: 'Only the author can remove a preview' });
+        db.hideEmbeds('dm', dm.id);
+        const frame = JSON.stringify({ type: 'dm_embeds', id: dm.id, embeds: [] });
+        sendToUser(dm.user_a, frame);
+        sendToUser(dm.user_b, frame);
+        return sendJson(res, 200, { ok: true });
       }
       // GET /dms/:username/messages — latest history; ?before=<id> pages back, ?after=<id> backfills
       if (pathSegments[2] === 'messages' && req.method === 'GET') {
