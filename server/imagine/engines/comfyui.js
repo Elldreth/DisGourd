@@ -35,6 +35,11 @@ const TIERS = { low: 1.0, medium: 1.5, high: 2.4 };
 const HIRES_MP = { low: 1.6, medium: 2.4, high: 3.6 };
 const HIRES_SCALE = 1.5;
 const HIRES_DENOISE = 0.4;
+// The Upscale button (P3-29): 'model' (the upscale model alone; ComfyUI tiles
+// it internally, so big images are fine) or 'tiled' (Ultimate SD Upscale:
+// repaints tile by tile for added detail; needs that custom node).
+const UPSCALE_MODES = ['model', 'tiled'];
+const TILE = { denoise: 0.3, size: 1024 };
 const RATIOS = { square: [1, 1], portrait: [2, 3], landscape: [3, 2], wide: [16, 9] };
 const NEGATIVE = 'lowres, worst quality, low quality, blurry, jpeg artifacts, watermark, signature, text';
 const SAFE_NEGATIVE = 'nsfw, nude, nudity';
@@ -184,6 +189,50 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   return { workflow: wf, width, height, seed, hires };
 }
 
+// The Upscale button's workflow (P3-29) for an image already uploaded to
+// ComfyUI as `imageName`: request.upscale = { width, height, factor }.
+function buildUpscaleWorkflow(request, cfg, imageName, { permissive = false, seed = crypto.randomInt(0, 2 ** 32) } = {}) {
+  const { width: w0, height: h0, factor } = request.upscale;
+  const width = Math.round((w0 * factor) / 8) * 8;
+  const height = Math.round((h0 * factor) / 8) * 8;
+  const load = { class_type: 'LoadImage', inputs: { image: imageName } };
+  if (cfg.upscaleMode !== 'tiled') {
+    return {
+      width, height, seed,
+      workflow: {
+        1: load,
+        20: { class_type: 'UpscaleModelLoader', inputs: { model_name: cfg.upscaler } },
+        21: { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['20', 0], image: ['1', 0] } },
+        22: { class_type: 'ImageScale', inputs: { image: ['21', 0], upscale_method: 'lanczos', width, height, crop: 'disabled' } },
+        [SAVE_NODE]: { class_type: 'PreviewImage', inputs: { images: ['22', 0] } },
+      },
+    };
+  }
+  // Tiled: the configured model and the prompt, as for a Standard image, but
+  // sampling happens inside Ultimate SD Upscale instead of a KSampler.
+  const base = buildWorkflow({ ...request, quality: 'standard' }, { ...cfg, hires: false }, { permissive, seed });
+  const wf = base.workflow;
+  const s = wf[3].inputs;
+  const vae = wf[8].inputs.vae;
+  for (const k of ['3', '5', '8']) delete wf[k];
+  const f = FAMILIES[cfg.kind === 'unet' || !FAMILIES[cfg.family]?.splitOnly ? cfg.family : 'sdxl'] || FAMILIES.sdxl;
+  const tile = Math.min(2048, Math.max(512, Math.round((cfg.tileSize || TILE.size) / 64) * 64));
+  wf[1] = load;
+  wf[20] = { class_type: 'UpscaleModelLoader', inputs: { model_name: cfg.upscaler } };
+  wf[30] = {
+    class_type: 'UltimateSDUpscale',
+    inputs: {
+      image: ['1', 0], model: s.model, positive: s.positive, negative: s.negative, vae, upscale_model: ['20', 0],
+      upscale_by: factor, seed, steps: f.steps.standard, cfg: s.cfg, sampler_name: s.sampler_name, scheduler: s.scheduler,
+      denoise: cfg.tileDenoise ?? TILE.denoise, mode_type: 'Linear', tile_width: tile, tile_height: tile, mask_blur: 8, tile_padding: 32,
+      seam_fix_mode: 'None', seam_fix_denoise: 1, seam_fix_width: 64, seam_fix_mask_blur: 8, seam_fix_padding: 16,
+      force_uniform_tiles: true, tiled_decode: false, batch_size: 1,
+    },
+  };
+  wf[SAVE_NODE] = { class_type: 'PreviewImage', inputs: { images: ['30', 0] } };
+  return { workflow: wf, width, height, seed };
+}
+
 // ---- Talking to ComfyUI ----
 const base = (url) => String(url).replace(/\/+$/, '');
 const fail = (code, message) => Object.assign(new Error(message), { code });
@@ -224,6 +273,46 @@ async function loaderOptions(url, node, input) {
   }
 }
 
+// Whether this ComfyUI has a node (e.g. a custom node like Ultimate SD Upscale).
+async function hasNode(url, node) {
+  try {
+    const data = await comfy(url, `/object_info/${node}`, { timeoutMs: 8000 });
+    return !!data?.[node];
+  } catch {
+    return false;
+  }
+}
+
+// The upscale model to use: the saved one, or (P3-29 fix for the hires fix)
+// the suggestion from this ComfyUI's list, cached per address for 10 minutes.
+const upscalerCache = new Map();
+async function resolveUpscaler(cfg) {
+  if (cfg.upscaler) return cfg.upscaler;
+  const hit = upscalerCache.get(cfg.url);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.name;
+  const name = suggestUpscaler(await loaderOptions(cfg.url, 'UpscaleModelLoader', 'model_name'));
+  upscalerCache.set(cfg.url, { at: Date.now(), name });
+  return name;
+}
+
+// Put an image into ComfyUI's input folder (POST /upload/image); returns the
+// name LoadImage takes.
+async function uploadImage(url, { buffer, contentType = 'image/png', filename }, signal) {
+  const form = new FormData();
+  form.append('image', new Blob([buffer], { type: contentType }), filename);
+  form.append('overwrite', 'true');
+  let res;
+  try {
+    res = await fetch(`${base(url)}/upload/image`, { method: 'POST', body: form, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000) });
+  } catch {
+    if (signal?.aborted) throw fail('ABORTED', 'Stopped');
+    throw fail('UNAVAILABLE', `ComfyUI isn't reachable at ${base(url)}`);
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.name) throw fail('ENGINE', `ComfyUI didn't take the image (${res.status})`);
+  return data.subfolder ? `${data.subfolder}/${data.name}` : data.name;
+}
+
 // What ComfyUI can load: checkpoints, plus (P3-24) image diffusion models with
 // the text encoders and VAEs they need. { models: [{ name, kind, family }],
 // clips, vaes, suggested: { flux: parts, zimage: parts } }.
@@ -232,11 +321,12 @@ async function listAll(url) {
   const spec = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name;
   const names = Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options;
   if (!Array.isArray(names)) throw fail('ENGINE', 'That address answered, but not like ComfyUI');
-  const [unets, clips, vaes, upscalers] = await Promise.all([
+  const [unets, clips, vaes, upscalers, tiledAvailable] = await Promise.all([
     loaderOptions(url, 'UNETLoader', 'unet_name'),
     loaderOptions(url, 'CLIPLoader', 'clip_name'),
     loaderOptions(url, 'VAELoader', 'vae_name'),
     loaderOptions(url, 'UpscaleModelLoader', 'model_name'),
+    hasNode(url, 'UltimateSDUpscale'),
   ]);
   const models = names.map((name) => ({ name, kind: 'checkpoint', family: guessFamily(name) }));
   for (const name of unets.filter((n) => !VIDEO.test(n))) {
@@ -247,7 +337,7 @@ async function listAll(url) {
   const suggested = Object.fromEntries(SPLIT_FAMILIES.map((f) => [f, suggestParts(f, clips, vaes)]));
   // The hires fix's upscale model (P3-28): a general-purpose 4× one if there is one.
   suggested.upscaler = suggestUpscaler(upscalers);
-  return { models, clips, vaes, upscalers, suggested };
+  return { models, clips, vaes, upscalers, suggested, tiledAvailable };
 }
 // Kept for callers that only need the model list.
 async function listModels(url) {
@@ -289,7 +379,19 @@ async function cancel(url, promptId) {
 }
 
 async function generate(request, cfg, { permissive = false, signal } = {}) {
-  const { workflow, width, height } = buildWorkflow(request, cfg, { permissive });
+  // The hires fix and the Upscale button need an upscale model: the saved one,
+  // or the one suggested from this ComfyUI's list.
+  const wantsUpscaler = !!request.upscale || (request.quality === 'high' && cfg.hires !== false);
+  cfg = wantsUpscaler ? { ...cfg, upscaler: await resolveUpscaler(cfg) } : cfg;
+  let built;
+  if (request.upscale) {
+    if (!cfg.upscaler) throw fail('ENGINE', 'ComfyUI has no upscale models (models/upscale_models)');
+    const name = await uploadImage(cfg.url, { ...request.upscale, filename: `disgourd-upscale-${crypto.randomBytes(6).toString('hex')}.${request.upscale.ext || 'png'}` }, signal);
+    built = buildUpscaleWorkflow(request, cfg, name, { permissive });
+  } else {
+    built = buildWorkflow(request, cfg, { permissive });
+  }
+  const { workflow, width, height } = built;
   let queued;
   try {
     queued = await comfy(cfg.url, '/prompt', { method: 'POST', body: { prompt: workflow, client_id: `disgourd-${crypto.randomUUID()}` }, signal });
@@ -379,6 +481,19 @@ function validateConfig(input, prev = {}) {
     if (i.upscaler !== null && (typeof i.upscaler !== 'string' || !i.upscaler.trim() || i.upscaler.length > 300)) return { error: 'Pick an upscale model from the list' };
     cfg.upscaler = i.upscaler;
   }
+  // The Upscale button (P3-29): its mode and, for tiled, denoise and tile size.
+  if (i.upscaleMode !== undefined) {
+    if (!UPSCALE_MODES.includes(i.upscaleMode)) return { error: 'The upscale mode must be "model" or "tiled"' };
+    cfg.upscaleMode = i.upscaleMode;
+  }
+  if (i.tileDenoise !== undefined) {
+    if (typeof i.tileDenoise !== 'number' || !(i.tileDenoise >= 0.05 && i.tileDenoise <= 0.6)) return { error: 'The tiled denoise is 0.05–0.6' };
+    cfg.tileDenoise = Math.round(i.tileDenoise * 100) / 100;
+  }
+  if (i.tileSize !== undefined) {
+    if (!Number.isInteger(i.tileSize) || i.tileSize < 512 || i.tileSize > 2048 || i.tileSize % 64) return { error: 'The tile size is 512–2048, in steps of 64' };
+    cfg.tileSize = i.tileSize;
+  }
   if (i.tier !== undefined) {
     if (!TIERS[i.tier]) return { error: 'The VRAM tier must be low, medium or high' };
     cfg.tier = i.tier;
@@ -392,6 +507,7 @@ const publicConfig = (cfg = {}) => ({
   enabled: !!cfg.enabled, url: cfg.url || '', model: cfg.model || null, family: cfg.family || null, tier: cfg.tier || 'medium',
   kind: cfg.kind || 'checkpoint', clip1: cfg.clip1 || null, clip2: cfg.clip2 || null, vae: cfg.vae || null,
   hires: cfg.hires !== false, upscaler: cfg.upscaler || null,
+  upscaleMode: cfg.upscaleMode || 'model', tileDenoise: cfg.tileDenoise ?? TILE.denoise, tileSize: cfg.tileSize || TILE.size,
 });
 
 module.exports = {
@@ -410,6 +526,9 @@ module.exports = {
   suggestUpscaler,
   hiresSize,
   HIRES_MP,
+  buildUpscaleWorkflow,
+  resolveUpscaler,
+  upscalerCache,
   sizeFor,
   buildWorkflow,
   FAMILIES,

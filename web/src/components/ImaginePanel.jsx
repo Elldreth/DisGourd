@@ -85,7 +85,7 @@ export function imagineState(info, run, spaceName = 'This server') {
   else if (!info.engines?.length) reason = 'No image engine is set up on this instance yet.';
   else if (!info.canUse) reason = 'You don’t have the Generate images permission in this server.';
   else if (remaining <= 0) reason = `You’ve used all ${info.dailyLimit} images for today. ${limitSourceText(info, spaceName)}`;
-  return { available: !reason, reason, remaining, engines: info.engines || [], run };
+  return { available: !reason, reason, remaining, engines: info.engines || [], run, canUpscale: !!info.canUpscale };
 }
 
 // Where the daily limit comes from, in words (P3-21; matches the server's refusal).

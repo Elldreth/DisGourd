@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #136)
 - **Effort:** S–M
 - **Depends on:** P3-24 (#135; same engine file). Branched from it; merge after it.
 - **Requirement Source:** the user, 2026-10-18: "add in a hires fix to the comfyui workflow". Decisions (user, 2026-10-18):

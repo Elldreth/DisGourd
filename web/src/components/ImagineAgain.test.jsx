@@ -40,3 +40,21 @@ test('no buttons while /imagine is not available here', () => {
   render(<MessageList messages={[done, failed]} channel="general" currentUser="sandy" />);
   expect(screen.queryByRole('button', { name: /Variations|Retry/ })).toBeNull();
 });
+
+// P3-29: the Upscale button.
+const upscaled = { id: 5, author: 'Imagine', bot: true, content: '🔍 **bob** upscaled: a gourd', attachments: ['/uploads/z/imagine-1.png'], timestamp: at + 4000, reactions: [] };
+
+test('Upscale 2× on generated images when ComfyUI can upscale; upscaled ones get Variations only', async () => {
+  expect(imagineResultKind(upscaled)).toBe('upscaled');
+  const run = vi.fn().mockResolvedValue({ jobId: 1 });
+  render(<MessageList messages={[done, failed, upscaled]} channel="general" currentUser="sandy" imagineAgain={run} imagineUpscale />);
+  expect(screen.getAllByRole('button', { name: /Upscale 2×/ })).toHaveLength(1); // not on the failure or the upscaled one
+  expect(screen.getAllByRole('button', { name: /Variations/ })).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: /Upscale 2×/ }));
+  expect(run).toHaveBeenCalledWith({ from: 1, upscale: true });
+  await screen.findByRole('button', { name: /Upscale 2×/ });
+  cleanup();
+  render(<MessageList messages={[done]} channel="general" currentUser="sandy" imagineAgain={run} />);
+  expect(screen.queryByRole('button', { name: /Upscale/ })).toBeNull(); // no ComfyUI to upscale with
+});
+

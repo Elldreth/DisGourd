@@ -49,7 +49,7 @@ export default function ImagineAdmin() {
   const [defaultEngine, setDefaultEngine] = useState(null);
   const [general, setGeneral] = useState(null); // { dailyLimit, permissive }
   const [models, setModels] = useState(null); // [{ name, kind, family }] once tested
-  const [parts, setParts] = useState({ clips: [], vaes: [], upscalers: [], suggested: {} }); // for split models and the hires fix
+  const [parts, setParts] = useState({ clips: [], vaes: [], upscalers: [], suggested: {}, tiledAvailable: null }); // split models, hires fix, Upscale
   const [filter, setFilter] = useState('');
   const [testing, setTesting] = useState(false);
   const [testNote, setTestNote] = useState('');
@@ -68,6 +68,7 @@ export default function ImagineAdmin() {
       enabled: !!c.enabled, url: c.url || '', model: c.model || '', kind: c.kind || 'checkpoint', family: c.family || (c.kind === 'unet' ? '' : 'sdxl'),
       tier: c.tier || 'medium', clip1: c.clip1 || '', clip2: c.clip2 || '', vae: c.vae || '',
       hires: c.hires !== false, upscaler: c.upscaler || '',
+      upscaleMode: c.upscaleMode || 'model', tileDenoise: c.tileDenoise ?? 0.3, tileSize: c.tileSize || 1024,
     });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
     setKie({ enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' });
@@ -94,8 +95,8 @@ export default function ImagineAdmin() {
     try {
       const res = await api.testComfyUI(url);
       setModels(res.models);
-      setParts({ clips: res.clips || [], vaes: res.vaes || [], upscalers: res.upscalers || [], suggested: res.suggested || {} });
-      // The hires fix's upscale model: the suggested one until the host picks.
+      setParts({ clips: res.clips || [], vaes: res.vaes || [], upscalers: res.upscalers || [], suggested: res.suggested || {}, tiledAvailable: !!res.tiledAvailable });
+      // The upscale model: the suggested one until the host picks.
       setComfy((c) => ({ ...c, url: res.url, upscaler: c.upscaler || res.suggested?.upscaler || '' }));
       const count = (kind) => res.models.filter((m) => (m.kind || 'checkpoint') === kind).length;
       const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -158,6 +159,8 @@ export default function ImagineAdmin() {
             vae: comfy.kind === 'unet' ? comfy.vae || null : null,
             hires: comfy.hires,
             upscaler: comfy.upscaler || null,
+            upscaleMode: comfy.upscaleMode,
+            ...(comfy.upscaleMode === 'tiled' ? { tileDenoise: Number(comfy.tileDenoise), tileSize: Number(comfy.tileSize) } : {}),
           },
           kie: {
             enabled: kie.enabled,
@@ -324,26 +327,78 @@ export default function ImagineAdmin() {
         </fieldset>
 
         <div>
+          <label htmlFor="imagine-upscaler" className={heading}>Upscale model</label>
+          <select id="imagine-upscaler" value={comfy.upscaler} onChange={(e) => setComfy((c) => ({ ...c, upscaler: e.target.value }))} className="input">
+            <option value="">Automatic (picked by name)</option>
+            {(parts.upscalers.length ? parts.upscalers : comfy.upscaler ? [comfy.upscaler] : []).map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">Used by the hires fix and the Upscale button.</p>
+          {models && !parts.upscalers.length && (
+            <p className="mt-1 text-xs text-gray-500">This ComfyUI has no upscale models (models/upscale_models), so there’s no hires fix or Upscale button.</p>
+          )}
+        </div>
+
+        <div>
           <label className="flex items-center gap-2 text-sm text-gray-200">
             <input type="checkbox" checked={comfy.hires} onChange={(e) => setComfy((c) => ({ ...c, hires: e.target.checked }))} className="h-4 w-4 accent-brand" />
             Hires fix for High quality
           </label>
           <p className="mt-1 text-xs text-gray-500">
-            High-quality images are made at the Standard size, enlarged about 1.5× with an upscale model, then lightly repainted for detail. Slower, sharper.
+            High-quality images are made at the Standard size, enlarged about 1.5× with the upscale model, then lightly repainted for detail. Slower, sharper.
           </p>
-          {comfy.hires && (
-            <div className="mt-2">
-              <label htmlFor="imagine-upscaler" className={heading}>Upscale model</label>
-              <select id="imagine-upscaler" value={comfy.upscaler} onChange={(e) => setComfy((c) => ({ ...c, upscaler: e.target.value }))} className="input">
-                <option value="">{parts.upscalers.length || comfy.upscaler ? 'None (no hires fix)' : 'Test the connection to list upscale models'}</option>
-                {(parts.upscalers.length ? parts.upscalers : comfy.upscaler ? [comfy.upscaler] : []).map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-              {models && !parts.upscalers.length && (
-                <p className="mt-1 text-xs text-gray-500">This ComfyUI has no upscale models (models/upscale_models), so High is made without the hires fix.</p>
-              )}
+        </div>
+
+        <fieldset>
+          <legend className={heading}>Upscale button (2×, up to 4096 px)</legend>
+          <div className="space-y-1">
+            <label className="flex items-baseline gap-2 text-sm text-gray-200">
+              <input type="radio" name="imagine-upscale-mode" checked={comfy.upscaleMode !== 'tiled'} onChange={() => setComfy((c) => ({ ...c, upscaleMode: 'model' }))} className="accent-brand" />
+              Upscale model only
+              <span className="text-xs text-gray-500">fast, nothing to tune</span>
+            </label>
+            <label className={`flex items-baseline gap-2 text-sm ${parts.tiledAvailable === false ? 'text-gray-500' : 'text-gray-200'}`}>
+              <input
+                type="radio"
+                name="imagine-upscale-mode"
+                checked={comfy.upscaleMode === 'tiled'}
+                disabled={parts.tiledAvailable === false && comfy.upscaleMode !== 'tiled'}
+                onChange={() => setComfy((c) => ({ ...c, upscaleMode: 'tiled' }))}
+                className="accent-brand"
+              />
+              Tiled repaint
+              <span className="text-xs text-gray-500">adds detail; may need tuning</span>
+            </label>
+          </div>
+          {parts.tiledAvailable === false && (
+            <p className="mt-1 text-xs text-gray-500">Tiled repaint needs the Ultimate SD Upscale custom node in ComfyUI.</p>
+          )}
+          {comfy.upscaleMode === 'tiled' && (
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="imagine-tile-denoise" className={heading}>Repaint strength</label>
+                <input
+                  id="imagine-tile-denoise"
+                  type="number"
+                  min="0.05"
+                  max="0.6"
+                  step="0.05"
+                  value={comfy.tileDenoise}
+                  onChange={(e) => setComfy((c) => ({ ...c, tileDenoise: e.target.value }))}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label htmlFor="imagine-tile-size" className={heading}>Tile size</label>
+                <select id="imagine-tile-size" value={comfy.tileSize} onChange={(e) => setComfy((c) => ({ ...c, tileSize: Number(e.target.value) }))} className="input">
+                  {[512, 768, 1024, 1280, 1536, 2048].map((n) => <option key={n} value={n}>{n} px</option>)}
+                </select>
+              </div>
+              <p className="col-span-2 text-xs text-gray-500">
+                Lower strength keeps the image as it is; higher adds detail but can change faces or repeat things across tiles (0.2–0.35 is usual). Bigger tiles need more VRAM.
+              </p>
             </div>
           )}
-        </div>
+        </fieldset>
       </fieldset>
 
       <fieldset className="space-y-3 rounded-lg bg-ink-900/60 p-3">

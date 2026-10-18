@@ -482,6 +482,18 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 16,
+    name: 'imagine upscale jobs',
+    up(db) {
+      // P3-29: what a job did ('generate' or 'upscale') and, for an upscale,
+      // the image it started from (so a Retry can upscale it again).
+      db.exec(`
+        ALTER TABLE imagine_jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'generate';
+        ALTER TABLE imagine_jobs ADD COLUMN source_url TEXT;
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

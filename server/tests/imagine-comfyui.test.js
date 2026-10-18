@@ -23,13 +23,15 @@ const UPSCALERS = ['4x-AnimeSharp.pth', '4x-UltraSharp.pth', 'RealESRGAN_x2.pth'
 let partsListed = true; // false: this ComfyUI can't list split parts
 
 // What the mock saw.
-const seen = { prompts: [], deleted: [], interrupts: 0 };
+const seen = { prompts: [], deleted: [], interrupts: 0, uploads: [] };
+let hasTiled = true; // whether the mock has the Ultimate SD Upscale node
 let promptCount = 0;
 const promptsById = new Map();
 
 function startMock() {
   mock = http.createServer((req, res) => {
     let body = '';
+    req.setEncoding('latin1');
     req.on('data', (c) => (body += c));
     req.on('end', () => {
       const json = (status, data) => {
@@ -43,6 +45,12 @@ function startMock() {
       if (url.pathname === '/object_info/CLIPLoader') return combo('CLIPLoader', 'clip_name', CLIPS);
       if (url.pathname === '/object_info/VAELoader') return combo('VAELoader', 'vae_name', VAES);
       if (url.pathname === '/object_info/UpscaleModelLoader') return combo('UpscaleModelLoader', 'model_name', UPSCALERS);
+      if (url.pathname === '/object_info/UltimateSDUpscale') return json(200, hasTiled ? { UltimateSDUpscale: { input: { required: {} } } } : {});
+      if (url.pathname === '/upload/image' && req.method === 'POST') {
+        const name = (body.match(/filename="([^"]+)"/) || [])[1];
+        seen.uploads.push({ name, type: (req.headers['content-type'] || '').split(';')[0], overwrite: /name="overwrite"\r\n\r\ntrue/.test(body) });
+        return json(200, { name, subfolder: '', type: 'input' });
+      }
       if (url.pathname === '/prompt' && req.method === 'POST') {
         const { prompt } = JSON.parse(body);
         seen.prompts.push(prompt);
@@ -56,7 +64,7 @@ function startMock() {
           return json(400, { error: { message: 'Prompt outputs failed validation' }, node_errors: { 4: { errors: [{ message: 'Value not in list', details: "ckpt_name: 'missing.safetensors' not in [...]" }] } } });
         }
         const id = `p${++promptCount}`;
-        promptsById.set(id, { text: prompt['6'].inputs.text, polls: 0 });
+        promptsById.set(id, { text: prompt['6']?.inputs.text || 'upscale', polls: 0 });
         return json(200, { prompt_id: id, number: promptCount });
       }
       if (url.pathname.startsWith('/history/')) {
@@ -137,13 +145,17 @@ describe('the engine', () => {
       upscaler: '4x-UltraSharp.pth', // P3-28: a general-purpose one, not the anime one listed first
     });
     expect(all.upscalers).toEqual(UPSCALERS);
+    expect(all.tiledAvailable).toBe(true); // P3-29
     // Another host's ComfyUI that can't list split parts: checkpoints only.
     partsListed = false;
     try {
       const old = await comfy.listAll(mockUrl);
+      hasTiled = false;
       expect(old).toMatchObject({ models: MODELS.map((name) => ({ name, kind: 'checkpoint' })), clips: [], vaes: [], upscalers: [], suggested: { upscaler: null } });
+      expect((await comfy.listAll(mockUrl)).tiledAvailable).toBe(false);
     } finally {
       partsListed = true;
+      hasTiled = true;
     }
   });
 
@@ -217,6 +229,53 @@ describe('the engine', () => {
     expect(comfy.validateConfig({ upscaler: 5 }).error).toMatch(/upscale model/);
     expect(comfy.validateConfig({ hires: false, upscaler: '4x-UltraSharp.pth' })).toMatchObject({ hires: false, upscaler: '4x-UltraSharp.pth' });
     expect(comfy.publicConfig({})).toMatchObject({ hires: true, upscaler: null }); // on unless switched off
+  });
+
+  test('P3-29 fix: the hires fix works with no saved upscale model (suggested from the list, then cached)', async () => {
+    comfy.upscalerCache.clear();
+    const before = seen.prompts.length;
+    const out = await comfy.generate(request({ quality: 'high' }), cfg({ upscaler: undefined, tier: 'high' }));
+    expect(out).toMatchObject({ width: 1536, height: 1536 });
+    expect(seen.prompts.at(-1)['20'].inputs.model_name).toBe('4x-UltraSharp.pth');
+    expect(seen.prompts.length).toBe(before + 1);
+    expect(comfy.upscalerCache.get(mockUrl)).toMatchObject({ name: '4x-UltraSharp.pth' });
+    expect(await comfy.resolveUpscaler(cfg({ upscaler: 'mine.pth' }))).toBe('mine.pth'); // a saved one wins
+    // Switched off: no upscale model is looked for or used.
+    expect((await comfy.generate(request({ quality: 'high' }), cfg({ hires: false }))).width).toBe(1088); // High's own size, no fix
+    expect(seen.prompts.at(-1)['20']).toBeUndefined();
+  });
+
+  test('P3-29: Upscale workflows: model only (exact 2× size) and tiled (Ultimate SD Upscale with the configured model)', () => {
+    const up = { upscale: { width: 1536, height: 1024, factor: 2 } };
+    const plain = comfy.buildUpscaleWorkflow(request(up), cfg({ upscaler: '4x-UltraSharp.pth' }), 'in.png');
+    expect([plain.width, plain.height]).toEqual([3072, 2048]);
+    expect(plain.workflow).toEqual({
+      1: { class_type: 'LoadImage', inputs: { image: 'in.png' } },
+      20: { class_type: 'UpscaleModelLoader', inputs: { model_name: '4x-UltraSharp.pth' } },
+      21: { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['20', 0], image: ['1', 0] } },
+      22: { class_type: 'ImageScale', inputs: { image: ['21', 0], upscale_method: 'lanczos', width: 3072, height: 2048, crop: 'disabled' } },
+      9: { class_type: 'PreviewImage', inputs: { images: ['22', 0] } },
+    });
+    const tiled = comfy.buildUpscaleWorkflow(request(up), cfg({ upscaler: 'u.pth', upscaleMode: 'tiled', tileDenoise: 0.25, tileSize: 768 }), 'in.png', { seed: 5 }).workflow;
+    expect(tiled['30'].class_type).toBe('UltimateSDUpscale');
+    expect(tiled['30'].inputs).toMatchObject({
+      image: ['1', 0], model: ['4', 0], positive: ['6', 0], negative: ['7', 0], vae: ['4', 2], upscale_model: ['20', 0],
+      upscale_by: 2, seed: 5, steps: 28, cfg: 6, sampler_name: 'dpmpp_2m', scheduler: 'karras', denoise: 0.25, tile_width: 768, tile_height: 768, mode_type: 'Linear', seam_fix_mode: 'None',
+    });
+    expect(tiled['3'] || tiled['5'] || tiled['8']).toBeUndefined(); // no KSampler, latent or decode of its own
+    expect(tiled['9'].inputs.images).toEqual(['30', 0]);
+    expect(tiled['7'].inputs.text).toMatch(/nsfw/); // the negative nudge still applies outside 18+
+    // Flux in parts: its loaders, guidance and VAE; default denoise and tile size.
+    const flux = comfy.buildUpscaleWorkflow(request(up), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0], upscaler: 'u.pth', upscaleMode: 'tiled' }), 'in.png').workflow;
+    expect(flux['30'].inputs).toMatchObject({ model: ['11', 0], positive: ['10', 0], vae: ['13', 0], cfg: 1, steps: 20, denoise: 0.3, tile_width: 1024 });
+  });
+
+  test('P3-29: Upscale config: mode, denoise and tile size are checked', () => {
+    expect(comfy.validateConfig({ upscaleMode: 'huge' }).error).toMatch(/upscale mode/);
+    expect(comfy.validateConfig({ tileDenoise: 0.9 }).error).toMatch(/0.05–0.6/);
+    expect(comfy.validateConfig({ tileSize: 1000 }).error).toMatch(/steps of 64/);
+    expect(comfy.validateConfig({ upscaleMode: 'tiled', tileDenoise: 0.35, tileSize: 1536 })).toMatchObject({ upscaleMode: 'tiled', tileDenoise: 0.35, tileSize: 1536 });
+    expect(comfy.publicConfig({})).toMatchObject({ upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024 });
   });
 
   test('P3-24: config for a split model needs its type and parts; Z-Image is split only', () => {
@@ -339,7 +398,7 @@ describe('the admin routes and the chat path', () => {
   test('saving the ComfyUI settings, a test image, and the always-refused check', async () => {
     expect((await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } })).body.error).toMatch(/pick a model/);
     const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[0], tier: 'high' } }, defaultEngine: 'comfyui' });
-    expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null });
+    expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024 });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);
     const tried = await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'a gourd', shape: 'wide', quality: 'draft' });
@@ -366,5 +425,88 @@ describe('the admin routes and the chat path', () => {
     expect(done.content).toBe('🎨 **admin** imagined: a gourd on a hill');
     const job = db.raw.prepare('SELECT * FROM imagine_jobs WHERE space_id = ? ORDER BY id DESC').get(spaceId);
     expect(job).toMatchObject({ engine: 'comfyui', status: 'done', model: MODELS[0] });
+  });
+
+  test('P3-29: the Upscale button: 2× under the 4096 px cap, posted for the presser; Retry; refusals', async () => {
+    const S = 'Comfy Club';
+    const { channelId } = db.channelRef(S, 'general');
+    const spaceId = db.getSpaceByName(S).id;
+    await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[1], family: 'sdxl', upscaler: '4x-UltraSharp.pth', upscaleMode: 'model' } }, defaultEngine: 'comfyui' });
+    await call('admin', 'PATCH', `/spaces/${encodeURIComponent(S)}/imagine`, { dailyLimit: 100 });
+    // A finished image of a given size, as the bot posted it.
+    const finished = (w, h, kind = 'generate') => {
+      const token = require('crypto').randomBytes(9).toString('hex');
+      fs.mkdirSync(path.join(UPLOADS, token), { recursive: true });
+      const head = Buffer.alloc(33);
+      head.writeUInt32BE(0x89504e47, 0);
+      head.writeUInt32BE(w, 16);
+      head.writeUInt32BE(h, 20);
+      fs.writeFileSync(path.join(UPLOADS, token, 'imagine-1.png'), head);
+      const url = `/uploads/${token}/imagine-1.png`;
+      const msg = db.postAsBot(S, 'general', '🎨 **pat** imagined: a gourd on a hill');
+      db.updateBotMessage(Number(msg.id), '🎨 **pat** imagined: a gourd on a hill', [url]);
+      const id = db.createImagineJob({ userId: users.admin.id, spaceId, channelId, engine: 'comfyui', prompt: 'a gourd on a hill', shape: 'landscape', quality: 'high', kind, sourceUrl: kind === 'upscale' ? url : null });
+      db.updateImagineJob(id, { messageId: Number(msg.id), status: 'done' });
+      return { messageId: Number(msg.id), jobId: id, url };
+    };
+    const frames = [];
+    const ws = new WebSocket(`ws://localhost:${port}/gateway?token=${users.admin.token}`);
+    ws.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
+    await new Promise((r) => ws.on('open', r));
+    const ask = async (fields) => {
+      const from = frames.length;
+      ws.send(JSON.stringify({ op: 'imagine', space: S, channel: 'general', ...fields }));
+      const end = Date.now() + 3000;
+      for (;;) {
+        const f = frames.slice(from).find((x) => x.type === 'imagine_queued' || (x.type === 'error' && x.op === 'imagine'));
+        if (f) return f.type === 'error' ? f.code : f;
+        if (Date.now() > end) throw new Error('no answer');
+        await new Promise((r) => setTimeout(r, 15));
+      }
+    };
+    const settle = async (jobId) => {
+      const end = Date.now() + 5000;
+      while (!['done', 'failed'].includes(db.getImagineJob(jobId).status) && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+      return db.getImagineJob(jobId);
+    };
+    try {
+      expect((await call('admin', 'GET', '/spaces')).body.find((s) => s.name === S).imagine.canUpscale).toBe(true);
+      // 1536×1024 → 3072×2048, posted under the presser's name, counted for them.
+      const src = finished(1536, 1024);
+      const used = db.countImagineJobsSince(users.admin.id, 0);
+      const up = await ask({ from: src.messageId, upscale: true });
+      expect(db.getImagineJob(up.jobId)).toMatchObject({ kind: 'upscale', source_url: src.url, prompt: 'a gourd on a hill', user_id: users.admin.id });
+      expect(db.countImagineJobsSince(users.admin.id, 0)).toBe(used + 1);
+      expect((await settle(up.jobId)).status).toBe('done');
+      expect(seen.uploads.at(-1)).toMatchObject({ type: 'multipart/form-data', overwrite: true });
+      expect(seen.uploads.at(-1).name).toMatch(/^disgourd-upscale-[a-f0-9]+\.png$/);
+      const wf = seen.prompts.at(-1);
+      expect(wf['1'].inputs.image).toBe(seen.uploads.at(-1).name);
+      expect(wf['22'].inputs).toMatchObject({ width: 3072, height: 2048 });
+      expect(db.raw.prepare('SELECT content FROM messages WHERE id = ?').get(up.messageId).content).toBe('🔍 **admin** upscaled: a gourd on a hill');
+      // The cap: 3000×2000 becomes 4096 wide; 4096 square is refused.
+      const wide = await ask({ from: finished(3000, 2000).messageId, upscale: true });
+      await settle(wide.jobId);
+      expect(seen.prompts.at(-1)['22'].inputs).toMatchObject({ width: 4096, height: 2728 });
+      expect(await ask({ from: finished(4096, 4096).messageId, upscale: true })).toBe('TOO_BIG');
+      // An upscaled image isn't offered again; a failed upscale is retried as an upscale.
+      expect(await ask({ from: up.messageId, upscale: true })).toBe('NOT_FOUND');
+      const failed = finished(1024, 1024, 'upscale');
+      db.updateImagineJob(failed.jobId, { status: 'failed' });
+      const retry = await ask({ from: failed.messageId });
+      expect(db.getImagineJob(retry.jobId)).toMatchObject({ kind: 'upscale', source_url: failed.url });
+      await settle(retry.jobId);
+      // Tiled mode goes through Ultimate SD Upscale.
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { upscaleMode: 'tiled' } } });
+      const tiled = await ask({ from: src.messageId, upscale: true });
+      await settle(tiled.jobId);
+      expect(seen.prompts.at(-1)['30']).toMatchObject({ class_type: 'UltimateSDUpscale', inputs: { upscale_by: 2 } });
+      // With ComfyUI off there's nothing to upscale with.
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: false } } });
+      expect(await ask({ from: src.messageId, upscale: true })).toBe('NO_ENGINE');
+    } finally {
+      ws.close();
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, upscaleMode: 'model' } } });
+    }
   });
 });
