@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { EMOJI_GROUPS, addRecentEmoji, getRecentEmoji, loadEmoji, searchEmoji } from '../emoji.js';
+import { EMOJI_GROUPS, addRecentEmoji, customEmojiItems, getRecentEmoji, loadEmoji, searchEmoji } from '../emoji.js';
 
 const COLS = 8;
 
-// Emoji picker: search (focused on open), Recent, and every category. The
-// keyboard stays in the search box: arrows move the highlight, Enter picks,
-// Esc closes. The emoji data loads the first time a picker opens.
-export default function EmojiPicker({ onPick, onClose }) {
+// Emoji picker: search (focused on open), Recent, the server's own emoji
+// (`custom`: [{ id, name, url }]) and every category. The keyboard stays in
+// the search box: arrows move the highlight, Enter picks, Esc closes. The
+// emoji data loads the first time a picker opens. `onPick(emoji, item)`: a
+// custom emoji picks as ':name:', and `item.reaction` is its reaction token.
+export default function EmojiPicker({ onPick, onClose, custom = [] }) {
   const [list, setList] = useState(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState('');
@@ -27,7 +29,8 @@ export default function EmojiPicker({ onPick, onClose }) {
   }, []);
 
   const byEmoji = useMemo(() => new Map((list || []).map((e) => [e.emoji, e])), [list]);
-  const results = useMemo(() => (list && query.trim() ? searchEmoji(list, query) : null), [list, query]);
+  const customItems = useMemo(() => customEmojiItems(custom), [custom]);
+  const results = useMemo(() => (list && query.trim() ? searchEmoji([...customItems, ...list], query) : null), [list, query, customItems]);
 
   // Sections shown: search results, or Recent + each category.
   const sections = useMemo(() => {
@@ -36,9 +39,10 @@ export default function EmojiPicker({ onPick, onClose }) {
     const out = [];
     const rec = recent.map((e) => byEmoji.get(e) || { emoji: e, label: e }).filter(Boolean);
     if (rec.length) out.push({ key: 'recent', name: 'Recent', items: rec });
+    if (customItems.length) out.push({ key: 'server', name: 'Server', items: customItems });
     for (const g of EMOJI_GROUPS) out.push({ key: `g${g.id}`, name: g.name, items: list.filter((e) => e.group === g.id) });
     return out;
-  }, [list, results, recent, byEmoji]);
+  }, [list, results, recent, byEmoji, customItems]);
 
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
   useEffect(() => setActive(0), [query]);
@@ -49,8 +53,8 @@ export default function EmojiPicker({ onPick, onClose }) {
   }, [active]);
 
   function pick(e) {
-    addRecentEmoji(e.emoji);
-    onPick(e.emoji);
+    if (!e.custom) addRecentEmoji(e.emoji); // a server's emoji isn't kept across servers
+    onPick(e.emoji, e);
   }
 
   function onKeyDown(e) {
@@ -98,6 +102,11 @@ export default function EmojiPicker({ onPick, onClose }) {
               🕘
             </button>
           )}
+          {customItems.length > 0 && (
+            <button type="button" tabIndex={-1} title="Server" aria-label="Server" onClick={() => jumpTo('server')} className="flex items-center justify-center rounded-sm p-1 hover:bg-ink-600">
+              <img src={customItems[0].custom.url} alt="" className="h-5 w-5 object-contain" />
+            </button>
+          )}
           {EMOJI_GROUPS.map((g) => (
             <button key={g.id} type="button" tabIndex={-1} title={g.name} aria-label={g.name} onClick={() => jumpTo(`g${g.id}`)} className="rounded-sm p-1 text-base hover:bg-ink-600">
               {g.icon}
@@ -133,7 +142,7 @@ export default function EmojiPicker({ onPick, onClose }) {
                     onClick={() => pick(e)}
                     className={`flex h-9 items-center justify-center rounded-lg text-xl ${i === active ? 'bg-ink-600' : 'hover:bg-ink-600'}`}
                   >
-                    {e.emoji}
+                    {e.custom ? <img src={e.custom.url} alt="" className="h-7 w-7 object-contain" /> : e.emoji}
                   </button>
                 );
               })}
@@ -144,7 +153,7 @@ export default function EmojiPicker({ onPick, onClose }) {
       <div className="flex h-8 items-center gap-2 border-t border-ink-900/60 px-3 text-xs text-gray-400">
         {flat[active] && (
           <>
-            <span className="text-base">{flat[active].emoji}</span>
+            {flat[active].custom ? <img src={flat[active].custom.url} alt="" className="h-5 w-5 object-contain" /> : <span className="text-base">{flat[active].emoji}</span>}
             <span className="truncate">{flat[active].label}</span>
           </>
         )}

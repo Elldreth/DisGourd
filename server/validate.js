@@ -59,9 +59,18 @@ function validateRegistration({ username, password, email }) {
 const MAX_REACTION_LENGTH = 32;
 const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
 const EMOJI_MARK = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
+// A custom server emoji as a reaction: <:name:id> (P2-19b). Whether that
+// emoji exists in the message's server is checked by the react op.
+const CUSTOM_REACTION_RE = /^<:([a-z0-9_]{2,32}):(\d{1,12})>$/;
+function parseCustomReaction(value) {
+  const m = typeof value === 'string' ? CUSTOM_REACTION_RE.exec(value.trim()) : null;
+  return m ? { token: m[0], name: m[1], id: parseInt(m[2], 10) } : null;
+}
+
 function parseReactionEmoji(value) {
   if (typeof value !== 'string') return null;
   const emoji = value.trim();
+  if (CUSTOM_REACTION_RE.test(emoji)) return emoji;
   if (!emoji || emoji.length > MAX_REACTION_LENGTH) return null;
   let count = 0;
   for (const _ of graphemes.segment(emoji)) if (++count > 1) return null;
@@ -70,5 +79,5 @@ function parseReactionEmoji(value) {
 
 module.exports = {
   MAX_MESSAGE_LENGTH, MAX_ATTACHMENTS, validateSpaceName, normalizeChannelName, validateChannelName,
-  parseMentionUsernames, normalizeAttachments, validateRegistration, parseReactionEmoji,
+  parseMentionUsernames, normalizeAttachments, validateRegistration, parseReactionEmoji, parseCustomReaction,
 };

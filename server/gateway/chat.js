@@ -2,7 +2,7 @@
 // reactions and typing.
 const WebSocket = require('ws');
 const db = require('../db');
-const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments, parseReactionEmoji } = require('../validate');
+const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments, parseReactionEmoji, parseCustomReaction } = require('../validate');
 const { canViewChannel, canPostChannel, canView, canModerateMessage } = require('../permissions');
 const { userClients, deliverToChannelViewers, tellFollow } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
@@ -140,6 +140,9 @@ const ops = {
     if (!id || !emoji) return;
     const loc = db.getMessageLocation(id);
     if (!loc || !canView(loc.space, loc.channel, userId)) return;
+    // A custom emoji must belong to this message's server, under that name.
+    const custom = parseCustomReaction(emoji);
+    if (custom && !db.spaceHasEmoji(loc.space, custom.id, custom.name)) return;
     db.toggleReaction(id, userId, emoji);
     const agg = db.getReaction(id, emoji);
     deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({

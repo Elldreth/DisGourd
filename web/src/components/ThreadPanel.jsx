@@ -8,6 +8,7 @@ import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
 import { renderMarkdown } from '../markdown.jsx';
 import { formatDay, formatTime } from '../util.js';
+import { emojiLookup } from '../emoji.js';
 
 // An open thread: the message it started from, its replies and a composer.
 // It sits to the right of the channel on wide screens and fills the screen on
@@ -41,6 +42,7 @@ export default function ThreadPanel({
   followed = false, // you follow this thread (it counts as unread and notifies)
   onToggleFollow, // (follow: boolean)
   onSetArchived, // (archived: boolean), only when you may
+  emoji = [], // the server's custom emoji [{ id, name, url }]
 }) {
   const [root, setRoot] = useState(thread.root || null); // null while loading; false = deleted
   const [replyingTo, setReplyingTo] = useState(null);
@@ -148,11 +150,12 @@ export default function ThreadPanel({
         </div>
       )}
 
-      <RootMessage root={root} currentUser={currentUser} />
+      <RootMessage root={root} currentUser={currentUser} emoji={emoji} />
 
       <MessageList
         ref={listRef}
         label={`Replies in thread ${thread.name}`}
+        emoji={emoji}
         channel={thread.channel}
         messages={messages}
         currentUser={currentUser}
@@ -186,6 +189,7 @@ export default function ThreadPanel({
           }}
           onTyping={onTyping}
           mentionCandidates={memberNames}
+          customEmoji={emoji}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
         />
@@ -199,7 +203,7 @@ export default function ThreadPanel({
 }
 
 // The message the thread started from, quoted at the top.
-function RootMessage({ root, currentUser }) {
+function RootMessage({ root, currentUser, emoji }) {
   if (root === null) return <div className="border-b border-ink-900/60 px-4 py-3 text-xs text-gray-500">Loading the original message…</div>;
   if (root === false) {
     return (
@@ -218,7 +222,7 @@ function RootMessage({ root, currentUser }) {
           <span className="text-xs text-gray-500">{`Started by ${root.author || 'unknown'} · ${formatDay(root.timestamp)} ${formatTime(root.timestamp)}`}</span>
         </div>
         <div className="prose-chat mt-0.5 max-h-40 overflow-y-auto text-sm text-gray-200">
-          {root.content ? renderMarkdown(root.content, { me: currentUser, mentions: true }) : hasAttachment ? <em className="text-gray-400">Attachment</em> : null}
+          {root.content ? renderMarkdown(root.content, { me: currentUser, mentions: true, emoji: emojiLookup(emoji) }) : hasAttachment ? <em className="text-gray-400">Attachment</em> : null}
         </div>
       </div>
     </div>

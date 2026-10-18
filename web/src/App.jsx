@@ -448,6 +448,7 @@ export default function App() {
             permissions={sp.activeSpace ? sp.activeSpace.permissions : null}
             channelMeta={sp.channelMeta}
             onPermsChanged={sp.reloadSpaces}
+            emoji={sp.activeSpace?.emoji || []}
             user={user}
             avatar={profile?.avatar}
             presence={presence}
@@ -521,6 +522,7 @@ export default function App() {
               threadsVersion={chat.threadsVersion}
               threadBadge={threadBadge}
               threadsUnread={channelThreads[sp.currentChannel] || 0}
+              emoji={sp.activeSpace?.emoji || []}
             />
           </div>
           {openThread && (
@@ -546,6 +548,7 @@ export default function App() {
               history={thread.history}
               onTyping={thread.sendTyping}
               onClose={closeThread}
+              emoji={sp.activeSpace?.emoji || []}
               followed={!!chat.threads[unreadKey(openThread.space, openThread.channel)]?.followed}
               onSetArchived={
                 sp.canPin

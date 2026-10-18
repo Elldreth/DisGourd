@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-19)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #110, 2026-10-17)
 - **Effort:** S–M
 - **Depends on:** P1-01 (migrations), P1-04 (uploads)
 - **Serialize with:** anything touching `server/db/index.js`, `server/routes/spaces.js`, `server/routes/uploads.js`

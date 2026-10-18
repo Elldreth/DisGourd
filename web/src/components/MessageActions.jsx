@@ -162,7 +162,8 @@ function pickerPosition(anchor) {
   return { left, top };
 }
 
-export function ReactionPicker({ onPick, onClose, sheet, above }) {
+// `custom`: the server's own emoji; one of those reacts as its <:name:id> token.
+export function ReactionPicker({ onPick, onClose, sheet, above, custom = [] }) {
   const ref = useRef(null);
   useAutoFocusFirst(ref);
   // null = the quick strip; otherwise where the full picker goes.
@@ -180,7 +181,7 @@ export function ReactionPicker({ onPick, onClose, sheet, above }) {
           onClick={(e) => e.stopPropagation()}
           style={full.sheet ? undefined : { position: 'fixed', left: full.left, top: full.top }}
         >
-          <EmojiPicker onPick={onPick} onClose={onClose} />
+          <EmojiPicker custom={custom} onPick={(emoji, item) => onPick(item?.reaction || emoji)} onClose={onClose} />
         </div>
       </div>,
       document.body

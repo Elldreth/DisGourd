@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
 import Embed from './Embed.jsx';
@@ -8,6 +8,7 @@ import { MessageToolbar, ActionMenu, ReactionPicker } from './MessageActions.jsx
 import { formatTime, formatDay, formatAgo } from '../util.js';
 import { renderMarkdown } from '../markdown.jsx';
 import { newDivider } from '../newMessages.js';
+import { emojiLookup, parseEmojiToken } from '../emoji.js';
 
 const LONG_PRESS_MS = 450;
 const JUMP_MAX_PAGES = 10; // how far back "Jump" will page before giving up
@@ -73,12 +74,16 @@ function mentionsUser(content, me) {
 // under a message that has a thread, and adds Open thread. `opener` is the
 // element to give focus back to when the thread closes.
 // `threadBadge(channel)` (optional) gives a thread's { unread, mentions } for its summary.
+// `emoji` (optional): the server's custom emoji [{ id, name, url }], for :name:
+// in messages, reaction chips and the reaction picker.
 // `label` (optional) names the list (default "Messages in #channel").
 // `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
 // an original that isn't loaded, and, while that older window is showing
 // (`history.hasNewer`), offers newer pages and "Jump to present".
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, emptyIcon = null, emptyArt = null, topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label }, ref) {
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, simple = false, emptyHeading, emptyBody, emptyIcon = null, emptyArt = null, topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label, emoji = [] }, ref) {
   const bottomRef = useRef(null);
+  const emojiMap = useMemo(() => emojiLookup(emoji), [emoji]);
+  const emojiById = useMemo(() => new Map(emoji.map((e) => [e.id, e])), [emoji]);
   const containerRef = useRef(null);
   // The message being edited, and where focus goes when that edit ends: back
   // to its row, or to the composer when the composer's up arrow started it.
@@ -437,6 +442,9 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               onCreateThread={onCreateThread}
               onOpenThread={onOpenThread}
               threadBadge={threadBadge}
+              emoji={emoji}
+              emojiMap={emojiMap}
+              emojiById={emojiById}
               onJumpTo={jumpTo}
               flash={row.m.id === flashId}
               simple={simple}
@@ -473,7 +481,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
 
 export default MessageList;
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onPin, onCreateThread, onOpenThread, threadBadge, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onReact, onReply, onPin, onCreateThread, onOpenThread, threadBadge, emoji, emojiMap, emojiById, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
   const [draft, setDraft] = useState(m.content || '');
   const editRef = useRef(null);
   // Entering edit mode (from this row or the composer's up arrow): start from
@@ -794,7 +802,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
             )}
             {m.content && (
               <div className="whitespace-pre-wrap wrap-break-word text-gray-200">
-                {renderMarkdown(m.content, { me: currentUser, mentions: !simple })}
+                {renderMarkdown(m.content, { me: currentUser, mentions: !simple, emoji: emojiMap })}
                 {m.editedAt && <span className="ml-1 text-[10px] text-gray-500">(edited)</span>}
               </div>
             )}
@@ -810,12 +818,16 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
               <div className="mt-1 flex flex-wrap gap-1 coarse:gap-2">
                 {reactions.map((r) => {
                   const mineReacted = r.users?.includes(currentUser);
+                  // A custom emoji reaction shows its image, or :name: if it's gone.
+                  const token = parseEmojiToken(r.emoji);
+                  const image = token && emojiById?.get(token.id);
+                  const shown = token ? `:${token.name}:` : r.emoji;
                   return (
                     <button
                       key={r.emoji}
                       onClick={() => onReact(m.id, r.emoji)}
                       title={(r.users || []).join(', ')}
-                      aria-label={`${r.emoji} ${r.count}${mineReacted ? ', you reacted' : ''}`}
+                      aria-label={`${shown} ${r.count}${mineReacted ? ', you reacted' : ''}`}
                       aria-pressed={!!mineReacted}
                       className={`tap-reaction flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition ${
                         mineReacted
@@ -823,7 +835,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
                           : 'bg-ink-600/60 text-gray-200 ring-ink-500/60 hover:ring-brand-hi'
                       }`}
                     >
-                      <span>{r.emoji}</span>
+                      <span>{image ? <img src={image.url} alt={shown} className="h-[18px] w-[18px] object-contain" /> : shown}</span>
                       <span>{r.count}</span>
                     </button>
                   );
@@ -844,7 +856,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
       {popup === 'menu' && (
         <ActionMenu actions={actions} sheet={sheet} above={above} onClose={closePopup} label="Message actions" />
       )}
-      {popup === 'react' && <ReactionPicker sheet={sheet} above={above} onPick={pickReaction} onClose={closePopup} />}
+      {popup === 'react' && <ReactionPicker sheet={sheet} above={above} custom={emoji} onPick={pickReaction} onClose={closePopup} />}
     </div>
   );
 }

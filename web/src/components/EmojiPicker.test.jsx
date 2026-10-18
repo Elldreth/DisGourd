@@ -57,3 +57,17 @@ test('no matches says so', async () => {
   fireEvent.change(search, { target: { value: 'zzzzqqq' } });
   expect(screen.getByText(/no emoji found/i)).toBeTruthy();
 });
+
+test('a server\'s own emoji get a Server section; picking one gives :name: and its reaction token (P2-19b)', async () => {
+  const custom = [{ id: 7, name: 'party_gourd', url: '/uploads/a/party.png' }];
+  const { onPick, search } = await open({ custom });
+  const group = screen.getByRole('group', { name: 'Server' });
+  const option = screen.getByRole('option', { name: ':party_gourd:' });
+  expect(group.contains(option)).toBe(true);
+  expect(option.querySelector('img').getAttribute('src')).toBe('/uploads/a/party.png');
+  fireEvent.click(option);
+  expect(onPick).toHaveBeenCalledWith(':party_gourd:', expect.objectContaining({ reaction: '<:party_gourd:7>' }));
+  expect(JSON.parse(localStorage.getItem('disgourd.recentEmoji') || '[]')).not.toContain(':party_gourd:');
+  fireEvent.change(search, { target: { value: 'party' } });
+  await waitFor(() => expect(screen.getByRole('option', { name: ':party_gourd:' })).toBeTruthy());
+});

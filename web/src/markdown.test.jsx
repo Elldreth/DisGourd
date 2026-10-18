@@ -183,3 +183,24 @@ describe('safety and performance', () => {
     expect(el.textContent).toBe('before `````` after');
   });
 });
+
+describe('custom server emoji (P2-19b)', () => {
+  const emoji = new Map([['party_gourd', '/uploads/a/party.png']]);
+  test(':name: renders the image only for a name the server has', () => {
+    const el = md('cheers :party_gourd: and :unknown: too', { me: 'me', mentions: true, emoji });
+    const img = el.querySelector('img');
+    expect(img.getAttribute('src')).toBe('/uploads/a/party.png');
+    expect(img.getAttribute('alt')).toBe(':party_gourd:');
+    expect(el.textContent).toBe('cheers  and :unknown: too');
+  });
+  test('without a server (DMs) the name stays text', () => {
+    const el = md('cheers :party_gourd:');
+    expect(el.querySelector('img')).toBeNull();
+    expect(el.textContent).toBe('cheers :party_gourd:');
+  });
+  test('inside code it stays text', () => {
+    const el = md('`:party_gourd:`', { me: 'me', mentions: true, emoji });
+    expect(el.querySelector('img')).toBeNull();
+    expect(el.querySelector('code').textContent).toBe(':party_gourd:');
+  });
+});
