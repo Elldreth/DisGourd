@@ -96,6 +96,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-15 | Server templates in the setup wizard | 3 | COMPLETE | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
 | P3-17 | Dev server forwards every API path (`/me`, `/dms`, `/search`, `/invites`) | 3 | COMPLETE | S | none | vite.config.js, devProxy.js (new) |
 | P3-18 | Channel list shield follows the role overrides | 3 | COMPLETE | S | P2-21c | db/index.js (getUserSpaces), ChannelList.jsx |
+| P3-19 | The "new version" notice stays clear of the composer | 3 | REVIEW | S | P2-18a, P3-09 | Toasts.jsx, App.jsx |
 | P3-20 | Smoothness batch (Container: a–c) | 3 | PLANNED | M | see packet | see children |
 | P3-20a | Channel topics | 3 | REVIEW | M | none | migrations, routes/spaces.js, ChatPanel, ChannelSettingsDialog |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |

@@ -202,11 +202,20 @@ export default function App() {
   // Deleting a message: hidden at once with an Undo toast, sent after 5s.
   const toast = useToasts();
   // The installable shell (production builds): when a new version has been
-  // installed behind this one, offer to reload into it.
+  // installed behind this one, offer to reload into it. Shown at the top so it
+  // never covers the composer or the panels that open above it.
   useEffect(() => {
     registerServiceWorker({
       onUpdate: (apply) =>
-        toast.show({ id: 'sw-update', message: 'A new version of DisGourd is ready.', actionLabel: 'Reload', onAction: apply, duration: 10 * 60 * 1000 }),
+        toast.show({
+          id: 'sw-update',
+          message: 'A new version of DisGourd is ready.',
+          actionLabel: 'Reload',
+          onAction: apply,
+          duration: 10 * 60 * 1000,
+          placement: 'top',
+          dismissible: true,
+        }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -54,3 +54,34 @@ test('showing a toast with the same id replaces it; dismiss removes it', () => {
   act(() => api.dismiss('a'));
   expect(screen.getByRole('status').textContent).not.toContain('two');
 });
+
+test('a top toast (the update notice) shows in the top list, clear of the composer; others stay at the bottom', () => {
+  setup();
+  act(() => api.show({ id: 'sw-update', message: 'A new version is ready.', actionLabel: 'Reload', placement: 'top', dismissible: true }));
+  act(() => api.show({ id: 'del', message: 'Message deleted', actionLabel: 'Undo' }));
+  const region = screen.getByRole('status');
+  const top = region.querySelector('[data-placement="top"]');
+  const bottom = region.querySelector('[data-placement="bottom"]');
+  expect(top.className).toContain('top-14');
+  expect(top.textContent).toContain('A new version is ready.');
+  expect(top.textContent).not.toContain('Message deleted');
+  expect(bottom.className).toContain('bottom-20');
+  expect(bottom.textContent).toContain('Message deleted');
+  expect(bottom.textContent).not.toContain('A new version is ready.');
+});
+
+test('a dismissible toast closes from its Dismiss button without running its action', () => {
+  setup();
+  const onAction = vi.fn();
+  act(() => api.show({ id: 'sw-update', message: 'A new version is ready.', actionLabel: 'Reload', onAction, placement: 'top', dismissible: true }));
+  expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+  expect(onAction).not.toHaveBeenCalled();
+  expect(screen.getByRole('status').textContent).not.toContain('A new version is ready.');
+});
+
+test('toasts are not dismissible unless asked', () => {
+  setup();
+  act(() => api.show({ id: 'a', message: 'Message deleted', actionLabel: 'Undo' }));
+  expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+});
