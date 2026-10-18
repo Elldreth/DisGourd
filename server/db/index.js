@@ -225,6 +225,70 @@ const syncSpaceRoles = db.transaction((spaceId) => {
     }
   }
 });
+// What a member may do in a server, read from the roles tables (P2-21b).
+// null for a non-member; otherwise { owner, actions: Set, position, roleIds,
+// channel(channelId) -> { view, post } }. The owner may do everything. Channel
+// access: @everyone's override first, then the member's own roles: an allow
+// from any of them wins, else a deny from any, else what @everyone said
+// (default allowed). Posting needs viewing. One call reads everything it
+// needs, so looping over a server's channels costs nothing more.
+function resolveAccess(spaceId, userId) {
+  const space = getSpaceById(spaceId);
+  if (!space || !isMember(spaceId, userId)) return null;
+  const owner = Number(space.owner_id) === Number(userId);
+  const roles = getRoles(spaceId);
+  const everyone = roles.find((r) => r.isDefault) || null;
+  const roleIds = new Set(getMemberRoleIds(spaceId, userId));
+  const mine = roles.filter((r) => roleIds.has(r.id));
+  const actions = new Set();
+  for (const r of [everyone, ...mine]) if (r) for (const a of r.permissions) actions.add(a);
+  if (owner) for (const a of Object.keys(DEFAULT_PERMISSIONS)) actions.add(a);
+  const position = owner ? Infinity : mine.reduce((top, r) => Math.max(top, r.position), everyone ? everyone.position : 0);
+  const byChannel = new Map();
+  for (const o of db.prepare(`
+    SELECT o.channel_id AS channelId, o.role_id AS roleId, o.view, o.post
+    FROM channel_role_overrides o JOIN channels c ON c.id = o.channel_id WHERE c.space_id = ?
+  `).all(spaceId)) {
+    if (!byChannel.has(o.channelId)) byChannel.set(o.channelId, []);
+    byChannel.get(o.channelId).push(o);
+  }
+  const channel = (channelId) => {
+    if (owner) return { view: true, post: true };
+    const ovs = byChannel.get(Number(channelId)) || [];
+    const decide = (field) => {
+      const base = everyone ? ovs.find((o) => o.roleId === everyone.id)?.[field] : null;
+      let allowed = base == null ? true : base === 1;
+      const own = ovs.filter((o) => roleIds.has(o.roleId)).map((o) => o[field]).filter((v) => v != null);
+      if (own.includes(1)) allowed = true;
+      else if (own.includes(0)) allowed = false;
+      return allowed;
+    };
+    const view = decide('view');
+    return { view, post: view && decide('post') };
+  };
+  return { owner, actions, position, roleIds, channel };
+}
+
+// The ids behind a (server name, channel name) pair, or null if unknown.
+function channelRef(spaceName, channelName) {
+  const row = db.prepare('SELECT c.id AS channelId, c.space_id AS spaceId FROM channels c JOIN spaces s ON c.space_id = s.id WHERE s.name = ? AND c.name = ?').get(spaceName, channelName);
+  return row || null;
+}
+
+// Every channel id the user may view, across all their servers (the unread,
+// mention and search queries filter on this).
+function visibleChannelIds(userId) {
+  const ids = [];
+  for (const m of db.prepare('SELECT space_id FROM space_members WHERE user_id = ?').all(userId)) {
+    const access = resolveAccess(m.space_id, userId);
+    if (!access) continue;
+    for (const c of db.prepare('SELECT id FROM channels WHERE space_id = ?').all(m.space_id)) if (access.channel(c.id).view) ids.push(c.id);
+  }
+  return ids;
+}
+// `c.id IN (...)` for a list of ids (an empty list matches nothing).
+const inList = (ids) => (ids.length ? `(${ids.map(() => '?').join(',')})` : '(NULL)');
+
 // Seed (or refresh) the tier-derived roles of every server.
 function seedAllSpaceRoles() {
   for (const s of db.prepare('SELECT id FROM spaces').all()) syncSpaceRoles(s.id);
@@ -266,7 +330,9 @@ function setSpacePermissions(spaceId, perms) {
   syncSpaceRoles(spaceId);
 }
 
-// Whether a role rank may perform a server action.
+// Whether a *tier* may perform a server action. Legacy: production checks use
+// the roles tables (resolveAccess / permissions.js); the roles equivalence
+// test keeps this to compare against.
 function canDo(spaceId, role, action) {
   return roleRank(role) >= (getSpacePermissions(spaceId)[action] || 3);
 }
@@ -419,6 +485,9 @@ function isMember(spaceId, userId) {
   return !!db.prepare('SELECT 1 FROM space_members WHERE space_id = ? AND user_id = ?').get(spaceId, userId);
 }
 
+// The owner's position as sent to clients (JSON has no Infinity).
+const OWNER_POSITION = 1e9;
+
 // Spaces the user belongs to, each with its channels and the user's role.
 function getUserSpaces(userId) {
   const spaces = db.prepare(`
@@ -429,21 +498,27 @@ function getUserSpaces(userId) {
     ORDER BY s.name COLLATE NOCASE
   `).all(userId);
   const channelStmt = db.prepare(
-    "SELECT name, type, view_role AS view, post_role AS post FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
+    "SELECT id, name, type, view_role AS view, post_role AS post FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
   );
   const emojiStmt = db.prepare('SELECT id, name, url FROM space_emoji WHERE space_id = ? ORDER BY name');
   return spaces.map((s) => {
-    const rank = roleRank(s.role);
-    // Members only see channels their rank is allowed to view.
-    const chans = channelStmt.all(s.id).filter((c) => rank >= (c.view || 1));
+    // Members only see channels their roles allow them to view; `canPost`
+    // and `abilities` tell the client what it may offer (the server checks too).
+    const access = resolveAccess(s.id, userId);
+    const chans = channelStmt.all(s.id)
+      .map((c) => ({ ...c, can: access ? access.channel(c.id) : { view: false, post: false } }))
+      .filter((c) => c.can.view);
     const channelMeta = {};
-    for (const c of chans) channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1 };
+    for (const c of chans) channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post };
     return {
       name: s.name,
       icon: s.icon || null,
       iconOriginal: s.iconOriginal || null,
       iconCrop: s.iconCrop ? JSON.parse(s.iconCrop) : null,
       role: s.role,
+      owner: !!(access && access.owner),
+      position: access ? (access.owner ? OWNER_POSITION : access.position) : 0,
+      abilities: access ? [...access.actions] : [],
       permissions: getSpacePermissions(s.id),
       // The server's own emoji, so :name: can render client-side.
       emoji: emojiStmt.all(s.id),
@@ -912,21 +987,17 @@ function markRead(userId, space, channel, lastReadId) {
   `).run(userId, space, channel, lastReadId || 0);
 }
 
-// SQL twin of roleRank() for a space_members alias, so queries can apply the
-// per-channel view threshold (channels.view_role) themselves.
-const memberRankSql = (alias) =>
-  `(CASE ${alias}.role WHEN 'owner' THEN 3 WHEN 'admin' THEN 2 WHEN 'member' THEN 1 ELSE 0 END)`;
-
 // Unread message counts per channel across all of the user's servers
 // (only channels the user is allowed to view). Threads count only when the
 // user follows them; a thread row names its `parent` channel.
 function getUnreadCounts(userId) {
+  const visible = visibleChannelIds(userId);
   return db.prepare(`
     SELECT s.name AS space, c.name AS channel, pc.name AS parent, COUNT(m.id) AS count,
       COALESCE(rs.last_read_id, 0) AS lastReadId
     FROM space_members sm
     JOIN spaces s ON sm.space_id = s.id
-    JOIN channels c ON c.space_id = s.id AND c.view_role <= ${memberRankSql('sm')}
+    JOIN channels c ON c.space_id = s.id AND c.id IN ${inList(visible)}
     LEFT JOIN channels pc ON pc.id = c.parent_id
     LEFT JOIN thread_follows tf ON tf.channel_id = c.id AND tf.user_id = sm.user_id
     LEFT JOIN read_state rs ON rs.user_id = sm.user_id AND rs.space = s.name AND rs.channel = c.name
@@ -934,7 +1005,7 @@ function getUnreadCounts(userId) {
     WHERE sm.user_id = ? AND (c.type IS NOT 'thread' OR tf.user_id IS NOT NULL)
     GROUP BY s.name, c.name, pc.name
     HAVING count > 0
-  `).all(userId).map(withParent);
+  `).all(...visible, userId).map(withParent);
 }
 // Only thread rows name a parent channel.
 const withParent = ({ parent, ...row }) => (parent ? { ...row, parent } : row);
@@ -964,20 +1035,20 @@ function addMentions(messageId, spaceId, usernames, ids = []) {
 // user's read marker for that channel). Mentions in any thread the user can
 // see count, followed or not; a thread row names its `parent` channel.
 function getMentionCounts(userId) {
+  const visible = visibleChannelIds(userId);
   return db.prepare(`
     SELECT s.name AS space, c.name AS channel, pc.name AS parent, COUNT(m.id) AS count
     FROM mentions mn
     JOIN messages m ON mn.message_id = m.id
-    JOIN channels c ON m.channel_id = c.id
+    JOIN channels c ON m.channel_id = c.id AND c.id IN ${inList(visible)}
     JOIN spaces s ON c.space_id = s.id
     JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = mn.user_id
-      AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN channels pc ON pc.id = c.parent_id
     LEFT JOIN read_state rs ON rs.user_id = ? AND rs.space = s.name AND rs.channel = c.name
     WHERE mn.user_id = ? AND m.id > COALESCE(rs.last_read_id, 0)
     GROUP BY s.name, c.name, pc.name
     HAVING count > 0
-  `).all(userId, userId).map(withParent);
+  `).all(...visible, userId, userId).map(withParent);
 }
 
 // ---- Web Push subscriptions (P2-18b) ----
@@ -1194,22 +1265,22 @@ function getDmUnreadCounts(userId) {
 // their servers, plus their direct messages. Returns two lists.
 function searchMessages(userId, query, limit = 40) {
   const like = `%${query.replace(/[\\%_]/g, '\\$&')}%`;
+  const visible = visibleChannelIds(userId);
   const channels = db.prepare(`
     SELECT m.id, m.content,
            COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) AS timestamp,
            u.username AS author, u.avatar_url AS authorAvatar,
            s.name AS space, c.name AS channel, c.thread_name AS threadName, pc.name AS parentChannel
     FROM messages m
-    JOIN channels c ON m.channel_id = c.id
+    JOIN channels c ON m.channel_id = c.id AND c.id IN ${inList(visible)}
     JOIN spaces s ON c.space_id = s.id
     JOIN space_members sm ON sm.space_id = s.id AND sm.user_id = ?
-      AND c.view_role <= ${memberRankSql('sm')}
     LEFT JOIN channels pc ON pc.id = c.parent_id
     LEFT JOIN users u ON m.author_id = u.id
     WHERE m.content LIKE ? ESCAPE '\\'
     ORDER BY m.id DESC
     LIMIT ?
-  `).all(userId, like, limit).map(({ threadName, parentChannel, ...r }) => ({
+  `).all(...visible, userId, like, limit).map(({ threadName, parentChannel, ...r }) => ({
     ...r,
     thread: parentChannel ? { channel: r.channel, name: threadName, parentChannel } : null,
   }));
@@ -1577,6 +1648,10 @@ module.exports = {
   setChannelOverride,
   syncSpaceRoles,
   seedAllSpaceRoles,
+  resolveAccess,
+  visibleChannelIds,
+  channelRef,
+  OWNER_POSITION,
   DEFAULT_PERMISSIONS,
   getSpaceEmoji,
   addSpaceEmoji,

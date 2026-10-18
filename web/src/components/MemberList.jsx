@@ -13,7 +13,8 @@ import ConfirmDialog from './ConfirmDialog.jsx';
 // Spoken after a member's name (the dot alone isn't enough).
 const STATUS_WORDS = { idle: 'Idle', dnd: 'Do Not Disturb' };
 
-export default function MemberList({ space, members, currentUser, myRole, onMessageUser, onSetRole, onKick, open = false, onClose }) {
+// canKickMembers / myPosition (from the server's roles): who I may remove.
+export default function MemberList({ space, members, currentUser, myRole, canKickMembers = false, myPosition = 0, onMessageUser, onSetRole, onKick, open = false, onClose }) {
   const panelRef = useRef(null);
   const [kicking, setKicking] = useState(null); // username awaiting "are you sure?"
   useEffect(() => {
@@ -49,7 +50,8 @@ export default function MemberList({ space, members, currentUser, myRole, onMess
           : { label: 'Make admin', onClick: () => onSetRole(m.username, 'admin') }
       );
     }
-    const canKick = !self && ((isOwner && m.role !== 'owner') || (myRole === 'admin' && m.role === 'member'));
+    // Removing someone: the "kick" ability, and they sit strictly below me.
+    const canKick = !self && canKickMembers && (m.position ?? 0) < myPosition;
     if (canKick) {
       acts.push({
         label: 'Remove from server',

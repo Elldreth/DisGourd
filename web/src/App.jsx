@@ -479,6 +479,7 @@ export default function App() {
             channelMeta={sp.channelMeta}
             onPermsChanged={sp.reloadSpaces}
             emoji={sp.activeSpace?.emoji || []}
+            canManageEmoji={sp.canManageEmoji}
             user={user}
             avatar={profile?.avatar}
             presence={presence}
@@ -595,6 +596,8 @@ export default function App() {
             members={sp.members}
             currentUser={user}
             myRole={sp.role}
+            canKickMembers={sp.canKick}
+            myPosition={sp.myPosition}
             onMessageUser={(name) => {
               setMembersOpen(false);
               startDm(name);

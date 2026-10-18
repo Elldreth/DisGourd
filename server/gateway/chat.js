@@ -3,7 +3,7 @@
 const WebSocket = require('ws');
 const db = require('../db');
 const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments, parseReactionEmoji, parseCustomReaction } = require('../validate');
-const { canViewChannel, canPostChannel, canView, canModerateMessage } = require('../permissions');
+const { canViewChannel, canPostChannel, canView, canModerateMessage, canDoAction } = require('../permissions');
 const { userClients, deliverToChannelViewers, tellFollow } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
 const linkPreviews = require('../linkPreviews');
@@ -49,9 +49,8 @@ const ops = {
     const space = db.getSpaceByName(msg.space);
     const type = space ? db.channelType(msg.space, msg.channel) : null;
     if (!space || !db.isMember(space.id, userId) || (type !== 'text' && type !== 'thread')) return;
-    // Enforce channel view/post role gates.
-    const mrole = db.getMemberRole(space.id, userId);
-    if (!canViewChannel(msg.space, msg.channel, mrole) || !canPostChannel(msg.space, msg.channel, mrole)) return;
+    // Enforce the channel's view/post gates (from the member's roles).
+    if (!canViewChannel(msg.space, msg.channel, userId) || !canPostChannel(msg.space, msg.channel, userId)) return;
     const content = typeof msg.content === 'string' ? msg.content : '';
     if (content.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
     const attachments = normalizeAttachments(msg);
@@ -173,7 +172,7 @@ const ops = {
     // itself or in the thread panel (excluding sender).
     const looking = (f) => !!f && f.space === msg.space && f.channel === msg.channel;
     for (const m of db.getSpaceMembers(space.id)) {
-      if (!canViewChannel(msg.space, msg.channel, m.role)) continue;
+      if (!canViewChannel(msg.space, msg.channel, m.userId)) continue;
       const socks = userClients[m.userId];
       if (!socks) continue;
       socks.forEach((s) => {
@@ -193,7 +192,7 @@ function setPinned(ws, msg, userId, pinned) {
   if (!loc || !canView(loc.space, loc.channel, userId)) return;
   const space = db.getSpaceByName(loc.space);
   const op = pinned ? 'pin' : 'unpin';
-  if (!db.canDo(space.id, db.getMemberRole(space.id, userId), 'pin_messages')) {
+  if (!canDoAction(space.id, userId, 'pin_messages')) {
     return rejectFrame(ws, op, "You don't have permission to pin messages here");
   }
   if (pinned) {

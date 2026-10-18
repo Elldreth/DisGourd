@@ -15,7 +15,7 @@ function setup(props = {}) {
   const onClose = vi.fn();
   const onMessageUser = vi.fn();
   const utils = render(
-    <MemberList members={members} currentUser="sandy" myRole="owner" onMessageUser={onMessageUser} onSetRole={() => {}} onKick={() => {}} onClose={onClose} {...props} />
+    <MemberList members={members} currentUser="sandy" myRole="owner" canKickMembers myPosition={1e9} onMessageUser={onMessageUser} onSetRole={() => {}} onKick={() => {}} onClose={onClose} {...props} />
   );
   return { onClose, onMessageUser, ...utils };
 }
@@ -65,7 +65,7 @@ test('focus goes back where it was when the drawer closes', async () => {
   opener.focus();
   const { rerender } = setup({ open: true });
   await waitFor(() => expect(document.activeElement).not.toBe(opener));
-  rerender(<MemberList members={members} currentUser="sandy" myRole="owner" onMessageUser={() => {}} onSetRole={() => {}} onKick={() => {}} onClose={() => {}} open={false} />);
+  rerender(<MemberList members={members} currentUser="sandy" myRole="owner" canKickMembers myPosition={1e9} onMessageUser={() => {}} onSetRole={() => {}} onKick={() => {}} onClose={() => {}} open={false} />);
   await waitFor(() => expect(document.activeElement).toBe(opener));
   opener.remove();
 });

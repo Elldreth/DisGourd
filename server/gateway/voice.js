@@ -30,7 +30,7 @@ function voiceStatesFor(userId) {
     if (room.members.size === 0) continue;
     const space = db.getSpaceByName(room.space);
     if (!space || !db.isMember(space.id, userId)) continue;
-    if (!canViewChannel(room.space, room.channel, db.getMemberRole(space.id, userId))) continue;
+    if (!canViewChannel(room.space, room.channel, userId)) continue;
     frames.push({ type: 'voice_state', space: room.space, channel: room.channel, participants: voiceParticipants(room) });
   }
   return frames;
@@ -59,7 +59,7 @@ const ops = {
   voice_join({ ws, msg, userId }) {
     const space = db.getSpaceByName(msg.space);
     if (!space || !db.isMember(space.id, userId) || db.channelType(msg.space, msg.channel) !== 'voice') return;
-    if (!canViewChannel(msg.space, msg.channel, db.getMemberRole(space.id, userId))) return; // no access to this channel
+    if (!canViewChannel(msg.space, msg.channel, userId)) return; // no access to this channel
     voiceLeave(ws); // only one voice channel at a time
     const key = voiceKey(msg.space, msg.channel);
     let room = voiceRooms.get(key);
