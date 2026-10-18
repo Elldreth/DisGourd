@@ -1768,9 +1768,19 @@ function updateImagineJob(id, fields) {
 function getImagineJob(id) {
   return db.prepare('SELECT * FROM imagine_jobs WHERE id = ?').get(id);
 }
-// How many images a user asked for since `since` (failures don't count).
+// How many images a user asked for in chat since `since` (failures and
+// admins' test images don't count).
 function countImagineJobsSince(userId, since) {
-  return db.prepare("SELECT COUNT(*) AS n FROM imagine_jobs WHERE user_id = ? AND created_at >= ? AND status != 'failed'").get(userId, since).n;
+  return db.prepare("SELECT COUNT(*) AS n FROM imagine_jobs WHERE user_id = ? AND created_at >= ? AND status != 'failed' AND space_id IS NOT NULL").get(userId, since).n;
+}
+// The last real cost of one image from an engine's model at a quality (P2-20c).
+function lastImagineCost(engine, model, quality) {
+  const r = db.prepare("SELECT cost FROM imagine_jobs WHERE engine = ? AND model = ? AND quality = ? AND status = 'done' AND cost > 0 ORDER BY id DESC LIMIT 1").get(engine, model, quality);
+  return r ? r.cost : null;
+}
+// Credits an engine has used (or has queued) since `since`.
+function imagineCreditsSince(engine, since) {
+  return db.prepare("SELECT COALESCE(SUM(cost), 0) AS c FROM imagine_jobs WHERE engine = ? AND created_at >= ? AND status != 'failed'").get(engine, since).c;
 }
 // Jobs a restart interrupted.
 function getUnfinishedImagineJobs() {
@@ -1900,6 +1910,8 @@ module.exports = {
   updateImagineJob,
   getImagineJob,
   countImagineJobsSince,
+  lastImagineCost,
+  imagineCreditsSince,
   getUnfinishedImagineJobs,
   isSiteAdmin,
   setSiteAdmin,

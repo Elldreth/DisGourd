@@ -37,11 +37,19 @@ function Chips({ label, options, value, onChange, disabled }) {
 }
 
 export default function ImaginePanel({ imagine, shape, quality, engine, onShape, onQuality, onEngine, busy, error }) {
+  // Paid engines (kie.ai) carry a price per quality: the last real one, or an estimate.
+  const price = imagine.engines.find((e) => e.id === engine)?.price?.[quality];
+  const priceText = price ? `${price.estimate ? '≈ ' : ''}${price.credits} credits` : null;
   return (
     <div className="anim-pop mb-1 space-y-2 rounded-lg bg-ink-800 p-2.5 shadow-lg ring-1 ring-ink-500/50" aria-label="Image options" role="region">
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="font-semibold text-gray-300">🎨 /imagine — describe the image, then press Enter</span>
-        {imagine.available && <span className="shrink-0 text-gray-400">{imagine.remaining} left today</span>}
+        {imagine.available && (
+          <span className="shrink-0 text-gray-400">
+            {priceText && <span title="kie.ai credits for one image">{priceText} · </span>}
+            {imagine.remaining} left today
+          </span>
+        )}
       </div>
       {imagine.available ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">

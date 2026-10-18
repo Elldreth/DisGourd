@@ -10,6 +10,7 @@ const runner = require('./runner');
 
 const ENGINES = new Map([
   ['comfyui', require('./engines/comfyui')],
+  ['kie', require('./engines/kie')],
   ['fake', require('./engines/fake')],
 ]);
 const SHAPES = ['square', 'portrait', 'landscape', 'wide'];
@@ -41,7 +42,12 @@ function adminView(settings = getSettings()) {
     permissive: !!settings.permissive,
     dailyLimit: settings.dailyLimit,
     dailyCeiling: settings.dailyCeiling,
-    engines: [...ENGINES.values()].filter((e) => e.available()).map((e) => ({ id: e.id, name: e.name, config: e.publicConfig(engineConfig(settings, e.id)) })),
+    engines: [...ENGINES.values()].filter((e) => e.available()).map((e) => ({
+      id: e.id,
+      name: e.name,
+      config: e.publicConfig(engineConfig(settings, e.id)),
+      ...(e.catalogue ? { models: e.catalogue(engineConfig(settings, e.id)) } : {}),
+    })),
   };
 }
 const intIn = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
@@ -83,12 +89,26 @@ function dailyLimitFor(spaceId, settings = getSettings()) {
   return Math.min(own ?? settings.dailyLimit, settings.dailyCeiling);
 }
 const usedToday = (userId) => db.countImagineJobsSince(userId, Date.now() - DAY_MS);
+// The start of this calendar month (the kie.ai credit cap counts from here).
+function monthStart(now = new Date()) {
+  return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+}
+// Whether one more image would go over an engine's monthly credit cap.
+function overBudget(engine, config, cost) {
+  const cap = engine.monthlyCap ? engine.monthlyCap(config) : 0;
+  return cap > 0 && db.imagineCreditsSince(engine.id, monthStart()) + cost > cap;
+}
+// An engine's price per image at each quality (engines that charge), or null.
+function enginePrices(engine, config) {
+  if (!engine.priceFor) return null;
+  return Object.fromEntries(QUALITIES.map((q) => [q, engine.priceFor(config, q)]));
+}
 
 // GET /spaces gains `imagine` per server: whether it's on here, whether I may
 // use it, my limit and use, and the engines to choose from.
 function decorateSpaces(list, userId) {
   const settings = getSettings();
-  const engines = enabledEngines(settings).map((e) => ({ id: e.id, name: e.name }));
+  const engines = enabledEngines(settings).map((e) => ({ id: e.id, name: e.name, price: enginePrices(e, engineConfig(settings, e.id)) }));
   const used = usedToday(userId);
   return list.map((s) => {
     const space = db.getSpaceByName(s.name);
@@ -143,8 +163,10 @@ function imagineOp({ ws, msg, userId }) {
   const permissive = !!settings.permissive && db.isChannelNsfw(msg.space, msg.channel);
   const ref = db.channelRef(msg.space, msg.channel);
   const user = db.getUserById(userId);
+  const cost = engine.costOf(request, config);
+  if (overBudget(engine, config, cost)) return refuse(ws, 'BUDGET', `This instance's ${engine.name} budget for the month is used up`);
   const job = {
-    engine, config, request, permissive, cost: engine.costOf(request, config),
+    engine, config, request, permissive, cost,
     space: msg.space, channel: msg.channel, username: user.username,
   };
   job.id = db.createImagineJob({
@@ -169,7 +191,7 @@ function imagineOp({ ws, msg, userId }) {
 
 // An admin's test image (P2-20b): straight from one engine, with its saved
 // config — no chat message, no daily count, but the same always-refused check.
-async function tryEngine({ engine: id, prompt, shape = 'square', quality = 'standard' } = {}) {
+async function tryEngine({ engine: id, prompt, shape = 'square', quality = 'standard' } = {}, adminId = null) {
   const settings = getSettings();
   const engine = ENGINES.get(id);
   if (!engine || !engine.available()) return { error: `Unknown engine: ${id}` };
@@ -179,14 +201,22 @@ async function tryEngine({ engine: id, prompt, shape = 'square', quality = 'stan
   const refused = refusedReason(text);
   if (refused) return { error: refused };
   const config = engineConfig(settings, id);
+  const cost = engine.costOf({ prompt: text, shape, quality }, config);
+  if (overBudget(engine, config, cost)) return { error: `This instance's ${engine.name} budget for the month is used up` };
+  // Recorded like a chat request (without a server), so the price and the
+  // monthly spend stay right; it doesn't count against anyone's daily images.
+  const jobId = db.createImagineJob({ userId: adminId || null, spaceId: null, channelId: null, engine: id, prompt: text, shape, quality, permissive: false, cost });
   const started = Date.now();
   const signal = AbortSignal.timeout(parseInt(process.env.IMAGINE_TIMEOUT_MS, 10) || 5 * 60 * 1000);
   try {
     const result = await engine.generate({ prompt: text, shape, quality }, config, { permissive: !!settings.permissive, signal });
     const [url] = runner.saveImages(result.images);
-    return { url, width: result.width || null, height: result.height || null, model: result.model || null, ms: Date.now() - started };
+    db.updateImagineJob(jobId, { status: 'done', finishedAt: Date.now(), model: result.model || null, cost: result.cost ?? cost });
+    return { url, width: result.width || null, height: result.height || null, model: result.model || null, cost: result.cost ?? null, ms: Date.now() - started };
   } catch (err) {
-    return { error: signal.aborted ? 'It took too long' : err.message || 'Something went wrong' };
+    const reason = signal.aborted ? 'It took too long' : err.message || 'Something went wrong';
+    db.updateImagineJob(jobId, { status: 'failed', finishedAt: Date.now(), error: reason });
+    return { error: reason };
   }
 }
 
