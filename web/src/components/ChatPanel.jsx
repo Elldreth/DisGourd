@@ -10,6 +10,7 @@ import IconButton from './IconButton.jsx';
 import EmptyState from './EmptyState.jsx';
 import DropOverlay from './DropOverlay.jsx';
 import { useFileDrop } from '../useFileDrop.js';
+import { renderMarkdown } from '../markdown.jsx';
 
 export default function ChatPanel({
   space,
@@ -45,9 +46,21 @@ export default function ChatPanel({
   threadBadge, // (channel) => { unread, mentions } for a thread's summary or row
   threadsUnread = 0, // how many of this channel's threads have something unread
   emoji = [], // the server's custom emoji [{ id, name, url }]
+  topic = null, // the channel's topic (P3-20a), or null
   imagine = null, // /imagine for this server (imagineState), or null
 }) {
   const [pinsOpen, setPinsOpen] = useState(false);
+  // The whole topic, shown under the header; closes on Esc or a channel switch.
+  const [topicOpen, setTopicOpen] = useState(false);
+  useEffect(() => setTopicOpen(false), [space, channel]);
+  useEffect(() => {
+    if (!topicOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setTopicOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [topicOpen]);
   const [threadsOpen, setThreadsOpen] = useState(false);
   const [threadFrom, setThreadFrom] = useState(null); // the message a new thread starts from
   // The phone-only More menu (Threads, Pins). Opening it focuses its first
@@ -124,8 +137,23 @@ export default function ChatPanel({
           className="tap -ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         />
         <Icon name="hash" size={20} className="text-gray-500" />
-        <h2 className="font-bold">{channel}</h2>
-        <div className="flex-1" />
+        <h2 className="shrink-0 font-bold">{channel}</h2>
+        {/* The topic (P3-20a): one truncated line; click or Enter shows it all. */}
+        {topic ? (
+          <button
+            type="button"
+            onClick={() => setTopicOpen((v) => !v)}
+            aria-expanded={topicOpen}
+            aria-controls="channel-topic-full"
+            aria-label={`Topic: ${topic.split('\n')[0]}`}
+            title={topicOpen ? 'Hide the topic' : 'Show the whole topic'}
+            className="ml-1 min-w-0 flex-1 truncate border-l border-ink-500/60 pl-3 text-left text-sm text-gray-400 hover:text-gray-200 max-[399px]:hidden"
+          >
+            {topic.split('\n')[0]}
+          </button>
+        ) : (
+          <div className="flex-1" />
+        )}
         {onOpenMembers && (
           <button
             onClick={onOpenMembers}
@@ -236,6 +264,11 @@ export default function ChatPanel({
           className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
         />
       </header>
+      {topic && topicOpen && (
+        <div id="channel-topic-full" className="prose-chat max-h-48 overflow-y-auto whitespace-pre-wrap border-b border-ink-900/60 bg-ink-800/60 px-4 py-2 text-sm text-gray-300">
+          {renderMarkdown(topic, {})}
+        </div>
+      )}
 
       {degraded && (
         <div className="anim-slide-down bg-idle/20 px-4 py-1 text-center text-sm text-idle">
@@ -246,6 +279,7 @@ export default function ChatPanel({
 
       <MessageList
         ref={listRef}
+        emptyBody={topic || undefined}
         onPin={canPin && onSetPinned ? onSetPinned : undefined}
         messages={messages}
         channel={channel}

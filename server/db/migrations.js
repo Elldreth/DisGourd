@@ -462,6 +462,14 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 14,
+    name: 'channel topics',
+    up(db) {
+      // A short description per channel, shown in its header (P3-20a).
+      db.exec('ALTER TABLE channels ADD COLUMN topic TEXT');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
