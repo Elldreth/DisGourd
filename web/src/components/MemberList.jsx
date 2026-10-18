@@ -104,12 +104,16 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
                 onClick={() => acts.length && setMenuFor(open ? null : m.username)}
                 title={acts.length ? m.username : 'You'}
                 className={`tap-row flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition ${
-                  status === 'offline' ? 'opacity-50' : ''
-                } ${acts.length ? 'hover:bg-ink-700/60' : 'cursor-default'}`}
+                  acts.length ? 'hover:bg-ink-700/60' : 'cursor-default'
+                }`}
               >
-                <Avatar name={m.username} size={30} status={statusOf(m)} src={m.avatar} />
+                {/* Offline: a greyed avatar and muted (still readable) text, not
+                    opacity, which took names below AA contrast (P3-20b). */}
+                <span className={status === 'offline' ? 'grayscale' : ''}>
+                  <Avatar name={m.username} size={30} status={statusOf(m)} src={m.avatar} />
+                </span>
                 <span className="min-w-0 flex-1">
-                  <RoleName name={m.username} className="block truncate text-sm text-gray-200" />
+                  <RoleName name={m.username} className={`block truncate text-sm ${status === 'offline' ? 'text-gray-500' : 'text-gray-200'}`} />
                   {STATUS_WORDS[statusOf(m)] && <span className="sr-only">, {STATUS_WORDS[statusOf(m)]}</span>}
                   {(m.statusText || m.statusEmoji) && (
                     // Plain text, never markdown or HTML.

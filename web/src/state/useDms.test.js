@@ -48,3 +48,21 @@ test('starting a brand-new DM from a server keeps it in the list after the list 
   await waitFor(() => expect(api.getDms).toHaveBeenCalled());
   await waitFor(() => expect(result.current.conversations.map((d) => d.username)).toEqual(['cara', 'bob']));
 });
+
+test('opening a DM with unread messages marks where the new ones start (once per visit)', async () => {
+  const msgs = [
+    { id: 1, author: 'bob', content: 'old' },
+    { id: 2, author: 'sandy', content: 'mine' },
+    { id: 3, author: 'bob', content: 'new 1' },
+    { id: 4, author: 'bob', content: 'new 2' },
+  ];
+  api.getDmMessages.mockResolvedValue(msgs);
+  const { result } = setup(true);
+  act(() => result.current.handlers.dm_unread({ type: 'dm_unread', counts: [{ with: 'bob', count: 2 }] }));
+  act(() => result.current.select('bob'));
+  await waitFor(() => expect(result.current.newMessages).toEqual({ since: 2, count: 2 }));
+  expect(send).toHaveBeenCalledWith({ op: 'dm_read', with: 'bob', lastId: 4 });
+  act(() => result.current.select(''));
+  expect(result.current.newMessages).toBeNull();
+  api.getDmMessages.mockResolvedValue([]);
+});
