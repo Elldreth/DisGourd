@@ -32,7 +32,7 @@ The channel list shows a small shield on restricted channels. It decided this fr
 | Flags follow overrides | `roles-api.test.js` "channelMeta marks private and read-only channels from the overrides": post deny → `readOnly`; view deny with an Admin allow → `private` for the owner and an admin, hidden from a member |
 | Tier columns ignored | same test: `view_role = 3, post_role = 3` with no overrides → `private: false, readOnly: false` |
 | Shield | `ChannelList.access.test.jsx`: "Private" / "Read-only" titles, none for plain channels or tier fields alone |
-| Suites pass | Server: 32 suites, 302 tests. Web: 67 files, 571 tests. `vite build` clean |
+| Suites pass | Server: 32 suites, 302 tests. Web: 69 files, 585 tests (after merging main). `vite build` clean |
 
 ## Discovered Work
 None.
