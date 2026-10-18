@@ -10,7 +10,7 @@ import EmptyState from './EmptyState.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 
 // The conversation view in Direct Messages mode.
-export default function DmPanel({ username, messages, currentUser, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
+export default function DmPanel({ username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
   // The message being replied to ({ id, author }), cleared on send, Esc or switching conversation.
   const [replyingTo, setReplyingTo] = useState(null);
   useEffect(() => setReplyingTo(null), [username]);
@@ -75,6 +75,7 @@ export default function DmPanel({ username, messages, currentUser, typing = [], 
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}
         history={history}
+        newMessages={newMessages}
         onReply={(m) => setReplyingTo({ id: m.id, author: m.author })}
         simple
         emptyHeading={`This is the beginning of your conversation with ${username}`}

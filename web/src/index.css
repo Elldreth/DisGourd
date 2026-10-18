@@ -341,8 +341,16 @@ h3 {
   padding-left: 0.65rem;
   border-left: 3px solid color-mix(in srgb, var(--color-fg) 20%, transparent);
 }
-.md-link { color: var(--color-brand-hi); text-decoration: none; word-break: break-all; }
-.md-link:hover { text-decoration: underline; }
+/* Links are underlined at rest, not told apart by colour alone (P3-20b);
+   the line is quieter until you hover. */
+.md-link {
+  color: var(--color-brand-hi);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+.md-link:hover { text-decoration-color: currentColor; }
 
 /* Syntax highlighting tokens (highlight.js / lowlight), Neon Calabash colours.
    Contrast on the code-block background (#131024): violet 6.5:1, lime 14.2:1,

@@ -186,6 +186,9 @@ export default function App() {
     openDm: (name) => selectDm(name),
     openThread: (space, t) => openThreadFromSearch(space, t),
   });
+  // "Create a server" / "Join with an invite" from the empty screen open the
+  // rail's Add-a-server dialog (P3-20b).
+  const [addServerRequest, setAddServerRequest] = useState(null);
   // /imagine requests (P2-20d); an accepted one refreshes "left today".
   const imagineReq = useImagine({ send, onQueued: () => sp.reloadSpaces() });
   gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, thread.handlers, dm.handlers, imagineReq.handlers, {
@@ -407,6 +410,7 @@ export default function App() {
           onJoin={joinServerAndShow}
           onReorder={sp.reorder}
           pendingInvite={pendingInvite}
+          openRequest={addServerRequest}
           onInviteOpened={() => {
             clearPendingInvite();
             setPendingInvite('');
@@ -519,6 +523,7 @@ export default function App() {
           username={dm.current}
           messages={shownDmMessages}
           currentUser={user}
+          newMessages={dm.newMessages}
           typing={dm.typingNames}
           onSend={dm.send}
           onEdit={dm.edit}
@@ -571,6 +576,7 @@ export default function App() {
               emoji={sp.activeSpace?.emoji || []}
               imagine={imagineFor(sp.spaces, sp.currentSpace, sp.currentChannel, imagineReq.imagine)}
               topic={sp.channelMeta[sp.currentChannel]?.topic || null}
+              onAddServer={sp.spaces.length === 0 ? (tab) => setAddServerRequest((r) => ({ tab, n: (r?.n || 0) + 1 })) : null}
             />
           </div>
           {openThread && (

@@ -98,6 +98,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-18 | Channel list shield follows the role overrides | 3 | REVIEW | S | P2-21c | db/index.js (getUserSpaces), ChannelList.jsx |
 | P3-20 | Smoothness batch (Container: a–c) | 3 | PLANNED | M | see packet | see children |
 | P3-20a | Channel topics | 3 | REVIEW | M | none | migrations, routes/spaces.js, ChatPanel, ChannelSettingsDialog |
+| P3-20b | Small fixes: first server from the empty screen, DM divider, offline contrast, link underline | 3 | REVIEW | S–M | none | ChatPanel, ServerRail, useDms, MemberList, index.css |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
 | P4-02 | Settings with section navigation | 4 | COMPLETE | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |

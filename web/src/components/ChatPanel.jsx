@@ -47,6 +47,7 @@ export default function ChatPanel({
   threadsUnread = 0, // how many of this channel's threads have something unread
   emoji = [], // the server's custom emoji [{ id, name, url }]
   topic = null, // the channel's topic (P3-20a), or null
+  onAddServer = null, // (tab: 'create' | 'join') — offered when you have no servers (P3-20b)
   imagine = null, // /imagine for this server (imagineState), or null
 }) {
   const [pinsOpen, setPinsOpen] = useState(false);
@@ -103,13 +104,33 @@ export default function ChatPanel({
   const drop = useFileDrop({ enabled: !!channel && canPost, onFiles: (files) => composerRef.current?.addFiles(files) });
 
   if (!space) {
+    // With no servers at all, offer the first step right here (P3-20b).
     return (
       <Empty
         onOpenNav={onOpenNav}
         art="server"
-        title="No server selected"
-        body="Pick a server on the left, or press + to create one and invite your friends."
-      />
+        title={onAddServer ? 'You’re not in any servers yet' : 'No server selected'}
+        body={onAddServer ? 'Create one for your friends, or join one with an invite.' : 'Pick a server on the left, or press + to create one and invite your friends.'}
+      >
+        {onAddServer && (
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => onAddServer('create')}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover active:scale-95"
+            >
+              Create a server
+            </button>
+            <button
+              type="button"
+              onClick={() => onAddServer('join')}
+              className="rounded-lg bg-ink-600 px-4 py-2 text-sm font-semibold text-fg transition hover:bg-ink-500 active:scale-95"
+            >
+              Join with an invite
+            </button>
+          </div>
+        )}
+      </Empty>
     );
   }
   if (!channel) {
@@ -362,7 +383,7 @@ export default function ChatPanel({
   );
 }
 
-function Empty({ art, title, body, onOpenNav }) {
+function Empty({ art, title, body, onOpenNav, children }) {
   return (
     <main className="anim-fade relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
       {onOpenNav && (
@@ -375,6 +396,7 @@ function Empty({ art, title, body, onOpenNav }) {
         />
       )}
       <EmptyState art={art} as="h2" title={title} body={body} />
+      {children}
     </main>
   );
 }

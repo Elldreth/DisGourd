@@ -16,6 +16,18 @@ export function newDivider(messages, since, me, hasMore) {
   return target ? { id: target.id, loaded: true } : null;
 }
 
+// The divider's `since` for a DM you open with `count` unread (P3-20b): DMs
+// keep no last-read id in the app, but the unread messages are the partner's
+// newest `count`, so the divider goes before the first of them. When they go
+// back further than what's loaded, `since` is just before the first loaded
+// message (with older history, newDivider then says "not loaded yet").
+export function dmSince(messages, count, me) {
+  if (!count || count <= 0 || !messages.length) return null;
+  const theirs = messages.filter((m) => m.author !== me);
+  if (count > theirs.length) return (messages[0].id || 1) - 1;
+  return theirs[theirs.length - count].id - 1;
+}
+
 // Combine last-read ids (unreadKey -> id), keeping the higher of each.
 export function mergeLastRead(prev, next) {
   const out = { ...prev };

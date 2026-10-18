@@ -21,10 +21,17 @@ export default function ServerRail({
   onReorder,
   pendingInvite = '',
   onInviteOpened,
+  openRequest = null, // { tab, n }: open the Add-a-server dialog on that tab (P3-20b)
 }) {
   const [dialog, setDialog] = useState(null); // { tab: 'create' | 'join', code } | null
   const [dragIndex, setDragIndex] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
+
+  useEffect(() => {
+    if (openRequest) setDialog({ tab: openRequest.tab, code: '' });
+    // A new request (n) opens it again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRequest?.n]);
 
   useEffect(() => {
     if (!pendingInvite) return;

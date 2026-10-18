@@ -1,3 +1,4 @@
+import { dmSince } from '../newMessages.js';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import * as api from '../api.js';
 import { messagesReducer, pruneExpired, hasGap } from './useChannelMessages.js';
@@ -30,11 +31,17 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
   const [current, setCurrent] = useState(''); // partner username
   const [messages, dispatch] = useReducer(messagesReducer, []);
   const [unread, setUnread] = useState({}); // username -> count
+  const unreadNow = useRef(unread);
+  unreadNow.current = unread;
   const [typing, setTyping] = useState({}); // username -> expires-at ms
   const paging = useHistoryPaging(`dm:${current}`);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const loadedFor = useRef(null); // the partner whose messages are showing
+  // What was new when you opened the conversation ({ since, count } or null):
+  // drives the "New" divider, once per visit (P3-20b).
+  const [newMessages, setNewMessages] = useState(null);
+  const capturedFor = useRef(null);
 
   // Handlers run outside render, so they read the latest state from refs.
   const activeRef = useRef(active);
@@ -95,6 +102,8 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
   useEffect(() => {
     if (!active || !current) {
       loadedFor.current = null;
+      capturedFor.current = null;
+      setNewMessages(null);
       dispatch({ type: 'reset', messages: [] });
       setTyping({});
       return undefined;
@@ -117,6 +126,13 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
           paging.pageLoaded(`dm:${current}`, msgs.length);
         }
         loadedFor.current = current;
+        // Note what was new before marking it read (first load of this visit only).
+        if (capturedFor.current !== current) {
+          capturedFor.current = current;
+          const count = unreadNow.current[current] || 0;
+          const since = dmSince(msgs, count, user);
+          setNewMessages(count > 0 && since != null ? { since, count } : null);
+        }
         const maxId = msgs.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
         send({ op: 'dm_read', with: current, lastId: maxId });
         setUnread((prev) => {
@@ -204,6 +220,7 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     open,
     loadConversations,
     messages,
+    newMessages,
     unread,
     totalUnread: Object.values(unread).reduce((a, b) => a + b, 0),
     typingNames: Object.keys(typing),
