@@ -123,7 +123,7 @@ test('server and channel settings: who may change them, the limit cap, and what 
   expect(mine.imagine).toMatchObject({ enabled: false, canUse: true, dailyLimit: 10, usedToday: 0, engines: [{ id: 'fake', name: 'Test engine' }] });
   expect((await call('owner', 'PATCH', `${S}/imagine`, { enabled: true, dailyLimit: 5 })).body).toMatchObject({ enabled: true, dailyLimit: 5, effectiveLimit: 5 });
   mine = (await call('viewer', 'GET', '/spaces')).body.find((s) => s.name === SPACE);
-  expect(mine.imagine).toMatchObject({ enabled: true, canUse: false, dailyLimit: 5 });
+  expect(mine.imagine).toMatchObject({ enabled: true, canUse: false, dailyLimit: 5, ownLimit: 5 });
   expect(mine.channelMeta.general.nsfw).toBe(false);
   // The 18+ switch: managers only.
   db.createChannel(SPACE, 'after-dark');
@@ -168,7 +168,8 @@ test('a request: the placeholder reaches the channel, then turns into the image'
   expect(JSON.parse(botMessage(queued.messageId).attachments)).toEqual(done.attachments);
   expect(db.getImagineJob(queued.jobId)).toMatchObject({ status: 'done', engine: 'fake', shape: 'landscape', model: 'fake' });
   const history = (await call('viewer', 'GET', `${S}/channels/general/messages`)).body;
-  expect(history.find((m) => m.id === queued.messageId)).toMatchObject({ author: 'Imagine', attachments: done.attachments });
+  expect(history.find((m) => m.id === queued.messageId)).toMatchObject({ author: 'Imagine', bot: true, attachments: done.attachments });
+  expect(history.filter((m) => m.author !== 'Imagine').every((m) => !('bot' in m))).toBe(true); // people's messages carry no flag
 });
 
 test('one at a time: a second request waits its turn and says where it stands', async () => {

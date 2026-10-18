@@ -15,6 +15,8 @@ import ChannelList from './components/ChannelList.jsx';
 import Gourd from './components/Gourd.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import ThreadPanel from './components/ThreadPanel.jsx';
+import { imagineFor } from './components/ImaginePanel.jsx';
+import { useImagine } from './state/useImagine.js';
 import { RoleColorsContext } from './components/RoleName.jsx';
 import VideoStage from './components/VideoStage.jsx';
 import MemberList from './components/MemberList.jsx';
@@ -184,7 +186,9 @@ export default function App() {
     openDm: (name) => selectDm(name),
     openThread: (space, t) => openThreadFromSearch(space, t),
   });
-  gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, thread.handlers, dm.handlers, {
+  // /imagine requests (P2-20d); an accepted one refreshes "left today".
+  const imagineReq = useImagine({ send, onQueued: () => sp.reloadSpaces() });
+  gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, thread.handlers, dm.handlers, imagineReq.handlers, {
     // You changed your status in another tab.
     my_presence: (f) => setProfile((p) => (p ? { ...p, presence: f.mode } : p)),
     // Your custom status changed elsewhere, or its time ran out.
@@ -485,6 +489,7 @@ export default function App() {
             myPosition={sp.myPosition}
             abilities={sp.activeSpace?.abilities || []}
             onRolesChanged={sp.reloadRoles}
+            imagineInfo={sp.activeSpace?.imagine || null}
             channelMeta={sp.channelMeta}
             onPermsChanged={sp.reloadSpaces}
             emoji={sp.activeSpace?.emoji || []}
@@ -564,6 +569,7 @@ export default function App() {
               threadBadge={threadBadge}
               threadsUnread={channelThreads[sp.currentChannel] || 0}
               emoji={sp.activeSpace?.emoji || []}
+              imagine={imagineFor(sp.spaces, sp.currentSpace, sp.currentChannel, imagineReq.imagine)}
             />
           </div>
           {openThread && (
@@ -592,6 +598,7 @@ export default function App() {
               onTyping={thread.sendTyping}
               onClose={closeThread}
               emoji={sp.activeSpace?.emoji || []}
+              imagine={imagineFor(sp.spaces, openThread.space, openThread.channel, imagineReq.imagine)}
               followed={!!chat.threads[unreadKey(openThread.space, openThread.channel)]?.followed}
               onSetArchived={
                 sp.canPin
