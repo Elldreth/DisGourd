@@ -30,6 +30,7 @@ import QuickSwitcher, { itemKey, loadRecent, recordVisit, peopleItems } from './
 import { useShortcuts, stepChannel } from './shortcuts.js';
 import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
+import { registerServiceWorker } from './pwa.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
@@ -192,6 +193,15 @@ export default function App() {
 
   // Deleting a message: hidden at once with an Undo toast, sent after 5s.
   const toast = useToasts();
+  // The installable shell (production builds): when a new version has been
+  // installed behind this one, offer to reload into it.
+  useEffect(() => {
+    registerServiceWorker({
+      onUpdate: (apply) =>
+        toast.show({ id: 'sw-update', message: 'A new version of DisGourd is ready.', actionLabel: 'Reload', onAction: apply, duration: 10 * 60 * 1000 }),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const undoDelete = useUndoDelete({ toast });
   const chatMessagesRef = useRef(chat.messages);
   chatMessagesRef.current = chat.messages;

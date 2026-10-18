@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0E0B1A" />
+    <title>DisGourd — offline</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        background: #0e0b1a; color: #e6e1f5;
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        text-align: center; padding: 24px; box-sizing: border-box;
+      }
+      main { max-width: 22rem; }
+      .mark { width: 72px; height: 72px; margin: 0 auto 20px; display: block; }
+      h1 { font-size: 1.35rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+      p { margin: 0 0 20px; color: #a9a3bd; line-height: 1.5; }
+      button {
+        background: #7d6ff3; color: #0e0b1a; border: 0; border-radius: 12px;
+        padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer;
+      }
+      button:hover { background: #9466ff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+        <path fill="#9466FF" d="M32 14c-6 0-9 5-9 10 0 3 1 5 1 7-5 3-9 8-9 14 0 9 8 15 17 15s17-6 17-15c0-6-4-11-9-14 0-2 1-4 1-7 0-5-3-10-9-10z" />
+        <path fill="#B8F34A" d="M33 3c6 0 10 4 10 9-5 0-9-3-10-9z" />
+        <path stroke="#B8F34A" stroke-width="2.6" stroke-linecap="round" fill="none" d="M32 14c0-4 1-8 1-11" />
+      </svg>
+      <h1>You’re offline</h1>
+      <p>DisGourd can’t reach your server right now. Your messages will be here when you’re back online.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

@@ -57,6 +57,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-16 | Theme tokens → CSS vars (done in P1-21) | 2 | COMPLETE | S | none | index.css (@theme) |
 | P2-17 | Light theme + picker | 2 | COMPLETE | M | P2-16 | index.css, theme.js (new), index.html, ~12 components |
 | P2-18 | PWA + Web Push (Container: a, b) | 2 | PLANNED | M | see packet | sw.js, static.js, push |
+| P2-18a | Service worker + installable shell | 2 | REVIEW | S–M | P1-04 | web/public/sw.js (new), offline.html (new), static.js, main.jsx, Toasts |
+| P2-18b | Web Push for mentions and DMs while no socket is open | 2 | PLANNED | M | P2-18a, P2-04, P2-14 | push routes, push_subscriptions, NotificationSettings |
 | P2-19 | Custom server emoji (Container: a, b) | 2 | COMPLETE | M | see packet | migrations, routes/spaces, markdown, picker |
 | P2-19a | Custom emoji: storage + management API | 2 | COMPLETE | S–M | P1-01, P1-04 | migrations, db, routes/spaces, routes/uploads |
 | P2-19b | Custom emoji: `:name:` rendering, picker tab, reactions, settings | 2 | COMPLETE | M | P2-19a | markdown.jsx, EmojiPicker, MessageList, ChannelSettingsDialog/ServerSettings, gateway react op |
@@ -82,7 +84,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-12 | ↑ edits last message | 3 | COMPLETE | S | P3-05 | Composer.jsx, MessageList.jsx |
 | P3-13 | Voice stage: speaking ring, spotlight, fullscreen | 3 | COMPLETE | S–M | none | VideoStage.jsx, voice.js |
 | P3-14 | Invite deep link (`/invite/<code>`) | 3 | COMPLETE | S | none (follow-up to P3-07) | inviteLink.js (new), App.jsx, ServerRail.jsx, CreateServerDialog.jsx, InviteDialog.jsx, SetupWizard.jsx |
-| P3-16 | Two small follow-ups: typing in threads, server view after create/join | 3 | REVIEW | S | P2-22b, P1-14 | gateway/chat.js, useChannelMessages.js, App.jsx |
+| P3-16 | Two small follow-ups: typing in threads, server view after create/join | 3 | COMPLETE | S | P2-22b, P1-14 | gateway/chat.js, useChannelMessages.js, App.jsx |
 | P3-15 | Server templates in the setup wizard | 3 | COMPLETE | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |

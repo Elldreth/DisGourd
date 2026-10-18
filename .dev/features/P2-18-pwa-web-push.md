@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 2, rank 10
-- **State:** PLANNED
+- **State:** PLANNED (P2-18a ACTIVE; child packet P2-18a-service-worker.md)
 - **Effort:** M (total)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #10
 
@@ -18,6 +18,8 @@
 ## Why it isn't decomposed further now
 Both children depend on Phase 1 outputs, and on P2-04's settings model. Write the full child packets once those land.
 
-## Open questions
-- FLAG: iOS Safari push requires the PWA to be installed to the home screen. Is that acceptable?
-- FLAG: should push carry message previews (privacy versus usefulness)?
+## Decisions (user, 2026-10-18)
+| Question | Decision |
+|---|---|
+| iOS Safari push only works once the app is on the Home Screen | **Acceptable.** Push works on Android and desktop as is; on iOS it works after Add to Home Screen, and the app shows a short hint about that. |
+| Message previews in push | **On, with an opt-out.** Up to 100 characters of text (never attachments); a setting turns previews off so the notification only says who and where. |

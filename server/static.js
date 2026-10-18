@@ -46,7 +46,7 @@ function serveWebApp(pathname, res) {
             'DisGourd API is running. Build the web client with `npm run build` to serve the UI here.'
           );
         }
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
         res.end(html);
       });
       return;
@@ -54,8 +54,12 @@ function serveWebApp(pathname, res) {
     const ext = path.extname(filePath).toLowerCase();
     const headers = { 'Content-Type': STATIC_TYPES[ext] || 'application/octet-stream' };
     // Vite fingerprints filenames under /assets, so they're safe to cache hard.
+    // The shell, the service worker and the manifest must be re-checked on
+    // every load, or a new deploy would go unnoticed (P2-18a).
     if (filePath.includes(`${path.sep}assets${path.sep}`)) {
       headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+    } else if (['index.html', 'sw.js', 'manifest.json'].includes(safe)) {
+      headers['Cache-Control'] = 'no-cache';
     }
     res.writeHead(200, headers);
     res.end(content);
