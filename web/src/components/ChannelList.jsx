@@ -312,6 +312,13 @@ export default function ChannelList({
               <button
                 onClick={() => onSelect(c)}
                 className={`tap-row flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
+                  // Make room for the gear whenever it shows, so it doesn't cover the 18+ tag or badges.
+                  canManage
+                    ? channelSettings === c
+                      ? 'pr-8 coarse:pr-13'
+                      : 'group-hover:pr-8 group-focus-within:pr-8 coarse:group-hover:pr-13 coarse:group-focus-within:pr-13'
+                    : ''
+                } ${
                   active
                     ? 'bg-ink-600 text-fg'
                     : hasUnread || mentionCount

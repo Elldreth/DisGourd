@@ -79,6 +79,11 @@ test('channel list: an 18+ tag on marked channels; Image generation in the serve
   );
   expect(screen.getByRole('button', { name: /^after-dark/ }).textContent).toContain('18+');
   expect(screen.getByRole('button', { name: /^general/ }).textContent).not.toContain('18+');
+  // P3-22: managers' rows make room for the gear when it shows, so it can't cover the 18+ tag.
+  expect(screen.getByRole('button', { name: /^after-dark/ }).className).toMatch(/group-hover:pr-8/);
+  fireEvent.click(screen.getByRole('button', { name: 'Channel settings for after-dark' }));
+  expect(screen.getByRole('button', { name: /^after-dark/ }).className).toMatch(/(^| )pr-8( |$)/);
+  fireEvent.keyDown(document.activeElement, { key: 'Escape' });
   fireEvent.click(screen.getByRole('button', { name: /^S$|S$/ }));
   fireEvent.click(screen.getByRole('button', { name: /Image generation/ }));
   expect(screen.getByRole('dialog', { name: 'Image generation — S' })).toBeTruthy();
