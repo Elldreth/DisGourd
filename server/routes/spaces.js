@@ -217,6 +217,46 @@ const routes = [
       }
 
       // /spaces/:name/channels ...
+      // ---- Channel categories and layout (P3-25a) — same permission as
+      // creating channels. Every change tells members (space_updated), so
+      // their channel lists reload. ----
+      if (pathSegments[2] === 'categories' || (pathSegments[2] === 'layout' && pathSegments.length === 3)) {
+        if (!access.actions.has('create_channel')) return sendJson(res, 403, { error: 'You are not allowed to arrange channels here' });
+        const changed = (out, status = 200) => {
+          deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+          return sendJson(res, status, out);
+        };
+        const categoryName = (v) => (typeof v === 'string' && v.trim().length >= 1 && v.trim().length <= 50 ? v.trim() : null);
+        // PUT /spaces/:s/layout { categories: [id…], channels: [{ name, category }…] }
+        if (pathSegments[2] === 'layout') {
+          if (req.method !== 'PUT') return sendJson(res, 405, { error: 'Method not allowed' });
+          const body = await getJsonBody(req);
+          const visible = new Set(db.spaceChannelNames(space.id).filter((n) => canViewChannel(spaceName, n, userId)));
+          const out = db.setLayout(space.id, body.categories, body.channels, visible);
+          return out.error ? sendJson(res, 400, out) : changed({ ok: true, categories: db.getCategories(space.id) });
+        }
+        const categoryId = pathSegments[3] ? Number(pathSegments[3]) : null;
+        // POST /spaces/:s/categories { name }
+        if (pathSegments.length === 3 && req.method === 'POST') {
+          const name = categoryName((await getJsonBody(req)).name);
+          if (!name) return sendJson(res, 400, { error: 'Category names are 1–50 characters' });
+          return changed(db.createCategory(space.id, name), 201);
+        }
+        if (pathSegments.length === 4 && Number.isInteger(categoryId)) {
+          // PATCH /spaces/:s/categories/:id { name }
+          if (req.method === 'PATCH') {
+            const name = categoryName((await getJsonBody(req)).name);
+            if (!name) return sendJson(res, 400, { error: 'Category names are 1–50 characters' });
+            return db.renameCategory(space.id, categoryId, name) ? changed({ id: categoryId, name }) : sendJson(res, 404, { error: 'No such category' });
+          }
+          // DELETE /spaces/:s/categories/:id — its channels are kept (uncategorized)
+          if (req.method === 'DELETE') {
+            return db.deleteCategory(space.id, categoryId) ? changed({ ok: true }) : sendJson(res, 404, { error: 'No such category' });
+          }
+        }
+        return sendJson(res, 404, { error: 'Not found' });
+      }
+
       if (pathSegments[2] === 'channels') {
         const channelName = pathSegments[3];
         // GET messages — must be a member AND allowed to view this channel.
@@ -342,13 +382,19 @@ const routes = [
         // POST create channel — gated by the "create_channel" threshold
         if (!channelName && req.method === 'POST') {
           if (!access.actions.has('create_channel')) return sendJson(res, 403, { error: 'You are not allowed to create channels here' });
-          const { name, type } = await getJsonBody(req);
+          const { name, type, category } = await getJsonBody(req);
           const invalid = validateChannelName(name);
           if (invalid) return sendJson(res, 400, { error: invalid });
+          // P3-25a: `category` (an id, or null for the top); left out, the
+          // server's default category for the type.
+          if (category !== undefined && category !== null && !db.getCategories(space.id).some((c) => c.id === category)) {
+            return sendJson(res, 400, { error: 'No such category' });
+          }
           const channel = normalizeChannelName(name);
           const chType = type === 'voice' ? 'voice' : 'text';
-          db.createChannel(spaceName, channel, chType);
+          db.createChannel(spaceName, channel, chType, category);
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'channel_created', space: spaceName, channel, channelType: chType }));
+          deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName })); // its place in the list
           return sendJson(res, 201, { name: channel, type: chType });
         }
         // DELETE channel — gated by the "delete_channel" threshold

@@ -106,7 +106,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-23 | /imagine Retry and Variations | 3 | COMPLETE | S–M | P2-20, P3-21 | server/imagine/index.js, db (job by message), MessageList, ChatPanel |
 | P3-24 | ComfyUI models that aren't single checkpoint files | 3 | COMPLETE | M | P2-20b | engines/comfyui.js, ImagineAdmin |
 | P3-25 | Channel categories (Container: a–d) | 3 | PLANNED | L | P2-21, P3-15 | see children |
-| P3-25a | Categories: data and API (v17, layout route, live event, templates) | 3 | READY | M | none | migrations, db/index.js, routes/spaces.js, templates |
+| P3-25a | Categories: data and API (v17, layout route, live event, templates) | 3 | REVIEW | M | none | migrations, db/index.js, routes/spaces.js, templates |
 | P3-25b | Categories in the channel list (collapse, manage, keyboard moves) | 3 | PLANNED | M | P3-25a | ChannelList.jsx, CategoryDialog |
 | P3-25c | Drag and drop channels and categories | 3 | PLANNED | S–M | P3-25b | ChannelList.jsx, drag hook |
 | P3-25d | Category permissions, copied to channels | 3 | PLANNED | M | P3-25a (b for UI) | migrations, roles, ChannelSettingsDialog |
@@ -116,7 +116,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-29 | Upscale button on /imagine images (model only or tiled repaint) | 3 | COMPLETE | M | P3-23, P3-24, P3-28 | migrations, imagine/index.js, runner, engines/comfyui.js, ImagineAgain, ImagineAdmin |
 | P3-30 | Image viewer: right-click to save, real size, Download | 3 | COMPLETE | S | none | MessageList (row events), Lightbox, Icon |
 | P3-31 | ComfyUI advanced settings: sampler, CFG, steps, negative, face detailer | 3 | COMPLETE | M | P3-24, P3-28, P3-29 | engines/comfyui.js, ImagineAdmin |
-| P3-32 | Update notice behind dialogs; date/time image names | 3 | REVIEW | XS | P3-19, P2-20 | Toasts.jsx, imagine/runner.js |
+| P3-32 | Update notice behind dialogs; date/time image names | 3 | COMPLETE | XS | P3-19, P2-20 | Toasts.jsx, imagine/runner.js |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
 | P4-02 | Settings with section navigation | 4 | COMPLETE | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |

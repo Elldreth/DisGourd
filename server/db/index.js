@@ -465,13 +465,88 @@ function createSpace(name) {
   stmt.run(name);
 }
 
-function createChannel(spaceName, channelName, type = 'text') {
+// A new channel goes at the end of a category: the one asked for (if it's
+// this server's), else the server's "Text channels" / "Voice channels" if it
+// still has one, else the uncategorized top (P3-25a).
+function createChannel(spaceName, channelName, type = 'text', categoryId) {
   createSpace(spaceName);
   const space = db.prepare('SELECT id FROM spaces WHERE name = ?').get(spaceName);
-  const made = db.prepare('INSERT OR IGNORE INTO channels(space_id, name, type) VALUES (?, ?, ?)')
-    .run(space.id, channelName, type === 'voice' ? 'voice' : 'text').changes > 0;
+  const kind = type === 'voice' ? 'voice' : 'text';
+  const category = categoryId !== undefined ? categoryOf(space.id, categoryId) : defaultCategory(space.id, kind);
+  const made = db.prepare('INSERT OR IGNORE INTO channels(space_id, name, type, category_id, position) VALUES (?, ?, ?, ?, ?)')
+    .run(space.id, channelName, kind, category, nextChannelPosition(space.id, category)).changes > 0;
   if (made && !hasRoles(space.id)) syncSpaceRoles(space.id); // seed a bare server's roles
+  return made;
 }
+
+// ---- Channel categories (P3-25a) ----
+const DEFAULT_CATEGORY = { text: 'Text channels', voice: 'Voice channels' };
+// A category id if it belongs to this server, else null (uncategorized).
+function categoryOf(spaceId, categoryId) {
+  if (categoryId == null) return null;
+  const row = db.prepare('SELECT id FROM channel_categories WHERE id = ? AND space_id = ?').get(categoryId, spaceId);
+  return row ? row.id : null;
+}
+function defaultCategory(spaceId, kind) {
+  const row = db.prepare('SELECT id FROM channel_categories WHERE space_id = ? AND name = ? ORDER BY position LIMIT 1').get(spaceId, DEFAULT_CATEGORY[kind]);
+  return row ? row.id : null;
+}
+function nextChannelPosition(spaceId, categoryId) {
+  return db.prepare("SELECT COALESCE(MAX(position) + 1, 0) AS p FROM channels WHERE space_id = ? AND category_id IS ? AND type IS NOT 'thread'").get(spaceId, categoryId).p;
+}
+// A server's channel names (no threads), for checking a layout.
+function spaceChannelNames(spaceId) {
+  return db.prepare("SELECT name FROM channels WHERE space_id = ? AND type IS NOT 'thread'").all(spaceId).map((r) => r.name);
+}
+// A server's categories in order: [{ id, name, position }].
+function getCategories(spaceId) {
+  return db.prepare('SELECT id, name, position FROM channel_categories WHERE space_id = ? ORDER BY position, id').all(spaceId);
+}
+function createCategory(spaceId, name) {
+  const pos = db.prepare('SELECT COALESCE(MAX(position) + 1, 0) AS p FROM channel_categories WHERE space_id = ?').get(spaceId).p;
+  const id = Number(db.prepare('INSERT INTO channel_categories(space_id, name, position) VALUES (?, ?, ?)').run(spaceId, name, pos).lastInsertRowid);
+  return { id, name, position: pos };
+}
+function renameCategory(spaceId, categoryId, name) {
+  return db.prepare('UPDATE channel_categories SET name = ? WHERE id = ? AND space_id = ?').run(name, categoryId, spaceId).changes > 0;
+}
+// Deleting a category keeps its channels: they join the uncategorized top,
+// after what's there, in their order. Positions are then made contiguous.
+const deleteCategory = db.transaction((spaceId, categoryId) => {
+  if (!categoryOf(spaceId, categoryId)) return false;
+  let next = nextChannelPosition(spaceId, null);
+  const move = db.prepare('UPDATE channels SET category_id = NULL, position = ? WHERE id = ?');
+  for (const c of db.prepare('SELECT id FROM channels WHERE category_id = ? ORDER BY position, id').all(categoryId)) move.run(next++, c.id);
+  db.prepare('DELETE FROM channel_categories WHERE id = ?').run(categoryId);
+  const renumber = db.prepare('UPDATE channel_categories SET position = ? WHERE id = ?');
+  getCategories(spaceId).forEach((c, i) => renumber.run(i, c.id));
+  return true;
+});
+// Rearrange a server in one go: `categories` is every category id in its new
+// order; `channels` is [{ name, category }] for the channels this person can
+// see, in their new order. Channels they can't see keep their category and
+// follow the listed ones in it, in their old order. Returns { error } or { ok }.
+const setLayout = db.transaction((spaceId, categories, channels, visible) => {
+  const known = getCategories(spaceId).map((c) => c.id);
+  if (!Array.isArray(categories) || categories.length !== known.length || new Set(categories).size !== known.length || !categories.every((id) => known.includes(id))) {
+    return { error: 'The layout must list each of this server’s categories once' };
+  }
+  const all = db.prepare("SELECT id, name, category_id AS category FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY position, id").all(spaceId);
+  const seen = all.filter((c) => visible.has(c.name));
+  if (!Array.isArray(channels) || channels.length !== seen.length || new Set(channels.map((c) => c && c.name)).size !== seen.length
+    || !channels.every((c) => c && visible.has(c.name) && seen.some((s) => s.name === c.name) && (c.category === null || known.includes(c.category)))) {
+    return { error: 'The layout must list each channel you can see once, in a category of this server or none' };
+  }
+  categories.forEach((id, i) => db.prepare('UPDATE channel_categories SET position = ? WHERE id = ?').run(i, id));
+  const byName = new Map(all.map((c) => [c.name, c]));
+  const place = db.prepare('UPDATE channels SET category_id = ?, position = ? WHERE id = ?');
+  for (const group of [null, ...categories]) {
+    const listed = channels.filter((c) => c.category === group).map((c) => byName.get(c.name));
+    const hidden = all.filter((c) => !visible.has(c.name) && c.category === group);
+    [...listed, ...hidden].forEach((c, i) => place.run(group, i, c.id));
+  }
+  return { ok: true };
+});
 
 function channelType(spaceName, channelName) {
   const row = db.prepare(`
@@ -572,9 +647,14 @@ function getUserSpaces(userId) {
     WHERE sm.user_id = ?
     ORDER BY s.name COLLATE NOCASE
   `).all(userId);
-  const channelStmt = db.prepare(
-    "SELECT id, name, type, view_role AS view, post_role AS post, nsfw, topic FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
-  );
+  // In layout order (P3-25a): the uncategorized top, then each category in
+  // order, channels by position within each.
+  const channelStmt = db.prepare(`
+    SELECT c.id, c.name, c.type, c.view_role AS view, c.post_role AS post, c.nsfw, c.topic, c.category_id AS category, c.position
+    FROM channels c LEFT JOIN channel_categories k ON k.id = c.category_id
+    WHERE c.space_id = ? AND c.type IS NOT 'thread'
+    ORDER BY k.id IS NOT NULL, k.position, k.id, c.position, c.id
+  `);
   const emojiStmt = db.prepare('SELECT id, name, url FROM space_emoji WHERE space_id = ? ORDER BY name');
   return spaces.map((s) => {
     // Members only see channels their roles allow them to view; `canPost`
@@ -588,7 +668,10 @@ function getUserSpaces(userId) {
     const channelMeta = {};
     for (const c of chans) {
       const ev = access.everyoneChannel(c.id);
-      channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post, nsfw: !!c.nsfw, topic: c.topic || null, private: !ev.view, readOnly: ev.view && !ev.post };
+      channelMeta[c.name] = {
+        type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post, nsfw: !!c.nsfw, topic: c.topic || null, private: !ev.view, readOnly: ev.view && !ev.post,
+        category: c.category ?? null, position: c.position, // P3-25a
+      };
     }
     return {
       name: s.name,
@@ -605,6 +688,7 @@ function getUserSpaces(userId) {
       channels: chans.filter((c) => c.type !== 'voice').map((c) => c.name),
       voiceChannels: chans.filter((c) => c.type === 'voice').map((c) => c.name),
       channelMeta,
+      categories: getCategories(s.id), // P3-25a: in order
     };
   });
 }
@@ -1629,8 +1713,14 @@ function templateChannels(key) {
 const createSpaceWithDefaults = db.transaction((name, ownerId, channels = [{ name: 'general', type: 'text' }]) => {
   const spaceId = createSpaceOwned(name, ownerId);
   if (!spaceId) return null;
-  const insert = db.prepare('INSERT INTO channels(space_id, name, type) VALUES (?, ?, ?)');
-  for (const ch of channels) insert.run(spaceId, ch.name, ch.type === 'voice' ? 'voice' : 'text');
+  // P3-25a: every new server starts with the two default categories.
+  const cats = { text: createCategory(spaceId, DEFAULT_CATEGORY.text).id, voice: createCategory(spaceId, DEFAULT_CATEGORY.voice).id };
+  const insert = db.prepare('INSERT INTO channels(space_id, name, type, category_id, position) VALUES (?, ?, ?, ?, ?)');
+  const count = { text: 0, voice: 0 };
+  for (const ch of channels) {
+    const kind = ch.type === 'voice' ? 'voice' : 'text';
+    insert.run(spaceId, ch.name, kind, cats[kind], count[kind]++);
+  }
   syncSpaceRoles(spaceId);
   return spaceId;
 });
@@ -1836,6 +1926,12 @@ if (versionBefore > 0 && versionBefore < 12) seedAllSpaceRoles();
 module.exports = {
   createSpace,
   createChannel,
+  getCategories,
+  spaceChannelNames,
+  createCategory,
+  renameCategory,
+  deleteCategory,
+  setLayout,
   deleteSpace,
   deleteChannel,
   renameSpace,

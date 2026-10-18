@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #140)
 - **Effort:** XS
 - **Depends on:** P3-19 (top notice), P2-20 (saved images)
 - **Starting baseline:** main at ba1fd6f (#139 merged)

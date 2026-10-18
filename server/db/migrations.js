@@ -494,6 +494,36 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 17,
+    name: 'channel categories',
+    up(db) {
+      // P3-25a: named categories in an order, and each channel's category and
+      // place. Every existing server gets "Text channels" and "Voice channels"
+      // holding what it has now (in creation order), so nothing looks
+      // different until someone rearranges. Threads stay out of it.
+      db.exec(`
+        CREATE TABLE channel_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          position INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX idx_categories_space ON channel_categories(space_id, position);
+        ALTER TABLE channels ADD COLUMN category_id INTEGER REFERENCES channel_categories(id) ON DELETE SET NULL;
+        ALTER TABLE channels ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+      `);
+      const addCategory = db.prepare('INSERT INTO channel_categories(space_id, name, position) VALUES (?, ?, ?)');
+      const channelsOf = db.prepare("SELECT id FROM channels WHERE space_id = ? AND type = ? ORDER BY id");
+      const place = db.prepare('UPDATE channels SET category_id = ?, position = ? WHERE id = ?');
+      for (const { id: spaceId } of db.prepare('SELECT id FROM spaces').all()) {
+        [['text', 'Text channels'], ['voice', 'Voice channels']].forEach(([type, name], i) => {
+          const categoryId = Number(addCategory.run(spaceId, name, i).lastInsertRowid);
+          channelsOf.all(spaceId, type).forEach((c, pos) => place.run(categoryId, pos, c.id));
+        });
+      }
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
