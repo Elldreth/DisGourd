@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { attachmentInfo } from '../util.js';
 import Icon from './Icon.jsx';
 import Modal from './Modal.jsx';
 
 // Full-screen media viewer (a Modal dialog). Click around the media or ✕ to
 // close (also Esc); the arrows / ← → keys move between items in the album.
+// Below the media (P3-30): its real size in pixels, Download and Open original.
 export default function Lightbox({ items, index, onClose, onIndex }) {
   const count = items.length;
+  const [size, setSize] = useState(null); // { w, h } of the item on show, once loaded
   const go = (delta) => onIndex((index + delta + count) % count);
 
   useEffect(() => {
@@ -20,6 +22,7 @@ export default function Lightbox({ items, index, onClose, onIndex }) {
   }, [index, count]);
 
   const info = attachmentInfo(items[index]);
+  useEffect(() => setSize(null), [info?.url]);
   if (!info) return null;
 
   const kind = info.isVideo ? 'Video' : 'Image';
@@ -65,22 +68,42 @@ export default function Lightbox({ items, index, onClose, onIndex }) {
       )}
 
       {/* Media — clicking it doesn't close the viewer; clicking around it does */}
-      <div className="max-h-[92vh] max-w-[92vw]">
+      <div className="max-h-[86vh] max-w-[92vw]">
         {info.isVideo ? (
           <video
             key={info.url}
             src={info.url}
             controls
             autoPlay
-            className="max-h-[92vh] max-w-[92vw] rounded-sm"
+            onLoadedMetadata={(e) => setSize({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
+            className="max-h-[86vh] max-w-[92vw] rounded-sm"
           />
         ) : (
           <img
+            key={info.url}
             src={info.url}
             alt={info.name}
-            className="max-h-[92vh] max-w-[92vw] rounded-sm object-contain"
+            onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+            className="max-h-[86vh] max-w-[92vw] rounded-sm object-contain"
           />
         )}
+      </div>
+
+      {/* The file: its size, and ways to keep it */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="absolute bottom-4 left-1/2 flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-full bg-black/60 px-4 py-1.5 text-sm text-white/90"
+      >
+        <span className="truncate" title={info.name}>{info.name}</span>
+        {size && <span className="shrink-0 tabular-nums text-white/70" aria-label={`${size.w} by ${size.h} pixels`}>{size.w} × {size.h}</span>}
+        <a href={info.url} download={info.name} className="flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 hover:bg-white/15" title="Download">
+          <Icon name="download" size={16} />
+          <span>Download</span>
+        </a>
+        <a href={info.url} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 hover:bg-white/15" title="Open the original in a new tab">
+          <Icon name="external" size={16} />
+          <span>Open original</span>
+        </a>
       </div>
     </Modal>
   );
