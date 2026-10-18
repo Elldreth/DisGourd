@@ -70,6 +70,13 @@ test('a top toast (the update notice) shows in the top list, clear of the compos
   expect(bottom.textContent).not.toContain('A new version is ready.');
 });
 
+test('P3-32: the top row (the update notice) sits below dialogs (z-50); quick notices at the bottom stay above them', () => {
+  setup();
+  const region = screen.getByRole('status');
+  expect(region.querySelector('[data-placement="top"]').className).toMatch(/(^| )z-45( |$)/);
+  expect(region.querySelector('[data-placement="bottom"]').className).toMatch(/(^| )z-60( |$)/);
+});
+
 test('a dismissible toast closes from its Dismiss button without running its action', () => {
   setup();
   const onAction = vi.fn();

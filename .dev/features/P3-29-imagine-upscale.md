@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #137)
 - **Effort:** M
 - **Depends on:** P3-23 (Retry/Variations, `from`), P3-24 / P3-28 (ComfyUI parts, upscale model)
 - **Starting baseline:** main at 784b8a6 (#136 merged)

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #138)
 - **Effort:** S
 - **Depends on:** none. Branched from P3-29 (#137) only to keep INDEX.md conflict-free; merge after it.
 - **Requirement Source:** the user, 2026-10-18: "I can't save the image because there are no options to do so and when I right click it in the lightbox the message menu pops up in the background. So, I have no way to see if the image is the same size or if it is upscaled."
