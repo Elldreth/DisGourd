@@ -18,14 +18,14 @@ test('thread channel names', () => {
   expect(threadRootId('general')).toBeNull();
 });
 
-test('the thread instance posts and reads with channel ~tN, and leaves the gateway focus alone', async () => {
+test('the thread instance posts and reads with channel ~tN, and takes the thread focus, not the channel\'s', async () => {
   const send = vi.fn();
   const onIncoming = vi.fn();
-  const { result } = renderHook(() =>
+  const { result, unmount } = renderHook(() =>
     useChannelMessages({ space: 'S', channel: '~t7', active: true, user: 'sandy', send, status: 'open', onIncoming, threadOnly: true })
   );
   await waitFor(() => expect(result.current.messages.map((m) => m.id)).toEqual([40]));
-  expect(send.mock.calls.map((c) => c[0].op)).toEqual(['read']); // no 'focus'
+  expect(send.mock.calls.map((c) => c[0])).toEqual([{ op: 'focus', space: 'S', channel: '~t7', thread: true }, { op: 'read', space: 'S', channel: '~t7', lastId: 40 }]);
   act(() => result.current.sendMessage('hi', [], false, 40));
   expect(send).toHaveBeenLastCalledWith({ op: 'message', space: 'S', channel: '~t7', content: 'hi', attachments: [], spoiler: false, replyTo: 40 });
 
@@ -38,6 +38,8 @@ test('the thread instance posts and reads with channel ~tN, and leaves the gatew
   expect(result.current.messages.map((m) => m.id)).toEqual([40, 41]);
   expect(result.current.unread).toEqual({});
   expect(onIncoming).not.toHaveBeenCalled();
+  unmount(); // closing the panel clears the thread focus (and only that)
+  expect(send).toHaveBeenLastCalledWith({ op: 'focus', thread: true });
 });
 
 test('the channel instance keeps root summaries live', async () => {

@@ -2,7 +2,7 @@
 // or logging errors. It catches bugs `vite build` can't, such as a value read
 // before it's declared (which blanked the app in P1-13).
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 const SPACE = {
   name: 'Smoke',
@@ -16,13 +16,18 @@ const SPACE = {
 // A fake server API; each test sets whether we're signed in.
 let signedIn = true;
 let smokeThread = null; // a thread summary on the smoke message, when a test wants one
+let spaces = []; // what getSpaces returns; createSpace adds to it
 vi.mock('./api.js', () => ({
   getToken: () => (signedIn ? 'token' : ''),
   decodeToken: (t) => (t ? { sub: 1, name: 'tester' } : null),
   setUnauthorizedHandler: () => {},
   clearToken: () => {},
   getAuthInfo: () => Promise.resolve({ registration: 'open', setup: false }),
-  getSpaces: () => Promise.resolve([SPACE]),
+  getSpaces: () => Promise.resolve(spaces),
+  createSpace: (name) => {
+    spaces = [...spaces, { ...SPACE, name, channels: ['general'], voiceChannels: [] }];
+    return Promise.resolve({ name });
+  },
   getMe: () => Promise.resolve({ id: 1, username: 'tester', avatar: null }),
   getMembers: () => Promise.resolve({ members: [{ username: 'tester', role: 'owner', online: true }] }),
   getMessages: () =>
@@ -45,6 +50,7 @@ class FakeSocket {
 let errors;
 beforeEach(() => {
   errors = [];
+  spaces = [SPACE];
   vi.stubGlobal('WebSocket', FakeSocket);
   // jsdom has no layout, so these browser APIs are missing.
   Element.prototype.scrollIntoView = () => {};
@@ -133,4 +139,25 @@ test('threads: the summary opens the side panel, and Esc closes it and gives foc
   } finally {
     smokeThread = null;
   }
+});
+
+test('creating a server from the DM view lands you in it (P3-16)', async () => {
+  signedIn = true;
+  await renderApp();
+  await act(async () => {
+    screen.getByRole('button', { name: /^Direct Messages/ }).click();
+  });
+  expect(screen.queryByRole('log', { name: 'Messages in #general' })).toBeNull(); // the DM view
+  await act(async () => {
+    screen.getByRole('button', { name: 'Create a server' }).click();
+  });
+  const dialog = screen.getByRole('dialog', { name: 'Add a server' });
+  fireEvent.change(screen.getByPlaceholderText('My friends'), { target: { value: 'Split Check' } });
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await new Promise((r) => setTimeout(r, 50));
+  });
+  expect(await screen.findByRole('heading', { name: 'Split Check' })).toBeTruthy();
+  expect(screen.getByRole('log', { name: 'Messages in #general' })).toBeTruthy();
+  expect(errors).toEqual([]);
 });

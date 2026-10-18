@@ -29,12 +29,13 @@ function previewChannelMessage(space, channel, id, content, userId, edited = fal
 
 // Op handlers, called by router.js with { ws, msg, userId }.
 const ops = {
+  // Where this socket is looking (for typing indicators): the open channel,
+  // and separately the thread open in the panel (`thread: true`). No
+  // channel clears that focus.
   focus({ ws, msg }) {
-    if (typeof msg.space === 'string' && typeof msg.channel === 'string') {
-      ws.focus = { space: msg.space, channel: msg.channel };
-    } else {
-      ws.focus = null;
-    }
+    const at = typeof msg.space === 'string' && typeof msg.channel === 'string' ? { space: msg.space, channel: msg.channel } : null;
+    if (msg.thread) ws.threadFocus = at;
+    else ws.focus = at;
     return;
   },
   read({ msg, userId }) {
@@ -157,14 +158,15 @@ const ops = {
     const frame = JSON.stringify({
       type: 'typing', user: user ? user.username : String(userId), space: msg.space, channel: msg.channel,
     });
-    // Relay only to members currently viewing this channel (excluding sender).
+    // Relay only to members currently viewing this channel, in the channel
+    // itself or in the thread panel (excluding sender).
+    const looking = (f) => !!f && f.space === msg.space && f.channel === msg.channel;
     for (const m of db.getSpaceMembers(space.id)) {
       if (!canViewChannel(msg.space, msg.channel, m.role)) continue;
       const socks = userClients[m.userId];
       if (!socks) continue;
       socks.forEach((s) => {
-        if (s !== ws && s.readyState === WebSocket.OPEN && s.focus &&
-            s.focus.space === msg.space && s.focus.channel === msg.channel) {
+        if (s !== ws && s.readyState === WebSocket.OPEN && (looking(s.focus) || looking(s.threadFocus))) {
           s.send(frame);
         }
       });

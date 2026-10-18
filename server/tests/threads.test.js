@@ -191,6 +191,29 @@ test('thread channels are not managed like normal channels', async () => {
   expect(created.name).toBe('t9999'); // the ~ can never be used in a real channel name
 });
 
+test('typing inside a thread reaches people with that thread open, without taking their channel focus (P3-16)', async () => {
+  const clear = () => Object.values(users).forEach((u) => (u.frames.length = 0));
+  // owner and member both look at #general; member also has the thread open.
+  send('owner', { op: 'focus', space: 'Threadville', channel: 'general' });
+  send('member', { op: 'focus', space: 'Threadville', channel: 'general' });
+  send('member', { op: 'focus', space: 'Threadville', channel: thread.channel, thread: true });
+  await wait(60);
+  clear();
+  send('admin', { op: 'typing', space: 'Threadville', channel: thread.channel });
+  send('admin', { op: 'typing', space: 'Threadville', channel: 'general' });
+  await wait(100);
+  expect(framesOf('member', 'typing').map((f) => f.channel).sort()).toEqual([thread.channel, 'general'].sort());
+  expect(framesOf('owner', 'typing').map((f) => f.channel)).toEqual(['general']);
+  // Closing the panel clears only the thread focus.
+  send('member', { op: 'focus', thread: true });
+  await wait(60);
+  clear();
+  send('admin', { op: 'typing', space: 'Threadville', channel: thread.channel });
+  send('admin', { op: 'typing', space: 'Threadville', channel: 'general' });
+  await wait(100);
+  expect(framesOf('member', 'typing').map((f) => f.channel)).toEqual(['general']);
+});
+
 test('deleting the root keeps the thread; deleting the parent channel removes its threads', async () => {
   const { db } = serverModule;
   db.createChannel('Threadville', 'temp');
