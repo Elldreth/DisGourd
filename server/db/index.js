@@ -849,6 +849,16 @@ const setEmbeds = db.transaction((kind, messageId, urls) => {
   urls.forEach((url, i) => insert.run(messageId, url, i));
 });
 
+// Remove a message's link cards for good (P3-20c): they're cleared now, and
+// the flag keeps an edit from bringing them back.
+const hideEmbeds = db.transaction((kind, messageId) => {
+  db.prepare(`DELETE FROM ${EMBED_TABLE[kind]} WHERE message_id = ?`).run(messageId);
+  return db.prepare(`UPDATE ${MESSAGE_TABLE[kind]} SET embeds_hidden = 1 WHERE id = ?`).run(messageId).changes > 0;
+});
+function embedsHidden(kind, messageId) {
+  return !!db.prepare(`SELECT embeds_hidden AS h FROM ${MESSAGE_TABLE[kind]} WHERE id = ?`).get(messageId)?.h;
+}
+
 function getEmbedUrls(kind, messageId) {
   return db.prepare(`SELECT url FROM ${EMBED_TABLE[kind]} WHERE message_id = ? ORDER BY position`).all(messageId).map((r) => r.url);
 }
@@ -1953,6 +1963,8 @@ module.exports = {
   saveLinkPreview,
   messageExists,
   setEmbeds,
+  hideEmbeds,
+  embedsHidden,
   getEmbedUrls,
   attachEmbeds,
   setSetting,

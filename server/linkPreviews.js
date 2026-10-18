@@ -123,6 +123,7 @@ async function cardFor(url, userId) {
 
 function handleMessage({ kind, messageId, content, userId, deliver, edited = false }) {
   if (!messageId || !enabled()) return;
+  if (db.embedsHidden(kind, messageId)) return; // removed by its author or a moderator (P3-20c)
   const urls = extractUrls(content);
   const had = edited ? db.getEmbedUrls(kind, messageId).length : 0;
   if (urls.length === 0 && had === 0) return;

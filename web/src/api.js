@@ -145,6 +145,13 @@ export function setSpaceIcon(space, icon, iconOriginal = null, iconCrop = null) 
 export function setServerImagine(space, { enabled, dailyLimit }) {
   return request(`/spaces/${encodeURIComponent(space)}/imagine`, { method: 'PATCH', body: { enabled, dailyLimit } });
 }
+// Remove a message's link cards (P3-20c): the author, or a moderator in a channel.
+export function hideChannelPreview(space, channel, id) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/preview`, { method: 'DELETE' });
+}
+export function hideDmPreview(username, id) {
+  return request(`/dms/${encodeURIComponent(username)}/messages/${id}/preview`, { method: 'DELETE' });
+}
 // A channel's topic (P3-20a); '' clears it.
 export function setChannelTopic(space, channel, topic) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, { method: 'PATCH', body: { topic } });

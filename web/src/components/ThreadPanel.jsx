@@ -156,6 +156,7 @@ export default function ThreadPanel({
 
       <MessageList
         ref={listRef}
+        onHidePreview={(m) => api.hideChannelPreview(space, thread.channel, m.id).catch(() => {})}
         label={`Replies in thread ${thread.name}`}
         emoji={emoji}
         channel={thread.channel}

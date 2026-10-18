@@ -11,6 +11,7 @@ import EmptyState from './EmptyState.jsx';
 import DropOverlay from './DropOverlay.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 import { renderMarkdown } from '../markdown.jsx';
+import * as api from '../api.js';
 
 export default function ChatPanel({
   space,
@@ -301,6 +302,7 @@ export default function ChatPanel({
       <MessageList
         ref={listRef}
         emptyBody={topic || undefined}
+        onHidePreview={(m) => api.hideChannelPreview(space, channel, m.id).catch(() => {})}
         onPin={canPin && onSetPinned ? onSetPinned : undefined}
         messages={messages}
         channel={channel}
