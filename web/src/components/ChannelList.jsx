@@ -7,6 +7,7 @@ import { unreadLabel } from '../util.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import UserFooter from './UserFooter.jsx';
 import RolesDialog from './RolesDialog.jsx';
+import ServerImagineDialog from './ServerImagineDialog.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
 import ServerEmojiDialog from './ServerEmojiDialog.jsx';
 import { displayCaptureSupported } from '../audio.js';
@@ -67,6 +68,7 @@ export default function ChannelList({
   myPosition = 0,
   abilities = [],
   onRolesChanged,
+  imagineInfo = null, // the server's /imagine info (GET /spaces), for its settings dialog
   channelMeta = {},
   onPermsChanged,
   user,
@@ -95,6 +97,7 @@ export default function ChannelList({
   };
   const [permsOpen, setPermsOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [imagineOpen, setImagineOpen] = useState(false);
   const [channelSettings, setChannelSettings] = useState(null); // channel name or null
   const gearRefs = useRef({}); // channel -> its settings gear, to return focus to
   const [renaming, setRenaming] = useState(false);
@@ -216,6 +219,16 @@ export default function ChannelList({
                   <Icon name="smile" size={16} /> Server emoji
                 </MenuItem>
               )}
+              {canManage && imagineInfo && (
+                <MenuItem
+                  onClick={() => {
+                    closeMenu();
+                    setImagineOpen(true);
+                  }}
+                >
+                  <Icon name="image" size={16} /> Image generation
+                </MenuItem>
+              )}
               {canManageRoles && (
                 <MenuItem
                   onClick={() => {
@@ -309,6 +322,11 @@ export default function ChannelList({
                 <span className="flex-1 truncate">{c}</span>
                 {(hasUnread || mentionCount > 0) && (
                   <span className="sr-only">, {unreadLabel({ unread: hasUnread ? unread[c] : 0, mentions: mentionCount })}</span>
+                )}
+                {channelMeta[c]?.nsfw && (
+                  <span title="Age-restricted (18+)" className="shrink-0 rounded-sm bg-ink-600 px-1 text-[10px] font-semibold text-gray-300">
+                    18+
+                  </span>
                 )}
                 {restricted && <span title="Restricted access" className="shrink-0 text-gray-500"><Icon name="shield" size={13} /></span>}
                 {mentionCount > 0 ? (
@@ -554,6 +572,9 @@ export default function ChannelList({
         onLogout={onLogout}
       />
 
+      {imagineOpen && (
+        <ServerImagineDialog space={space} info={imagineInfo} onClose={() => setImagineOpen(false)} onSaved={onPermsChanged} />
+      )}
       {emojiOpen && (
         <ServerEmojiDialog space={space} emoji={emoji} onClose={() => setEmojiOpen(false)} onChanged={onPermsChanged} />
       )}

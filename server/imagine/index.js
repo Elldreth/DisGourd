@@ -98,6 +98,7 @@ function decorateSpaces(list, userId) {
       imagine: {
         enabled: !!(own && own.enabled && engines.length),
         serverEnabled: !!(own && own.enabled),
+        ownLimit: own ? own.dailyLimit : null, // the server's own, or null for the instance default
         canUse: !!(space && canDoAction(space.id, userId, 'generate_images')),
         dailyLimit: space ? dailyLimitFor(space.id, settings) : 0,
         usedToday: used,

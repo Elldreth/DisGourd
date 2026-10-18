@@ -17,6 +17,7 @@ const fromCell = (c) => (c === '1' ? 1 : c === '0' ? 0 : null);
 // at or above your own are shown but locked (the owner: none locked).
 export default function ChannelSettingsDialog({ space, channel, meta, roles = [], isOwner = false, myPosition = 0, onClose, onSaved }) {
   const [cells, setCells] = useState(null); // roleId -> { view, post } cells; null while loading
+  const [nsfw, setNsfw] = useState(!!meta?.nsfw); // Age-restricted (18+), text channels
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -60,6 +61,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
         post: isVoice ? null : fromCell(cell(r.id, 'post')),
       }));
       await api.setChannelOverrides(space, channel, overrides);
+      if (!isVoice && nsfw !== !!meta?.nsfw) await api.setChannelNsfw(space, channel, nsfw);
       onSaved();
       onClose();
     } catch (err) {
@@ -143,6 +145,17 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
         <p className="text-xs text-gray-500">
           Default follows @everyone, whose default is allowed. If any of someone’s roles allows, they’re allowed; posting always needs viewing.
         </p>
+        {!isVoice && (
+          <label className="flex items-start gap-2 border-t border-ink-500/30 pt-3 text-sm text-gray-200">
+            <input type="checkbox" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand" />
+            <span>
+              Age-restricted (18+)
+              <span className="mt-0.5 block text-xs text-gray-500">
+                Marks the channel 18+. If the instance allows it, /imagine here isn’t filtered.
+              </span>
+            </span>
+          </label>
+        )}
         {error && <div role="alert" className="text-sm text-danger">{error}</div>}
       </div>
 

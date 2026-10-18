@@ -137,6 +137,14 @@ export function setSpaceIcon(space, icon, iconOriginal = null, iconCrop = null) 
     body: { icon, iconOriginal, iconCrop },
   });
 }
+// ---- /imagine per server and channel (P2-20d) ----
+export function setServerImagine(space, { enabled, dailyLimit }) {
+  return request(`/spaces/${encodeURIComponent(space)}/imagine`, { method: 'PATCH', body: { enabled, dailyLimit } });
+}
+export function setChannelNsfw(space, channel, nsfw) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, { method: 'PATCH', body: { nsfw } });
+}
+
 // ---- Roles (P2-21c) ----
 const rolesPath = (space) => `/spaces/${encodeURIComponent(space)}/roles`;
 export function getRoles(space) {

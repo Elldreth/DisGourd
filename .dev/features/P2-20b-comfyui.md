@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-20)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged #122)
 - **Effort:** M
 - **Depends on:** P2-20a (engine interface, settings, runner)
 - **Starting baseline:** main at 383cbd8 (#121 merged)
