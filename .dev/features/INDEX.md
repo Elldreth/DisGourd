@@ -62,10 +62,10 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-19 | Custom server emoji (Container: a, b) | 2 | COMPLETE | M | see packet | migrations, routes/spaces, markdown, picker |
 | P2-19a | Custom emoji: storage + management API | 2 | COMPLETE | S–M | P1-01, P1-04 | migrations, db, routes/spaces, routes/uploads |
 | P2-19b | Custom emoji: `:name:` rendering, picker tab, reactions, settings | 2 | COMPLETE | M | P2-19a | markdown.jsx, EmojiPicker, MessageList, ChannelSettingsDialog/ServerSettings, gateway react op |
-| P2-20 | /imagine with two engines, local ComfyUI or kie.ai (Container: a–d) | 2 | PLANNED | L | P2-21 | server/imagine/*, bot user, admin page, Composer |
+| P2-20 | /imagine with two engines, local ComfyUI or kie.ai (Container: a–d) | 2 | COMPLETE | L | P2-21 | server/imagine/*, bot user, admin page, Composer |
 | P2-20a | Imagine core: bot user, settings, permission, limits, job runner, fake engine | 2 | COMPLETE | M | P2-21 | migrations, db, server/imagine/*, gateway, admin + spaces routes |
 | P2-20b | ComfyUI engine + Image generation settings section | 2 | COMPLETE | M | P2-20a | server/imagine/engines/comfyui.js, admin routes, ImagineAdmin |
-| P2-20c | kie.ai engine: model catalogue, real prices, monthly credit cap | 2 | REVIEW | M | P2-20a, b, d | server/imagine/engines/kie.js, admin routes, ImagineAdmin, ImaginePanel |
+| P2-20c | kie.ai engine: model catalogue, real prices, monthly credit cap | 2 | COMPLETE | M | P2-20a, b, d | server/imagine/engines/kie.js, admin routes, ImagineAdmin, ImaginePanel |
 | P2-20d | /imagine in chat: panel, server + 18+ switches, bot badge | 2 | COMPLETE | M | P2-20a, P2-20b | Composer, ImaginePanel, ServerImagineDialog, ChannelSettingsDialog, MessageList |
 | P2-21 | Custom roles (Container: a–d) | 2 | COMPLETE | L | see packet | permissions.js, migrations, UI |
 | P2-21a | Roles schema seeded from tiers + a resolver that agrees with today's checks | 2 | COMPLETE | M | P1-01, P1-06 | migrations, db, permissions.js |
@@ -94,8 +94,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-14 | Invite deep link (`/invite/<code>`) | 3 | COMPLETE | S | none (follow-up to P3-07) | inviteLink.js (new), App.jsx, ServerRail.jsx, CreateServerDialog.jsx, InviteDialog.jsx, SetupWizard.jsx |
 | P3-16 | Two small follow-ups: typing in threads, server view after create/join | 3 | COMPLETE | S | P2-22b, P1-14 | gateway/chat.js, useChannelMessages.js, App.jsx |
 | P3-15 | Server templates in the setup wizard | 3 | COMPLETE | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
-| P3-17 | Dev server forwards every API path (`/me`, `/dms`, `/search`, `/invites`) | 3 | REVIEW | S | none | vite.config.js, devProxy.js (new) |
-| P3-18 | Channel list shield follows the role overrides | 3 | REVIEW | S | P2-21c | db/index.js (getUserSpaces), ChannelList.jsx |
+| P3-17 | Dev server forwards every API path (`/me`, `/dms`, `/search`, `/invites`) | 3 | COMPLETE | S | none | vite.config.js, devProxy.js (new) |
+| P3-18 | Channel list shield follows the role overrides | 3 | COMPLETE | S | P2-21c | db/index.js (getUserSpaces), ChannelList.jsx |
 | P3-20 | Smoothness batch (Container: a–c) | 3 | PLANNED | M | see packet | see children |
 | P3-20a | Channel topics | 3 | REVIEW | M | none | migrations, routes/spaces.js, ChatPanel, ChannelSettingsDialog |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |

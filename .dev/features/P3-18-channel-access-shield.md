@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (display fix)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #125)
 - **Effort:** S
 - **Depends on:** P2-21c
 - **Serialize with:** `server/db/index.js` (`getUserSpaces`), `web/src/components/ChannelList.jsx`
