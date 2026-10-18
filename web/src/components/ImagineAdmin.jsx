@@ -6,6 +6,13 @@ const FAMILIES = [
   { v: 'sdxl', label: 'SDXL (incl. Illustrious, Pony)' },
   { v: 'flux', label: 'Flux' },
 ];
+// A model in separate parts (P3-24): a diffusion model plus text encoder(s) and VAE.
+const SPLIT_FAMILIES = [
+  { v: 'flux', label: 'Flux' },
+  { v: 'zimage', label: 'Z-Image Turbo' },
+];
+// The model <select> value: kind and file name (the same name can be in both lists).
+const modelKey = (kind, name) => (name ? `${kind}:${name}` : '');
 const TIERS = [
   { v: 'low', label: 'Low', hint: 'up to ~8 GB · about 1 megapixel' },
   { v: 'medium', label: 'Medium', hint: '12–16 GB · about 1.5 megapixels' },
@@ -41,7 +48,8 @@ export default function ImagineAdmin() {
   const [kieNote, setKieNote] = useState({ text: '', ok: false });
   const [defaultEngine, setDefaultEngine] = useState(null);
   const [general, setGeneral] = useState(null); // { dailyLimit, permissive }
-  const [models, setModels] = useState(null); // [{ name, family }] once tested
+  const [models, setModels] = useState(null); // [{ name, kind, family }] once tested
+  const [parts, setParts] = useState({ clips: [], vaes: [], suggested: {} }); // for split models
   const [filter, setFilter] = useState('');
   const [testing, setTesting] = useState(false);
   const [testNote, setTestNote] = useState('');
@@ -56,7 +64,10 @@ export default function ImagineAdmin() {
   function adopt(view) {
     setData(view);
     const c = view.engines.find((e) => e.id === 'comfyui')?.config || {};
-    setComfy({ enabled: !!c.enabled, url: c.url || '', model: c.model || '', family: c.family || 'sdxl', tier: c.tier || 'medium' });
+    setComfy({
+      enabled: !!c.enabled, url: c.url || '', model: c.model || '', kind: c.kind || 'checkpoint', family: c.family || (c.kind === 'unet' ? '' : 'sdxl'),
+      tier: c.tier || 'medium', clip1: c.clip1 || '', clip2: c.clip2 || '', vae: c.vae || '',
+    });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
     setKie({ enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' });
     setKieKey('');
@@ -82,8 +93,12 @@ export default function ImagineAdmin() {
     try {
       const res = await api.testComfyUI(url);
       setModels(res.models);
+      setParts({ clips: res.clips || [], vaes: res.vaes || [], suggested: res.suggested || {} });
       setComfy((c) => ({ ...c, url: res.url }));
-      setTestNote(`Connected · ${res.models.length} checkpoint${res.models.length === 1 ? '' : 's'}`);
+      const count = (kind) => res.models.filter((m) => (m.kind || 'checkpoint') === kind).length;
+      const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+      const split = count('unet');
+      setTestNote(`Connected · ${plural(count('checkpoint'), 'checkpoint')}${split ? ` · ${plural(split, 'diffusion model')}` : ''}`);
     } catch (err) {
       setModels(null);
       if (!quiet || err.message) setTestNote(err.message || 'Could not reach ComfyUI');
@@ -92,9 +107,26 @@ export default function ImagineAdmin() {
     }
   }
 
-  function pickModel(name) {
-    const m = models?.find((x) => x.name === name);
-    setComfy((c) => ({ ...c, model: name, family: m ? m.family : c.family }));
+  function pickModel(key) {
+    const kind = key.startsWith('unet:') ? 'unet' : 'checkpoint';
+    const name = key.slice(kind.length + 1);
+    const m = models?.find((x) => x.name === name && (x.kind || 'checkpoint') === kind);
+    setComfy((c) => {
+      const family = m ? m.family || '' : c.family;
+      return kind === 'unet' ? withParts({ ...c, model: name, kind, family }) : { ...c, model: name, kind, family: family || 'sdxl' };
+    });
+  }
+
+  // A split model's suggested text encoders and VAE for its type (blank where
+  // this ComfyUI has nothing that fits; the host picks from the lists).
+  function withParts(c) {
+    const s = parts.suggested?.[c.family];
+    if (!s) return c;
+    return { ...c, clip1: s.clip1 || '', clip2: c.family === 'flux' ? s.clip2 || '' : '', vae: s.vae || '' };
+  }
+
+  function pickFamily(family) {
+    setComfy((c) => (c.kind === 'unet' ? withParts({ ...c, family }) : { ...c, family }));
   }
 
   async function testKie() {
@@ -117,7 +149,12 @@ export default function ImagineAdmin() {
     try {
       const view = await api.saveImagineSettings({
         engines: {
-          comfyui: { enabled: comfy.enabled, url: comfy.url, model: comfy.model || null, family: comfy.family, tier: comfy.tier },
+          comfyui: {
+            enabled: comfy.enabled, url: comfy.url, model: comfy.model || null, kind: comfy.kind, family: comfy.family || null, tier: comfy.tier,
+            clip1: comfy.kind === 'unet' ? comfy.clip1 || null : null,
+            clip2: comfy.kind === 'unet' && comfy.family === 'flux' ? comfy.clip2 || null : null,
+            vae: comfy.kind === 'unet' ? comfy.vae || null : null,
+          },
           kie: {
             enabled: kie.enabled,
             model: kie.model || undefined,
@@ -168,9 +205,14 @@ export default function ImagineAdmin() {
     },
   ].filter(Boolean);
   const bothOn = comfy.enabled && kie.enabled;
-  const list = (models || (comfy.model ? [{ name: comfy.model, family: comfy.family }] : [])).filter(
+  const list = (models || (comfy.model ? [{ name: comfy.model, kind: comfy.kind, family: comfy.family }] : [])).filter(
     (m) => !filter || m.name.toLowerCase().includes(filter.toLowerCase()) || m.name === comfy.model
   );
+  const checkpoints = list.filter((m) => (m.kind || 'checkpoint') === 'checkpoint');
+  const splitModels = list.filter((m) => m.kind === 'unet');
+  const split = comfy.kind === 'unet';
+  // The lists for a part: what ComfyUI has, or (before a test) the saved choice.
+  const partOptions = (list, current) => (list.length ? list : current ? [current] : []);
 
   return (
     <div className="space-y-5">
@@ -218,21 +260,51 @@ export default function ImagineAdmin() {
           {models && models.length > 12 && (
             <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter models" aria-label="Filter models" className="input mb-2" />
           )}
-          <select id="imagine-model" value={comfy.model} onChange={(e) => pickModel(e.target.value)} className="input" disabled={!list.length}>
+          <select id="imagine-model" value={modelKey(comfy.kind, comfy.model)} onChange={(e) => pickModel(e.target.value)} className="input" disabled={!list.length}>
             <option value="">{models ? 'Pick a model…' : 'Test the connection to list models'}</option>
-            {list.map((m) => (
-              <option key={m.name} value={m.name}>{m.name}</option>
-            ))}
+            {splitModels.length > 0 ? (
+              <>
+                <optgroup label="Checkpoints">
+                  {checkpoints.map((m) => <option key={`c${m.name}`} value={modelKey('checkpoint', m.name)}>{m.name}</option>)}
+                </optgroup>
+                <optgroup label="Separate parts (diffusion models)">
+                  {splitModels.map((m) => <option key={`u${m.name}`} value={modelKey('unet', m.name)}>{m.name}</option>)}
+                </optgroup>
+              </>
+            ) : (
+              checkpoints.map((m) => <option key={`c${m.name}`} value={modelKey('checkpoint', m.name)}>{m.name}</option>)
+            )}
           </select>
+          {split && <p className="mt-1 text-xs text-gray-500">This model comes in separate parts: pick its text encoder and VAE below.</p>}
         </div>
 
         <div>
           <label htmlFor="imagine-family" className={heading}>Model type</label>
-          <select id="imagine-family" value={comfy.family} onChange={(e) => setComfy((c) => ({ ...c, family: e.target.value }))} className="input">
-            {FAMILIES.map((f) => <option key={f.v} value={f.v}>{f.label}</option>)}
+          <select id="imagine-family" value={comfy.family} onChange={(e) => pickFamily(e.target.value)} className="input">
+            {split && !comfy.family && <option value="">Pick the type…</option>}
+            {(split ? SPLIT_FAMILIES : FAMILIES).map((f) => <option key={f.v} value={f.v}>{f.label}</option>)}
           </select>
           <p className="mt-1 text-xs text-gray-500">Guessed from the model’s folder and name. It picks the workflow and the image sizes.</p>
         </div>
+
+        {split && comfy.family && (
+          <div className="space-y-3" role="group" aria-label="Model parts">
+            {[
+              ['clip1', comfy.family === 'flux' ? 'Text encoder (CLIP-L)' : 'Text encoder', parts.clips],
+              ...(comfy.family === 'flux' ? [['clip2', 'Text encoder (T5-XXL)', parts.clips]] : []),
+              ['vae', 'VAE', parts.vaes],
+            ].map(([key, label, options]) => (
+              <div key={key}>
+                <label htmlFor={`imagine-${key}`} className={heading}>{label}</label>
+                <select id={`imagine-${key}`} value={comfy[key]} onChange={(e) => setComfy((c) => ({ ...c, [key]: e.target.value }))} className="input">
+                  <option value="">Pick one…</option>
+                  {partOptions(options, comfy[key]).map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            ))}
+            <p className="text-xs text-gray-500">Suggested by name from what your ComfyUI has. Change them if your files are named differently.</p>
+          </div>
+        )}
 
         <fieldset>
           <legend className={heading}>Graphics card memory (VRAM)</legend>

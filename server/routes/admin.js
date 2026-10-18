@@ -54,7 +54,7 @@ const routes = [
       const checked = comfy.validateConfig({ url: body.url });
       if (checked.error) return sendJson(res, 400, checked);
       try {
-        return sendJson(res, 200, { url: checked.url, models: await comfy.listModels(checked.url) });
+        return sendJson(res, 200, { url: checked.url, ...(await comfy.listAll(checked.url)) });
       } catch (err) {
         return sendJson(res, 400, { error: err.message });
       }
