@@ -1755,6 +1755,10 @@ function setSpaceImagine(spaceId, { enabled, dailyLimit } = {}) {
   );
   return getSpaceImagine(spaceId);
 }
+// Servers that set their own /imagine daily limit (P3-21): [{ space, limit }].
+function getSpaceImagineLimits() {
+  return db.prepare('SELECT name AS space, imagine_daily_limit AS "limit" FROM spaces WHERE imagine_daily_limit IS NOT NULL ORDER BY name COLLATE NOCASE').all();
+}
 // The 18+ flag of a channel; a thread answers with its parent's.
 function isChannelNsfw(spaceName, channelName) {
   const r = db.prepare(`
@@ -1933,6 +1937,7 @@ module.exports = {
   postAsBot,
   updateBotMessage,
   getSpaceImagine,
+  getSpaceImagineLimits,
   setSpaceImagine,
   isChannelNsfw,
   setChannelNsfw,

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-20)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #129)
 - **Effort:** M
 - **Depends on:** none (uses the channel PATCH route from P2-20a)
 - **Starting baseline:** main at 691724d

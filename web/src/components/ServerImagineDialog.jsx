@@ -55,10 +55,13 @@ export default function ServerImagineDialog({ space, info, onClose, onSaved }) {
             min={1}
             value={limit}
             onChange={(e) => setLimit(e.target.value.replace(/\D/g, ''))}
-            placeholder={`Instance default (${info?.dailyLimit ?? '—'})`}
+            placeholder={`Instance default (${info?.instanceLimit ?? info?.dailyLimit ?? '—'})`}
             className="input w-48"
           />
-          <p className="mt-1 text-xs text-gray-500">Leave blank to use the instance’s default.</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Leave blank to use the instance’s default ({info?.instanceLimit ?? info?.dailyLimit ?? '—'} a day, set in Settings → Image generation). A
+            number here takes priority over it.
+          </p>
         </div>
         <p className="text-sm text-gray-400">
           Who may use it: give roles the <span className="font-semibold text-gray-200">Generate images</span> permission on the Roles screen.

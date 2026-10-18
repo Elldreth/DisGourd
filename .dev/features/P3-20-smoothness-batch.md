@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 3
-- **State:** PLANNED (P3-20a ACTIVE)
+- **State:** COMPLETE (a #129, b #130, c #131)
 - **Requirement Source:** the user, 2026-10-18: "Start the smoothness polish batch: channel topics, Create a server from the empty screen, the DM new-messages divider, the two accessibility fixes, and Hide preview." Drawn from UX review F7 and the discovered-work notes in P4-03, P2-05, P4-06 and P4-05.
 
 ## Children

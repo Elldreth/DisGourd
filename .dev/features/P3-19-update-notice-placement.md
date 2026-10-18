@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (UI polish fix)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #128)
 - **Effort:** S
 - **Depends on:** P2-18a (service worker update notice), P3-09 (toasts)
 - **Serialize with:** `web/src/components/Toasts.jsx`

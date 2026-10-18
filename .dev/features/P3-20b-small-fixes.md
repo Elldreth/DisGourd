@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-20)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #130)
 - **Effort:** S–M
 - **Depends on:** none. Branched from P3-20a (#129) only to keep INDEX.md conflict-free; merge after it.
 - **Serialize with:** `ChatPanel.jsx`, `ServerRail.jsx`, `App.jsx`, `useDms.js`, `MemberList.jsx`, `index.css`
