@@ -1,36 +1,65 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as api from '../api.js';
 import Icon from './Icon.jsx';
 import Modal from './Modal.jsx';
 
-const LEVELS = [
-  { v: 1, label: 'Everyone' },
-  { v: 2, label: 'Admins & owner' },
-  { v: 3, label: 'Owner only' },
+// An override cell: '' default, '1' allow, '0' deny.
+const CHOICES = [
+  { v: '', label: 'Default' },
+  { v: '1', label: 'Allow' },
+  { v: '0', label: 'Deny' },
 ];
+const toCell = (v) => (v === 1 ? '1' : v === 0 ? '0' : '');
+const fromCell = (c) => (c === '1' ? 1 : c === '0' ? 0 : null);
 
-// Owner/admin panel: who can see and who can post in a single channel.
-export default function ChannelSettingsDialog({ space, channel, meta, onClose, onSaved }) {
-  const [view, setView] = useState(meta?.view ?? 1);
-  const [post, setPost] = useState(meta?.post ?? 1);
+// Manager panel for one channel: per-role access (P2-21c) — for each role,
+// View and Post each Default / Allow / Deny — and deleting the channel. Roles
+// at or above your own are shown but locked (the owner: none locked).
+export default function ChannelSettingsDialog({ space, channel, meta, roles = [], isOwner = false, myPosition = 0, onClose, onSaved }) {
+  const [cells, setCells] = useState(null); // roleId -> { view, post } cells; null while loading
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Voice channels only gate visibility/joining — "who can post" doesn't apply.
   const isVoice = meta?.type === 'voice';
   const bodyRef = useRef(null); // focus starts on the first setting, not the header's Close
+  // @everyone first, then the others highest first.
+  const ordered = [...roles.filter((r) => r.isDefault), ...roles.filter((r) => !r.isDefault)];
+  const editable = (r) => r.isDefault || isOwner || r.position < myPosition;
 
-  // You can't post somewhere you can't see, so keep post >= view.
-  function chooseView(v) {
-    setView(v);
-    if (post < v) setPost(v);
-  }
+  useEffect(() => {
+    let live = true;
+    api
+      .getChannelOverrides(space, channel)
+      .then(({ overrides }) => {
+        if (!live) return;
+        const next = {};
+        for (const o of overrides || []) next[o.roleId] = { view: toCell(o.view), post: toCell(o.post) };
+        setCells(next);
+      })
+      .catch((err) => {
+        if (!live) return;
+        setCells({});
+        setError(err.message || 'Could not load channel access');
+      });
+    return () => {
+      live = false;
+    };
+  }, [space, channel]);
+
+  const cell = (roleId, field) => cells?.[roleId]?.[field] ?? '';
+  const setCell = (roleId, field, v) => setCells((c) => ({ ...c, [roleId]: { view: '', post: '', ...c?.[roleId], [field]: v } }));
 
   async function save() {
     setBusy(true);
     setError('');
     try {
-      await api.setChannelPermissions(space, channel, view, isVoice ? view : Math.max(view, post));
+      const overrides = ordered.filter(editable).map((r) => ({
+        roleId: r.id,
+        view: fromCell(cell(r.id, 'view')),
+        post: isVoice ? null : fromCell(cell(r.id, 'post')),
+      }));
+      await api.setChannelOverrides(space, channel, overrides);
       onSaved();
       onClose();
     } catch (err) {
@@ -56,34 +85,65 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
     <Modal
       onClose={onClose}
       initialFocusRef={bodyRef}
-      panelClassName="w-full max-w-sm rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
+      panelClassName="flex max-h-[90vh] w-full max-w-md flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
     >
       <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
         <Modal.Title>{isVoice ? channel : `#${channel}`} settings</Modal.Title>
         <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">Close</button>
       </div>
 
-      <div ref={bodyRef} className="space-y-4 p-6">
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
-            {isVoice ? 'Who can see & join this channel' : 'Who can see this channel'}
-          </span>
-          <select value={view} onChange={(e) => chooseView(parseInt(e.target.value, 10))} className="input">
-            {LEVELS.map((l) => <option key={l.v} value={l.v}>{l.label}</option>)}
-          </select>
-        </label>
-        {!isVoice && (
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Who can post</span>
-            <select value={Math.max(view, post)} onChange={(e) => setPost(parseInt(e.target.value, 10))} className="input">
-              {LEVELS.filter((l) => l.v >= view).map((l) => <option key={l.v} value={l.v}>{l.label}</option>)}
-            </select>
-            <span className="mt-1 block text-xs text-gray-500">
-              Set posting higher than viewing for a read-only / announcements channel.
-            </span>
-          </label>
+      <div ref={bodyRef} className="space-y-3 overflow-y-auto p-6">
+        <p className="text-sm text-gray-400">
+          {isVoice
+            ? 'Who can see and join this channel, by role.'
+            : 'Who can see and post here, by role. Deny @everyone and allow a role for a private channel; deny posting for a read-only one.'}
+        </p>
+        {cells === null ? (
+          <p className="text-sm text-gray-500">Loading…</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
+                <th scope="col" className="pb-2 font-semibold">Role</th>
+                <th scope="col" className="pb-2 font-semibold">{isVoice ? 'See & join' : 'View'}</th>
+                {!isVoice && <th scope="col" className="pb-2 font-semibold">Post</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {ordered.map((r) => {
+                const locked = !editable(r);
+                return (
+                  <tr key={r.id} className="border-t border-ink-500/30">
+                    <th scope="row" className="py-1.5 pr-2 text-left font-normal text-gray-200">
+                      <span className="flex items-center gap-2">
+                        <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-ink-500" style={{ background: r.color || 'transparent' }} />
+                        <span className="truncate">{r.name}</span>
+                      </span>
+                    </th>
+                    {(isVoice ? ['view'] : ['view', 'post']).map((field) => (
+                      <td key={field} className="py-1.5 pr-2">
+                        <select
+                          aria-label={`${r.name}: ${field === 'post' ? 'post' : isVoice ? 'see and join' : 'view'}`}
+                          value={cell(r.id, field)}
+                          disabled={locked}
+                          title={locked ? 'Only roles below your own can be changed' : undefined}
+                          onChange={(e) => setCell(r.id, field, e.target.value)}
+                          className="input py-1 disabled:opacity-50"
+                        >
+                          {CHOICES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}
+                        </select>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
-        {error && <div className="text-sm text-danger">{error}</div>}
+        <p className="text-xs text-gray-500">
+          Default follows @everyone, whose default is allowed. If any of someone’s roles allows, they’re allowed; posting always needs viewing.
+        </p>
+        {error && <div role="alert" className="text-sm text-danger">{error}</div>}
       </div>
 
       <div className="border-t border-ink-500/40 px-6 py-4">
@@ -125,7 +185,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, onClose, o
         <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-fg">Cancel</button>
         <button
           onClick={save}
-          disabled={busy}
+          disabled={busy || cells === null}
           className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60"
         >
           {busy ? 'Saving…' : 'Save'}

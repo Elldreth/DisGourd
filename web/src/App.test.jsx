@@ -30,6 +30,7 @@ vi.mock('./api.js', () => ({
   },
   getMe: () => Promise.resolve({ id: 1, username: 'tester', avatar: null }),
   getMembers: () => Promise.resolve({ members: [{ username: 'tester', role: 'owner', online: true }] }),
+  getRoles: () => Promise.resolve({ roles: [{ id: 1, name: '@everyone', color: null, position: 0, isDefault: true, permissions: ['invite'], members: [] }] }),
   getMessages: () =>
     Promise.resolve([{ id: 1, author: 'tester', content: 'hello from the smoke test', timestamp: Date.now(), reactions: [], thread: smokeThread }]),
   getDms: () => Promise.resolve([]),

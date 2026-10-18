@@ -475,7 +475,12 @@ export default function App() {
             onReframeServerIcon={sp.reframeServerIcon}
             canReframeIcon={!!(sp.activeSpace && sp.activeSpace.iconOriginal)}
             role={sp.role}
-            permissions={sp.activeSpace ? sp.activeSpace.permissions : null}
+            roles={sp.roles}
+            members={sp.members}
+            canManageRoles={sp.canManageRoles}
+            myPosition={sp.myPosition}
+            abilities={sp.activeSpace?.abilities || []}
+            onRolesChanged={sp.reloadRoles}
             channelMeta={sp.channelMeta}
             onPermsChanged={sp.reloadSpaces}
             emoji={sp.activeSpace?.emoji || []}
@@ -596,13 +601,15 @@ export default function App() {
             members={sp.members}
             currentUser={user}
             myRole={sp.role}
+            roles={sp.roles}
+            canManageRoles={sp.canManageRoles}
             canKickMembers={sp.canKick}
             myPosition={sp.myPosition}
             onMessageUser={(name) => {
               setMembersOpen(false);
               startDm(name);
             }}
-            onSetRole={sp.changeMemberRole}
+            onToggleRole={sp.setMemberHasRole}
             onKick={sp.kickMember}
             open={membersOpen}
             onClose={() => setMembersOpen(false)}

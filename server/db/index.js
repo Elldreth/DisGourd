@@ -125,9 +125,10 @@ function deleteSpaceEmoji(spaceId, name) {
 
 // ---- Roles (P2-21a) ----
 // A server's roles: `@everyone` (is_default, position 0) which every member
-// has, and any others. Until P2-21b the checks still read the tier columns;
-// syncSpaceRoles keeps the seeded @everyone / Admin roles, the Admin
-// memberships and the channel overrides in step with them.
+// has, and any others. The roles tables are the source of truth (P2-21c): the
+// full re-seed from the tier columns (syncSpaceRoles) runs only for a new
+// server and the v12 upgrade; the legacy tier helpers write only what they
+// name (applyTierPermissions, applyTierChannel, the Admin membership).
 const shapeRole = (r) => ({
   id: r.id, name: r.name, color: r.color || null, position: r.position, isDefault: !!r.is_default,
   permissions: (() => { try { return JSON.parse(r.permissions) || []; } catch { return []; } })(),
@@ -171,6 +172,40 @@ function addMemberRole(spaceId, userId, roleId) {
 function removeMemberRole(spaceId, userId, roleId) {
   return db.prepare('DELETE FROM member_roles WHERE space_id = ? AND user_id = ? AND role_id = ?').run(spaceId, userId, roleId).changes > 0;
 }
+// A new role from the roles screen goes to the bottom, just above @everyone
+// (the others move up one). null when the name is taken.
+const createRoleAtBottom = db.transaction((spaceId, fields = {}) => {
+  if (db.prepare('SELECT 1 FROM roles WHERE space_id = ? AND name = ?').get(spaceId, String(fields.name || '').trim())) return null;
+  db.prepare('UPDATE roles SET position = position + 1 WHERE space_id = ? AND is_default = 0').run(spaceId);
+  return createRole(spaceId, { ...fields, position: 1 });
+});
+// Reorder roles within the positions they already hold: `ids` bottom to top.
+const reorderRoles = db.transaction((spaceId, ids) => {
+  const slots = ids.map((id) => getRole(spaceId, id).position).sort((a, b) => a - b);
+  const set = db.prepare('UPDATE roles SET position = ? WHERE space_id = ? AND id = ?');
+  ids.forEach((id, i) => set.run(slots[i], spaceId, id));
+});
+// Who holds each role: Map roleId -> [username].
+function getRoleHolders(spaceId) {
+  const out = new Map();
+  for (const r of db.prepare(`
+    SELECT mr.role_id AS roleId, u.username FROM member_roles mr JOIN users u ON u.id = mr.user_id
+    WHERE mr.space_id = ? ORDER BY u.username COLLATE NOCASE
+  `).all(spaceId)) {
+    if (!out.has(r.roleId)) out.set(r.roleId, []);
+    out.get(r.roleId).push(r.username);
+  }
+  return out;
+}
+// Each member's roles (besides @everyone): Map userId -> [roleId].
+function getMemberRolesMap(spaceId) {
+  const out = new Map();
+  for (const r of db.prepare('SELECT user_id AS userId, role_id AS roleId FROM member_roles WHERE space_id = ? ORDER BY role_id').all(spaceId)) {
+    if (!out.has(r.userId)) out.set(r.userId, []);
+    out.get(r.userId).push(r.roleId);
+  }
+  return out;
+}
 // A channel's overrides: [{ roleId, view, post }] with 1 allow, 0 deny, null inherit.
 function getChannelOverrides(channelId) {
   return db.prepare('SELECT role_id AS roleId, view, post FROM channel_role_overrides WHERE channel_id = ?').all(channelId);
@@ -189,6 +224,14 @@ function setChannelOverride(channelId, roleId, { view = null, post = null } = {}
   `).run(channelId, roleId, v, p);
 }
 
+// A tier threshold as a seeded role's override: 0 deny, 1 allow, null default.
+const tierOverride = (threshold, rank) => (threshold > rank ? 0 : threshold === rank && rank > 1 ? 1 : null);
+const tierAllowed = (perms, max) => Object.keys(DEFAULT_PERMISSIONS).filter((a) => (perms[a] || 3) <= max);
+const hasRoles = (spaceId) => !!db.prepare('SELECT 1 FROM roles WHERE space_id = ? AND is_default = 1').get(spaceId);
+// The seeded Admin role (what the tier helpers call "admin"), or null once
+// it has been renamed or deleted on the roles screen.
+const seededAdminId = (spaceId) => db.prepare("SELECT id FROM roles WHERE space_id = ? AND name = 'Admin' AND is_default = 0").get(spaceId)?.id ?? null;
+
 // Re-derive the seeded roles from the tier data for one server: @everyone
 // gets the actions whose threshold is 1, Admin those up to 2; admins hold
 // Admin; each channel's view/post thresholds become overrides (2: deny
@@ -201,7 +244,7 @@ const syncSpaceRoles = db.transaction((spaceId) => {
     INSERT INTO roles(space_id, name, color, position, permissions, is_default, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?)
     ON CONFLICT(space_id, name) DO UPDATE SET permissions = excluded.permissions
   `);
-  const allowed = (max) => JSON.stringify(Object.keys(DEFAULT_PERMISSIONS).filter((a) => (perms[a] || 3) <= max));
+  const allowed = (max) => JSON.stringify(tierAllowed(perms, max));
   upsert.run(spaceId, '@everyone', 0, allowed(1), 1, now);
   upsert.run(spaceId, 'Admin', 1, allowed(2), 0, now);
   const everyone = db.prepare('SELECT id FROM roles WHERE space_id = ? AND is_default = 1').get(spaceId).id;
@@ -215,16 +258,39 @@ const syncSpaceRoles = db.transaction((spaceId) => {
     ON CONFLICT(channel_id, role_id) DO UPDATE SET view = excluded.view, post = excluded.post
   `);
   const delOv = db.prepare('DELETE FROM channel_role_overrides WHERE channel_id = ? AND role_id = ?');
-  const forRole = (threshold, rank) => (threshold > rank ? 0 : threshold === rank && rank > 1 ? 1 : null);
   for (const c of db.prepare('SELECT id, view_role, post_role FROM channels WHERE space_id = ?').all(spaceId)) {
     for (const [roleId, rank] of [[everyone, 1], [admin, 2]]) {
-      const v = forRole(c.view_role || 1, rank);
-      const p = forRole(c.post_role || 1, rank);
+      const v = tierOverride(c.view_role || 1, rank);
+      const p = tierOverride(c.post_role || 1, rank);
       if (v === null && p === null) delOv.run(c.id, roleId);
       else setOv.run(c.id, roleId, v, p);
     }
   }
 });
+// Legacy tier helpers (the existing endpoints and tests), written as targeted
+// updates so they never undo what the roles screen set. A server without
+// roles yet (made through the bare helpers) gets the full seed instead.
+function applyTierPermissions(spaceId) {
+  if (!hasRoles(spaceId)) return syncSpaceRoles(spaceId);
+  const perms = getSpacePermissions(spaceId);
+  db.prepare('UPDATE roles SET permissions = ? WHERE space_id = ? AND is_default = 1').run(JSON.stringify(tierAllowed(perms, 1)), spaceId);
+  const admin = seededAdminId(spaceId);
+  if (admin) db.prepare('UPDATE roles SET permissions = ? WHERE id = ?').run(JSON.stringify(tierAllowed(perms, 2)), admin);
+}
+function applyTierChannel(spaceId, channelId, view, post) {
+  if (!hasRoles(spaceId)) return syncSpaceRoles(spaceId);
+  const everyone = db.prepare('SELECT id FROM roles WHERE space_id = ? AND is_default = 1').get(spaceId).id;
+  for (const [roleId, rank] of [[everyone, 1], [seededAdminId(spaceId), 2]]) {
+    if (roleId) setChannelOverride(channelId, roleId, { view: tierOverride(view, rank), post: tierOverride(post, rank) });
+  }
+}
+function applyTierMember(spaceId, userId, role) {
+  if (!hasRoles(spaceId)) return syncSpaceRoles(spaceId);
+  const admin = seededAdminId(spaceId);
+  if (!admin) return;
+  if (role === 'admin') addMemberRole(spaceId, userId, admin);
+  else removeMemberRole(spaceId, userId, admin);
+}
 // What a member may do in a server, read from the roles tables (P2-21b).
 // null for a non-member; otherwise { owner, actions: Set, position, roleIds,
 // channel(channelId) -> { view, post } }. The owner may do everything. Channel
@@ -252,9 +318,12 @@ function resolveAccess(spaceId, userId) {
     if (!byChannel.has(o.channelId)) byChannel.set(o.channelId, []);
     byChannel.get(o.channelId).push(o);
   }
+  // A thread answers with its parent channel's overrides.
+  const parentOf = new Map(db.prepare('SELECT id, parent_id FROM channels WHERE space_id = ? AND parent_id IS NOT NULL').all(spaceId).map((c) => [c.id, c.parent_id]));
   const channel = (channelId) => {
     if (owner) return { view: true, post: true };
-    const ovs = byChannel.get(Number(channelId)) || [];
+    const id = parentOf.get(Number(channelId)) ?? Number(channelId);
+    const ovs = byChannel.get(id) || [];
     const decide = (field) => {
       const base = everyone ? ovs.find((o) => o.roleId === everyone.id)?.[field] : null;
       let allowed = base == null ? true : base === 1;
@@ -293,11 +362,6 @@ const inList = (ids) => (ids.length ? `(${ids.map(() => '?').join(',')})` : '(NU
 function seedAllSpaceRoles() {
   for (const s of db.prepare('SELECT id FROM spaces').all()) syncSpaceRoles(s.id);
 }
-// The seeded roles of the server a (space name) belongs to.
-function syncSpaceRolesByName(spaceName) {
-  const s = db.prepare('SELECT id FROM spaces WHERE name = ?').get(spaceName);
-  if (s) syncSpaceRoles(s.id);
-}
 
 // Merge a space's stored permission overrides onto the defaults.
 function getSpacePermissions(spaceId) {
@@ -327,7 +391,7 @@ function setSpacePermissions(spaceId, perms) {
     if (v >= min && v <= 3) clean[k] = v;
   }
   db.prepare('UPDATE spaces SET permissions = ? WHERE id = ?').run(JSON.stringify(clean), spaceId);
-  syncSpaceRoles(spaceId);
+  applyTierPermissions(spaceId);
 }
 
 // Whether a *tier* may perform a server action. Legacy: production checks use
@@ -362,7 +426,8 @@ function setChannelPerms(spaceName, channelName, viewRole, postRole) {
       UPDATE channels SET view_role = ?, post_role = ?
       WHERE parent_id = (SELECT c.id FROM channels c JOIN spaces s ON c.space_id = s.id WHERE s.name = ? AND c.name = ?)
     `).run(v, p, spaceName, channelName);
-    syncSpaceRolesByName(spaceName);
+    const ref = channelRef(spaceName, channelName);
+    applyTierChannel(ref.spaceId, ref.channelId, v, p);
   }
   return ok;
 }
@@ -395,7 +460,7 @@ function createChannel(spaceName, channelName, type = 'text') {
   const space = db.prepare('SELECT id FROM spaces WHERE name = ?').get(spaceName);
   const made = db.prepare('INSERT OR IGNORE INTO channels(space_id, name, type) VALUES (?, ?, ?)')
     .run(space.id, channelName, type === 'voice' ? 'voice' : 'text').changes > 0;
-  if (made) syncSpaceRoles(space.id);
+  if (made && !hasRoles(space.id)) syncSpaceRoles(space.id); // seed a bare server's roles
 }
 
 function channelType(spaceName, channelName) {
@@ -461,7 +526,7 @@ function createSpaceOwned(name, ownerId) {
 function addMember(spaceId, userId, role = 'member') {
   const added = db.prepare('INSERT OR IGNORE INTO space_members(space_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)')
     .run(spaceId, userId, role, Date.now()).changes > 0;
-  if (added && role === 'admin') syncSpaceRoles(spaceId);
+  if (added && role === 'admin') applyTierMember(spaceId, userId, 'admin');
 }
 
 function removeMember(spaceId, userId) {
@@ -477,7 +542,7 @@ function getMemberRole(spaceId, userId) {
 function setMemberRole(spaceId, userId, role) {
   const changed = db.prepare('UPDATE space_members SET role = ? WHERE space_id = ? AND user_id = ?')
     .run(role, spaceId, userId).changes > 0;
-  if (changed) syncSpaceRoles(spaceId);
+  if (changed) applyTierMember(spaceId, userId, role);
   return changed;
 }
 
@@ -961,7 +1026,6 @@ const createThread = db.transaction((spaceName, parentName, messageId, name, use
   `).run(parent.spaceId, channel, parent.view, parent.post, parent.id, root.id, title, userId, Date.now());
   const thread = getThread(spaceName, channel);
   followThread(userId, thread.id); // you follow what you start
-  syncSpaceRoles(parent.spaceId); // the thread's overrides mirror its parent's
   return { thread, created: true };
 });
 
@@ -1647,6 +1711,10 @@ module.exports = {
   getChannelOverrides,
   setChannelOverride,
   syncSpaceRoles,
+  createRoleAtBottom,
+  reorderRoles,
+  getRoleHolders,
+  getMemberRolesMap,
   seedAllSpaceRoles,
   resolveAccess,
   visibleChannelIds,

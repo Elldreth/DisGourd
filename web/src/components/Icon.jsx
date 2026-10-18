@@ -126,6 +126,7 @@ const ICONS = {
       <line x1="6" y1="6" x2="18" y2="18" />
     </>
   ),
+  chevronUp: <polyline points="18 15 12 9 6 15" />,
   chevronDown: <polyline points="6 9 12 15 18 9" />,
   chevronLeft: <polyline points="15 18 9 12 15 6" />,
   menu: (

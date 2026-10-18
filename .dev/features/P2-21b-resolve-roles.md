@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-21)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged #116)
 - **Effort:** M
 - **Depends on:** P2-21a (tables, seeding, resolver)
 - **Serialize with:** `server/permissions.js`, `server/db/index.js`, `server/routes/spaces.js`, `server/gateway/*`, `web/src/state/useSpaces.js`, `MemberList.jsx`

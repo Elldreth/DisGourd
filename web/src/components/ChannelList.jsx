@@ -6,7 +6,7 @@ import IconButton from './IconButton.jsx';
 import { unreadLabel } from '../util.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import UserFooter from './UserFooter.jsx';
-import ServerPermissionsDialog from './ServerPermissionsDialog.jsx';
+import RolesDialog from './RolesDialog.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
 import ServerEmojiDialog from './ServerEmojiDialog.jsx';
 import { displayCaptureSupported } from '../audio.js';
@@ -57,9 +57,16 @@ export default function ChannelList({
   onReframeServerIcon,
   canReframeIcon,
   role,
-  permissions,
   emoji = [], // the server's custom emoji (for the Server emoji dialog)
   canManageEmoji = false,
+  // Roles (P2-21c): the server's roles (highest first), its members, and what
+  // I may do — for the Roles screen and channel access.
+  roles = [],
+  members = [],
+  canManageRoles = false,
+  myPosition = 0,
+  abilities = [],
+  onRolesChanged,
   channelMeta = {},
   onPermsChanged,
   user,
@@ -209,14 +216,14 @@ export default function ChannelList({
                   <Icon name="smile" size={16} /> Server emoji
                 </MenuItem>
               )}
-              {isOwner && (
+              {canManageRoles && (
                 <MenuItem
                   onClick={() => {
                     closeMenu();
                     setPermsOpen(true);
                   }}
                 >
-                  <Icon name="shield" size={16} /> Permissions
+                  <Icon name="shield" size={16} /> Roles
                 </MenuItem>
               )}
               {isOwner && (
@@ -551,11 +558,16 @@ export default function ChannelList({
         <ServerEmojiDialog space={space} emoji={emoji} onClose={() => setEmojiOpen(false)} onChanged={onPermsChanged} />
       )}
       {permsOpen && (
-        <ServerPermissionsDialog
+        <RolesDialog
           space={space}
-          permissions={permissions || {}}
+          roles={roles}
+          members={members}
+          currentUser={user}
+          isOwner={isOwner}
+          myPosition={myPosition}
+          abilities={abilities}
           onClose={() => setPermsOpen(false)}
-          onSaved={onPermsChanged}
+          onChanged={onRolesChanged}
         />
       )}
       {confirmDeleteServer && (
@@ -577,6 +589,9 @@ export default function ChannelList({
           space={space}
           channel={channelSettings}
           meta={channelMeta[channelSettings]}
+          roles={roles}
+          isOwner={isOwner}
+          myPosition={myPosition}
           onClose={() => {
             // Focus the gear while it's still shown; focus keeps it shown after.
             gearRefs.current[channelSettings]?.focus();

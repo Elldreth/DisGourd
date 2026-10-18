@@ -121,13 +121,37 @@ export function setSpaceIcon(space, icon, iconOriginal = null, iconCrop = null) 
     body: { icon, iconOriginal, iconCrop },
   });
 }
-export function setServerPermissions(space, permissions) {
-  return request(`/spaces/${encodeURIComponent(space)}/permissions`, { method: 'PUT', body: { permissions } });
+// ---- Roles (P2-21c) ----
+const rolesPath = (space) => `/spaces/${encodeURIComponent(space)}/roles`;
+export function getRoles(space) {
+  return request(rolesPath(space));
 }
-export function setChannelPermissions(space, channel, view, post) {
-  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/permissions`, {
-    method: 'PATCH',
-    body: { view, post },
+export function createRole(space, fields) {
+  return request(rolesPath(space), { method: 'POST', body: fields });
+}
+export function updateRole(space, id, fields) {
+  return request(`${rolesPath(space)}/${id}`, { method: 'PATCH', body: fields });
+}
+export function deleteRole(space, id) {
+  return request(`${rolesPath(space)}/${id}`, { method: 'DELETE' });
+}
+// `ids`: the roles you manage, bottom to top.
+export function reorderRoles(space, ids) {
+  return request(`${rolesPath(space)}/order`, { method: 'PUT', body: { ids } });
+}
+export function setMemberHasRole(space, username, roleId, on) {
+  return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}/roles/${roleId}`, {
+    method: on ? 'PUT' : 'DELETE',
+  });
+}
+// A channel's per-role overrides: [{ roleId, view, post }] (1 allow, 0 deny, null default).
+export function getChannelOverrides(space, channel) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/overrides`);
+}
+export function setChannelOverrides(space, channel, overrides) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/overrides`, {
+    method: 'PUT',
+    body: { overrides },
   });
 }
 export function createChannel(space, name, type) {
@@ -148,12 +172,6 @@ export function getMembers(space) {
 }
 export function createInvite(space) {
   return request(`/spaces/${encodeURIComponent(space)}/invites`, { method: 'POST' });
-}
-export function setMemberRole(space, username, role) {
-  return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}`, {
-    method: 'PATCH',
-    body: { role },
-  });
 }
 export function kickMember(space, username) {
   return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}`, {

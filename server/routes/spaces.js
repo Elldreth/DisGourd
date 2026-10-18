@@ -11,6 +11,7 @@ const { threadUpdated } = require('../gateway/chat');
 const fs = require('fs');
 const path = require('path');
 const { uploadFilePath } = require('./uploads');
+const roles = require('./roles');
 
 // Custom emoji images: these types, at most this big.
 const EMOJI_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
@@ -57,6 +58,8 @@ const routes = [
       const access = db.resolveAccess(space.id, userId);
       if (!access) return sendJson(res, 403, { error: 'You are not a member of this server' });
       const canManage = access.owner || access.actions.has('edit_server');
+      // Roles, member roles and channel overrides (P2-21c).
+      if (await roles.handle({ req, res, pathSegments, space, spaceName, userId, access, canManage })) return undefined;
 
       // PATCH /spaces/:name — update server settings (icon). Owner/admin only.
       if (pathSegments.length === 2 && req.method === 'PATCH') {
@@ -98,16 +101,18 @@ const routes = [
 
       // GET /spaces/:name/members
       if (pathSegments[2] === 'members' && pathSegments.length === 3 && req.method === 'GET') {
+        const memberRoles = db.getMemberRolesMap(space.id);
         const members = db.getSpaceMembers(space.id).map((m) => {
           const p = publicPresence(m.userId); // status online | idle | dnd | offline, plus custom status
           const a = db.resolveAccess(space.id, m.userId);
           const position = a ? (a.owner ? db.OWNER_POSITION : a.position) : 0;
-          return { username: m.username, avatar: m.avatar, role: m.role, position, ...p, online: p.status !== 'offline' };
+          return { username: m.username, avatar: m.avatar, role: m.role, position, roles: memberRoles.get(m.userId) || [], ...p, online: p.status !== 'offline' };
         });
         return sendJson(res, 200, { members });
       }
 
-      // PATCH /spaces/:name/members/:username — change a member's role
+      // PATCH /spaces/:name/members/:username — change a member's tier (legacy:
+      // the app gives and takes roles through /members/:u/roles/:id)
       if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'PATCH') {
         if (!access.actions.has('manage_roles')) return sendJson(res, 403, { error: 'You are not allowed to change roles' });
         const target = db.getUserByUsername(pathSegments[3]);
@@ -149,7 +154,8 @@ const routes = [
         if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can view permissions' });
         return sendJson(res, 200, { permissions: db.getSpacePermissions(space.id) });
       }
-      // PUT /spaces/:name/permissions — change server action thresholds (owner only)
+      // PUT /spaces/:name/permissions — change server action thresholds (owner
+      // only; legacy: sets @everyone's and Admin's permissions from the tiers)
       if (pathSegments[2] === 'permissions' && pathSegments.length === 3 && req.method === 'PUT') {
         if (!access.owner) return sendJson(res, 403, { error: 'Only the owner can change permissions' });
         const body = await getJsonBody(req);
@@ -264,7 +270,8 @@ const routes = [
         if (channelName && db.isThreadChannel(channelName) && (req.method === 'DELETE' || pathSegments[4] === 'permissions')) {
           return sendJson(res, 404, { error: 'Channel not found' });
         }
-        // PATCH channel permissions — view/post minimum ranks (managers only)
+        // PATCH channel permissions — view/post minimum ranks (managers only;
+        // legacy: the app sets per-role overrides through …/overrides)
         if (channelName && pathSegments[4] === 'permissions' && req.method === 'PATCH') {
           if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel access' });
           if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
