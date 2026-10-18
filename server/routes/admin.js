@@ -25,6 +25,32 @@ const routes = [
     },
   },
   {
+    // POST /admin/imagine/comfyui/test { url } — the checkpoints a ComfyUI
+    // server offers (P2-20b). POST /admin/imagine/try { engine, prompt, shape,
+    // quality } — one test image from an engine's saved settings.
+    match: ({ req, pathSegments }) =>
+      pathSegments[0] === 'admin' && pathSegments[1] === 'imagine' && req.method === 'POST' &&
+      ((pathSegments[2] === 'comfyui' && pathSegments[3] === 'test' && pathSegments.length === 4) || (pathSegments[2] === 'try' && pathSegments.length === 3)),
+    run: async ({ req, res, parsedUrl, pathSegments }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can change this' });
+      const body = await getJsonBody(req);
+      if (pathSegments[2] === 'try') {
+        const out = await imagine.tryEngine(body);
+        return out.error ? sendJson(res, 400, out) : sendJson(res, 200, out);
+      }
+      const comfy = imagine.ENGINES.get('comfyui');
+      const checked = comfy.validateConfig({ url: body.url });
+      if (checked.error) return sendJson(res, 400, checked);
+      try {
+        return sendJson(res, 200, { url: checked.url, models: await comfy.listModels(checked.url) });
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message });
+      }
+    },
+  },
+  {
     // PUT /admin/link-previews { enabled } — turn link previews on/off for the instance
     match: ({ req, pathSegments }) =>
       pathSegments[0] === 'admin' && pathSegments[1] === 'link-previews' && pathSegments.length === 2 && req.method === 'PUT',

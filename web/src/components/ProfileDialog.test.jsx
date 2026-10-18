@@ -12,6 +12,10 @@ vi.mock('../api.js', () => ({
   createRegCode: vi.fn(),
   revokeRegCode: vi.fn(),
   setSiteAdmin: vi.fn(),
+  getImagineSettings: vi.fn(async () => ({ defaultEngine: null, permissive: false, dailyLimit: 20, dailyCeiling: 100, engines: [{ id: 'comfyui', name: 'ComfyUI (local)', config: { enabled: false, url: '', model: null, family: null, tier: 'medium' } }] })),
+  saveImagineSettings: vi.fn(),
+  testComfyUI: vi.fn(),
+  tryImagine: vi.fn(),
   uploadFile: vi.fn(),
   updateMe: vi.fn(),
 }));
@@ -96,6 +100,9 @@ test('site admins get a second group with Registration & access; members never s
   const tab = screen.getByRole('tab', { name: 'Registration & access' });
   fireEvent.click(tab);
   expect(within(panelFor(tab)).getByRole('checkbox', { name: /Link previews/ })).toBeTruthy();
+  const imagine = screen.getByRole('tab', { name: 'Image generation' });
+  fireEvent.click(imagine);
+  expect(await within(panelFor(imagine)).findByLabelText('ComfyUI address')).toBeTruthy();
 });
 
 test('opens at a requested section, and remembers the last one you used', () => {

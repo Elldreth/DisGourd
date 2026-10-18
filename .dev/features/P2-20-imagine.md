@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 2, rank 12
-- **State:** PLANNED (design agreed with the user 2026-10-18; P2-20a ACTIVE)
+- **State:** PLANNED (design agreed with the user 2026-10-18; P2-20a COMPLETE #121; P2-20b ACTIVE)
 - **Effort:** L in total (four children)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #12, reshaped in conversation with the user on 2026-10-18 (this packet replaces the earlier kie.ai-only sketch)
 
@@ -74,7 +74,7 @@ People choose from the same small set; each engine translates it into its own se
 | P2-20a | Imagine core: bot user, settings, permission, limits, fake engine | P2-21 (roles), P1-05 | Migration: `users.is_bot`, `channels.nsfw`, `imagine_jobs` (who, where, engine, model, cost, status, timestamps), instance settings for the engines. A bot user that can't log in; `postAsBot` / `updateMessage` with attachments (and `message_update` carrying them). A `generate_images` role action. A per-server toggle, a daily per-user limit and a monthly kie.ai credit cap, all enforced in an `imagine` gateway op. A job runner (one at a time per engine, a 5-minute timeout, queue-position frames). The `fake` engine for tests. The prompt check for the always-refused cases. Tests cover each rule; no real engine is called. |
 | P2-20b | ComfyUI engine | P2-20a | `comfyui.js` talks to the configured URL (`/object_info` for models, `/prompt` to queue, `/history` or the websocket for completion, `/view` for the image). Shipped API-format workflow templates with placeholders for prompt, negative, width, height, steps, seed and model: one SDXL template and one Flux template, each tuned to look good at Draft / Standard / High. VRAM tiers cap pixels (Low ≈ 1 MP, Medium ≈ 1.5 MP, High ≈ 2.4 MP). An admin "Test connection" button that lists the models. Tested against a mocked ComfyUI, then live against the user's ComfyUI (started with `--listen`). |
 | P2-20c | kie.ai engine | P2-20a | `kie.js` with a catalogue of chosen models: for each, its endpoint, shape and quality mapping, price in credits, and safety knob. Async task create + poll; the result downloaded through `safeFetch` restricted to kie.ai's result hosts. The credit cap enforced from the catalogue prices before a call. **Before writing it:** re-read kie.ai's docs and pricing for the chosen models, and confirm each safety knob with a real request. Tests mock the HTTP client. |
-| P2-20d | `/imagine` in the app | P2-20a (b or c to use for real) | The `/imagine` panel in the Composer (shape, quality, engine, price, remaining count); the placeholder and queue position; errors inline; a BOT badge. The admin page section (engines, key, tier, template, model, caps, permissive switch). The server-settings toggle and the 18+ channel switch. Tests plus a sandbox run with the fake engine. |
+| P2-20d | `/imagine` in the app | P2-20a (b or c to use for real) | The `/imagine` panel in the Composer (shape, quality, engine, price, remaining count); the placeholder and queue position; errors inline; a BOT badge. The admin page's kie.ai part (the ComfyUI part and the shared settings moved to P2-20b at the user's request, 2026-10-18). The server-settings toggle and the 18+ channel switch. Tests plus a sandbox run with the fake engine. |
 
 Order: a → b (free, so it can be iterated on the user's own hardware) → c → d. Each is its own PR.
 
@@ -85,6 +85,7 @@ Order: a → b (free, so it can be iterated on the user's own hardware) → c �
 | Options | The same set on both engines; ComfyUI's maximum resolution follows a Low / Medium / High VRAM tier. |
 | NSFW | Investigated kie.ai (above). Off by default; allowed only in channels a server owner marks 18+, and only if the instance allows it. |
 | Where ComfyUI runs | Usually on the user's desktop PC; DisGourd (on Unraid) reaches it over the LAN, so it needs `--listen` and a fixed IP. |
+| Where the engine is set up | Settings → Site admin → Image generation, with a model dropdown read from ComfyUI; built in P2-20b (moved from P2-20d) so it can be tried as soon as the engine exists. |
 
 ## Open questions (resolve when the child starts)
 - **P2-20b:** which models the user has installed in ComfyUI, and the GPU's VRAM. This picks the templates to tune first.

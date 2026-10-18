@@ -111,7 +111,8 @@ test('instance settings: site admins only, unknown engines refused, values round
   expect((await call('owner', 'PUT', '/admin/imagine', { dailyLimit: 500 })).status).toBe(400); // over the ceiling of 100
   const saved = await call('owner', 'PUT', '/admin/imagine', { engines: { fake: { enabled: true } }, defaultEngine: 'fake', dailyLimit: 10 });
   expect(saved.status).toBe(200);
-  expect(saved.body).toMatchObject({ defaultEngine: 'fake', permissive: false, dailyLimit: 10, engines: [{ id: 'fake', config: { enabled: true } }] });
+  expect(saved.body).toMatchObject({ defaultEngine: 'fake', permissive: false, dailyLimit: 10 });
+  expect(saved.body.engines.find((e) => e.id === 'fake')).toMatchObject({ config: { enabled: true } });
   expect((await call('owner', 'GET', '/admin/imagine')).body.dailyLimit).toBe(10);
 });
 

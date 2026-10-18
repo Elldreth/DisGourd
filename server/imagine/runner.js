@@ -106,4 +106,4 @@ function recover() {
 // Whether anything is queued or running (tests wait on this).
 const idle = () => [...lanes.values()].every((l) => !l.running && !l.queue.length);
 
-module.exports = { enqueue, placeFor, recover, idle, text, setDeliver: (fn) => (deliver = fn) };
+module.exports = { enqueue, placeFor, recover, idle, text, saveImages, setDeliver: (fn) => (deliver = fn) };
