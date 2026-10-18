@@ -292,7 +292,8 @@ export default function ChannelList({
           const active = c === currentChannel;
           const hasUnread = (unread[c] || 0) > 0 && !active;
           const mentionCount = active ? 0 : mentions[c] || 0;
-          const restricted = (channelMeta[c]?.view ?? 1) > 1 || (channelMeta[c]?.post ?? 1) > 1;
+          // From the role overrides: what @everyone may do here.
+          const access = channelMeta[c]?.private ? 'Private' : channelMeta[c]?.readOnly ? 'Read-only' : null;
           return (
             <div key={c} className="group relative mb-0.5">
               <button
@@ -310,7 +311,7 @@ export default function ChannelList({
                 {(hasUnread || mentionCount > 0) && (
                   <span className="sr-only">, {unreadLabel({ unread: hasUnread ? unread[c] : 0, mentions: mentionCount })}</span>
                 )}
-                {restricted && <span title="Restricted access" className="shrink-0 text-gray-500"><Icon name="shield" size={13} /></span>}
+                {access && <span title={access} className="shrink-0 text-gray-500"><Icon name="shield" size={13} /></span>}
                 {mentionCount > 0 ? (
                   <span aria-hidden="true" className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-ink-900 tabular-nums">
                     {mentionCount}
