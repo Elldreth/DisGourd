@@ -25,6 +25,9 @@ let partsListed = true; // false: this ComfyUI can't list split parts
 // What the mock saw.
 const seen = { prompts: [], deleted: [], interrupts: 0, uploads: [] };
 let hasTiled = true; // whether the mock has the Ultimate SD Upscale node
+const SAMPLERS = ['euler', 'dpmpp_2m', 'dpmpp_2m_sde'];
+const SCHEDULERS = ['simple', 'karras', 'exponential'];
+const DETECTORS = ['bbox/hand_yolov8n.pt', 'bbox/face_yolov8n.pt', 'bbox/face_yolov8m.pt'];
 let promptCount = 0;
 const promptsById = new Map();
 
@@ -45,6 +48,11 @@ function startMock() {
       if (url.pathname === '/object_info/CLIPLoader') return combo('CLIPLoader', 'clip_name', CLIPS);
       if (url.pathname === '/object_info/VAELoader') return combo('VAELoader', 'vae_name', VAES);
       if (url.pathname === '/object_info/UpscaleModelLoader') return combo('UpscaleModelLoader', 'model_name', UPSCALERS);
+      if (url.pathname === '/object_info/KSampler') {
+        return json(200, partsListed ? { KSampler: { input: { required: { sampler_name: [SAMPLERS], scheduler: [SCHEDULERS] } } } } : {});
+      }
+      if (url.pathname === '/object_info/UltralyticsDetectorProvider') return combo('UltralyticsDetectorProvider', 'model_name', DETECTORS);
+      if (url.pathname === '/object_info/FaceDetailer') return json(200, hasTiled ? { FaceDetailer: { input: { required: {} } } } : {});
       if (url.pathname === '/object_info/UltimateSDUpscale') return json(200, hasTiled ? { UltimateSDUpscale: { input: { required: {} } } } : {});
       if (url.pathname === '/upload/image' && req.method === 'POST') {
         const name = (body.match(/filename="([^"]+)"/) || [])[1];
@@ -54,6 +62,12 @@ function startMock() {
       if (url.pathname === '/prompt' && req.method === 'POST') {
         const { prompt } = JSON.parse(body);
         seen.prompts.push(prompt);
+        if (prompt['40']?.inputs.model_name === 'gone.pt') {
+          return json(400, { error: { message: 'Prompt outputs failed validation' }, node_errors: { 40: { errors: [{ message: 'Value not in list', details: "model_name: 'gone.pt' not in [...]" }] } } });
+        }
+        if (prompt['3']?.inputs.sampler_name === 'made_up') {
+          return json(400, { error: { message: 'Prompt outputs failed validation' }, node_errors: { 3: { errors: [{ message: 'Value not in list', details: "sampler_name: 'made_up' not in [...]" }] } } });
+        }
         if (prompt['20']?.inputs.model_name === 'gone.pth') {
           return json(400, { error: { message: 'Prompt outputs failed validation' }, node_errors: { 20: { errors: [{ message: 'Value not in list', details: "model_name: 'gone.pth' not in [...]" }] } } });
         }
@@ -143,7 +157,9 @@ describe('the engine', () => {
       flux: { clip1: 'clip_l.safetensors', clip2: 't5xxl_enconly.safetensors', vae: String.raw`FLUX1\ae.sft` },
       zimage: { clip1: String.raw`zturbo\qwen_3_4b.safetensors`, clip2: null, vae: String.raw`zturbo\ae.safetensors` },
       upscaler: '4x-UltraSharp.pth', // P3-28: a general-purpose one, not the anime one listed first
+      detector: 'bbox/face_yolov8m.pt', // P3-31: the medium face model, not the hand one listed first
     });
+    expect(all).toMatchObject({ samplers: SAMPLERS, schedulers: SCHEDULERS, detectors: DETECTORS, detailerAvailable: true });
     expect(all.upscalers).toEqual(UPSCALERS);
     expect(all.tiledAvailable).toBe(true); // P3-29
     // Another host's ComfyUI that can't list split parts: checkpoints only.
@@ -152,7 +168,7 @@ describe('the engine', () => {
       const old = await comfy.listAll(mockUrl);
       hasTiled = false;
       expect(old).toMatchObject({ models: MODELS.map((name) => ({ name, kind: 'checkpoint' })), clips: [], vaes: [], upscalers: [], suggested: { upscaler: null } });
-      expect((await comfy.listAll(mockUrl)).tiledAvailable).toBe(false);
+      expect(await comfy.listAll(mockUrl)).toMatchObject({ tiledAvailable: false, samplers: [], schedulers: [], detectors: [], detailerAvailable: false, suggested: { detector: null } });
     } finally {
       partsListed = true;
       hasTiled = true;
@@ -278,6 +294,77 @@ describe('the engine', () => {
     expect(comfy.publicConfig({})).toMatchObject({ upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024 });
   });
 
+  test('P3-31: advanced sampler, scheduler, CFG and steps reach every sampling node; blanks keep the defaults', () => {
+    const adv = cfg({ sampler: 'dpmpp_2m_sde', scheduler: 'exponential', cfgScale: 4.5, steps: { draft: 9, standard: 22, high: 40 }, upscaler: 'u.pth', tier: 'high' });
+    const high = comfy.buildWorkflow(request({ quality: 'high' }), adv).workflow;
+    expect(high['3'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m_sde', scheduler: 'exponential', cfg: 4.5, steps: 40 });
+    expect(high['24'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m_sde', scheduler: 'exponential', cfg: 4.5, steps: 22 }); // the hires repaint: Standard's steps
+    expect(comfy.buildWorkflow(request({ quality: 'draft' }), adv).workflow['3'].inputs.steps).toBe(9);
+    const tiled = comfy.buildUpscaleWorkflow(request({ upscale: { width: 512, height: 512, factor: 2 } }), { ...adv, upscaleMode: 'tiled' }, 'in.png').workflow;
+    expect(tiled['30'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m_sde', scheduler: 'exponential', cfg: 4.5, steps: 22 });
+    // Blank: the model type's tuned defaults; a partial steps object fills the rest.
+    expect(comfy.buildWorkflow(request(), cfg()).workflow['3'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m', scheduler: 'karras', cfg: 6, steps: 28 });
+    expect(comfy.buildWorkflow(request({ quality: 'high' }), cfg({ steps: { draft: 5 } })).workflow['3'].inputs.steps).toBe(36);
+    expect(comfy.buildWorkflow(request(), cfg({ model: MODELS[0], family: 'flux' })).workflow['3'].inputs).toMatchObject({ sampler_name: 'euler', cfg: 1 });
+  });
+
+  test('P3-31: the negative prompt: the host’s replaces the built-in one; safety words stay outside 18+; Flux only if set', () => {
+    const neg = (c, permissive = false) => comfy.buildWorkflow(request(), cfg(c), { permissive }).workflow['7'].inputs.text;
+    expect(neg({ negative: 'ugly, extra fingers' })).toBe('ugly, extra fingers, nsfw, nude, nudity');
+    expect(neg({ negative: 'ugly, extra fingers' }, true)).toBe('ugly, extra fingers');
+    expect(neg({})).toMatch(/^lowres, worst quality.*nsfw, nude, nudity$/);
+    expect(neg({ model: MODELS[0], family: 'flux' })).toBe('');
+    expect(neg({ model: MODELS[0], family: 'flux', negative: 'blurry' })).toBe('blurry');
+  });
+
+  test('P3-31: the face detailer on Standard and High (after the hires fix), not Draft, off or without a detector', () => {
+    const on = cfg({ detailer: true, detector: 'bbox/face_yolov8m.pt', detailerDenoise: 0.35, sampler: 'euler', upscaler: 'u.pth', tier: 'high' });
+    const std = comfy.buildWorkflow(request(), on, { seed: 3 });
+    expect(std.detailer).toBe(true);
+    expect(std.workflow['40']).toEqual({ class_type: 'UltralyticsDetectorProvider', inputs: { model_name: 'bbox/face_yolov8m.pt' } });
+    expect(std.workflow['41']).toMatchObject({
+      class_type: 'FaceDetailer',
+      inputs: {
+        image: ['8', 0], model: ['4', 0], clip: ['4', 1], vae: ['4', 2], positive: ['6', 0], negative: ['7', 0], bbox_detector: ['40', 0],
+        seed: 3, steps: 28, cfg: 6, sampler_name: 'euler', scheduler: 'karras', denoise: 0.35, guide_size: 1024, max_size: 1024, sam_mask_hint_use_negative: 'False', cycle: 1,
+      },
+    });
+    expect(std.workflow['9'].inputs.images).toEqual(['41', 0]);
+    const high = comfy.buildWorkflow(request({ quality: 'high' }), on).workflow;
+    expect(high['41'].inputs.image).toEqual(['25', 0]); // after the hires repaint
+    // Flux in parts: its own loaders and guidance; SD 1.5 guides at 512.
+    const flux = comfy.buildWorkflow(request(), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0], detailer: true, detector: 'd.pt' })).workflow;
+    expect(flux['41'].inputs).toMatchObject({ model: ['11', 0], clip: ['12', 0], vae: ['13', 0], positive: ['10', 0], cfg: 1 });
+    expect(comfy.buildWorkflow(request(), cfg({ family: 'sd15', detailer: true, detector: 'd.pt' })).workflow['41'].inputs.guide_size).toBe(512);
+    for (const [req, c] of [[request({ quality: 'draft' }), on], [request(), { ...on, detailer: false }], [request(), { ...on, detector: null }]]) {
+      const out = comfy.buildWorkflow(req, c);
+      expect(out.detailer).toBe(false);
+      expect(out.workflow['41']).toBeUndefined();
+    }
+    // The tiled upscale never adds it.
+    expect(comfy.buildUpscaleWorkflow(request({ upscale: { width: 512, height: 512, factor: 2 } }), { ...on, upscaleMode: 'tiled' }, 'in.png').workflow['41']).toBeUndefined();
+  });
+
+  test('P3-31: a detailed generation runs end to end with the suggested detector; refusals name the part', async () => {
+    comfy.detectorCache.clear();
+    await comfy.generate(request(), cfg({ detailer: true }));
+    expect(seen.prompts.at(-1)['40'].inputs.model_name).toBe('bbox/face_yolov8m.pt');
+    expect(seen.prompts.at(-1)['9'].inputs.images).toEqual(['41', 0]);
+    await comfy.generate(request({ quality: 'draft' }), cfg({ detailer: true }));
+    expect(seen.prompts.at(-1)['41']).toBeUndefined();
+    await expect(comfy.generate(request(), cfg({ detailer: true, detector: 'gone.pt' }))).rejects.toMatchObject({ message: `The face detector "gone.pt" isn't in ComfyUI any more` });
+    await expect(comfy.generate(request(), cfg({ sampler: 'made_up' }))).rejects.toMatchObject({ message: `ComfyUI doesn't have the sampler "made_up"` });
+    expect(comfy.validateConfig({ cfgScale: 31 }).error).toMatch(/CFG is 0–30/);
+    expect(comfy.validateConfig({ steps: { high: 0 } }).error).toMatch(/1–150/);
+    expect(comfy.validateConfig({ steps: [1] }).error).toMatch(/per quality/);
+    expect(comfy.validateConfig({ negative: 'x'.repeat(1001) }).error).toMatch(/1000/);
+    expect(comfy.validateConfig({ sampler: 5 }).error).toMatch(/sampler/);
+    expect(comfy.validateConfig({ detailerDenoise: 0.9 }).error).toMatch(/0.1–0.8/);
+    expect(comfy.validateConfig({ sampler: ' euler ', scheduler: '', cfgScale: 4.25, steps: { draft: 8, standard: '', high: null }, negative: '  ', detailer: true, detector: 'd.pt', detailerDenoise: 0.3 }))
+      .toMatchObject({ sampler: 'euler', scheduler: null, cfgScale: 4.3, steps: { draft: 8 }, negative: null, detailer: true, detector: 'd.pt', detailerDenoise: 0.3 });
+    expect(comfy.validateConfig({ steps: {} }).steps).toBeNull();
+  });
+
   test('P3-24: config for a split model needs its type and parts; Z-Image is split only', () => {
     expect(comfy.validateConfig({ kind: 'disk' }).error).toMatch(/Unknown model kind/);
     expect(comfy.validateConfig({ kind: 'unet', model: UNETS[2] }).error).toMatch(/pick its type: Flux or Z-Image Turbo/);
@@ -398,7 +485,8 @@ describe('the admin routes and the chat path', () => {
   test('saving the ComfyUI settings, a test image, and the always-refused check', async () => {
     expect((await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } })).body.error).toMatch(/pick a model/);
     const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[0], tier: 'high' } }, defaultEngine: 'comfyui' });
-    expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024 });
+    expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024,
+      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4 });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);
     const tried = await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'a gourd', shape: 'wide', quality: 'draft' });

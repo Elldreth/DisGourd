@@ -6,6 +6,8 @@ const MODELS = [
   { name: 'Illustrious\\Illustrious-XL-v2.0.safetensors', family: 'sdxl' },
   { name: 'SD1\\absolutereality_v16.safetensors', family: 'sd15' },
 ];
+// What Save sends when nothing in Advanced was touched (P3-31).
+const NO_ADVANCED = { sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, detailer: false, detector: null };
 const view = (comfy = {}) => ({
   defaultEngine: null,
   permissive: false,
@@ -52,7 +54,7 @@ test('Test connection lists the models; picking one guesses its type; Save sends
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         engines: expect.objectContaining({
-          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: MODELS[0].name, kind: 'checkpoint', family: 'flux', tier: 'high', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model' },
+          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: MODELS[0].name, kind: 'checkpoint', family: 'flux', tier: 'high', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', ...NO_ADVANCED },
         }),
         defaultEngine: 'comfyui',
         dailyLimit: 8,
@@ -214,7 +216,7 @@ test('split models: grouped in the list; picking one fills its text encoders and
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         engines: expect.objectContaining({
-          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: 'mystery.safetensors', kind: 'unet', family: 'flux', tier: 'medium', clip1: SPLIT.clips[0], clip2: SPLIT.clips[1], vae: SPLIT.vaes[1], hires: true, upscaler: null, upscaleMode: 'model' },
+          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: 'mystery.safetensors', kind: 'unet', family: 'flux', tier: 'medium', clip1: SPLIT.clips[0], clip2: SPLIT.clips[1], vae: SPLIT.vaes[1], hires: true, upscaler: null, upscaleMode: 'model', ...NO_ADVANCED },
         }),
       })
     )
@@ -271,5 +273,44 @@ test('P3-29: the Upscale button mode; tiled needs the node, and saves its streng
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ upscaleMode: 'tiled', tileDenoise: 0.25, tileSize: 768, upscaler: null })); // blank upscaler = automatic
+});
+
+test('P3-31: Advanced starts closed; its lists come from the test; defaults are shown; values and blanks are saved', async () => {
+  api.testComfyUI.mockResolvedValue({ ...SPLIT, upscalers: [], samplers: ['euler', 'dpmpp_2m_sde'], schedulers: ['simple', 'karras'], detectors: ['bbox/face_yolov8m.pt'], suggested: { ...SPLIT.suggested, detector: 'bbox/face_yolov8m.pt' }, detailerAvailable: true });
+  api.saveImagineSettings.mockImplementation(async (body) => ({ ...view(body.engines.comfyui), defaultEngine: 'comfyui' }));
+  render(<ImagineAdmin />);
+  fireEvent.change(await screen.findByLabelText('ComfyUI address'), { target: { value: 'http://127.0.0.1:8188' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+  await screen.findByText(/Connected/);
+  const advanced = screen.getByRole('group', { name: 'Advanced settings' });
+  expect(advanced.open).toBe(false);
+  fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
+  expect(within(screen.getByLabelText('Sampler')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Default (dpmpp_2m)', 'euler', 'dpmpp_2m_sde']);
+  expect(screen.getByLabelText('High').getAttribute('placeholder')).toBe('Default (36)');
+  expect(screen.getByLabelText('CFG').getAttribute('placeholder')).toBe('Default (6)');
+  fireEvent.change(screen.getByLabelText('Sampler'), { target: { value: 'dpmpp_2m_sde' } });
+  fireEvent.change(screen.getByLabelText('CFG'), { target: { value: '4.5' } });
+  fireEvent.change(screen.getByLabelText('High'), { target: { value: '40' } });
+  fireEvent.change(screen.getByLabelText('Negative prompt'), { target: { value: 'extra fingers' } });
+  fireEvent.click(screen.getByLabelText('Face detailer on Standard and High'));
+  expect(screen.getByLabelText('Face detector').value).toBe('bbox/face_yolov8m.pt');
+  fireEvent.change(screen.getByLabelText('Face repaint strength'), { target: { value: '0.35' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({
+      sampler: 'dpmpp_2m_sde', scheduler: null, cfgScale: 4.5, steps: { draft: null, standard: null, high: 40 }, negative: 'extra fingers',
+      detailer: true, detector: 'bbox/face_yolov8m.pt', detailerDenoise: 0.35,
+    })
+  );
+});
+
+test('P3-31: the face detailer is unavailable without the Impact Pack', async () => {
+  api.testComfyUI.mockResolvedValue({ ...SPLIT, detailerAvailable: false });
+  render(<ImagineAdmin />);
+  fireEvent.change(await screen.findByLabelText('ComfyUI address'), { target: { value: 'http://127.0.0.1:8188' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+  await screen.findByText(/Connected/);
+  expect(screen.getByLabelText('Face detailer on Standard and High').matches(':disabled')).toBe(true); // via its fieldset
+  expect(screen.getByText(/Needs the Impact Pack/)).toBeTruthy();
 });
 

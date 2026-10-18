@@ -40,6 +40,9 @@ const HIRES_DENOISE = 0.4;
 // repaints tile by tile for added detail; needs that custom node).
 const UPSCALE_MODES = ['model', 'tiled'];
 const TILE = { denoise: 0.3, size: 1024 };
+// The face detailer (P3-31, Impact Pack's FaceDetailer): on Standard and High.
+const DETAILER_DENOISE = 0.4;
+const DETAILER_QUALITIES = ['standard', 'high'];
 const RATIOS = { square: [1, 1], portrait: [2, 3], landscape: [3, 2], wide: [16, 9] };
 const NEGATIVE = 'lowres, worst quality, low quality, blurry, jpeg artifacts, watermark, signature, text';
 const SAFE_NEGATIVE = 'nsfw, nude, nudity';
@@ -86,6 +89,15 @@ function suggestUpscaler(list = []) {
   return list[0] || null;
 }
 
+// A face detector, by name, from this ComfyUI's list (or null).
+function suggestDetector(list = []) {
+  for (const re of [/face_yolov8m/i, /face_yolov8s/i, /face_yolov8/i, /face/i]) {
+    const hit = list.find((x) => re.test(x));
+    if (hit) return hit;
+  }
+  return null;
+}
+
 // A checkpoint's likely family from its folder and name.
 function guessFamily(name) {
   const n = String(name || '').toLowerCase();
@@ -125,6 +137,22 @@ function hiresSize({ width, height }, tier) {
 // Whether a request gets the hires fix: High quality, switched on, with an upscale model.
 const hiresFor = (request, cfg) => request.quality === 'high' && cfg.hires !== false && !!cfg.upscaler;
 
+// The host's advanced settings (P3-31), each falling back to the family's
+// tuned default when blank.
+const stepsFor = (f, cfg, quality) => cfg.steps?.[quality] || f.steps[quality] || f.steps.standard;
+const samplingFor = (f, cfg) => ({ cfg: cfg.cfgScale ?? f.cfg, sampler_name: cfg.sampler || f.sampler, scheduler: cfg.scheduler || f.scheduler });
+// The negative prompt: the host's own replaces the built-in quality words;
+// outside 18+ the safety words are added for SD 1.5 / SDXL. Flux and Z-Image
+// (CFG 1) get one only if the host set it.
+function negativeFor(family, cfg, permissive) {
+  const own = typeof cfg.negative === 'string' && cfg.negative.trim() ? cfg.negative.trim() : null;
+  if (family === 'flux' || family === 'zimage') return own || '';
+  return [own || NEGATIVE, permissive ? null : SAFE_NEGATIVE].filter(Boolean).join(', ');
+}
+// Whether a request gets the face detailer: switched on, a detector known, and
+// Standard or High quality.
+const detailerFor = (request, cfg) => !!cfg.detailer && !!cfg.detector && DETAILER_QUALITIES.includes(request.quality);
+
 // The API-format workflow for one request.
 function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomInt(0, 2 ** 32) } = {}) {
   const split = cfg.kind === 'unet';
@@ -134,7 +162,8 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   // With the hires fix, the first pass is made at the Standard size.
   const base = sizeFor(family, hires ? 'standard' : request.quality, request.shape, cfg.tier);
   const { width, height } = hires ? hiresSize(base, cfg.tier) : base;
-  const negative = family === 'flux' || family === 'zimage' ? '' : permissive ? NEGATIVE : `${NEGATIVE}, ${SAFE_NEGATIVE}`;
+  const negative = negativeFor(family, cfg, permissive);
+  const sampling = samplingFor(f, cfg);
   // Where the model, text encoder and VAE come from: one checkpoint (node 4),
   // or separate loaders (11 diffusion model, 12 text encoder(s), 13 VAE).
   const loaders = split
@@ -157,7 +186,7 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
     3: {
       class_type: 'KSampler',
       inputs: {
-        seed, steps: f.steps[request.quality] || f.steps.standard, cfg: f.cfg, sampler_name: f.sampler, scheduler: f.scheduler, denoise: 1,
+        seed, steps: stepsFor(f, cfg, request.quality), ...sampling, denoise: 1,
         model, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0],
       },
     },
@@ -181,12 +210,30 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
     wf[23] = { class_type: 'VAEEncode', inputs: { pixels: ['22', 0], vae } };
     wf[24] = {
       class_type: 'KSampler',
-      inputs: { ...wf[3].inputs, seed, steps: f.steps.standard, denoise: HIRES_DENOISE, latent_image: ['23', 0] },
+      inputs: { ...wf[3].inputs, seed, steps: stepsFor(f, cfg, 'standard'), denoise: HIRES_DENOISE, latent_image: ['23', 0] },
     };
     wf[25] = { class_type: 'VAEDecode', inputs: { samples: ['24', 0], vae } };
     wf[SAVE_NODE].inputs.images = ['25', 0];
   }
-  return { workflow: wf, width, height, seed, hires };
+  const detailer = detailerFor(request, cfg);
+  if (detailer) {
+    // Find faces in the finished image and repaint each at a good size.
+    const guide = family === 'sd15' ? 512 : 1024;
+    wf[40] = { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: cfg.detector } };
+    wf[41] = {
+      class_type: 'FaceDetailer',
+      inputs: {
+        image: wf[SAVE_NODE].inputs.images, model: wf[3].inputs.model, clip, vae, positive: wf[3].inputs.positive, negative: ['7', 0],
+        guide_size: guide, guide_size_for: true, max_size: guide, seed, steps: stepsFor(f, cfg, 'standard'), ...sampling,
+        denoise: cfg.detailerDenoise ?? DETAILER_DENOISE, feather: 5, noise_mask: true, force_inpaint: true,
+        bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: 3, sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
+        sam_bbox_expansion: 0, sam_mask_hint_threshold: 0.7, sam_mask_hint_use_negative: 'False', drop_size: 10,
+        bbox_detector: ['40', 0], wildcard: '', cycle: 1,
+      },
+    };
+    wf[SAVE_NODE].inputs.images = ['41', 0];
+  }
+  return { workflow: wf, width, height, seed, hires, detailer };
 }
 
 // The Upscale button's workflow (P3-29) for an image already uploaded to
@@ -210,7 +257,7 @@ function buildUpscaleWorkflow(request, cfg, imageName, { permissive = false, see
   }
   // Tiled: the configured model and the prompt, as for a Standard image, but
   // sampling happens inside Ultimate SD Upscale instead of a KSampler.
-  const base = buildWorkflow({ ...request, quality: 'standard' }, { ...cfg, hires: false }, { permissive, seed });
+  const base = buildWorkflow({ ...request, quality: 'standard' }, { ...cfg, hires: false, detailer: false }, { permissive, seed });
   const wf = base.workflow;
   const s = wf[3].inputs;
   const vae = wf[8].inputs.vae;
@@ -223,7 +270,7 @@ function buildUpscaleWorkflow(request, cfg, imageName, { permissive = false, see
     class_type: 'UltimateSDUpscale',
     inputs: {
       image: ['1', 0], model: s.model, positive: s.positive, negative: s.negative, vae, upscale_model: ['20', 0],
-      upscale_by: factor, seed, steps: f.steps.standard, cfg: s.cfg, sampler_name: s.sampler_name, scheduler: s.scheduler,
+      upscale_by: factor, seed, steps: stepsFor(f, cfg, 'standard'), cfg: s.cfg, sampler_name: s.sampler_name, scheduler: s.scheduler,
       denoise: cfg.tileDenoise ?? TILE.denoise, mode_type: 'Linear', tile_width: tile, tile_height: tile, mask_blur: 8, tile_padding: 32,
       seam_fix_mode: 'None', seam_fix_denoise: 1, seam_fix_width: 64, seam_fix_mask_blur: 8, seam_fix_padding: 16,
       force_uniform_tiles: true, tiled_decode: false, batch_size: 1,
@@ -286,6 +333,15 @@ async function hasNode(url, node) {
 // The upscale model to use: the saved one, or (P3-29 fix for the hires fix)
 // the suggestion from this ComfyUI's list, cached per address for 10 minutes.
 const upscalerCache = new Map();
+const detectorCache = new Map();
+async function resolveDetector(cfg) {
+  if (cfg.detector) return cfg.detector;
+  const hit = detectorCache.get(cfg.url);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.name;
+  const name = suggestDetector(await loaderOptions(cfg.url, 'UltralyticsDetectorProvider', 'model_name'));
+  detectorCache.set(cfg.url, { at: Date.now(), name });
+  return name;
+}
 async function resolveUpscaler(cfg) {
   if (cfg.upscaler) return cfg.upscaler;
   const hit = upscalerCache.get(cfg.url);
@@ -321,12 +377,17 @@ async function listAll(url) {
   const spec = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name;
   const names = Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options;
   if (!Array.isArray(names)) throw fail('ENGINE', 'That address answered, but not like ComfyUI');
-  const [unets, clips, vaes, upscalers, tiledAvailable] = await Promise.all([
+  const [unets, clips, vaes, upscalers, tiledAvailable, samplers, schedulers, detectors, hasFaceDetailer] = await Promise.all([
     loaderOptions(url, 'UNETLoader', 'unet_name'),
     loaderOptions(url, 'CLIPLoader', 'clip_name'),
     loaderOptions(url, 'VAELoader', 'vae_name'),
     loaderOptions(url, 'UpscaleModelLoader', 'model_name'),
     hasNode(url, 'UltimateSDUpscale'),
+    // P3-31: what the advanced settings can choose from.
+    loaderOptions(url, 'KSampler', 'sampler_name'),
+    loaderOptions(url, 'KSampler', 'scheduler'),
+    loaderOptions(url, 'UltralyticsDetectorProvider', 'model_name'),
+    hasNode(url, 'FaceDetailer'),
   ]);
   const models = names.map((name) => ({ name, kind: 'checkpoint', family: guessFamily(name) }));
   for (const name of unets.filter((n) => !VIDEO.test(n))) {
@@ -337,7 +398,9 @@ async function listAll(url) {
   const suggested = Object.fromEntries(SPLIT_FAMILIES.map((f) => [f, suggestParts(f, clips, vaes)]));
   // The hires fix's upscale model (P3-28): a general-purpose 4× one if there is one.
   suggested.upscaler = suggestUpscaler(upscalers);
-  return { models, clips, vaes, upscalers, suggested, tiledAvailable };
+  suggested.detector = suggestDetector(detectors);
+  const detailerAvailable = hasFaceDetailer && detectors.length > 0;
+  return { models, clips, vaes, upscalers, suggested, tiledAvailable, samplers, schedulers, detectors, detailerAvailable };
 }
 // Kept for callers that only need the model list.
 async function listModels(url) {
@@ -349,6 +412,10 @@ function promptError(err, cfg) {
   const nodeErrors = err.data && err.data.node_errors ? Object.values(err.data.node_errors) : [];
   const all = nodeErrors.flatMap((n) => n.errors || []);
   const says = (re) => all.some((e) => re.test(`${e.details || ''} ${e.message || ''}`));
+  // P3-31: the face detector (node 40) and the advanced sampler / scheduler.
+  if (err.data?.node_errors?.['40']) return fail('ENGINE', `The face detector "${cfg.detector}" isn't in ComfyUI any more`);
+  if (says(/sampler_name/)) return fail('ENGINE', `ComfyUI doesn't have the sampler "${cfg.sampler}"`);
+  if (says(/scheduler/)) return fail('ENGINE', `ComfyUI doesn't have the scheduler "${cfg.scheduler}"`);
   if (says(/ckpt_name|unet_name/)) return fail('ENGINE', `The model "${cfg.model}" isn't in ComfyUI any more`);
   if (says(/clip_name/)) return fail('ENGINE', `A text encoder (${[cfg.clip1, cfg.clip2].filter(Boolean).join(', ')}) isn't in ComfyUI any more`);
   if (says(/vae_name/)) return fail('ENGINE', `The VAE "${cfg.vae}" isn't in ComfyUI any more`);
@@ -383,6 +450,8 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
   // or the one suggested from this ComfyUI's list.
   const wantsUpscaler = !!request.upscale || (request.quality === 'high' && cfg.hires !== false);
   cfg = wantsUpscaler ? { ...cfg, upscaler: await resolveUpscaler(cfg) } : cfg;
+  // The face detailer (P3-31) likewise: the saved detector, or the suggested one.
+  if (!request.upscale && cfg.detailer && DETAILER_QUALITIES.includes(request.quality)) cfg = { ...cfg, detector: await resolveDetector(cfg) };
   let built;
   if (request.upscale) {
     if (!cfg.upscaler) throw fail('ENGINE', 'ComfyUI has no upscale models (models/upscale_models)');
@@ -494,6 +563,41 @@ function validateConfig(input, prev = {}) {
     if (!Number.isInteger(i.tileSize) || i.tileSize < 512 || i.tileSize > 2048 || i.tileSize % 64) return { error: 'The tile size is 512–2048, in steps of 64' };
     cfg.tileSize = i.tileSize;
   }
+  // Advanced (P3-31): null clears a value back to the model type's default.
+  const text = (v, max) => v === null || (typeof v === 'string' && v.length <= max);
+  for (const k of ['sampler', 'scheduler']) {
+    if (i[k] === undefined) continue;
+    if (!text(i[k], 100)) return { error: `Pick the ${k} from the list` };
+    cfg[k] = i[k] && i[k].trim() ? i[k].trim() : null;
+  }
+  if (i.cfgScale !== undefined) {
+    if (i.cfgScale !== null && (typeof i.cfgScale !== 'number' || !(i.cfgScale >= 0 && i.cfgScale <= 30))) return { error: 'CFG is 0–30' };
+    cfg.cfgScale = i.cfgScale === null ? null : Math.round(i.cfgScale * 10) / 10;
+  }
+  if (i.steps !== undefined) {
+    if (i.steps !== null && (typeof i.steps !== 'object' || Array.isArray(i.steps))) return { error: 'Steps must be per quality' };
+    const steps = {};
+    for (const q of ['draft', 'standard', 'high']) {
+      const v = i.steps ? i.steps[q] : null;
+      if (v === null || v === undefined || v === '') continue;
+      if (!Number.isInteger(v) || v < 1 || v > 150) return { error: 'Steps are 1–150' };
+      steps[q] = v;
+    }
+    cfg.steps = Object.keys(steps).length ? steps : null;
+  }
+  if (i.negative !== undefined) {
+    if (!text(i.negative, 1000)) return { error: 'The negative prompt is up to 1000 characters' };
+    cfg.negative = i.negative && i.negative.trim() ? i.negative.trim() : null;
+  }
+  if (i.detailer !== undefined) cfg.detailer = !!i.detailer;
+  if (i.detector !== undefined) {
+    if (!text(i.detector, 300)) return { error: 'Pick a face detector from the list' };
+    cfg.detector = i.detector || null;
+  }
+  if (i.detailerDenoise !== undefined) {
+    if (typeof i.detailerDenoise !== 'number' || !(i.detailerDenoise >= 0.1 && i.detailerDenoise <= 0.8)) return { error: 'The face detailer strength is 0.1–0.8' };
+    cfg.detailerDenoise = Math.round(i.detailerDenoise * 100) / 100;
+  }
   if (i.tier !== undefined) {
     if (!TIERS[i.tier]) return { error: 'The VRAM tier must be low, medium or high' };
     cfg.tier = i.tier;
@@ -508,6 +612,8 @@ const publicConfig = (cfg = {}) => ({
   kind: cfg.kind || 'checkpoint', clip1: cfg.clip1 || null, clip2: cfg.clip2 || null, vae: cfg.vae || null,
   hires: cfg.hires !== false, upscaler: cfg.upscaler || null,
   upscaleMode: cfg.upscaleMode || 'model', tileDenoise: cfg.tileDenoise ?? TILE.denoise, tileSize: cfg.tileSize || TILE.size,
+  sampler: cfg.sampler || null, scheduler: cfg.scheduler || null, cfgScale: cfg.cfgScale ?? null, steps: cfg.steps || null, negative: cfg.negative || null,
+  detailer: !!cfg.detailer, detector: cfg.detector || null, detailerDenoise: cfg.detailerDenoise ?? DETAILER_DENOISE,
 });
 
 module.exports = {
@@ -529,6 +635,8 @@ module.exports = {
   buildUpscaleWorkflow,
   resolveUpscaler,
   upscalerCache,
+  detectorCache,
+  suggestDetector,
   sizeFor,
   buildWorkflow,
   FAMILIES,

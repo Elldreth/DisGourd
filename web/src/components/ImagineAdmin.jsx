@@ -11,6 +11,18 @@ const SPLIT_FAMILIES = [
   { v: 'flux', label: 'Flux' },
   { v: 'zimage', label: 'Z-Image Turbo' },
 ];
+// Each model type's tuned defaults (match the server's FAMILIES), shown as
+// "Default (…)" in the Advanced settings (P3-31).
+const TYPE_DEFAULTS = {
+  sd15: { sampler: 'dpmpp_2m', scheduler: 'karras', cfg: 7, steps: { draft: 16, standard: 26, high: 34 } },
+  sdxl: { sampler: 'dpmpp_2m', scheduler: 'karras', cfg: 6, steps: { draft: 18, standard: 28, high: 36 } },
+  flux: { sampler: 'euler', scheduler: 'simple', cfg: 1, steps: { draft: 12, standard: 20, high: 28 } },
+  zimage: { sampler: 'res_multistep', scheduler: 'simple', cfg: 1, steps: { draft: 6, standard: 8, high: 10 } },
+};
+const QUALITY_NAMES = { draft: 'Draft', standard: 'Standard', high: 'High' };
+// A number field's value for the API: blank is null.
+const numOrNull = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
+
 // The model <select> value: kind and file name (the same name can be in both lists).
 const modelKey = (kind, name) => (name ? `${kind}:${name}` : '');
 const TIERS = [
@@ -49,7 +61,7 @@ export default function ImagineAdmin() {
   const [defaultEngine, setDefaultEngine] = useState(null);
   const [general, setGeneral] = useState(null); // { dailyLimit, permissive }
   const [models, setModels] = useState(null); // [{ name, kind, family }] once tested
-  const [parts, setParts] = useState({ clips: [], vaes: [], upscalers: [], suggested: {}, tiledAvailable: null }); // split models, hires fix, Upscale
+  const [parts, setParts] = useState({ clips: [], vaes: [], upscalers: [], suggested: {}, tiledAvailable: null, samplers: [], schedulers: [], detectors: [], detailerAvailable: null }); // split models, hires fix, Upscale, Advanced
   const [filter, setFilter] = useState('');
   const [testing, setTesting] = useState(false);
   const [testNote, setTestNote] = useState('');
@@ -69,6 +81,9 @@ export default function ImagineAdmin() {
       tier: c.tier || 'medium', clip1: c.clip1 || '', clip2: c.clip2 || '', vae: c.vae || '',
       hires: c.hires !== false, upscaler: c.upscaler || '',
       upscaleMode: c.upscaleMode || 'model', tileDenoise: c.tileDenoise ?? 0.3, tileSize: c.tileSize || 1024,
+      sampler: c.sampler || '', scheduler: c.scheduler || '', cfgScale: c.cfgScale ?? '', negative: c.negative || '',
+      steps: { draft: c.steps?.draft ?? '', standard: c.steps?.standard ?? '', high: c.steps?.high ?? '' },
+      detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.4,
     });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
     setKie({ enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' });
@@ -95,9 +110,12 @@ export default function ImagineAdmin() {
     try {
       const res = await api.testComfyUI(url);
       setModels(res.models);
-      setParts({ clips: res.clips || [], vaes: res.vaes || [], upscalers: res.upscalers || [], suggested: res.suggested || {}, tiledAvailable: !!res.tiledAvailable });
-      // The upscale model: the suggested one until the host picks.
-      setComfy((c) => ({ ...c, url: res.url, upscaler: c.upscaler || res.suggested?.upscaler || '' }));
+      setParts({
+        clips: res.clips || [], vaes: res.vaes || [], upscalers: res.upscalers || [], suggested: res.suggested || {}, tiledAvailable: !!res.tiledAvailable,
+        samplers: res.samplers || [], schedulers: res.schedulers || [], detectors: res.detectors || [], detailerAvailable: !!res.detailerAvailable,
+      });
+      // The upscale model and face detector: the suggested ones until the host picks.
+      setComfy((c) => ({ ...c, url: res.url, upscaler: c.upscaler || res.suggested?.upscaler || '', detector: c.detector || res.suggested?.detector || '' }));
       const count = (kind) => res.models.filter((m) => (m.kind || 'checkpoint') === kind).length;
       const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
       const split = count('unet');
@@ -161,6 +179,15 @@ export default function ImagineAdmin() {
             upscaler: comfy.upscaler || null,
             upscaleMode: comfy.upscaleMode,
             ...(comfy.upscaleMode === 'tiled' ? { tileDenoise: Number(comfy.tileDenoise), tileSize: Number(comfy.tileSize) } : {}),
+            // Advanced (P3-31): blanks go back to the model type's defaults.
+            sampler: comfy.sampler || null,
+            scheduler: comfy.scheduler || null,
+            cfgScale: numOrNull(comfy.cfgScale),
+            steps: { draft: numOrNull(comfy.steps.draft), standard: numOrNull(comfy.steps.standard), high: numOrNull(comfy.steps.high) },
+            negative: comfy.negative.trim() || null,
+            detailer: comfy.detailer,
+            detector: comfy.detector || null,
+            ...(comfy.detailer ? { detailerDenoise: Number(comfy.detailerDenoise) } : {}),
           },
           kie: {
             enabled: kie.enabled,
@@ -399,6 +426,84 @@ export default function ImagineAdmin() {
             </div>
           )}
         </fieldset>
+
+        <details className="rounded-lg bg-ink-800/60 px-3 py-2" aria-label="Advanced settings">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-gray-200">Advanced</summary>
+          {(() => {
+            const d = TYPE_DEFAULTS[comfy.family] || TYPE_DEFAULTS.sdxl;
+            const listOr = (list, current) => (list.length ? list : current ? [current] : []);
+            return (
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-gray-500">For every /imagine on this instance. Blank uses the model type’s tuned default.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="imagine-sampler" className={heading}>Sampler</label>
+                    <select id="imagine-sampler" value={comfy.sampler} onChange={(e) => setComfy((c) => ({ ...c, sampler: e.target.value }))} className="input">
+                      <option value="">Default ({d.sampler})</option>
+                      {listOr(parts.samplers, comfy.sampler).map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="imagine-scheduler" className={heading}>Scheduler</label>
+                    <select id="imagine-scheduler" value={comfy.scheduler} onChange={(e) => setComfy((c) => ({ ...c, scheduler: e.target.value }))} className="input">
+                      <option value="">Default ({d.scheduler})</option>
+                      {listOr(parts.schedulers, comfy.scheduler).map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="imagine-cfg" className={heading}>CFG</label>
+                    <input id="imagine-cfg" type="number" min="0" max="30" step="0.5" value={comfy.cfgScale} placeholder={`Default (${d.cfg})`}
+                      onChange={(e) => setComfy((c) => ({ ...c, cfgScale: e.target.value }))} className="input" />
+                  </div>
+                </div>
+                <fieldset>
+                  <legend className={heading}>Steps</legend>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['draft', 'standard', 'high'].map((q) => (
+                      <div key={q}>
+                        <label htmlFor={`imagine-steps-${q}`} className="mb-1 block text-xs text-gray-400">{QUALITY_NAMES[q]}</label>
+                        <input id={`imagine-steps-${q}`} type="number" min="1" max="150" step="1" value={comfy.steps[q]} placeholder={`Default (${d.steps[q]})`}
+                          onChange={(e) => setComfy((c) => ({ ...c, steps: { ...c.steps, [q]: e.target.value } }))} className="input" />
+                      </div>
+                    ))}
+                  </div>
+                </fieldset>
+                <div>
+                  <label htmlFor="imagine-negative" className={heading}>Negative prompt</label>
+                  <textarea id="imagine-negative" rows={2} maxLength={1000} value={comfy.negative} placeholder="Default (lowres, worst quality, blurry, watermark…)"
+                    onChange={(e) => setComfy((c) => ({ ...c, negative: e.target.value }))} className="input" />
+                  <p className="mt-1 text-xs text-gray-500">Replaces the built-in one. Outside 18+ channels the safety words are still added for SD 1.5 / SDXL. Flux and Z-Image mostly ignore it.</p>
+                </div>
+                <fieldset disabled={parts.detailerAvailable === false && !comfy.detailer}>
+                  <label className="flex items-center gap-2 text-sm text-gray-200">
+                    <input type="checkbox" checked={comfy.detailer} onChange={(e) => setComfy((c) => ({ ...c, detailer: e.target.checked }))} className="h-4 w-4 accent-brand" />
+                    Face detailer on Standard and High
+                  </label>
+                  <p className="mt-1 text-xs text-gray-500">Finds faces and repaints them at a better size. Adds a few seconds to images with faces.</p>
+                  {parts.detailerAvailable === false && (
+                    <p className="mt-1 text-xs text-gray-500">Needs the Impact Pack (FaceDetailer) and a face detector model in ComfyUI.</p>
+                  )}
+                  {comfy.detailer && (
+                    <div className="mt-2 grid grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor="imagine-detector" className={heading}>Face detector</label>
+                        <select id="imagine-detector" value={comfy.detector} onChange={(e) => setComfy((c) => ({ ...c, detector: e.target.value }))} className="input">
+                          <option value="">Automatic (picked by name)</option>
+                          {listOr(parts.detectors, comfy.detector).map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="imagine-detailer-denoise" className={heading}>Face repaint strength</label>
+                        <input id="imagine-detailer-denoise" type="number" min="0.1" max="0.8" step="0.05" value={comfy.detailerDenoise}
+                          onChange={(e) => setComfy((c) => ({ ...c, detailerDenoise: e.target.value }))} className="input" />
+                      </div>
+                    </div>
+                  )}
+                </fieldset>
+              </div>
+            );
+          })()}
+        </details>
       </fieldset>
 
       <fieldset className="space-y-3 rounded-lg bg-ink-900/60 p-3">
