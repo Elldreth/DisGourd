@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-20)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged #121)
 - **Effort:** M
 - **Depends on:** P2-21 (roles), P1-05
 - **Starting baseline:** main at 560106f (#120 merged)

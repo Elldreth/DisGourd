@@ -5,6 +5,7 @@ import AudioSettings from './AudioSettings.jsx';
 import NotificationSettings from './NotificationSettings.jsx';
 import AppearanceSettings from './AppearanceSettings.jsx';
 import RegistrationAdmin from './RegistrationAdmin.jsx';
+import ImagineAdmin from './ImagineAdmin.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Modal from './Modal.jsx';
 
@@ -18,7 +19,10 @@ const SECTIONS = [
   { id: 'appearance', label: 'Appearance' },
   { id: 'notifications', label: 'Notifications' },
 ];
-const ADMIN_SECTIONS = [{ id: 'admin', label: 'Registration & access', group: 'Site admin' }];
+const ADMIN_SECTIONS = [
+  { id: 'admin', label: 'Registration & access', group: 'Site admin' },
+  { id: 'imagine', label: 'Image generation', group: 'Site admin' },
+];
 const SECTION_KEY = 'dg.settingsSection';
 
 function readSection(allowed) {
@@ -259,6 +263,14 @@ export default function ProfileDialog({ profile, onClose, onUpdated, onOutputCha
               Registration &amp; access (site admin)
             </h4>
             <RegistrationAdmin />
+          </section>
+        )}
+        {profile?.siteAdmin && (
+          <section {...panelProps('imagine')}>
+            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Image generation (site admin)
+            </h4>
+            <ImagineAdmin />
           </section>
         )}
       </div>

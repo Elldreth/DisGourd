@@ -100,6 +100,22 @@ export function setSiteAdmin(username, admin) {
   return request(`/admin/registration/admins/${encodeURIComponent(username)}`, { method: 'PUT', body: { admin } });
 }
 
+// ---- Instance admin: /imagine (P2-20b) ----
+export function getImagineSettings() {
+  return request('/admin/imagine');
+}
+export function saveImagineSettings(settings) {
+  return request('/admin/imagine', { method: 'PUT', body: settings });
+}
+// The checkpoints a ComfyUI server offers: { url, models: [{ name, family }] }.
+export function testComfyUI(url) {
+  return request('/admin/imagine/comfyui/test', { method: 'POST', body: { url } });
+}
+// One test image from an engine's saved settings: { url, width, height, ms }.
+export function tryImagine(body) {
+  return request('/admin/imagine/try', { method: 'POST', body });
+}
+
 // ---- Servers (spaces) / channels ----
 // Only servers the current user belongs to are returned.
 export function getSpaces() {

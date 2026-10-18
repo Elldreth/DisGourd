@@ -8,7 +8,10 @@ const { deliverToChannelViewers } = require('../gateway/delivery');
 const { refusedReason } = require('./promptCheck');
 const runner = require('./runner');
 
-const ENGINES = new Map([['fake', require('./engines/fake')]]);
+const ENGINES = new Map([
+  ['comfyui', require('./engines/comfyui')],
+  ['fake', require('./engines/fake')],
+]);
 const SHAPES = ['square', 'portrait', 'landscape', 'wide'];
 const QUALITIES = ['draft', 'standard', 'high'];
 const MAX_PROMPT = 1000;
@@ -163,6 +166,29 @@ function imagineOp({ ws, msg, userId }) {
   runner.enqueue(job);
 }
 
+// An admin's test image (P2-20b): straight from one engine, with its saved
+// config — no chat message, no daily count, but the same always-refused check.
+async function tryEngine({ engine: id, prompt, shape = 'square', quality = 'standard' } = {}) {
+  const settings = getSettings();
+  const engine = ENGINES.get(id);
+  if (!engine || !engine.available()) return { error: `Unknown engine: ${id}` };
+  const text = typeof prompt === 'string' ? prompt.trim() : '';
+  if (!text || text.length > MAX_PROMPT) return { error: `Prompts are 1–${MAX_PROMPT} characters` };
+  if (!SHAPES.includes(shape) || !QUALITIES.includes(quality)) return { error: 'Unknown shape or quality' };
+  const refused = refusedReason(text);
+  if (refused) return { error: refused };
+  const config = engineConfig(settings, id);
+  const started = Date.now();
+  const signal = AbortSignal.timeout(parseInt(process.env.IMAGINE_TIMEOUT_MS, 10) || 5 * 60 * 1000);
+  try {
+    const result = await engine.generate({ prompt: text, shape, quality }, config, { permissive: !!settings.permissive, signal });
+    const [url] = runner.saveImages(result.images);
+    return { url, width: result.width || null, height: result.height || null, model: result.model || null, ms: Date.now() - started };
+  } catch (err) {
+    return { error: signal.aborted ? 'It took too long' : err.message || 'Something went wrong' };
+  }
+}
+
 runner.setDeliver((space, channel, frame) => deliverToChannelViewers(space, channel, JSON.stringify(frame)));
 
 // Start-up: the bot exists, and jobs a restart cut off are marked failed.
@@ -171,4 +197,4 @@ function start() {
   runner.recover();
 }
 
-module.exports = { imagineOp, decorateSpaces, getSettings, updateSettings, adminView, dailyLimitFor, start, idle: runner.idle, ENGINES, SHAPES, QUALITIES };
+module.exports = { imagineOp, tryEngine, decorateSpaces, getSettings, updateSettings, adminView, dailyLimitFor, start, idle: runner.idle, ENGINES, SHAPES, QUALITIES };
