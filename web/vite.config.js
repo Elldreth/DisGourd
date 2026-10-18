@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { readFileSync } from 'fs';
+import { apiPaths, proxyKey } from './devProxy.js';
 
 // Emits the hand-written service worker (sw.js, next to this file) as
 // dist/sw.js with a build id stamped in, so every build is a new worker and
@@ -22,10 +23,6 @@ function serviceWorker() {
 const server = process.env.DISGOURD_SERVER || 'http://localhost:3000';
 const wsServer = server.replace(/^http/, 'ws');
 
-// Same-origin paths the frontend calls; each is proxied to the backend in dev
-// so the client can use plain relative URLs and there are no CORS headaches.
-const apiPaths = ['/register', '/login', '/auth-info', '/uploads', '/media', '/spaces', '/friends', '/admin', '/push'];
-
 export default defineConfig({
   plugins: [react(), tailwindcss(), serviceWorker()],
   build: {
@@ -33,10 +30,11 @@ export default defineConfig({
     // when the picker opens, so it's fine for it to be big.
     chunkSizeWarningLimit: 600,
   },
+  // Same-origin API paths (devProxy.js) go to the backend in dev.
   server: {
     port: 5173,
     proxy: {
-      ...Object.fromEntries(apiPaths.map((p) => [p, { target: server, changeOrigin: true }])),
+      ...Object.fromEntries(apiPaths.map((p) => [proxyKey(p), { target: server, changeOrigin: true }])),
       '/gateway': { target: wsServer, ws: true },
     },
   },
