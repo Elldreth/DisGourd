@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-19)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #111, 2026-10-18)
 - **Effort:** M
 - **Depends on:** P2-19a (API and `emoji` in `GET /spaces`), P2-01 (markdown), P2-06/P2-07 (picker, any-emoji reactions)
 - **Serialize with:** `markdown.jsx`, `EmojiPicker.jsx`, `MessageList.jsx`, `MessageActions.jsx`, `ChannelList.jsx`, `server/gateway/chat.js`

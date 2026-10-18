@@ -143,7 +143,8 @@ const withoutKey = (k) => (prev) => {
 //   onIncoming(frame): told about every incoming message (notifications, sounds)
 //   threadOnly: this instance shows an open thread (channel = '~tN'). It only
 //     handles frames for that thread: no unread or mention counts, no
-//     notifications, and it doesn't take the gateway focus from the channel.
+//     notifications. It takes the socket's separate *thread* focus (typing
+//     indicators in the panel) and leaves the channel's focus alone.
 //   openThread: the channel instance is told which thread ('~tN') is open in
 //     the panel, so replies there don't count as unread.
 export function useChannelMessages({ space, channel, active, user, send, status, onIncoming, threadOnly = false, openThread = '' }) {
@@ -305,10 +306,12 @@ export function useChannelMessages({ space, channel, active, user, send, status,
   // Focus the active channel and (re)load its history — also on reconnect.
   useEffect(() => {
     if (!active || !space || !channel) return undefined;
-    // The channel keeps the gateway focus (typing indicators) while a thread is open.
-    if (!threadOnly) send({ op: 'focus', space, channel });
+    // The channel keeps its gateway focus while a thread is open: the thread
+    // instance takes the socket's thread focus instead, and clears it on close.
+    send(threadOnly ? { op: 'focus', space, channel, thread: true } : { op: 'focus', space, channel });
+    const unfocus = threadOnly ? () => send({ op: 'focus', thread: true }) : undefined;
     // Reading older history (a jump): keep that window; Jump to present reloads.
-    if (paging.hasNewerRef.current) return undefined;
+    if (paging.hasNewerRef.current) return unfocus;
     let cancelled = false;
     api
       .getMessages(space, channel)
@@ -344,6 +347,7 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       .catch(() => {});
     return () => {
       cancelled = true;
+      unfocus?.();
     };
   }, [active, space, channel, status, send]);
 

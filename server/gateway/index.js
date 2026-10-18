@@ -90,6 +90,7 @@ function attachGateway(httpServer, wss) {
     wss.handleUpgrade(request, socket, head, (ws) => {
       ws.userId = payload.sub;
       ws.focus = null;
+      ws.threadFocus = null;
       ws.isAlive = true;
       ws.on('pong', () => { ws.isAlive = true; });
 

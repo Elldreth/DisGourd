@@ -227,6 +227,16 @@ export default function App() {
     setView('server');
     sp.selectSpace(name);
   }
+  // Creating or joining a server lands you in it, even from the DM view.
+  // (Errors still reach the dialog, which shows them inline.)
+  async function createServerAndShow(...args) {
+    await sp.createSpace(...args);
+    setView('server');
+  }
+  async function joinServerAndShow(...args) {
+    await sp.joinServer(...args);
+    setView('server');
+  }
   function openDms() {
     setView('dm'); // useDms loads the conversation list when the view opens
   }
@@ -365,8 +375,8 @@ export default function App() {
           dmUnread={dm.totalUnread}
           onSelectDms={openDms}
           onSelect={selectSpace}
-          onCreate={sp.createSpace}
-          onJoin={sp.joinServer}
+          onCreate={createServerAndShow}
+          onJoin={joinServerAndShow}
           onReorder={sp.reorder}
           pendingInvite={pendingInvite}
           onInviteOpened={() => {
