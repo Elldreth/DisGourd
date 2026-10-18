@@ -110,6 +110,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-27 | Message edit history (packet to plan with the user) | 3 | PLANNED | M | none | migrations, chat gateway, MessageList |
 | P3-28 | ComfyUI hires fix (High quality: upscale model + light repaint) | 3 | COMPLETE | S–M | P3-24 | engines/comfyui.js, ImagineAdmin |
 | P3-29 | Upscale button on /imagine images (model only or tiled repaint) | 3 | REVIEW | M | P3-23, P3-24, P3-28 | migrations, imagine/index.js, runner, engines/comfyui.js, ImagineAgain, ImagineAdmin |
+| P3-30 | Image viewer: right-click to save, real size, Download | 3 | REVIEW | S | none | MessageList (row events), Lightbox, Icon |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
 | P4-02 | Settings with section navigation | 4 | COMPLETE | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |

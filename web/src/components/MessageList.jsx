@@ -694,7 +694,13 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
     if (press.current) clearTimeout(press.current.timer);
     press.current = null;
   }
+  // Events from dialogs this row opened (the image viewer, menus) reach it
+  // through React's portals though they happen elsewhere on the page; only
+  // the row's own area counts (P3-30: right-clicking the viewer's image opened
+  // this message's menu behind it instead of the browser's own menu).
+  const fromRow = (e) => !!rowRef.current?.contains(e.target);
   function onPointerDown(e) {
+    if (!fromRow(e)) return;
     lastPointer.current = e.pointerType;
     if (e.pointerType !== 'touch' || editing || !actions.length) return;
     cancelPress();
@@ -731,7 +737,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
   }
   // Right-click (and Android's long-press context menu) opens the same menu.
   function onContextMenu(e) {
-    if (editing || !actions.length) return;
+    if (editing || !actions.length || !fromRow(e)) return;
     e.preventDefault();
     openPopup('menu', lastPointer.current === 'touch');
   }
