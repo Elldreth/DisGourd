@@ -44,6 +44,7 @@ export default function ThreadPanel({
   onToggleFollow, // (follow: boolean)
   onSetArchived, // (archived: boolean), only when you may
   emoji = [], // the server's custom emoji [{ id, name, url }]
+  imagine = null, // /imagine for this server (imagineState), or null
 }) {
   const [root, setRoot] = useState(thread.root || null); // null while loading; false = deleted
   const [replyingTo, setReplyingTo] = useState(null);
@@ -180,6 +181,7 @@ export default function ThreadPanel({
       {canPost ? (
         <Composer
           ref={composerRef}
+          imagine={imagine}
           channel={thread.channel}
           placeholder={`Reply in ${thread.name}`}
           onEditLast={() => listRef.current?.startEditLast() ?? false}

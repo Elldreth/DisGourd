@@ -675,6 +675,7 @@ const MESSAGE_SELECT = `
          m.author_id AS authorId,
          u.username AS author,
          u.avatar_url AS authorAvatar,
+         u.is_bot AS bot,
          m.reply_to AS replyToId,
          p.id AS replyFoundId,
          p.content AS replyContent,
@@ -750,7 +751,15 @@ function hydrateThread(row) {
   };
   return row;
 }
-const hydrateMessage = (row) => hydrateThread(hydratePinned(hydrateReply(hydrateAttachments(row))));
+// `bot: true` on the /imagine bot's messages only (others carry no field).
+function hydrateBot(row) {
+  if (row && 'bot' in row) {
+    if (row.bot) row.bot = true;
+    else delete row.bot;
+  }
+  return row;
+}
+const hydrateMessage = (row) => hydrateBot(hydrateThread(hydratePinned(hydrateReply(hydrateAttachments(row)))));
 
 // The quote for a new reply, if `messageId` is in that same channel (so a
 // reply can never reveal a message from another, possibly private, channel).

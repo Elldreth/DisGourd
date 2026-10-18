@@ -45,6 +45,7 @@ export default function ChatPanel({
   threadBadge, // (channel) => { unread, mentions } for a thread's summary or row
   threadsUnread = 0, // how many of this channel's threads have something unread
   emoji = [], // the server's custom emoji [{ id, name, url }]
+  imagine = null, // /imagine for this server (imagineState), or null
 }) {
   const [pinsOpen, setPinsOpen] = useState(false);
   const [threadsOpen, setThreadsOpen] = useState(false);
@@ -270,6 +271,7 @@ export default function ChatPanel({
         // Always enabled: sends during a blip are queued and flushed on reconnect.
         <Composer
           ref={composerRef}
+          imagine={imagine}
           channel={channel}
           onEditLast={() => listRef.current?.startEditLast() ?? false}
           disabled={false}

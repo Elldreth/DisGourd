@@ -4,13 +4,19 @@ import { attachmentInfo } from '../util.js';
 import Icon from './Icon.jsx';
 import EmojiPicker from './EmojiPicker.jsx';
 import { insertAtCaret } from '../emoji.js';
+import ImaginePanel from './ImaginePanel.jsx';
+
+// "/imagine …" at the start of the box (P2-20d).
+const IMAGINE_RE = /^\/imagine(?:\s|$)/i;
 
 // The message box. Files can be attached with the + button, pasted (Ctrl+V a
 // screenshot), or dropped on the chat panel, which calls `addFiles` through
 // the ref.
 // `onEditLast()` (optional): up arrow in an empty box edits your last message;
 // it returns whether there was one to edit.
-const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], customEmoji = [], replyingTo, onCancelReply, onEditLast }, ref) {
+// `imagine` (optional, from imagineState): offers /imagine — the panel while
+// the text starts with it, and Enter sends the request instead of a message.
+const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], customEmoji = [], replyingTo, onCancelReply, onEditLast, imagine = null }, ref) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState([]); // [{ url, name, size }] — an album
   const [spoilerPending, setSpoilerPending] = useState(false);
@@ -25,6 +31,39 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   const lastTypingRef = useRef(0);
 
   const MAX_ATTACHMENTS = 10;
+
+  // /imagine (P2-20d): options, and the request in flight.
+  const [imgShape, setImgShape] = useState('square');
+  const [imgQuality, setImgQuality] = useState('standard');
+  const [imgEngine, setImgEngine] = useState('');
+  const [imgBusy, setImgBusy] = useState(false);
+  const [imgError, setImgError] = useState('');
+  const isImagine = !!imagine && IMAGINE_RE.test(text);
+  // Typing "/" (or the start of "/imagine") suggests the command.
+  const suggestImagine = !!imagine?.available && text.length > 0 && '/imagine'.startsWith(text.toLowerCase()) && !IMAGINE_RE.test(text);
+  function pickImagine() {
+    setText('/imagine ');
+    refocus(9);
+  }
+  async function sendImagine() {
+    const prompt = text.replace(/^\/imagine\s*/i, '').trim();
+    if (!imagine.available) return undefined; // the panel already says why
+    if (!prompt) return setImgError('Describe the image after /imagine');
+    setImgBusy(true);
+    setImgError('');
+    try {
+      const fields = { prompt, shape: imgShape, quality: imgQuality };
+      if (imgEngine && imagine.engines.some((e) => e.id === imgEngine)) fields.engine = imgEngine;
+      await imagine.run(fields);
+      setText('');
+      if (taRef.current) taRef.current.style.height = 'auto';
+    } catch (err) {
+      setImgError(err.message || 'Could not generate');
+    } finally {
+      setImgBusy(false);
+      refocus();
+    }
+  }
 
   // Starting a reply puts the cursor in the message box.
   useEffect(() => {
@@ -122,6 +161,10 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   const removePending = (url) => setPending((prev) => prev.filter((p) => p.url !== url));
 
   function submit() {
+    if (isImagine) {
+      if (!imgBusy && !disabled) sendImagine();
+      return;
+    }
     const content = text.trim();
     if ((!content && pending.length === 0) || disabled) return;
     onSend(content, pending.map((p) => p.url), pending.length > 0 ? spoilerPending : false);
@@ -136,6 +179,11 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
     if (mentionMatch && (e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
       e.preventDefault();
       pickMention(mentionMatch.candidates[0]);
+      return;
+    }
+    if (suggestImagine && (e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
+      e.preventDefault();
+      pickImagine();
       return;
     }
     if (e.key === 'Escape' && mentionMatch) {
@@ -162,6 +210,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   function grow(e) {
     const value = e.target.value;
     setText(value);
+    if (imgError) setImgError('');
     const ta = e.target;
     ta.style.height = 'auto';
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
@@ -268,6 +317,38 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
             </button>
           ))}
         </div>
+      )}
+
+      {suggestImagine && (
+        <div className="anim-pop mb-1 overflow-hidden rounded-lg bg-ink-800 shadow-lg ring-1 ring-ink-500/50">
+          <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Commands</div>
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              pickImagine();
+            }}
+            aria-label="/imagine — generate an image"
+            className="flex w-full items-center gap-2 bg-ink-600/60 px-3 py-1.5 text-left text-sm"
+          >
+            <span className="font-semibold text-brand-hi">/imagine</span>
+            <span className="text-gray-400">generate an image</span>
+          </button>
+        </div>
+      )}
+
+      {isImagine && (
+        <ImaginePanel
+          imagine={imagine}
+          shape={imgShape}
+          quality={imgQuality}
+          engine={imgEngine || imagine.engines[0]?.id}
+          onShape={setImgShape}
+          onQuality={setImgQuality}
+          onEngine={setImgEngine}
+          busy={imgBusy}
+          error={imgError}
+        />
       )}
 
       {replyingTo && (

@@ -144,6 +144,25 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
   const live = useRef({});
   live.current = { messages, hasMore, loadingOlder, onLoadOlder, newMessages, currentUser, history };
 
+  // Whether you were at (near) the bottom at your last scroll. When an image
+  // finishes loading — a generated one arriving, or any slow picture — the
+  // list grows without a scroll event; if you were at the bottom, stay there.
+  const nearBottomRef = useRef(true);
+  function noteScroll() {
+    const el = containerRef.current;
+    if (el) nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+  }
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    const onLoad = (e) => {
+      if (e.target?.tagName !== 'IMG' || !nearBottomRef.current || live.current.history?.hasNewer) return;
+      bottomRef.current?.scrollIntoView?.({ block: 'end' });
+    };
+    el.addEventListener('load', onLoad, true); // load doesn't bubble: capture it
+    return () => el.removeEventListener('load', onLoad, true);
+  }, []);
+
   // Is the divider out of view above (or not loaded yet)?
   function checkDivider() {
     const el = containerRef.current;
@@ -348,7 +367,14 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
   });
 
   return (
-    <div ref={containerRef} onScroll={divider ? checkDivider : undefined} className="relative flex-1 overflow-y-auto">
+    <div
+      ref={containerRef}
+      onScroll={() => {
+        noteScroll();
+        if (divider) checkDivider();
+      }}
+      className="relative flex-1 overflow-y-auto"
+    >
       {history?.hasNewer && (
         <div className="sticky top-0 z-30 flex items-center gap-3 bg-ink-900/95 px-4 py-1.5 text-sm text-gray-200 shadow-md ring-1 ring-ink-500/60">
           <span className="min-w-0 flex-1 truncate">You’re viewing older messages</span>
@@ -768,6 +794,11 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
         {!grouped && (
           <div className="flex items-baseline gap-2">
             <RoleName name={m.author} className="font-semibold text-gray-100">{m.author || 'Unknown'}</RoleName>
+            {m.bot && (
+              <span title="Bot account" className="rounded-sm bg-brand/20 px-1 py-px text-[10px] font-semibold leading-tight text-brand-hi">
+                BOT
+              </span>
+            )}
             <span className="text-xs text-gray-500">{formatTime(m.timestamp)}</span>
           </div>
         )}
