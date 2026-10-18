@@ -163,6 +163,7 @@ test('a request: the placeholder reaches the channel, then turns into the image'
   expect(framesOf('outsider', 'message').some((f) => f.id === queued.messageId)).toBe(false);
   const done = await until(() => framesOf('viewer', 'message_update').find((f) => f.id === queued.messageId && f.attachments.length));
   expect(done.content).toBe('🎨 **artist** imagined: a gourd wearing a top hat');
+  expect(done.attachments[0]).toMatch(/^\/uploads\/[a-f0-9]+\/disgourd-\d{4}-\d{2}-\d{2}-\d{6}\.png$/); // P3-32: a date/time name
   const file = path.join(UPLOADS, done.attachments[0].replace(/^\/uploads\//, ''));
   expect(fs.readFileSync(file).subarray(1, 4).toString()).toBe('PNG');
   expect(JSON.parse(botMessage(queued.messageId).attachments)).toEqual(done.attachments);
@@ -295,6 +296,17 @@ test('Retry and Variations: `from` repeats a finished request in the same channe
   await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: db.countImagineJobsSince(users.owner.id, Date.now() - 864e5) });
   expect(await ask('owner', { prompt: undefined, from: first.messageId })).toBe('LIMIT');
   await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: null });
+});
+
+test('P3-32: saved images are named disgourd-<date>-<time>, with -2… for extras and -upscaled for an upscale', () => {
+  const runner = require('../imagine/runner');
+  const now = new Date(2026, 9, 8, 7, 5, 3);
+  expect(runner.fileStamp(now)).toBe('2026-10-08-070503');
+  const png = { buffer: Buffer.from('x'), contentType: 'image/png' };
+  const urls = runner.saveImages([png, { ...png, contentType: 'image/jpeg' }], { now });
+  expect(urls.map((u) => u.split('/').pop())).toEqual(['disgourd-2026-10-08-070503.png', 'disgourd-2026-10-08-070503-2.jpg']);
+  expect(urls[0].split('/')[2]).toBe(urls[1].split('/')[2]); // one folder per request
+  expect(runner.saveImages([png], { kind: 'upscale', now })[0]).toMatch(/\/disgourd-2026-10-08-070503-upscaled\.png$/);
 });
 
 test('after a restart, jobs that were waiting or running are marked failed and say so', () => {

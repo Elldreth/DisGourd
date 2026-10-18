@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #139)
 - **Effort:** M
 - **Depends on:** P3-24 / P3-28 / P3-29 (engine and Settings). Branched from P3-30 (#138), itself on P3-29 (#137); merge after both.
 - **Requirement Source:** the user, 2026-10-18: "an advanced settings accordion that gives specific settings for image generation for the sampler and the other settings (CFG, steps, face detailer/adetailer)". Decisions (user, 2026-10-18):

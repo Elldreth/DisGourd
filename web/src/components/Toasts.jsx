@@ -49,8 +49,12 @@ export function ToastProvider({ children }) {
           <div
             key={placement}
             data-placement={placement}
-            className={`pointer-events-none fixed inset-x-0 z-60 flex flex-col items-center gap-2 px-4 ${
-              placement === 'top' ? 'top-14' : 'bottom-20'
+            // The top row (the long-lived "new version" notice) waits behind
+            // dialogs, menus and the image viewer (z-50) but stays over the
+            // phone panels (z-40); the bottom row's quick notices stay on top
+            // (P3-32).
+            className={`pointer-events-none fixed inset-x-0 flex flex-col items-center gap-2 px-4 ${
+              placement === 'top' ? 'top-14 z-45' : 'bottom-20 z-60'
             }`}
           >
             {toasts

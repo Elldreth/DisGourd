@@ -572,6 +572,7 @@ describe('the admin routes and the chat path', () => {
       expect(wf['1'].inputs.image).toBe(seen.uploads.at(-1).name);
       expect(wf['22'].inputs).toMatchObject({ width: 3072, height: 2048 });
       expect(db.raw.prepare('SELECT content FROM messages WHERE id = ?').get(up.messageId).content).toBe('🔍 **admin** upscaled: a gourd on a hill');
+      expect(JSON.parse(db.raw.prepare('SELECT attachments FROM messages WHERE id = ?').get(up.messageId).attachments)[0]).toMatch(/\/disgourd-[\d-]+-upscaled\.png$/); // P3-32
       // The cap: 3000×2000 becomes 4096 wide; 4096 square is refused.
       const wide = await ask({ from: finished(3000, 2000).messageId, upscale: true });
       await settle(wide.jobId);

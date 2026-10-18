@@ -46,12 +46,20 @@ function placeFor(engineId) {
   return l.queue.length + (l.running ? 2 : 1);
 }
 
-function saveImages(images) {
+// A file name like disgourd-2026-10-18-164705.png (P3-32: it's what a
+// download is called; the prompt is left out on purpose), with -2, -3… for
+// extra images and -upscaled for an upscale.
+function fileStamp(now = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
+}
+function saveImages(images, { kind = 'generate', now = new Date() } = {}) {
   const token = crypto.randomBytes(9).toString('hex');
   const dir = path.join(UPLOADS_DIR, token);
   fs.mkdirSync(dir, { recursive: true });
+  const stamp = fileStamp(now);
   return images.map((img, i) => {
-    const name = `imagine-${i + 1}.${EXT[img.contentType] || 'png'}`;
+    const name = `disgourd-${stamp}${i ? `-${i + 1}` : ''}${kind === 'upscale' ? '-upscaled' : ''}.${EXT[img.contentType] || 'png'}`;
     fs.writeFileSync(path.join(dir, name), img.buffer);
     return `/uploads/${token}/${name}`;
   });
@@ -68,7 +76,7 @@ async function run(job) {
   try {
     const result = await job.engine.generate(job.request, job.config, { permissive: job.permissive, signal: ac.signal });
     if (!result || !Array.isArray(result.images) || !result.images.length) throw Object.assign(new Error('No image came back'), { code: 'ENGINE' });
-    const urls = saveImages(result.images);
+    const urls = saveImages(result.images, { kind: job.kind });
     db.updateImagineJob(job.id, { status: 'done', finishedAt: Date.now(), model: result.model || null, cost: result.cost ?? job.cost });
     show(job, text.done(job), urls);
   } catch (err) {
@@ -107,4 +115,4 @@ function recover() {
 // Whether anything is queued or running (tests wait on this).
 const idle = () => [...lanes.values()].every((l) => !l.running && !l.queue.length);
 
-module.exports = { enqueue, placeFor, recover, idle, text, saveImages, setDeliver: (fn) => (deliver = fn) };
+module.exports = { enqueue, placeFor, recover, idle, text, saveImages, fileStamp, setDeliver: (fn) => (deliver = fn) };
