@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-20)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #131)
 - **Effort:** S–M
 - **Depends on:** none. Branched from P3-20b (#130) only to keep INDEX.md conflict-free; merge after it.
 - **Serialize with:** `server/db/migrations.js`, `server/linkPreviews.js`, `server/routes/spaces.js`, `server/routes/social.js`, `Embed.jsx`, `MessageList.jsx`

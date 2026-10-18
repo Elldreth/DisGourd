@@ -136,8 +136,10 @@ describe('generating', () => {
     const ac = new AbortController();
     setTimeout(() => ac.abort(), 80);
     await expect(kie.generate(req({ prompt: 'long [slow]' }), cfg(), { signal: ac.signal })).rejects.toMatchObject({ code: 'ABORTED' });
+    // A status check already on its way may still land; after that, none.
+    await new Promise((r) => setTimeout(r, 60));
     const polls = seen.polls;
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 150));
     expect(seen.polls).toBe(polls);
   });
 });

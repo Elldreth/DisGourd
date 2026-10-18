@@ -72,18 +72,26 @@ export default function ImaginePanel({ imagine, shape, quality, engine, onShape,
 // from the server list, with a `run` that sends the request there.
 export function imagineFor(spaces, space, channel, request) {
   const info = (spaces || []).find((s) => s.name === space)?.imagine;
-  return imagineState(info, (fields) => request({ space, channel, ...fields }));
+  return imagineState(info, (fields) => request({ space, channel, ...fields }), space);
 }
 
 // What the Composer needs from a server's `imagine` info (from GET /spaces):
 // null when the server knows nothing of /imagine (it then isn't offered).
-export function imagineState(info, run) {
+export function imagineState(info, run, spaceName = 'This server') {
   if (!info) return null;
   const remaining = Math.max(0, (info.dailyLimit || 0) - (info.usedToday || 0));
   let reason = null;
   if (!info.serverEnabled) reason = '/imagine is off in this server. Its owner can turn it on from the server menu.';
   else if (!info.engines?.length) reason = 'No image engine is set up on this instance yet.';
   else if (!info.canUse) reason = 'You don’t have the Generate images permission in this server.';
-  else if (remaining <= 0) reason = `You’ve used all ${info.dailyLimit} images for today.`;
+  else if (remaining <= 0) reason = `You’ve used all ${info.dailyLimit} images for today. ${limitSourceText(info, spaceName)}`;
   return { available: !reason, reason, remaining, engines: info.engines || [], run };
+}
+
+// Where the daily limit comes from, in words (P3-21; matches the server's refusal).
+export function limitSourceText(info, spaceName = 'This server') {
+  const n = info.dailyLimit;
+  if (info.limitSource === 'server') return `${spaceName} sets its own limit of ${n} a day (server menu → Image generation).`;
+  if (info.limitSource === 'ceiling') return `That's this instance's maximum of ${n} a day.`;
+  return `This instance allows ${n} a day (Settings → Image generation).`;
 }

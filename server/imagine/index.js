@@ -42,6 +42,8 @@ function adminView(settings = getSettings()) {
     permissive: !!settings.permissive,
     dailyLimit: settings.dailyLimit,
     dailyCeiling: settings.dailyCeiling,
+    // Servers whose own limit takes priority over the default (P3-21).
+    serverLimits: db.getSpaceImagineLimits(),
     engines: [...ENGINES.values()].filter((e) => e.available()).map((e) => ({
       id: e.id,
       name: e.name,
@@ -85,8 +87,25 @@ function updateSettings(body) {
 // ---- Per server and per user ----
 // The server's daily limit per user (its own, within the instance ceiling).
 function dailyLimitFor(spaceId, settings = getSettings()) {
+  return limitInfo(spaceId, settings).limit;
+}
+// The limit and where it comes from (P3-21): 'server' (the server's own
+// number, which takes priority), 'instance' (the instance default), or
+// 'ceiling' (either one, capped by the instance's maximum).
+function limitInfo(spaceId, settings = getSettings()) {
   const own = db.getSpaceImagine(spaceId)?.dailyLimit;
-  return Math.min(own ?? settings.dailyLimit, settings.dailyCeiling);
+  const wanted = own ?? settings.dailyLimit;
+  if (wanted > settings.dailyCeiling) return { limit: settings.dailyCeiling, source: 'ceiling' };
+  return { limit: wanted, source: own != null ? 'server' : 'instance' };
+}
+// The refusal when someone's used them all, saying where the number is set.
+function limitMessage(spaceName, { limit, source }) {
+  const where = {
+    server: `${spaceName} sets its own limit of ${limit} a day (server menu → Image generation).`,
+    instance: `This instance allows ${limit} a day (Settings → Image generation).`,
+    ceiling: `That's this instance's maximum of ${limit} a day.`,
+  }[source];
+  return `You’ve used all ${limit} images for today. ${where}`;
 }
 const usedToday = (userId) => db.countImagineJobsSince(userId, Date.now() - DAY_MS);
 // The start of this calendar month (the kie.ai credit cap counts from here).
@@ -121,6 +140,8 @@ function decorateSpaces(list, userId) {
         ownLimit: own ? own.dailyLimit : null, // the server's own, or null for the instance default
         canUse: !!(space && canDoAction(space.id, userId, 'generate_images')),
         dailyLimit: space ? dailyLimitFor(space.id, settings) : 0,
+        limitSource: space ? limitInfo(space.id, settings).source : 'instance', // P3-21
+        instanceLimit: Math.min(settings.dailyLimit, settings.dailyCeiling), // what a blank server limit falls back to
         usedToday: used,
         engines,
       },
@@ -153,8 +174,8 @@ function imagineOp({ ws, msg, userId }) {
     ? engines.find((e) => e.id === msg.engine)
     : engines.find((e) => e.id === settings.defaultEngine) || engines[0];
   if (!engine) return refuse(ws, 'BAD_OPTION', 'That engine isn’t available');
-  const limit = dailyLimitFor(space.id, settings);
-  if (usedToday(userId) >= limit) return refuse(ws, 'LIMIT', `You’ve used all ${limit} images for today`);
+  const limit = limitInfo(space.id, settings);
+  if (usedToday(userId) >= limit.limit) return refuse(ws, 'LIMIT', limitMessage(msg.space, limit));
   const refused = refusedReason(prompt);
   if (refused) return refuse(ws, 'REFUSED', refused);
 

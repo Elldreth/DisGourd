@@ -356,7 +356,22 @@ export default function ImagineAdmin() {
             onChange={(e) => setGeneral((g) => ({ ...g, dailyLimit: parseInt(e.target.value, 10) || 1 }))}
             className="input w-28"
           />
-          <p className="mt-1 text-xs text-gray-500">Server owners can set a lower number for their server.</p>
+          <p className="mt-1 text-xs text-gray-500">
+            The default for every server. A server can set its own number (up to {data.dailyCeiling}), which takes priority.
+          </p>
+          {data.serverLimits?.length > 0 && (
+            <div className="mt-2 rounded-lg bg-ink-900/60 px-3 py-2 text-xs text-gray-300" aria-label="Servers with their own limit">
+              <p className="mb-1 font-semibold">These servers set their own limit, which takes priority:</p>
+              <ul className="space-y-0.5">
+                {data.serverLimits.map((s) => (
+                  <li key={s.space}>
+                    {s.space} — {s.limit} a day
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-gray-500">Change one in that server’s menu → Image generation (blank uses this default).</p>
+            </div>
+          )}
         </div>
         <label className="flex items-start gap-2 text-sm text-gray-200">
           <input type="checkbox" checked={general.permissive} onChange={(e) => setGeneral((g) => ({ ...g, permissive: e.target.checked }))} className="mt-0.5 h-4 w-4 accent-brand" />

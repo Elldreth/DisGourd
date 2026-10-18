@@ -229,6 +229,37 @@ test('the daily limit counts what you asked for (not failures)', async () => {
   await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: null });
 });
 
+test('the limit refusal says where the number is set (server, instance or ceiling); Settings lists server overrides', async () => {
+  const refusal = async () => {
+    const from = users.artist.frames.length;
+    send('artist', { op: 'imagine', space: SPACE, channel: 'general', prompt: 'one more' });
+    return until(() => users.artist.frames.slice(from).find((f) => f.type === 'error' && f.op === 'imagine'));
+  };
+  const used = db.countImagineJobsSince(users.artist.id, Date.now() - 86400000);
+  const space = async () => (await call('artist', 'GET', '/spaces')).body.find((s) => s.name === SPACE).imagine;
+  const before0 = (await call('owner', 'GET', '/admin/imagine')).body;
+  // The server's own limit.
+  await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: used });
+  expect((await refusal()).error).toBe(`You’ve used all ${used} images for today. ${SPACE} sets its own limit of ${used} a day (server menu → Image generation).`);
+  expect(await space()).toMatchObject({ dailyLimit: used, limitSource: 'server', instanceLimit: before0.dailyLimit });
+  expect((await call('owner', 'GET', '/admin/imagine')).body.serverLimits).toEqual([{ space: SPACE, limit: used }]);
+  // The instance default.
+  await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: null });
+  const before = (await call('owner', 'GET', '/admin/imagine')).body;
+  await call('owner', 'PUT', '/admin/imagine', { dailyLimit: used });
+  expect((await refusal()).error).toBe(`You’ve used all ${used} images for today. This instance allows ${used} a day (Settings → Image generation).`);
+  expect(await space()).toMatchObject({ limitSource: 'instance' });
+  expect((await call('owner', 'GET', '/admin/imagine')).body.serverLimits).toEqual([]);
+  // The ceiling.
+  await call('owner', 'PUT', '/admin/imagine', { dailyCeiling: used, dailyLimit: used });
+  await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: used });
+  db.setSpaceImagine(db.getSpaceByName(SPACE).id, { dailyLimit: used + 5 }); // set before the ceiling dropped
+  expect((await refusal()).error).toBe(`You’ve used all ${used} images for today. That's this instance's maximum of ${used} a day.`);
+  expect(await space()).toMatchObject({ limitSource: 'ceiling' });
+  await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: null });
+  await call('owner', 'PUT', '/admin/imagine', { dailyCeiling: before.dailyCeiling, dailyLimit: before.dailyLimit });
+});
+
 test('after a restart, jobs that were waiting or running are marked failed and say so', () => {
   const runner = require('../imagine/runner');
   const msg = db.postAsBot(SPACE, 'general', '🎨 Imagining for **artist**… 2nd in line');
