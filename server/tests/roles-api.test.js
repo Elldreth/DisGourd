@@ -217,4 +217,29 @@ describe('hierarchy for a non-owner with manage_roles', () => {
     expect((await call('mgr', 'PUT', `${S}/channels/general/overrides`, { overrides: [{ roleId: everyone.id, post: 0 }] })).status).toBe(200);
     expect((await call('cara', 'GET', '/spaces')).body.find((s) => s.name === SPACE).channelMeta.general.canPost).toBe(false);
   });
+
+  // P3-18: channelMeta's private / readOnly flags follow @everyone's override.
+  test('channelMeta marks private and read-only channels from the overrides', async () => {
+    const everyone = await roleNamed('@everyone');
+    const admin = await roleNamed('Admin');
+    const metaFor = async (who, channel) => (await call(who, 'GET', '/spaces')).body.find((s) => s.name === SPACE).channelMeta[channel];
+    await call('owner', 'POST', `${S}/channels`, { name: 'lockbox' });
+    expect(await metaFor('owner', 'lockbox')).toMatchObject({ private: false, readOnly: false });
+
+    await call('owner', 'PUT', `${S}/channels/lockbox/overrides`, { overrides: [{ roleId: everyone.id, post: 0 }] });
+    expect(await metaFor('cara', 'lockbox')).toMatchObject({ private: false, readOnly: true, canPost: false });
+
+    // Hidden from @everyone, shown to Admin: the owner and an admin see it as private.
+    await call('owner', 'PUT', `${S}/channels/lockbox/overrides`, { overrides: [{ roleId: everyone.id, view: 0 }, { roleId: admin.id, view: 1 }] });
+    expect(await metaFor('owner', 'lockbox')).toMatchObject({ private: true, readOnly: false });
+    expect(await metaFor('cara', 'lockbox')).toBeUndefined();
+    db.setMemberRole(spaceId, users.cara.id, 'admin');
+    expect(await metaFor('cara', 'lockbox')).toMatchObject({ private: true, readOnly: false });
+    db.setMemberRole(spaceId, users.cara.id, 'member');
+
+    // The legacy tier columns alone don't make a channel private.
+    db.raw.prepare("UPDATE channels SET view_role = 3, post_role = 3 WHERE name = 'general' AND space_id = ?").run(spaceId);
+    await call('owner', 'PUT', `${S}/channels/general/overrides`, { overrides: [{ roleId: everyone.id, view: null, post: null }] });
+    expect(await metaFor('owner', 'general')).toMatchObject({ view: 3, post: 3, private: false, readOnly: false });
+  });
 });

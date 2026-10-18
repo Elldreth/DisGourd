@@ -336,7 +336,16 @@ function resolveAccess(spaceId, userId) {
     const view = decide('view');
     return { view, post: view && decide('post') };
   };
-  return { owner, actions, position, roleIds, channel };
+  // What @everyone alone gets in a channel (its own override, default
+  // allowed), whoever is asking: the channel list marks private and
+  // read-only channels from this.
+  const everyoneChannel = (channelId) => {
+    const id = parentOf.get(Number(channelId)) ?? Number(channelId);
+    const ov = everyone ? (byChannel.get(id) || []).find((o) => o.roleId === everyone.id) : null;
+    const view = ov?.view == null ? true : ov.view === 1;
+    return { view, post: view && (ov?.post == null ? true : ov.post === 1) };
+  };
+  return { owner, actions, position, roleIds, channel, everyoneChannel };
 }
 
 // The ids behind a (server name, channel name) pair, or null if unknown.
@@ -574,8 +583,13 @@ function getUserSpaces(userId) {
     const chans = channelStmt.all(s.id)
       .map((c) => ({ ...c, can: access ? access.channel(c.id) : { view: false, post: false } }))
       .filter((c) => c.can.view);
+    // `private` / `readOnly` say what @everyone may do there (from the role
+    // overrides); `view` / `post` are the legacy tier columns, kept as-is.
     const channelMeta = {};
-    for (const c of chans) channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post, nsfw: !!c.nsfw };
+    for (const c of chans) {
+      const ev = access.everyoneChannel(c.id);
+      channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post, nsfw: !!c.nsfw, private: !ev.view, readOnly: ev.view && !ev.post };
+    }
     return {
       name: s.name,
       icon: s.icon || null,

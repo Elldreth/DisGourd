@@ -94,6 +94,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-16 | Two small follow-ups: typing in threads, server view after create/join | 3 | COMPLETE | S | P2-22b, P1-14 | gateway/chat.js, useChannelMessages.js, App.jsx |
 | P3-15 | Server templates in the setup wizard | 3 | COMPLETE | S | P3-06, P3-07 | serverTemplates.js (new), TemplatePicker.jsx (new), SetupWizard.jsx, CreateServerDialog.jsx |
 | P3-17 | Dev server forwards every API path (`/me`, `/dms`, `/search`, `/invites`) | 3 | REVIEW | S | none | vite.config.js, devProxy.js (new) |
+| P3-18 | Channel list shield follows the role overrides | 3 | REVIEW | S | P2-21c | db/index.js (getUserSpaces), ChannelList.jsx |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
 | P4-02 | Settings with section navigation | 4 | COMPLETE | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |

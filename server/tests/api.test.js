@@ -606,7 +606,7 @@ test('role-based permissions: channel visibility, posting, and action thresholds
   // 'announce' read-only: everyone sees, admins post.
   await fetch(`${base}/spaces/perms/channels/announce/permissions`, { method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(owner) }, body: JSON.stringify({ view: 1, post: 2 }) });
   sp = await memberChannels();
-  expect(sp.channelMeta.announce).toEqual({ type: 'text', view: 1, post: 2, canPost: false, nsfw: false });
+  expect(sp.channelMeta.announce).toEqual({ type: 'text', view: 1, post: 2, canPost: false, nsfw: false, private: false, readOnly: true });
 
   // A member post to the read-only channel must not be stored.
   const gm = gateway(member);
