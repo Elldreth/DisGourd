@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
+import MemberRolesDialog from './MemberRolesDialog.jsx';
 
 // Right-hand roster grouped by online status. Clicking a member opens a menu:
-// message them, and (with permission) promote/demote or remove them.
+// message them, and (with permission) change their roles or remove them.
 // The member list: a column on the right on desktop (lg and up), and a
 // slide-in drawer below that, opened from the chat header (`open` /
 // `onClose`). The drawer closes on Esc, the backdrop or its close button;
@@ -14,9 +15,12 @@ import ConfirmDialog from './ConfirmDialog.jsx';
 const STATUS_WORDS = { idle: 'Idle', dnd: 'Do Not Disturb' };
 
 // canKickMembers / myPosition (from the server's roles): who I may remove.
-export default function MemberList({ space, members, currentUser, myRole, canKickMembers = false, myPosition = 0, onMessageUser, onSetRole, onKick, open = false, onClose }) {
+// roles (highest first) name each member's badge; canManageRoles offers
+// "Roles…", whose changes go through onToggleRole(username, roleId, on).
+export default function MemberList({ space, members, currentUser, myRole, roles = [], canKickMembers = false, canManageRoles = false, myPosition = 0, onMessageUser, onToggleRole, onKick, open = false, onClose }) {
   const panelRef = useRef(null);
   const [kicking, setKicking] = useState(null); // username awaiting "are you sure?"
+  const [editingRoles, setEditingRoles] = useState(null); // username whose roles are open
   useEffect(() => {
     if (!open) return undefined;
     const returnTo = document.activeElement;
@@ -38,17 +42,22 @@ export default function MemberList({ space, members, currentUser, myRole, canKic
   const online = members.filter((m) => statusOf(m) !== 'offline');
   const offline = members.filter((m) => statusOf(m) === 'offline');
   const isOwner = myRole === 'owner';
+  // The badge: Owner, else the member's highest role (roles come highest first).
+  const topRoleName = (m) => (m.role === 'owner' ? 'Owner' : roles.find((r) => !r.isDefault && (m.roles || []).includes(r.id))?.name || null);
 
   function actionsFor(m) {
     const self = m.username === currentUser;
     const acts = [];
     if (!self) acts.push({ label: 'Message', onClick: () => onMessageUser(m.username) });
-    if (isOwner && !self && m.role !== 'owner') {
-      acts.push(
-        m.role === 'admin'
-          ? { label: 'Remove admin', onClick: () => onSetRole(m.username, 'member') }
-          : { label: 'Make admin', onClick: () => onSetRole(m.username, 'admin') }
-      );
+    // Changing roles: "manage roles", and they sit below me (or it's me).
+    if (canManageRoles && m.role !== 'owner' && (isOwner || self || (m.position ?? 0) < myPosition)) {
+      acts.push({
+        label: 'Roles…',
+        onClick: () => {
+          panelRef.current?.querySelector(`button[title="${CSS.escape(m.username)}"]`)?.focus();
+          setEditingRoles(m.username);
+        },
+      });
     }
     // Removing someone: the "kick" ability, and they sit strictly below me.
     const canKick = !self && canKickMembers && (m.position ?? 0) < myPosition;
@@ -98,8 +107,7 @@ export default function MemberList({ space, members, currentUser, myRole, canKic
                     </span>
                   )}
                 </span>
-                {m.role === 'owner' && <RoleBadge>Owner</RoleBadge>}
-                {m.role === 'admin' && <RoleBadge>Admin</RoleBadge>}
+                {topRoleName(m) && <RoleBadge>{topRoleName(m)}</RoleBadge>}
               </button>
               {open && acts.length > 0 && (
                 <div className="anim-pop mb-1 ml-9 mr-1 overflow-hidden rounded-lg bg-ink-900 shadow-lg ring-1 ring-ink-500/50">
@@ -155,6 +163,17 @@ export default function MemberList({ space, members, currentUser, myRole, canKic
           {renderGroup('Offline', offline, 'offline')}
         </div>
       </aside>
+      {editingRoles && members.some((m) => m.username === editingRoles) && (
+        <MemberRolesDialog
+          space={space}
+          member={members.find((m) => m.username === editingRoles)}
+          roles={roles}
+          isOwner={isOwner}
+          myPosition={myPosition}
+          onToggle={onToggleRole}
+          onClose={() => setEditingRoles(null)}
+        />
+      )}
       {kicking && (
         <ConfirmDialog
           title={`Remove @${kicking} from ${space || 'this server'}?`}

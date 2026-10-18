@@ -71,7 +71,7 @@ test('members: idle and dnd count as online, each with its own dot and words', (
     { username: 'cat', role: 'member', status: 'idle', online: true },
     { username: 'dan', role: 'member', status: 'offline', online: false },
   ];
-  render(<MemberList space="S" members={members} currentUser="ann" myRole="owner" onMessageUser={() => {}} onSetRole={() => {}} onKick={() => {}} open onClose={() => {}} />);
+  render(<MemberList space="S" members={members} currentUser="ann" myRole="owner" onMessageUser={() => {}} onToggleRole={() => {}} onKick={() => {}} open onClose={() => {}} />);
   expect(screen.getByText('Online — 3')).toBeTruthy();
   expect(screen.getByText('Offline — 1')).toBeTruthy();
   // (the avatar's initials come first in the row's name, e.g. "BE ben, Do Not Disturb")

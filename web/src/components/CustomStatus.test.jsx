@@ -80,7 +80,7 @@ test("members show each other's status as plain text (no HTML, no markdown)", ()
     { username: 'ben', role: 'member', status: 'online', online: true, statusText: null, statusEmoji: null },
   ];
   const { container } = render(
-    <MemberList space="S" members={members} currentUser="ben" myRole="member" onMessageUser={() => {}} onSetRole={() => {}} onKick={() => {}} open onClose={() => {}} />
+    <MemberList space="S" members={members} currentUser="ben" myRole="member" onMessageUser={() => {}} onToggleRole={() => {}} onKick={() => {}} open onClose={() => {}} />
   );
   expect(screen.getByText('👋 <b>hi</b> **there**')).toBeTruthy();
   expect(container.querySelector('b')).toBeNull();

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 2, rank 13
-- **State:** PLANNED (P2-21a ACTIVE; child packets written as each starts)
+- **State:** PLANNED (P2-21a, P2-21b COMPLETE; P2-21c ACTIVE; child packets written as each starts)
 - **Effort:** L
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #13
 

@@ -21,6 +21,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const [currentSpace, setCurrentSpace] = useState('');
   const [currentChannel, setCurrentChannel] = useState('');
   const [members, setMembers] = useState([]);
+  const [roles, setRoles] = useState([]); // the current server's roles, highest first
   const [error, setError] = useState('');
   const [inviteCode, setInviteCode] = useState(null);
   const [iconCrop, setIconCrop] = useState(null); // { src: File|url, initialCrop } while framing a server icon
@@ -56,6 +57,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const canPin = can('pin_messages');
   const canManageEmoji = can('manage_emoji');
   const canKick = can('kick');
+  const canManageRoles = can('manage_roles');
 
   async function loadSpaces() {
     try {
@@ -72,6 +74,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   function refreshMembers(space) {
     if (!space) return;
     api.getMembers(space).then((r) => setMembers(r.members || [])).catch(() => {});
+    api.getRoles(space).then((r) => setRoles(r.roles || [])).catch(() => {});
   }
 
   // Open a server at a channel (default: its first).
@@ -146,6 +149,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   useEffect(() => {
     if (!currentSpace) {
       setMembers([]);
+      setRoles([]);
       return;
     }
     refreshMembers(currentSpace);
@@ -255,10 +259,12 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       setInviteCode(res.code);
     }),
     closeInvite: () => setInviteCode(null),
-    changeMemberRole: attempt('Could not change role', async (username, newRole) => {
-      await api.setMemberRole(currentSpace, username, newRole);
+    // Give (on) or take a role; the gateway's members_changed refreshes everyone.
+    setMemberHasRole: attempt('Could not change roles', async (username, roleId, on) => {
+      await api.setMemberHasRole(currentSpace, username, roleId, on);
       refreshMembers(currentSpace);
     }),
+    reloadRoles: () => refreshMembers(spaceRef.current),
     kickMember: attempt('Could not remove member', async (username) => {
       await api.kickMember(currentSpace, username);
       refreshMembers(currentSpace);
@@ -338,8 +344,10 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     canPin,
     canManageEmoji,
     canKick,
+    canManageRoles,
     myPosition,
     members,
+    roles,
     memberNames: members.map((m) => m.username),
     error,
     inviteCode,
