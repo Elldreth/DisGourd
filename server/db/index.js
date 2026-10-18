@@ -26,7 +26,7 @@ runMigrations(db);
 // site admin, promote the earliest.
 const anyAdmin = db.prepare('SELECT 1 FROM users WHERE site_admin = 1 LIMIT 1').get();
 if (!anyAdmin) {
-  const first = db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get();
+  const first = db.prepare('SELECT id FROM users WHERE is_bot = 0 ORDER BY id LIMIT 1').get();
   if (first) db.prepare('UPDATE users SET site_admin = 1 WHERE id = ?').run(first.id);
 }
 
@@ -85,6 +85,7 @@ const DEFAULT_PERMISSIONS = {
   pin_messages: 2,
   manage_emoji: 2,
   manage_roles: 3,
+  generate_images: 2,
 };
 
 // ---- Custom server emoji (P2-19) ----
@@ -563,7 +564,7 @@ function getUserSpaces(userId) {
     ORDER BY s.name COLLATE NOCASE
   `).all(userId);
   const channelStmt = db.prepare(
-    "SELECT id, name, type, view_role AS view, post_role AS post FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
+    "SELECT id, name, type, view_role AS view, post_role AS post, nsfw FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
   );
   const emojiStmt = db.prepare('SELECT id, name, url FROM space_emoji WHERE space_id = ? ORDER BY name');
   return spaces.map((s) => {
@@ -574,7 +575,7 @@ function getUserSpaces(userId) {
       .map((c) => ({ ...c, can: access ? access.channel(c.id) : { view: false, post: false } }))
       .filter((c) => c.can.view);
     const channelMeta = {};
-    for (const c of chans) channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post };
+    for (const c of chans) channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post, nsfw: !!c.nsfw };
     return {
       name: s.name,
       icon: s.icon || null,
@@ -1402,8 +1403,9 @@ function createUser(username, email, passwordHash, salt) {
   return stmt.run(username, email, passwordHash, salt, first ? 1 : 0).lastInsertRowid;
 }
 
+// People only: bot accounts (the /imagine bot) don't count.
 function countUsers() {
-  return db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+  return db.prepare('SELECT COUNT(*) AS n FROM users WHERE is_bot = 0').get().n;
 }
 
 // ---- Site admins ----
@@ -1674,6 +1676,98 @@ function createUserRedeemingCode(fields) {
   }
 }
 
+// ---- /imagine (P2-20a) ----
+// The bot that posts generated images: a real users row (so messages have an
+// author) that can never sign in (is_bot, and an impossible password hash).
+const IMAGINE_BOT_NAMES = ['Imagine', 'Imagine-bot', 'Imagine-bot-2'];
+let imagineBotId = null;
+function ensureImagineBot() {
+  if (imagineBotId) return imagineBotId;
+  const existing = db.prepare('SELECT id FROM users WHERE is_bot = 1 ORDER BY id LIMIT 1').get();
+  if (existing) return (imagineBotId = existing.id);
+  for (const name of IMAGINE_BOT_NAMES) {
+    if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(name)) continue;
+    const info = db.prepare("INSERT INTO users(username, email, password_hash, salt, site_admin, is_bot) VALUES (?, ?, '!', '!', 0, 1)")
+      .run(name, `${name.toLowerCase()}@bot.invalid`);
+    return (imagineBotId = Number(info.lastInsertRowid));
+  }
+  throw new Error('No free username for the imagine bot');
+}
+function isBotUser(userId) {
+  return !!db.prepare('SELECT 1 FROM users WHERE id = ? AND is_bot = 1').get(userId);
+}
+// The bot posts in a channel; returns { id, timestamp } (or null).
+function postAsBot(spaceName, channelName, content) {
+  return storeMessage(spaceName, channelName, content, ensureImagineBot());
+}
+// The bot rewrites one of its own messages (content and attachments).
+function updateBotMessage(messageId, content, attachments = []) {
+  const list = Array.isArray(attachments) ? attachments : [];
+  return db.prepare('UPDATE messages SET content = ?, attachment_url = ?, attachments = ? WHERE id = ? AND author_id = ?')
+    .run(content, list[0] || null, list.length ? JSON.stringify(list) : null, messageId, ensureImagineBot()).changes > 0;
+}
+
+// A server's /imagine settings.
+function getSpaceImagine(spaceId) {
+  const r = db.prepare('SELECT imagine_enabled, imagine_daily_limit FROM spaces WHERE id = ?').get(spaceId);
+  return r ? { enabled: !!r.imagine_enabled, dailyLimit: r.imagine_daily_limit ?? null } : null;
+}
+function setSpaceImagine(spaceId, { enabled, dailyLimit } = {}) {
+  const cur = getSpaceImagine(spaceId);
+  if (!cur) return null;
+  db.prepare('UPDATE spaces SET imagine_enabled = ?, imagine_daily_limit = ? WHERE id = ?').run(
+    (enabled === undefined ? cur.enabled : !!enabled) ? 1 : 0,
+    dailyLimit === undefined ? cur.dailyLimit : dailyLimit,
+    spaceId
+  );
+  return getSpaceImagine(spaceId);
+}
+// The 18+ flag of a channel; a thread answers with its parent's.
+function isChannelNsfw(spaceName, channelName) {
+  const r = db.prepare(`
+    SELECT COALESCE(p.nsfw, c.nsfw) AS nsfw FROM channels c JOIN spaces s ON c.space_id = s.id
+    LEFT JOIN channels p ON p.id = c.parent_id WHERE s.name = ? AND c.name = ?
+  `).get(spaceName, channelName);
+  return !!(r && r.nsfw);
+}
+function setChannelNsfw(spaceName, channelName, on) {
+  return db.prepare(`
+    UPDATE channels SET nsfw = ? WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ? AND type IS NOT 'thread'
+  `).run(on ? 1 : 0, spaceName, channelName).changes > 0;
+}
+
+// Generation jobs.
+const JOB_COLUMNS = { status: 'status', error: 'error', cost: 'cost', model: 'model', startedAt: 'started_at', finishedAt: 'finished_at', messageId: 'message_id' };
+function createImagineJob(j) {
+  const info = db.prepare(`
+    INSERT INTO imagine_jobs(user_id, space_id, channel_id, engine, model, prompt, shape, quality, permissive, cost, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
+  `).run(j.userId, j.spaceId, j.channelId, j.engine, j.model || null, j.prompt, j.shape, j.quality, j.permissive ? 1 : 0, j.cost || 0, Date.now());
+  return Number(info.lastInsertRowid);
+}
+function updateImagineJob(id, fields) {
+  const sets = [];
+  const vals = [];
+  for (const [k, col] of Object.entries(JOB_COLUMNS)) {
+    if (fields[k] !== undefined) {
+      sets.push(`${col} = ?`);
+      vals.push(fields[k]);
+    }
+  }
+  if (sets.length) db.prepare(`UPDATE imagine_jobs SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
+}
+function getImagineJob(id) {
+  return db.prepare('SELECT * FROM imagine_jobs WHERE id = ?').get(id);
+}
+// How many images a user asked for since `since` (failures don't count).
+function countImagineJobsSince(userId, since) {
+  return db.prepare("SELECT COUNT(*) AS n FROM imagine_jobs WHERE user_id = ? AND created_at >= ? AND status != 'failed'").get(userId, since).n;
+}
+// Jobs a restart interrupted.
+function getUnfinishedImagineJobs() {
+  return db.prepare("SELECT * FROM imagine_jobs WHERE status IN ('queued', 'running') ORDER BY id").all();
+}
+
 // Servers that existed before the roles migration get their seeded roles now.
 if (versionBefore > 0 && versionBefore < 12) seedAllSpaceRoles();
 
@@ -1785,6 +1879,19 @@ module.exports = {
   searchMessages,
   createUser,
   countUsers,
+  ensureImagineBot,
+  isBotUser,
+  postAsBot,
+  updateBotMessage,
+  getSpaceImagine,
+  setSpaceImagine,
+  isChannelNsfw,
+  setChannelNsfw,
+  createImagineJob,
+  updateImagineJob,
+  getImagineJob,
+  countImagineJobsSince,
+  getUnfinishedImagineJobs,
   isSiteAdmin,
   setSiteAdmin,
   setSiteAdminByUsername,

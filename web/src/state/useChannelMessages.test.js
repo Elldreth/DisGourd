@@ -24,6 +24,13 @@ describe('messagesReducer', () => {
     expect(next[1]).toBe(base[1]);
   });
 
+  test('updated applies attachments when the frame carries them (the /imagine bot), and keeps them otherwise', () => {
+    const withImage = messagesReducer(base, { type: 'updated', id: 1, content: 'done', editedAt: null, attachments: ['/uploads/x/imagine-1.png'] });
+    expect(withImage[0]).toMatchObject({ content: 'done', attachments: ['/uploads/x/imagine-1.png'], attachment: '/uploads/x/imagine-1.png' });
+    const edited = messagesReducer(withImage, { type: 'updated', id: 1, content: 'typo fixed', editedAt: 9 });
+    expect(edited[0].attachments).toEqual(['/uploads/x/imagine-1.png']);
+  });
+
   test('deleted removes one message', () => {
     expect(messagesReducer(base, { type: 'deleted', id: 1 }).map((m) => m.id)).toEqual([2]);
   });

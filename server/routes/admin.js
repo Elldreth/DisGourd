@@ -5,11 +5,25 @@ const { config, registrationMode } = require('../config');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, readJsonBody } = require('../http/util');
 const linkPreviews = require('../linkPreviews');
+const imagine = require('../imagine');
 
 const getJsonBody = readJsonBody;
 
 // Tried in order; the first match handles the request.
 const routes = [
+  {
+    // GET/PUT /admin/imagine — the instance's image engines and limits (P2-20)
+    match: ({ req, pathSegments }) =>
+      pathSegments[0] === 'admin' && pathSegments[1] === 'imagine' && pathSegments.length === 2 && (req.method === 'GET' || req.method === 'PUT'),
+    run: async ({ req, res, parsedUrl }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can change this' });
+      if (req.method === 'GET') return sendJson(res, 200, imagine.adminView());
+      const out = imagine.updateSettings(await getJsonBody(req));
+      return out.error ? sendJson(res, 400, out) : sendJson(res, 200, out);
+    },
+  },
   {
     // PUT /admin/link-previews { enabled } — turn link previews on/off for the instance
     match: ({ req, pathSegments }) =>

@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { uploadFilePath } = require('./uploads');
 const roles = require('./roles');
+const imagine = require('../imagine');
 
 // Custom emoji images: these types, at most this big.
 const EMOJI_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
@@ -30,7 +31,7 @@ const routes = [
 
       // GET /spaces — servers I'm a member of
       if (pathSegments.length === 1 && req.method === 'GET') {
-        return sendJson(res, 200, db.getUserSpaces(userId));
+        return sendJson(res, 200, imagine.decorateSpaces(db.getUserSpaces(userId), userId));
       }
       // POST /spaces { name, template? } — create a server (creator becomes
       // owner) with a template's channels (default: just #general)
@@ -97,6 +98,25 @@ const routes = [
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_deleted', space: spaceName }));
         db.deleteSpace(spaceName);
         return sendJson(res, 200, { ok: true });
+      }
+
+      // PATCH /spaces/:name/imagine { enabled?, dailyLimit? } — /imagine here
+      // (P2-20a); the limit is per user per day, within the instance ceiling.
+      if (pathSegments[2] === 'imagine' && pathSegments.length === 3 && req.method === 'PATCH') {
+        if (!access.actions.has('edit_server')) return sendJson(res, 403, { error: 'You are not allowed to change server settings' });
+        const body = await getJsonBody(req);
+        const ceiling = imagine.getSettings().dailyCeiling;
+        const fields = {};
+        if (body.enabled !== undefined) fields.enabled = !!body.enabled;
+        if (body.dailyLimit !== undefined) {
+          if (body.dailyLimit !== null && !(Number.isInteger(body.dailyLimit) && body.dailyLimit >= 1 && body.dailyLimit <= ceiling)) {
+            return sendJson(res, 400, { error: `The daily limit is 1–${ceiling}` });
+          }
+          fields.dailyLimit = body.dailyLimit;
+        }
+        const out = db.setSpaceImagine(space.id, fields);
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+        return sendJson(res, 200, { ...out, effectiveLimit: imagine.dailyLimitFor(space.id) });
       }
 
       // GET /spaces/:name/members
@@ -280,6 +300,16 @@ const routes = [
           if (!ok) return sendJson(res, 404, { error: 'Channel not found' });
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
           return sendJson(res, 200, { ok: true });
+        }
+        // PATCH a channel { nsfw } — mark it Age-restricted (18+) (managers only)
+        if (channelName && pathSegments.length === 4 && req.method === 'PATCH') {
+          if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel settings' });
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          const body = await getJsonBody(req);
+          if (typeof body.nsfw !== 'boolean') return sendJson(res, 400, { error: 'nsfw must be true or false' });
+          if (!db.setChannelNsfw(spaceName, channelName, body.nsfw)) return sendJson(res, 404, { error: 'Channel not found' });
+          deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+          return sendJson(res, 200, { nsfw: body.nsfw });
         }
         // POST create channel — gated by the "create_channel" threshold
         if (!channelName && req.method === 'POST') {
