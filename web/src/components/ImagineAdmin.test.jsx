@@ -52,7 +52,7 @@ test('Test connection lists the models; picking one guesses its type; Save sends
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         engines: expect.objectContaining({
-          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: MODELS[0].name, kind: 'checkpoint', family: 'flux', tier: 'high', clip1: null, clip2: null, vae: null },
+          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: MODELS[0].name, kind: 'checkpoint', family: 'flux', tier: 'high', clip1: null, clip2: null, vae: null, hires: true, upscaler: null },
         }),
         defaultEngine: 'comfyui',
         dailyLimit: 8,
@@ -214,7 +214,7 @@ test('split models: grouped in the list; picking one fills its text encoders and
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         engines: expect.objectContaining({
-          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: 'mystery.safetensors', kind: 'unet', family: 'flux', tier: 'medium', clip1: SPLIT.clips[0], clip2: SPLIT.clips[1], vae: SPLIT.vaes[1] },
+          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: 'mystery.safetensors', kind: 'unet', family: 'flux', tier: 'medium', clip1: SPLIT.clips[0], clip2: SPLIT.clips[1], vae: SPLIT.vaes[1], hires: true, upscaler: null },
         }),
       })
     )
@@ -227,4 +227,24 @@ test('a saved split model shows its parts before any test', async () => {
   expect((await screen.findByLabelText('Text encoder (T5-XXL)')).value).toBe('t5.safetensors');
   expect(screen.getByLabelText('VAE').value).toBe('ae.sft');
   expect(screen.getByLabelText('Model').value).toBe('unet:flux1-dev-fp8.safetensors');
+});
+
+test('P3-28: the hires fix switch and its upscale model (suggested after a test); Save sends both', async () => {
+  api.testComfyUI.mockResolvedValue({ ...SPLIT, upscalers: ['4x-AnimeSharp.pth', '4x-UltraSharp.pth'], suggested: { ...SPLIT.suggested, upscaler: '4x-UltraSharp.pth' } });
+  api.saveImagineSettings.mockImplementation(async (body) => ({ ...view(body.engines.comfyui), defaultEngine: 'comfyui' }));
+  render(<ImagineAdmin />);
+  const hires = await screen.findByLabelText('Hires fix for High quality');
+  expect(hires.checked).toBe(true); // on unless switched off
+  fireEvent.change(screen.getByLabelText('ComfyUI address'), { target: { value: 'http://127.0.0.1:8188' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+  await screen.findByText(/Connected/);
+  expect(screen.getByLabelText('Upscale model').value).toBe('4x-UltraSharp.pth');
+  fireEvent.change(screen.getByLabelText('Upscale model'), { target: { value: '4x-AnimeSharp.pth' } });
+  fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ hires: true, upscaler: '4x-AnimeSharp.pth' }));
+  fireEvent.click(hires);
+  expect(screen.queryByLabelText('Upscale model')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ hires: false }));
 });
