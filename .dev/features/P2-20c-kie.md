@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-20)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged #126)
 - **Effort:** M
 - **Depends on:** P2-20a (engine interface, runner), P2-20b (settings screen), P2-20d (chat panel)
 - **Starting baseline:** main at 9daf70a (#124 merged)
