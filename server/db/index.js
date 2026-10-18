@@ -573,7 +573,7 @@ function getUserSpaces(userId) {
     ORDER BY s.name COLLATE NOCASE
   `).all(userId);
   const channelStmt = db.prepare(
-    "SELECT id, name, type, view_role AS view, post_role AS post, nsfw FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
+    "SELECT id, name, type, view_role AS view, post_role AS post, nsfw, topic FROM channels WHERE space_id = ? AND type IS NOT 'thread' ORDER BY id"
   );
   const emojiStmt = db.prepare('SELECT id, name, url FROM space_emoji WHERE space_id = ? ORDER BY name');
   return spaces.map((s) => {
@@ -588,7 +588,7 @@ function getUserSpaces(userId) {
     const channelMeta = {};
     for (const c of chans) {
       const ev = access.everyoneChannel(c.id);
-      channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post, nsfw: !!c.nsfw, private: !ev.view, readOnly: ev.view && !ev.post };
+      channelMeta[c.name] = { type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post, nsfw: !!c.nsfw, topic: c.topic || null, private: !ev.view, readOnly: ev.view && !ev.post };
     }
     return {
       name: s.name,
@@ -1753,6 +1753,12 @@ function isChannelNsfw(spaceName, channelName) {
   `).get(spaceName, channelName);
   return !!(r && r.nsfw);
 }
+// A channel's topic (P3-20a): plain text, or null to clear. Not for threads.
+function setChannelTopic(spaceName, channelName, topic) {
+  return db.prepare(`
+    UPDATE channels SET topic = ? WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ? AND type IS NOT 'thread'
+  `).run(topic || null, spaceName, channelName).changes > 0;
+}
 function setChannelNsfw(spaceName, channelName, on) {
   return db.prepare(`
     UPDATE channels SET nsfw = ? WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ? AND type IS NOT 'thread'
@@ -1920,6 +1926,7 @@ module.exports = {
   setSpaceImagine,
   isChannelNsfw,
   setChannelNsfw,
+  setChannelTopic,
   createImagineJob,
   updateImagineJob,
   getImagineJob,

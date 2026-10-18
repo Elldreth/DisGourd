@@ -301,15 +301,29 @@ const routes = [
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
           return sendJson(res, 200, { ok: true });
         }
-        // PATCH a channel { nsfw } — mark it Age-restricted (18+) (managers only)
+        // PATCH a channel { nsfw?, topic? } — Age-restricted (18+) (P2-20d) and
+        // its topic (P3-20a: plain text, at most 300 characters; '' clears).
+        // Managers only.
         if (channelName && pathSegments.length === 4 && req.method === 'PATCH') {
           if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel settings' });
           if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
+          if (db.isThreadChannel(channelName) || !db.channelType(spaceName, channelName)) return sendJson(res, 404, { error: 'Channel not found' });
           const body = await getJsonBody(req);
-          if (typeof body.nsfw !== 'boolean') return sendJson(res, 400, { error: 'nsfw must be true or false' });
-          if (!db.setChannelNsfw(spaceName, channelName, body.nsfw)) return sendJson(res, 404, { error: 'Channel not found' });
+          if (body.nsfw === undefined && body.topic === undefined) return sendJson(res, 400, { error: 'Nothing to change' });
+          if (body.nsfw !== undefined && typeof body.nsfw !== 'boolean') return sendJson(res, 400, { error: 'nsfw must be true or false' });
+          let topic;
+          if (body.topic !== undefined) {
+            if (body.topic !== null && typeof body.topic !== 'string') return sendJson(res, 400, { error: 'The topic must be text' });
+            topic = (body.topic || '').trim();
+            if (topic.length > 300) return sendJson(res, 400, { error: 'Topics are at most 300 characters' });
+          }
+          if (body.nsfw !== undefined) db.setChannelNsfw(spaceName, channelName, body.nsfw);
+          if (topic !== undefined) db.setChannelTopic(spaceName, channelName, topic);
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
-          return sendJson(res, 200, { nsfw: body.nsfw });
+          const out = {};
+          if (body.nsfw !== undefined) out.nsfw = body.nsfw;
+          if (topic !== undefined) out.topic = topic || null;
+          return sendJson(res, 200, out);
         }
         // POST create channel — gated by the "create_channel" threshold
         if (!channelName && req.method === 'POST') {

@@ -18,6 +18,7 @@ const fromCell = (c) => (c === '1' ? 1 : c === '0' ? 0 : null);
 export default function ChannelSettingsDialog({ space, channel, meta, roles = [], isOwner = false, myPosition = 0, onClose, onSaved }) {
   const [cells, setCells] = useState(null); // roleId -> { view, post } cells; null while loading
   const [nsfw, setNsfw] = useState(!!meta?.nsfw); // Age-restricted (18+), text channels
+  const [topic, setTopic] = useState(meta?.topic || ''); // P3-20a
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -62,6 +63,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
       }));
       await api.setChannelOverrides(space, channel, overrides);
       if (!isVoice && nsfw !== !!meta?.nsfw) await api.setChannelNsfw(space, channel, nsfw);
+      if (topic.trim() !== (meta?.topic || '')) await api.setChannelTopic(space, channel, topic.trim());
       onSaved();
       onClose();
     } catch (err) {
@@ -95,6 +97,19 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
       </div>
 
       <div ref={bodyRef} className="space-y-3 overflow-y-auto p-6">
+        <div>
+          <label htmlFor="channel-topic" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Topic</label>
+          <textarea
+            id="channel-topic"
+            rows={2}
+            maxLength={300}
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            placeholder="What’s this channel for?"
+            className="input resize-y"
+          />
+          <p className="mt-0.5 text-right text-xs text-gray-500" aria-live="polite">{topic.length}/300</p>
+        </div>
         <p className="text-sm text-gray-400">
           {isVoice
             ? 'Who can see and join this channel, by role.'

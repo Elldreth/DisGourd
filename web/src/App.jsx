@@ -579,6 +579,7 @@ export default function App() {
               threadsUnread={channelThreads[sp.currentChannel] || 0}
               emoji={sp.activeSpace?.emoji || []}
               imagine={imagineFor(sp.spaces, sp.currentSpace, sp.currentChannel, imagineReq.imagine)}
+              topic={sp.channelMeta[sp.currentChannel]?.topic || null}
             />
           </div>
           {openThread && (
