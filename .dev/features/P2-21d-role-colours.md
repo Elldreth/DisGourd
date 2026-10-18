@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-21)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged #118)
 - **Effort:** S
 - **Depends on:** P2-21c (roles, colours and holders reach the client)
 - **Starting baseline:** main at b15cd6a (P2-21c merged, #117)

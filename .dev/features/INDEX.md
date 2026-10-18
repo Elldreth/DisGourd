@@ -63,11 +63,11 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-19a | Custom emoji: storage + management API | 2 | COMPLETE | S–M | P1-01, P1-04 | migrations, db, routes/spaces, routes/uploads |
 | P2-19b | Custom emoji: `:name:` rendering, picker tab, reactions, settings | 2 | COMPLETE | M | P2-19a | markdown.jsx, EmojiPicker, MessageList, ChannelSettingsDialog/ServerSettings, gateway react op |
 | P2-20 | /imagine with two engines, local ComfyUI or kie.ai (Container: a–d) | 2 | PLANNED | L | P2-21 | server/imagine/*, bot user, admin page, Composer |
-| P2-21 | Custom roles (Container: a–d) | 2 | PLANNED | L | see packet | permissions.js, migrations, UI |
+| P2-21 | Custom roles (Container: a–d) | 2 | COMPLETE | L | see packet | permissions.js, migrations, UI |
 | P2-21a | Roles schema seeded from tiers + a resolver that agrees with today's checks | 2 | COMPLETE | M | P1-01, P1-06 | migrations, db, permissions.js |
 | P2-21b | Permission resolution switched to roles | 2 | COMPLETE | M | P2-21a | permissions.js, db queries, routes, gateway |
 | P2-21c | Role management UI (create, reorder, colour, permission matrix) | 2 | COMPLETE | M | P2-21b | routes, RolesDialog (new), ChannelSettingsDialog |
-| P2-21d | Role colours in names and member-list grouping | 2 | REVIEW | S | P2-21c | MessageList, MemberList, Avatar |
+| P2-21d | Role colours in names and member-list grouping | 2 | COMPLETE | S | P2-21c | MessageList, MemberList, Avatar |
 | P2-22 | Threads (Container: a–d) | 2 | COMPLETE | L | P2-10, P2-13 | see children |
 | P2-22a | Thread data model + server API | 2 | COMPLETE | M | P2-22 decisions | db, gateway/chat.js, routes/spaces.js |
 | P2-22b | Thread panel + summaries, composable gateway handlers | 2 | COMPLETE | M | P2-22a | gatewayHandlers.js, App.jsx, ThreadPanel.jsx (new) |
