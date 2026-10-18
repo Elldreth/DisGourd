@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #134)
 - **Effort:** S–M
 - **Depends on:** P2-20 (/imagine), P3-21 (limit wording)
 - **Starting baseline:** main at 01f275a (#133 merged)

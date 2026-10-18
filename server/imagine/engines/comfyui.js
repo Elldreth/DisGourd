@@ -1,6 +1,6 @@
 // The ComfyUI engine (P2-20b): a local ComfyUI server the site admin points
 // at. DisGourd builds an API-format workflow for the chosen checkpoint's
-// family (SD 1.5, SDXL or Flux), queues it with POST /prompt, waits on
+// family (SD 1.5, SDXL, Flux or Z-Image Turbo), queues it with POST /prompt, waits on
 // /history and fetches the image with /view. Images go through PreviewImage
 // (ComfyUI's temp folder), so nothing piles up in its output folder.
 //
@@ -8,19 +8,63 @@
 // called directly (not through safeFetch, which refuses private addresses).
 // ComfyUI has no content filter: outside 18+ channels SD 1.5 / SDXL get a
 // negative-prompt nudge, which is not a filter (Flux at CFG 1 ignores it).
+//
+// A model is either a single checkpoint (CheckpointLoaderSimple) or, since
+// P3-24, separate parts: a diffusion model (UNETLoader) plus its text
+// encoder(s) and VAE. Nothing here assumes particular file names: the lists
+// come from the host's own ComfyUI, and the parts suggested for a split model
+// are guesses by name that the host can change.
 const crypto = require('crypto');
 
 const FAMILIES = {
   sd15: { name: 'SD 1.5', mp: { draft: 0.26, standard: 0.33, high: 0.45 }, steps: { draft: 16, standard: 26, high: 34 }, cfg: 7, sampler: 'dpmpp_2m', scheduler: 'karras' },
   sdxl: { name: 'SDXL', mp: { draft: 0.8, standard: 1.0, high: 1.15 }, steps: { draft: 18, standard: 28, high: 36 }, cfg: 6, sampler: 'dpmpp_2m', scheduler: 'karras' },
   flux: { name: 'Flux', mp: { draft: 0.6, standard: 1.0, high: 1.6 }, steps: { draft: 12, standard: 20, high: 28 }, cfg: 1, guidance: 3.5, sampler: 'euler', scheduler: 'simple' },
+  // Z-Image Turbo (P3-24): separate parts only; Qwen 3 4B text encoder (lumina2).
+  zimage: { name: 'Z-Image Turbo', splitOnly: true, mp: { draft: 0.8, standard: 1.0, high: 1.6 }, steps: { draft: 6, standard: 8, high: 10 }, cfg: 1, shift: 3, sampler: 'res_multistep', scheduler: 'simple' },
 };
+// Families a split model (UNETLoader) can be.
+const SPLIT_FAMILIES = ['flux', 'zimage'];
+// Diffusion models that make video, not images: left out of the list.
+const VIDEO = /hunyuan.?video|(^|[\\/_\- ])ltx|minimax|(^|[\\/_\- ])wan[\d_.\- ]|mochi|cosmos|cogvideo|svd|animatediff/i;
 // The most pixels each VRAM tier is asked for (megapixels).
 const TIERS = { low: 1.0, medium: 1.5, high: 2.4 };
 const RATIOS = { square: [1, 1], portrait: [2, 3], landscape: [3, 2], wide: [16, 9] };
 const NEGATIVE = 'lowres, worst quality, low quality, blurry, jpeg artifacts, watermark, signature, text';
 const SAFE_NEGATIVE = 'nsfw, nude, nudity';
 const SAVE_NODE = '9';
+
+// A split model's likely family, or null when its name doesn't say.
+function guessSplitFamily(name) {
+  const n = String(name || '').toLowerCase();
+  if (/z[_\- ]?image|zturbo/.test(n)) return 'zimage';
+  if (/flux/.test(n)) return 'flux';
+  return null;
+}
+
+// The text encoders and VAE a split model probably wants, picked by name from
+// what this ComfyUI has (null where nothing fits).
+function suggestParts(family, clips = [], vaes = []) {
+  const find = (list, ...tests) => {
+    for (const re of tests) {
+      const hit = list.find((x) => re.test(x));
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const ae = (folder) => find(vaes, new RegExp(`(?:${folder})[^\\\\/]*[\\\\/][^\\\\/]*\\bae\\.(sft|safetensors)$`, 'i'), /(^|[\\/])ae\.(sft|safetensors)$/i, /\bae\b|flux.*vae/i);
+  if (family === 'flux') {
+    return {
+      clip1: find(clips, /(^|[\\/])clip_l\.safetensors$/i, /clip_l/i),
+      clip2: find(clips, /t5xxl/i, /t5.*xxl/i),
+      vae: ae('flux'),
+    };
+  }
+  if (family === 'zimage') {
+    return { clip1: find(clips, /qwen_?3_?4b/i, /qwen.*4b/i), clip2: null, vae: ae('z[_\\- ]?image|zturbo') };
+  }
+  return { clip1: null, clip2: null, vae: null };
+}
 
 // A checkpoint's likely family from its folder and name.
 function guessFamily(name) {
@@ -53,25 +97,44 @@ function sizeFor(family, quality, shape, tier) {
 
 // The API-format workflow for one request.
 function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomInt(0, 2 ** 32) } = {}) {
-  const family = FAMILIES[cfg.family] ? cfg.family : 'sdxl';
+  const split = cfg.kind === 'unet';
+  const family = FAMILIES[cfg.family] && (split || !FAMILIES[cfg.family].splitOnly) ? cfg.family : 'sdxl';
   const f = FAMILIES[family];
   const { width, height } = sizeFor(family, request.quality, request.shape, cfg.tier);
-  const negative = family === 'flux' ? '' : permissive ? NEGATIVE : `${NEGATIVE}, ${SAFE_NEGATIVE}`;
+  const negative = family === 'flux' || family === 'zimage' ? '' : permissive ? NEGATIVE : `${NEGATIVE}, ${SAFE_NEGATIVE}`;
+  // Where the model, text encoder and VAE come from: one checkpoint (node 4),
+  // or separate loaders (11 diffusion model, 12 text encoder(s), 13 VAE).
+  const loaders = split
+    ? {
+        11: { class_type: 'UNETLoader', inputs: { unet_name: cfg.model, weight_dtype: 'default' } },
+        12: family === 'flux'
+          ? { class_type: 'DualCLIPLoader', inputs: { clip_name1: cfg.clip1, clip_name2: cfg.clip2, type: 'flux' } }
+          : { class_type: 'CLIPLoader', inputs: { clip_name: cfg.clip1, type: 'lumina2' } },
+        13: { class_type: 'VAELoader', inputs: { vae_name: cfg.vae } },
+      }
+    : { 4: { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: cfg.model } } };
+  const model = split ? ['11', 0] : ['4', 0];
+  const clip = split ? ['12', 0] : ['4', 1];
+  const vae = split ? ['13', 0] : ['4', 2];
   const wf = {
-    4: { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: cfg.model } },
-    5: { class_type: family === 'flux' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: { width, height, batch_size: 1 } },
-    6: { class_type: 'CLIPTextEncode', inputs: { text: request.prompt, clip: ['4', 1] } },
-    7: { class_type: 'CLIPTextEncode', inputs: { text: negative, clip: ['4', 1] } },
+    ...loaders,
+    5: { class_type: family === 'flux' || family === 'zimage' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: { width, height, batch_size: 1 } },
+    6: { class_type: 'CLIPTextEncode', inputs: { text: request.prompt, clip } },
+    7: { class_type: 'CLIPTextEncode', inputs: { text: negative, clip } },
     3: {
       class_type: 'KSampler',
       inputs: {
         seed, steps: f.steps[request.quality] || f.steps.standard, cfg: f.cfg, sampler_name: f.sampler, scheduler: f.scheduler, denoise: 1,
-        model: ['4', 0], positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0],
+        model, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0],
       },
     },
-    8: { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['4', 2] } },
+    8: { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae } },
     [SAVE_NODE]: { class_type: 'PreviewImage', inputs: { images: ['8', 0] } },
   };
+  if (family === 'zimage') {
+    wf[14] = { class_type: 'ModelSamplingAuraFlow', inputs: { model, shift: f.shift } };
+    wf[3].inputs.model = ['14', 0];
+  }
   if (family === 'flux') {
     wf[10] = { class_type: 'FluxGuidance', inputs: { conditioning: ['6', 0], guidance: f.guidance } };
     wf[3].inputs.positive = ['10', 0];
@@ -106,19 +169,54 @@ async function comfy(url, path, { method = 'GET', body, signal, timeoutMs = 1500
   return data;
 }
 
-// The checkpoints ComfyUI can load: [{ name, family }].
-async function listModels(url) {
+// A loader's list of files from /object_info (old style [[...]] or the newer
+// ['COMBO', { options }]), or [] when this ComfyUI doesn't say.
+async function loaderOptions(url, node, input) {
+  try {
+    const data = await comfy(url, `/object_info/${node}`, { timeoutMs: 8000 });
+    const spec = data?.[node]?.input?.required?.[input];
+    const list = Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options;
+    return Array.isArray(list) ? list.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+// What ComfyUI can load: checkpoints, plus (P3-24) image diffusion models with
+// the text encoders and VAEs they need. { models: [{ name, kind, family }],
+// clips, vaes, suggested: { flux: parts, zimage: parts } }.
+async function listAll(url) {
   const data = await comfy(url, '/object_info/CheckpointLoaderSimple', { timeoutMs: 8000 });
-  const names = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
+  const spec = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name;
+  const names = Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options;
   if (!Array.isArray(names)) throw fail('ENGINE', 'That address answered, but not like ComfyUI');
-  return names.map((name) => ({ name, family: guessFamily(name) }));
+  const [unets, clips, vaes] = await Promise.all([
+    loaderOptions(url, 'UNETLoader', 'unet_name'),
+    loaderOptions(url, 'CLIPLoader', 'clip_name'),
+    loaderOptions(url, 'VAELoader', 'vae_name'),
+  ]);
+  const models = names.map((name) => ({ name, kind: 'checkpoint', family: guessFamily(name) }));
+  for (const name of unets.filter((n) => !VIDEO.test(n))) {
+    const family = guessSplitFamily(name);
+    models.push({ name, kind: 'unet', family });
+  }
+  // The parts each split family probably wants (the same for every model of it).
+  const suggested = Object.fromEntries(SPLIT_FAMILIES.map((f) => [f, suggestParts(f, clips, vaes)]));
+  return { models, clips, vaes, suggested };
+}
+// Kept for callers that only need the model list.
+async function listModels(url) {
+  return (await listAll(url)).models;
 }
 
 // A /prompt refusal in plain words.
 function promptError(err, cfg) {
   const nodeErrors = err.data && err.data.node_errors ? Object.values(err.data.node_errors) : [];
   const all = nodeErrors.flatMap((n) => n.errors || []);
-  if (all.some((e) => /ckpt_name/.test(`${e.details || ''} ${e.message || ''}`))) return fail('ENGINE', `The model "${cfg.model}" isn't in ComfyUI any more`);
+  const says = (re) => all.some((e) => re.test(`${e.details || ''} ${e.message || ''}`));
+  if (says(/ckpt_name|unet_name/)) return fail('ENGINE', `The model "${cfg.model}" isn't in ComfyUI any more`);
+  if (says(/clip_name/)) return fail('ENGINE', `A text encoder (${[cfg.clip1, cfg.clip2].filter(Boolean).join(', ')}) isn't in ComfyUI any more`);
+  if (says(/vae_name/)) return fail('ENGINE', `The VAE "${cfg.vae}" isn't in ComfyUI any more`);
   const first = all[0] || err.data?.error;
   return fail('ENGINE', first ? `ComfyUI refused the workflow: ${first.message || first}` : err.message);
 }
@@ -201,26 +299,46 @@ function validateConfig(input, prev = {}) {
     if (!/^https?:$/.test(u.protocol) || u.username || u.password) return { error: 'The ComfyUI address must be http(s), without a username or password' };
     cfg.url = base(u.toString());
   }
+  if (i.kind !== undefined) {
+    if (i.kind !== 'checkpoint' && i.kind !== 'unet') return { error: 'Unknown model kind' };
+    cfg.kind = i.kind;
+  }
   if (i.model !== undefined) {
     if (i.model !== null && (typeof i.model !== 'string' || !i.model.trim() || i.model.length > 300)) return { error: 'Pick a model' };
     cfg.model = i.model;
-    if (i.family === undefined && i.model) cfg.family = guessFamily(i.model);
+    if (i.family === undefined && i.model) cfg.family = cfg.kind === 'unet' ? guessSplitFamily(i.model) : guessFamily(i.model);
+  }
+  // The parts of a split model (P3-24): file names from this ComfyUI's lists.
+  for (const k of ['clip1', 'clip2', 'vae']) {
+    if (i[k] === undefined) continue;
+    if (i[k] !== null && (typeof i[k] !== 'string' || !i[k].trim() || i[k].length > 300)) return { error: 'Pick the text encoders and VAE from the lists' };
+    cfg[k] = i[k];
   }
   if (i.family !== undefined) {
-    if (!FAMILIES[i.family]) return { error: 'The model type must be SD 1.5, SDXL or Flux' };
+    if (i.family !== null && !FAMILIES[i.family]) return { error: 'The model type must be SD 1.5, SDXL, Flux or Z-Image Turbo' };
     cfg.family = i.family;
+  }
+  cfg.kind = cfg.kind || 'checkpoint';
+  if (cfg.kind === 'unet') {
+    if (cfg.model && !SPLIT_FAMILIES.includes(cfg.family)) return { error: 'For a model in separate parts, pick its type: Flux or Z-Image Turbo' };
+    if (cfg.enabled && (!cfg.clip1 || !cfg.vae || (cfg.family === 'flux' && !cfg.clip2))) {
+      return { error: cfg.family === 'flux' ? 'Pick both text encoders and the VAE for this model' : 'Pick the text encoder and the VAE for this model' };
+    }
+  } else if (FAMILIES[cfg.family]?.splitOnly) {
+    return { error: 'Z-Image Turbo comes as separate parts, not a checkpoint' };
   }
   if (i.tier !== undefined) {
     if (!TIERS[i.tier]) return { error: 'The VRAM tier must be low, medium or high' };
     cfg.tier = i.tier;
   }
   cfg.tier = cfg.tier || 'medium';
-  cfg.family = cfg.family || (cfg.model ? guessFamily(cfg.model) : 'sdxl');
+  if (cfg.kind === 'checkpoint') cfg.family = cfg.family || (cfg.model ? guessFamily(cfg.model) : 'sdxl');
   if (cfg.enabled && (!cfg.url || !cfg.model)) return { error: 'Set the ComfyUI address and pick a model before turning it on' };
   return cfg;
 }
 const publicConfig = (cfg = {}) => ({
   enabled: !!cfg.enabled, url: cfg.url || '', model: cfg.model || null, family: cfg.family || null, tier: cfg.tier || 'medium',
+  kind: cfg.kind || 'checkpoint', clip1: cfg.clip1 || null, clip2: cfg.clip2 || null, vae: cfg.vae || null,
 });
 
 module.exports = {
@@ -232,7 +350,10 @@ module.exports = {
   costOf: () => 0,
   generate,
   listModels,
+  listAll,
   guessFamily,
+  guessSplitFamily,
+  suggestParts,
   sizeFor,
   buildWorkflow,
   FAMILIES,
