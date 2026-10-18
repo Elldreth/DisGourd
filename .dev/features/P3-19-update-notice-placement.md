@@ -31,7 +31,7 @@ When a new build is installed behind the open one, the app shows "A new version 
 ## Evidence (2026-10-18)
 | Acceptance criterion | Evidence |
 |---|---|
-| Notice at the top, not over the composer | `Toasts.test.jsx` "a top toast (the update notice) shows in the top list…". Live: a throwaway server on :3007 (a copy of the sandbox DB, this branch's build). Changing `dist/sw.js` and calling `registration.update()` raised the real notice at y 56–96 px; the composer was at y 704–740 (1024 wide), and it sat just under the header at 375 px wide |
+| Notice at the top, not over the composer | `Toasts.test.jsx` "a top toast (the update notice) shows in the top list…". Live: a throwaway server on :3007 (a copy of the sandbox DB, this branch's build). Changing `dist/sw.js` and calling `registration.update()` raised the real notice at y 56–96 px; the composer was at y 704–740 at desktop width, and it sat just under the header at 375 px wide |
 | Reload reachable, Dismiss works | `Toasts.test.jsx` "a dismissible toast closes from its Dismiss button without running its action". Live: Dismiss emptied the live region, the page did not reload, and the new worker stayed waiting |
 | Other toasts unchanged | `Toasts.test.jsx` existing tests, plus "toasts are not dismissible unless asked" and the bottom-list check |
 | Suites pass | Web: 69 files, 591 tests. `vite build` clean |
