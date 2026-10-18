@@ -125,3 +125,18 @@ test('imagineFor sends the request to that server and channel (or thread)', asyn
   expect(request).toHaveBeenCalledWith({ space: 'Tx', channel: '~t42', prompt: 'a cat', shape: 'square', quality: 'draft' });
   expect(imagineFor(spaces, 'Other', 'general', request)).toBeNull(); // a server without /imagine info
 });
+
+test('a paid engine shows its price for the chosen quality', () => {
+  const engines = [
+    { id: 'comfyui', name: 'ComfyUI' },
+    { id: 'kie', name: 'kie.ai', price: { draft: { credits: 0.8, estimate: true }, standard: { credits: 0.8, estimate: true }, high: { credits: 5.5, estimate: false } } },
+  ];
+  const { type } = setup({ imagine: imagineState(info({ engines }), vi.fn()) });
+  type('/imagine a fox');
+  const panel = screen.getByRole('region', { name: 'Image options' });
+  expect(within(panel).getByText('3 left today', { exact: false }).textContent).not.toMatch(/credits/); // ComfyUI is free
+  fireEvent.click(within(panel).getByRole('button', { name: 'kie.ai' }));
+  expect(within(panel).getByText(/≈ 0.8 credits/)).toBeTruthy();
+  fireEvent.click(within(panel).getByRole('button', { name: 'High' }));
+  expect(within(panel).getByText(/^5.5 credits/)).toBeTruthy();
+});

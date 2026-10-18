@@ -111,6 +111,10 @@ export function saveImagineSettings(settings) {
 export function testComfyUI(url) {
   return request('/admin/imagine/comfyui/test', { method: 'POST', body: { url } });
 }
+// Check a kie.ai key (the given one, or the saved one when blank): { credits }.
+export function testKie(apiKey) {
+  return request('/admin/imagine/kie/test', { method: 'POST', body: { apiKey } });
+}
 // One test image from an engine's saved settings: { url, width, height, ms }.
 export function tryImagine(body) {
   return request('/admin/imagine/try', { method: 'POST', body });

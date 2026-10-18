@@ -65,7 +65,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-20 | /imagine with two engines, local ComfyUI or kie.ai (Container: a–d) | 2 | PLANNED | L | P2-21 | server/imagine/*, bot user, admin page, Composer |
 | P2-20a | Imagine core: bot user, settings, permission, limits, job runner, fake engine | 2 | COMPLETE | M | P2-21 | migrations, db, server/imagine/*, gateway, admin + spaces routes |
 | P2-20b | ComfyUI engine + Image generation settings section | 2 | COMPLETE | M | P2-20a | server/imagine/engines/comfyui.js, admin routes, ImagineAdmin |
-| P2-20d | /imagine in chat: panel, server + 18+ switches, bot badge | 2 | REVIEW | M | P2-20a, P2-20b | Composer, ImaginePanel, ServerImagineDialog, ChannelSettingsDialog, MessageList |
+| P2-20c | kie.ai engine: model catalogue, real prices, monthly credit cap | 2 | REVIEW | M | P2-20a, b, d | server/imagine/engines/kie.js, admin routes, ImagineAdmin, ImaginePanel |
+| P2-20d | /imagine in chat: panel, server + 18+ switches, bot badge | 2 | COMPLETE | M | P2-20a, P2-20b | Composer, ImaginePanel, ServerImagineDialog, ChannelSettingsDialog, MessageList |
 | P2-21 | Custom roles (Container: a–d) | 2 | COMPLETE | L | see packet | permissions.js, migrations, UI |
 | P2-21a | Roles schema seeded from tiers + a resolver that agrees with today's checks | 2 | COMPLETE | M | P1-01, P1-06 | migrations, db, permissions.js |
 | P2-21b | Permission resolution switched to roles | 2 | COMPLETE | M | P2-21a | permissions.js, db queries, routes, gateway |

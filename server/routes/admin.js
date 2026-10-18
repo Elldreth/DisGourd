@@ -30,15 +30,25 @@ const routes = [
     // quality } — one test image from an engine's saved settings.
     match: ({ req, pathSegments }) =>
       pathSegments[0] === 'admin' && pathSegments[1] === 'imagine' && req.method === 'POST' &&
-      ((pathSegments[2] === 'comfyui' && pathSegments[3] === 'test' && pathSegments.length === 4) || (pathSegments[2] === 'try' && pathSegments.length === 3)),
+      (((pathSegments[2] === 'comfyui' || pathSegments[2] === 'kie') && pathSegments[3] === 'test' && pathSegments.length === 4) || (pathSegments[2] === 'try' && pathSegments.length === 3)),
     run: async ({ req, res, parsedUrl, pathSegments }) => {
       const userId = authUserId(req, parsedUrl);
       if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
       if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can change this' });
       const body = await getJsonBody(req);
       if (pathSegments[2] === 'try') {
-        const out = await imagine.tryEngine(body);
+        const out = await imagine.tryEngine(body, userId);
         return out.error ? sendJson(res, 400, out) : sendJson(res, 200, out);
+      }
+      // POST /admin/imagine/kie/test { apiKey? } — the key given, or the saved one.
+      if (pathSegments[2] === 'kie') {
+        const kie = imagine.ENGINES.get('kie');
+        const key = typeof body.apiKey === 'string' && body.apiKey.trim() ? body.apiKey.trim() : kie.keyOf(imagine.getSettings().engines.kie || {});
+        try {
+          return sendJson(res, 200, await kie.testKey(key));
+        } catch (err) {
+          return sendJson(res, 400, { error: err.message });
+        }
       }
       const comfy = imagine.ENGINES.get('comfyui');
       const checked = comfy.validateConfig({ url: body.url });

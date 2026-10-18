@@ -24,12 +24,22 @@ const QUALITIES = [
 ];
 const heading = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400';
 
+// A kie.ai price for display: the last real one, or an estimate (P2-20c).
+export function priceLabel(p) {
+  if (!p) return 'price unknown until first use';
+  return p.estimate ? `≈ ${p.credits} credits (est.)` : `${p.credits} credits`;
+}
+
 // Site-admin panel (P2-20b): /imagine on this instance. ComfyUI's address, a
 // model picked from what that ComfyUI has, its type and the VRAM tier; the
 // daily allowance and the 18+ switch; and a test image to try it all out.
 export default function ImagineAdmin() {
   const [data, setData] = useState(null);
   const [comfy, setComfy] = useState(null); // the ComfyUI draft
+  const [kie, setKie] = useState(null); // the kie.ai draft (never holds the saved key)
+  const [kieKey, setKieKey] = useState(''); // a new key typed in, sent once on Save
+  const [kieNote, setKieNote] = useState({ text: '', ok: false });
+  const [defaultEngine, setDefaultEngine] = useState(null);
   const [general, setGeneral] = useState(null); // { dailyLimit, permissive }
   const [models, setModels] = useState(null); // [{ name, family }] once tested
   const [filter, setFilter] = useState('');
@@ -38,7 +48,7 @@ export default function ImagineAdmin() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  const [tryForm, setTryForm] = useState({ prompt: '', shape: 'square', quality: 'standard' });
+  const [tryForm, setTryForm] = useState({ engine: '', prompt: '', shape: 'square', quality: 'standard' });
   const [trying, setTrying] = useState(false);
   const [result, setResult] = useState(null);
   const [tryError, setTryError] = useState('');
@@ -47,6 +57,10 @@ export default function ImagineAdmin() {
     setData(view);
     const c = view.engines.find((e) => e.id === 'comfyui')?.config || {};
     setComfy({ enabled: !!c.enabled, url: c.url || '', model: c.model || '', family: c.family || 'sdxl', tier: c.tier || 'medium' });
+    const k = view.engines.find((e) => e.id === 'kie')?.config || {};
+    setKie({ enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' });
+    setKieKey('');
+    setDefaultEngine(view.defaultEngine);
     setGeneral({ dailyLimit: view.dailyLimit, permissive: !!view.permissive });
     return c;
   }
@@ -83,14 +97,36 @@ export default function ImagineAdmin() {
     setComfy((c) => ({ ...c, model: name, family: m ? m.family : c.family }));
   }
 
+  async function testKie() {
+    setKieNote({ text: 'Checking…', ok: false });
+    try {
+      const { credits } = await api.testKie(kieKey);
+      setKieNote({ text: `The key works · ${credits ?? '?'} credits left`, ok: true });
+    } catch (err) {
+      setKieNote({ text: err.message || 'Could not check the key', ok: false });
+    }
+  }
+
   async function save() {
     setSaving(true);
     setError('');
     setSaved(false);
+    // The default: the chosen one if it's on, else whichever engine is on.
+    const on = [comfy.enabled && 'comfyui', kie.enabled && 'kie'].filter(Boolean);
+    const chosenDefault = on.includes(defaultEngine) ? defaultEngine : on[0] || data.defaultEngine;
     try {
       const view = await api.saveImagineSettings({
-        engines: { comfyui: { enabled: comfy.enabled, url: comfy.url, model: comfy.model || null, family: comfy.family, tier: comfy.tier } },
-        defaultEngine: comfy.enabled ? 'comfyui' : data.defaultEngine,
+        engines: {
+          comfyui: { enabled: comfy.enabled, url: comfy.url, model: comfy.model || null, family: comfy.family, tier: comfy.tier },
+          kie: {
+            enabled: kie.enabled,
+            model: kie.model || undefined,
+            customModel: kie.customModel,
+            monthlyCredits: kie.monthlyCredits === '' ? null : Number(kie.monthlyCredits),
+            ...(kieKey.trim() ? { apiKey: kieKey.trim() } : {}),
+          },
+        },
+        defaultEngine: chosenDefault,
         dailyLimit: general.dailyLimit,
         permissive: general.permissive,
       });
@@ -109,7 +145,7 @@ export default function ImagineAdmin() {
     setTryError('');
     setResult(null);
     try {
-      setResult(await api.tryImagine({ engine: 'comfyui', ...tryForm }));
+      setResult(await api.tryImagine({ ...tryForm, engine: tryForm.engine || tryEngines[0]?.id }));
     } catch (err) {
       setTryError(err.message || 'Could not generate');
     } finally {
@@ -120,6 +156,18 @@ export default function ImagineAdmin() {
   if (!data || !comfy) return <div className="text-sm text-gray-500">{error || 'Loading…'}</div>;
 
   const savedComfy = data.engines.find((e) => e.id === 'comfyui')?.config || {};
+  const kieEngine = data.engines.find((e) => e.id === 'kie');
+  const savedKie = kieEngine?.config || {};
+  const kieModels = kieEngine?.models || [];
+  const kieModel = kieModels.find((m) => m.id === kie.model);
+  // Engines with saved settings, for the test image.
+  const tryEngines = [
+    savedComfy.model && { id: 'comfyui', name: 'ComfyUI', detail: savedComfy.model },
+    savedKie.model && (savedKie.keySaved || savedKie.envKey) && {
+      id: 'kie', name: 'kie.ai', detail: savedKie.model === 'custom' ? savedKie.customModel : kieModels.find((m) => m.id === savedKie.model)?.name,
+    },
+  ].filter(Boolean);
+  const bothOn = comfy.enabled && kie.enabled;
   const list = (models || (comfy.model ? [{ name: comfy.model, family: comfy.family }] : [])).filter(
     (m) => !filter || m.name.toLowerCase().includes(filter.toLowerCase()) || m.name === comfy.model
   );
@@ -200,6 +248,101 @@ export default function ImagineAdmin() {
         </fieldset>
       </fieldset>
 
+      <fieldset className="space-y-3 rounded-lg bg-ink-900/60 p-3">
+        <legend className="sr-only">kie.ai</legend>
+        <label className="flex items-center gap-2 text-sm font-semibold text-gray-200">
+          <input type="checkbox" checked={kie.enabled} onChange={(e) => setKie((k) => ({ ...k, enabled: e.target.checked }))} className="h-4 w-4 accent-brand" />
+          Use kie.ai (paid, with your API key)
+        </label>
+        <div>
+          <label htmlFor="imagine-kie-key" className={heading}>kie.ai API key</label>
+          {savedKie.envKey ? (
+            <p className="text-sm text-gray-400">Using the KIEAI_API_KEY set in the server’s environment.</p>
+          ) : (
+            <input
+              id="imagine-kie-key"
+              type="password"
+              autoComplete="off"
+              value={kieKey}
+              onChange={(e) => setKieKey(e.target.value)}
+              placeholder={savedKie.keySaved ? `A key is saved (${savedKie.keyHint}) — type to replace it` : 'Paste your kie.ai API key'}
+              className="input"
+            />
+          )}
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={testKie}
+              disabled={!kieKey.trim() && !savedKie.keySaved && !savedKie.envKey}
+              className="rounded-lg bg-ink-600 px-3 py-1.5 text-sm font-medium text-fg hover:bg-ink-500 disabled:opacity-60"
+            >
+              Test key
+            </button>
+            {kieNote.text && <span role="status" className={`text-xs ${kieNote.ok ? 'text-online' : 'text-gray-400'}`}>{kieNote.text}</span>}
+          </div>
+          <p className="mt-1 text-xs text-gray-500">The key stays on the server; it’s never shown again or sent to anyone’s browser.</p>
+        </div>
+        <div>
+          <label htmlFor="imagine-kie-model" className={heading}>kie.ai model</label>
+          <select id="imagine-kie-model" value={kie.model} onChange={(e) => setKie((k) => ({ ...k, model: e.target.value }))} className="input">
+            <option value="">Pick a model…</option>
+            {kieModels.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id === 'custom' ? 'Custom model ID…' : `${m.name} — ${priceLabel(m.price)}`}
+              </option>
+            ))}
+          </select>
+          {kieModel && (
+            <p className="mt-1 text-xs text-gray-500">
+              {kieModel.note} {kieModel.filterable ? 'Content filter on outside 18+ channels.' : ''}
+            </p>
+          )}
+          {kie.model === 'custom' && (
+            <input
+              aria-label="Custom model ID"
+              value={kie.customModel}
+              onChange={(e) => setKie((k) => ({ ...k, customModel: e.target.value }))}
+              placeholder="vendor/model-name, as kie.ai lists it"
+              className="input mt-2"
+            />
+          )}
+        </div>
+        <div>
+          <label htmlFor="imagine-kie-cap" className={heading}>Monthly credit cap</label>
+          <input
+            id="imagine-kie-cap"
+            type="number"
+            min={0}
+            value={kie.monthlyCredits}
+            onChange={(e) => setKie((k) => ({ ...k, monthlyCredits: e.target.value }))}
+            placeholder="No cap"
+            className="input w-40"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            /imagine stops using kie.ai for the rest of the month once this many credits are used. Prices change and new models appear:
+            check{' '}
+            <a href="https://kie.ai/pricing" target="_blank" rel="noreferrer" className="text-brand-hi underline">kie.ai’s pricing</a> and{' '}
+            <a href="https://kie.ai/market" target="_blank" rel="noreferrer" className="text-brand-hi underline">model list</a>. Prices here are the last
+            real cost DisGourd saw.
+          </p>
+        </div>
+      </fieldset>
+
+      {bothOn && (
+        <fieldset>
+          <legend className={heading}>Default engine</legend>
+          <div className="flex gap-4 text-sm text-gray-200">
+            {[['comfyui', 'ComfyUI'], ['kie', 'kie.ai']].map(([id, name]) => (
+              <label key={id} className="flex items-center gap-1.5">
+                <input type="radio" name="imagine-default" checked={(defaultEngine || 'comfyui') === id} onChange={() => setDefaultEngine(id)} className="accent-brand" />
+                {name}
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-gray-500">People can still pick the other one in the /imagine panel.</p>
+        </fieldset>
+      )}
+
       <fieldset className="space-y-3">
         <legend className="sr-only">For everyone</legend>
         <div>
@@ -243,8 +386,8 @@ export default function ImagineAdmin() {
 
       <form onSubmit={tryIt} className="space-y-2 rounded-lg bg-ink-900/60 p-3" aria-label="Generate a test image">
         <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">Generate a test image</div>
-        {!savedComfy.model ? (
-          <p className="text-sm text-gray-500">Save an address and a model first.</p>
+        {!tryEngines.length ? (
+          <p className="text-sm text-gray-500">Save an engine’s settings first.</p>
         ) : (
           <>
             <input
@@ -256,6 +399,11 @@ export default function ImagineAdmin() {
               className="input"
             />
             <div className="flex flex-wrap gap-2">
+              {tryEngines.length > 1 && (
+                <select aria-label="Engine" value={tryForm.engine || tryEngines[0].id} onChange={(e) => setTryForm((f) => ({ ...f, engine: e.target.value }))} className="input w-auto">
+                  {tryEngines.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              )}
               <select aria-label="Shape" value={tryForm.shape} onChange={(e) => setTryForm((f) => ({ ...f, shape: e.target.value }))} className="input w-auto">
                 {SHAPES.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
               </select>
@@ -270,7 +418,9 @@ export default function ImagineAdmin() {
                 {trying ? 'Generating…' : 'Generate'}
               </button>
             </div>
-            <p className="text-xs text-gray-500">Uses the saved settings ({savedComfy.model}).</p>
+            <p className="text-xs text-gray-500">
+              Uses the saved settings ({(tryEngines.find((e) => e.id === tryForm.engine) || tryEngines[0]).detail}).
+            </p>
           </>
         )}
         {tryError && <div role="alert" className="text-sm text-danger">{tryError}</div>}
@@ -278,7 +428,8 @@ export default function ImagineAdmin() {
           <figure>
             <img src={result.url} alt={`Test image: ${tryForm.prompt}`} className="max-h-80 rounded-lg" />
             <figcaption className="mt-1 text-xs text-gray-400">
-              {result.width}×{result.height} · {(result.ms / 1000).toFixed(1)} s
+              {result.width && result.height ? `${result.width}×${result.height} · ` : ''}
+              {(result.ms / 1000).toFixed(1)} s{result.cost != null ? ` · ${result.cost} credits` : ''}
             </figcaption>
           </figure>
         )}
