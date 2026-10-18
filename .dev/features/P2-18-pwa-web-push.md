@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 2, rank 10
-- **State:** PLANNED (P2-18a COMPLETE #113; P2-18b ACTIVE, packet P2-18b-web-push.md)
+- **State:** COMPLETE (P2-18a #113, P2-18b #114; 2026-10-18)
 - **Effort:** M (total)
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #10
 

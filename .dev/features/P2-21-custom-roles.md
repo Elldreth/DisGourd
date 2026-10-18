@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 2, rank 13
-- **State:** PLANNED
+- **State:** PLANNED (P2-21a ACTIVE; child packets written as each starts)
 - **Effort:** L
 - **Requirement Source:** IMPROVEMENT-PLAN.md Phase 2 #13
 
@@ -20,5 +20,8 @@ It touches the data model, the authorisation logic across every gate, and a comp
 | P2-21c | Role management UI (create, reorder, colour, permission matrix) | P2-21b, P3-01 | Role hierarchy enforced: you can't edit roles at or above your highest. Keyboard-accessible matrix. |
 | P2-21d | Role colours in names and member-list grouping | P2-21c | Author names take the colour of their highest coloured role. Contrast-checked against both themes. |
 
-## Open questions
-- FLAG: Discord-style bitset permissions, or keep named thresholds? This is a design decision for the human.
+## Decisions (user, 2026-10-18)
+| Question | Decision |
+|---|---|
+| Permission model | **Named permissions per role.** Each role carries a list of named actions it allows (the existing action names: `create_channel`, `delete_channel`, `invite`, `kick`, `edit_server`, `delete_others_messages`, `pin_messages`, `manage_emoji`, `manage_roles`), and a channel can allow or deny a role to view or post. Stored as names (JSON), not a bit field. |
+| Start | Now, as four PRs in the order a → b → c → d. |

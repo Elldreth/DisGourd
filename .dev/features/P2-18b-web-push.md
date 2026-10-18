@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-18)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #114, 2026-10-18)
 - **Effort:** M
 - **Depends on:** P2-18a (service worker), P2-04 (notification settings), P2-14 (Do Not Disturb), P1-01, P1-05
 - **Serialize with:** `server/gateway/chat.js`, `server/gateway/dm.js`, `web/sw.js`, `web/src/pwa.js`, `NotificationSettings.jsx`, `App.jsx`

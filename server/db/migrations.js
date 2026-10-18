@@ -389,6 +389,45 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 12,
+    name: 'roles',
+    up(db) {
+      // Custom roles (P2-21a). A server's roles, who holds which, and per-channel
+      // allow/deny overrides. Seeded from the fixed tiers by db/index.js
+      // (syncSpaceRoles) right after this migration runs; until P2-21b the old
+      // tier columns stay the ones the checks read.
+      db.exec(`
+        CREATE TABLE roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          color TEXT,
+          position INTEGER NOT NULL DEFAULT 0,
+          permissions TEXT NOT NULL DEFAULT '[]',
+          is_default INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          UNIQUE (space_id, name)
+        );
+        CREATE INDEX idx_roles_space ON roles(space_id, position);
+        CREATE TABLE member_roles (
+          space_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+          PRIMARY KEY (user_id, role_id),
+          FOREIGN KEY (space_id, user_id) REFERENCES space_members(space_id, user_id) ON DELETE CASCADE
+        );
+        CREATE INDEX idx_member_roles_member ON member_roles(space_id, user_id);
+        CREATE TABLE channel_role_overrides (
+          channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+          role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+          view INTEGER,
+          post INTEGER,
+          PRIMARY KEY (channel_id, role_id)
+        );
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
