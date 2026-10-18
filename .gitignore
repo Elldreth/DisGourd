@@ -16,6 +16,7 @@ server/db/backups/
 .env.local
 *.local
 server/.jwt-secret
+server/.vapid.json
 
 # Logs
 *.log

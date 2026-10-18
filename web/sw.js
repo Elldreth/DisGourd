@@ -45,6 +45,44 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// A push from the server (an @mention or a DM while no tab was open): show it.
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { title: 'DisGourd' };
+  }
+  const data = payload.data || {};
+  const tag = data.dm ? `dm:${data.dm}` : `ch:${data.space}:${data.channel}`;
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'DisGourd', {
+      body: payload.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag,
+      data,
+    })
+  );
+});
+
+// Clicking it: bring an open DisGourd tab to the front and ask it to open
+// the place, or open a new one at /?open=… (the app reads that once).
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const client = list.find((c) => 'focus' in c);
+      if (client) {
+        client.postMessage({ type: 'OPEN', data });
+        return client.focus();
+      }
+      return self.clients.openWindow(`/?open=${encodeURIComponent(JSON.stringify(data))}`);
+    })
+  );
+});
+
 // The page asks a waiting worker to take over (the "Reload" in the update toast).
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-18)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #113, 2026-10-18)
 - **Effort:** S–M
 - **Depends on:** P1-04 (`static.js` serves the built client)
 - **Serialize with:** `server/static.js`, `web/vite.config.js`, `web/src/App.jsx`

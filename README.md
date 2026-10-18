@@ -181,6 +181,7 @@ All settings are optional and provided via environment variables (or
 | `BACKUP_INTERVAL_HOURS` | `24`                | How often to take a backup                         |
 | `BACKUP_KEEP`      | `7`                      | How many backups to keep (oldest are deleted)      |
 | `THREAD_ARCHIVE_DAYS` | `7`                   | Threads with no new reply for this many days are archived (a new reply reopens them) |
+| `VAPID_CONTACT`    | `mailto:admin@disgourd.local` | Contact address sent to push services with web push notifications. The signing keys are generated on first run and kept in `.vapid.json` next to the database |
 
 Example (Linux/macOS):
 

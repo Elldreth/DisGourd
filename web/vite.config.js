@@ -24,7 +24,7 @@ const wsServer = server.replace(/^http/, 'ws');
 
 // Same-origin paths the frontend calls; each is proxied to the backend in dev
 // so the client can use plain relative URLs and there are no CORS headaches.
-const apiPaths = ['/register', '/login', '/auth-info', '/uploads', '/media', '/spaces', '/friends', '/admin'];
+const apiPaths = ['/register', '/login', '/auth-info', '/uploads', '/media', '/spaces', '/friends', '/admin', '/push'];
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), serviceWorker()],

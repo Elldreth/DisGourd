@@ -1,6 +1,7 @@
 // Gateway ops for direct messages.
 const WebSocket = require('ws');
 const db = require('../db');
+const push = require('../push');
 const { MAX_MESSAGE_LENGTH, normalizeAttachments } = require('../validate');
 const { userClients, sendToUser } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
@@ -54,6 +55,10 @@ const ops = {
     sendToUser(userId, frame);
     sendToUser(to.id, frame);
     if (content) previewDm({ id: stored.id, a: userId, b: to.id }, content, userId);
+    // A DM to someone with no tab open gets a push (P2-18b).
+    const sender = db.getUserById(userId);
+    const senderName = sender ? sender.username : String(userId);
+    push.notifyIfAway(to.id, { title: senderName, body: push.preview(content, attachments), data: { dm: senderName } }).catch(() => {});
     return;
   },
   dm_edit({ ws, msg, userId }) {

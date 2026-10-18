@@ -860,6 +860,25 @@ function getMentionCounts(userId) {
   `).all(userId, userId).map(withParent);
 }
 
+// ---- Web Push subscriptions (P2-18b) ----
+function getPushSubscriptions(userId) {
+  return db.prepare('SELECT id, endpoint, p256dh, auth, previews FROM push_subscriptions WHERE user_id = ? ORDER BY id').all(userId);
+}
+// Save a browser's subscription (an endpoint already saved moves to this
+// user and takes the new keys and preview choice).
+function savePushSubscription(userId, subscription, previews = true) {
+  db.prepare(`
+    INSERT INTO push_subscriptions(user_id, endpoint, p256dh, auth, previews, created_at) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, previews = excluded.previews
+  `).run(userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, previews ? 1 : 0, Date.now());
+}
+function deletePushSubscription(userId, endpoint) {
+  return db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(userId, endpoint).changes > 0;
+}
+function deletePushEndpoint(endpoint) {
+  return db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint).changes > 0;
+}
+
 // ---- Thread follows ----
 // The channel id of a thread (null if that name isn't a thread here).
 function threadChannelId(spaceName, channelName) {
@@ -1342,7 +1361,7 @@ const storeMessageWithMentions = db.transaction(
     if (threadId) {
       for (const uid of [authorId, ...mentionedIds]) if (uid && followThread(uid, threadId)) newFollows.push(uid);
     }
-    return { ...stored, mentions, newFollows };
+    return { ...stored, mentions, mentionedIds, newFollows };
   }
 );
 
@@ -1461,6 +1480,10 @@ module.exports = {
   unfollowThread,
   isFollowingThread,
   getThreadFollows,
+  getPushSubscriptions,
+  savePushSubscription,
+  deletePushSubscription,
+  deletePushEndpoint,
   getReplyTarget,
   deleteMessageById,
   getCoMemberIds,
