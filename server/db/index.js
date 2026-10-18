@@ -1802,6 +1802,10 @@ function updateImagineJob(id, fields) {
 function getImagineJob(id) {
   return db.prepare('SELECT * FROM imagine_jobs WHERE id = ?').get(id);
 }
+// The job behind one of the bot's messages (P3-23: Retry and Variations).
+function getImagineJobByMessage(messageId) {
+  return db.prepare('SELECT * FROM imagine_jobs WHERE message_id = ? ORDER BY id DESC LIMIT 1').get(messageId);
+}
 // How many images a user asked for in chat since `since` (failures and
 // admins' test images don't count).
 function countImagineJobsSince(userId, since) {
@@ -1945,6 +1949,7 @@ module.exports = {
   createImagineJob,
   updateImagineJob,
   getImagineJob,
+  getImagineJobByMessage,
   countImagineJobsSince,
   lastImagineCost,
   imagineCreditsSince,

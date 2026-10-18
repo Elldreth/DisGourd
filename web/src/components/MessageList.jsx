@@ -3,6 +3,7 @@ import RoleName from './RoleName.jsx';
 import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
 import Embed from './Embed.jsx';
+import ImagineAgain, { imagineResultKind } from './ImagineAgain.jsx';
 import Icon from './Icon.jsx';
 import EmptyState from './EmptyState.jsx';
 import { MessageToolbar, ActionMenu, ReactionPicker } from './MessageActions.jsx';
@@ -81,7 +82,7 @@ function mentionsUser(content, me) {
 // `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
 // an original that isn't loaded, and, while that older window is showing
 // (`history.hasNewer`), offers newer pages and "Jump to present".
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, onHidePreview, simple = false, emptyHeading, emptyBody, emptyIcon = null, emptyArt = null, topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label, emoji = [] }, ref) {
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, onHidePreview, imagineAgain = null, simple = false, emptyHeading, emptyBody, emptyIcon = null, emptyArt = null, topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label, emoji = [] }, ref) {
   const bottomRef = useRef(null);
   const emojiMap = useMemo(() => emojiLookup(emoji), [emoji]);
   const emojiById = useMemo(() => new Map(emoji.map((e) => [e.id, e])), [emoji]);
@@ -464,6 +465,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               onDelete={onDelete}
               canDelete={!!onDelete && (row.m.author === currentUser || !!canModerate?.(row.m.author))}
               onHidePreview={onHidePreview && (row.m.author === currentUser || canModerate?.(row.m.author)) ? () => onHidePreview(row.m) : undefined}
+              imagineAgain={imagineAgain}
               onReact={onReact}
               onReply={onReply}
               onPin={onPin}
@@ -509,7 +511,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
 
 export default MessageList;
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onHidePreview, onReact, onReply, onPin, onCreateThread, onOpenThread, threadBadge, emoji, emojiMap, emojiById, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onHidePreview, imagineAgain, onReact, onReply, onPin, onCreateThread, onOpenThread, threadBadge, emoji, emojiMap, emojiById, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
   const [draft, setDraft] = useState(m.content || '');
   const editRef = useRef(null);
   // Entering edit mode (from this row or the composer's up arrow): start from
@@ -846,6 +848,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
               />
             )}
             {m.embeds?.map((e) => <Embed key={e.url} embed={e} onHide={onHidePreview} />)}
+            {imagineAgain && imagineResultKind(m) && <ImagineAgain m={m} kind={imagineResultKind(m)} run={imagineAgain} />}
             {m.thread && onOpenThread && <ThreadSummary thread={m.thread} badge={threadBadge?.(m.thread.channel)} onOpen={(el) => onOpenThread(m.thread, m, el)} />}
             {reactions.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1 coarse:gap-2">

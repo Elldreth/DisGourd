@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #133)
 - **Effort:** XS
 - **Depends on:** P2-20d (18+ tag). Branched from P3-21 (#132) only to keep INDEX.md conflict-free; merge after it.
 - **Requirement Source:** the user, 2026-10-18: with an 18+ channel selected, the channel-settings gear sits over the 18+ tag, hiding it.

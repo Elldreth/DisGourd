@@ -101,8 +101,13 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-20a | Channel topics | 3 | COMPLETE | M | none | migrations, routes/spaces.js, ChatPanel, ChannelSettingsDialog |
 | P3-20b | Small fixes: first server from the empty screen, DM divider, offline contrast, link underline | 3 | COMPLETE | S–M | none | ChatPanel, ServerRail, useDms, MemberList, index.css |
 | P3-20c | Hide preview (authors and moderators remove link cards) | 3 | COMPLETE | S–M | none | migrations, linkPreviews.js, routes, Embed, MessageList |
-| P3-21 | Say where the /imagine daily limit comes from | 3 | REVIEW | S | P2-20 | server/imagine/index.js, ImaginePanel, ImagineAdmin, ServerImagineDialog |
-| P3-22 | The channel gear no longer covers the 18+ tag | 3 | REVIEW | XS | P2-20d | ChannelList.jsx |
+| P3-21 | Say where the /imagine daily limit comes from | 3 | COMPLETE | S | P2-20 | server/imagine/index.js, ImaginePanel, ImagineAdmin, ServerImagineDialog |
+| P3-22 | The channel gear no longer covers the 18+ tag | 3 | COMPLETE | XS | P2-20d | ChannelList.jsx |
+| P3-23 | /imagine Retry and Variations | 3 | REVIEW | S–M | P2-20, P3-21 | server/imagine/index.js, db (job by message), MessageList, ChatPanel |
+| P3-24 | ComfyUI models that aren't single checkpoint files | 3 | PLANNED | M | P2-20b | engines/comfyui.js, ImagineAdmin |
+| P3-25 | Channel categories (packet to plan with the user) | 3 | PLANNED | M–L | none | migrations, ChannelList, routes/spaces.js |
+| P3-26 | Moderation tools (packet to plan with the user) | 3 | PLANNED | L | P2-21 | tbd |
+| P3-27 | Message edit history (packet to plan with the user) | 3 | PLANNED | M | none | migrations, chat gateway, MessageList |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
 | P4-02 | Settings with section navigation | 4 | COMPLETE | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |

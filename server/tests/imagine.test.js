@@ -260,6 +260,43 @@ test('the limit refusal says where the number is set (server, instance or ceilin
   await call('owner', 'PUT', '/admin/imagine', { dailyCeiling: before.dailyCeiling, dailyLimit: before.dailyLimit });
 });
 
+test('Retry and Variations: `from` repeats a finished request in the same channel, for whoever presses it', async () => {
+  await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: 100 });
+  const first = await ask('artist', { prompt: 'a gourd on the moon', shape: 'wide', quality: 'draft' });
+  await until(() => db.getImagineJob(first.jobId).status === 'done');
+  // Someone else presses Variations: same prompt and options, under their name.
+  const usedBefore = db.countImagineJobsSince(users.owner.id, 0);
+  const again = await ask('owner', { prompt: undefined, from: first.messageId });
+  expect(again).toMatchObject({ space: SPACE, channel: 'general' });
+  expect(again.messageId).not.toBe(first.messageId);
+  expect(db.getImagineJob(again.jobId)).toMatchObject({ user_id: users.owner.id, prompt: 'a gourd on the moon', shape: 'wide', quality: 'draft', engine: 'fake' });
+  await until(() => db.getImagineJob(again.jobId).status === 'done');
+  expect(botMessage(again.messageId).content).toBe('🎨 **owner** imagined: a gourd on the moon');
+  expect(db.countImagineJobsSince(users.owner.id, 0)).toBe(usedBefore + 1); // counts toward the presser's limit
+  // A failed one can be retried.
+  const failed = await ask('artist', { prompt: 'retry me [fail]' });
+  await until(() => db.getImagineJob(failed.jobId).status === 'failed');
+  const retried = await ask('artist', { prompt: undefined, from: failed.messageId });
+  expect(db.getImagineJob(retried.jobId).prompt).toBe('retry me [fail]');
+  await until(() => imagine.idle());
+  // Refused: a running job, another channel, an unknown id, an ordinary message.
+  const slow = await ask('artist', { prompt: 'still going [slow]' });
+  expect(await ask('artist', { prompt: undefined, from: slow.messageId })).toBe('NOT_FOUND');
+  await until(() => imagine.idle());
+  db.createChannel(SPACE, 'elsewhere');
+  const elsewhere = await ask('artist', { channel: 'elsewhere', prompt: 'over there' });
+  await until(() => imagine.idle());
+  expect(await ask('artist', { prompt: undefined, from: elsewhere.messageId })).toBe('NOT_FOUND');
+  expect(await ask('artist', { prompt: undefined, from: 999999 })).toBe('NOT_FOUND');
+  const plain = db.storeMessage(SPACE, 'general', 'just words', users.artist.id);
+  expect(await ask('artist', { prompt: undefined, from: Number(plain.id) })).toBe('NOT_FOUND');
+  // The usual checks still apply: no permission, and the daily limit.
+  expect(await ask('viewer', { prompt: undefined, from: first.messageId })).toBe('NO_PERMISSION');
+  await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: db.countImagineJobsSince(users.owner.id, Date.now() - 864e5) });
+  expect(await ask('owner', { prompt: undefined, from: first.messageId })).toBe('LIMIT');
+  await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: null });
+});
+
 test('after a restart, jobs that were waiting or running are marked failed and say so', () => {
   const runner = require('../imagine/runner');
   const msg = db.postAsBot(SPACE, 'general', '🎨 Imagining for **artist**… 2nd in line');

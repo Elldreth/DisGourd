@@ -303,6 +303,7 @@ export default function ChatPanel({
         ref={listRef}
         emptyBody={topic || undefined}
         onHidePreview={(m) => api.hideChannelPreview(space, channel, m.id).catch(() => {})}
+        imagineAgain={imagine?.available ? imagine.run : null}
         onPin={canPin && onSetPinned ? onSetPinned : undefined}
         messages={messages}
         channel={channel}
