@@ -7,6 +7,7 @@ const { canViewChannel, canPostChannel, canView, canModerateMessage } = require(
 const { userClients, deliverToChannelViewers, tellFollow } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
 const linkPreviews = require('../linkPreviews');
+const push = require('../push');
 
 // A thread's reply count changed: refresh the summary under its root message
 // for the parent channel's viewers.
@@ -73,6 +74,16 @@ const ops = {
     );
     const mentions = stored ? stored.mentions : [];
     if (stored && thread) for (const uid of stored.newFollows) tellFollow(uid, msg.space, thread, true);
+    // People you @mentioned who have no tab open get a push (P2-18b).
+    if (stored) {
+      const where = thread ? `${thread.name} (#${thread.parentChannel})` : `#${msg.channel}`;
+      const title = `${user ? user.username : userId} in ${where} · ${msg.space}`;
+      const body = push.preview(content, attachments);
+      const data = { space: msg.space, channel: msg.channel, ...(thread ? { thread: { name: thread.name, parentChannel: thread.parentChannel } } : {}) };
+      for (const uid of new Set(stored.mentionedIds || [])) {
+        if (uid !== userId) push.notifyIfAway(uid, { title, body, data }).catch(() => {});
+      }
+    }
     deliverToChannelViewers(msg.space, msg.channel, JSON.stringify({
       type: 'message',
       id: stored ? stored.id : undefined,

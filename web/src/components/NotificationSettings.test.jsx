@@ -96,3 +96,38 @@ test('no test button until notifications are allowed', () => {
   render(<NotificationSettings />);
   expect(screen.queryByRole('button', { name: /send a test notification/i })).toBeNull();
 });
+
+test('push: the switch subscribes with the previews choice, and the text switch re-saves it (P2-18b)', async () => {
+  vi.resetModules();
+  vi.doMock('../pwa.js', () => ({
+    pushSupport: () => ({ supported: true, needsHomeScreen: false }),
+    getPushSubscription: vi.fn(async () => null),
+    subscribeToPush: vi.fn(async () => ({})),
+    unsubscribeFromPush: vi.fn(async () => true),
+  }));
+  const pwa = await import('../pwa.js');
+  const { default: Settings } = await import('./NotificationSettings.jsx');
+  mockNotification('default', 'granted');
+  render(<Settings />);
+  const push = await screen.findByRole('checkbox', { name: 'Push notifications for mentions and DMs' });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  expect(push.disabled).toBe(false);
+  await act(async () => {
+    fireEvent.click(push);
+  });
+  expect(pwa.subscribeToPush).toHaveBeenCalledWith({ previews: true });
+  expect(push.checked).toBe(true);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include message text in push notifications' }));
+  });
+  expect(pwa.subscribeToPush).toHaveBeenLastCalledWith({ previews: false });
+  expect(localStorage.getItem('disgourd.pushPreviews')).toBe('0');
+  await act(async () => {
+    fireEvent.click(push);
+  });
+  expect(pwa.unsubscribeFromPush).toHaveBeenCalled();
+  expect(push.checked).toBe(false);
+  vi.doUnmock('../pwa.js');
+});

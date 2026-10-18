@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 
@@ -33,4 +33,43 @@ test('the built worker carries a build id (so every deploy is a new worker)', ()
   const text = readFileSync(built, 'utf8');
   expect(text).not.toContain("'__BUILD__'");
   expect(text).toMatch(/const BUILD = '[a-z0-9]{6,}';/);
+});
+
+// The worker's push handlers (P2-18b), run against a recording scope.
+function workerScope() {
+  const listeners = {};
+  const scope = {
+    location: { origin: 'https://chat.example' },
+    addEventListener: (type, fn) => (listeners[type] = fn),
+    registration: { showNotification: vi.fn(async () => {}) },
+    clients: { matchAll: vi.fn(async () => []), openWindow: vi.fn(async () => {}) },
+  };
+  new Function('self', 'caches', 'fetch', 'module', source)(scope, undefined, undefined, { exports: {} });
+  return { scope, listeners };
+}
+const event = (extra) => ({ waitUntil: (p) => (event.last = p), ...extra });
+
+test('a push shows a notification from the payload, grouped per conversation', async () => {
+  const { scope, listeners } = workerScope();
+  listeners.push(event({ data: { json: () => ({ title: 'bob in #general · S', body: 'hi', data: { space: 'S', channel: 'general' } }) } }));
+  await event.last;
+  expect(scope.registration.showNotification).toHaveBeenCalledWith('bob in #general · S', expect.objectContaining({ body: 'hi', tag: 'ch:S:general', icon: '/icon-192.png', data: { space: 'S', channel: 'general' } }));
+  listeners.push(event({ data: { json: () => ({ title: 'bob', data: { dm: 'bob' } }) } }));
+  await event.last;
+  expect(scope.registration.showNotification).toHaveBeenLastCalledWith('bob', expect.objectContaining({ body: '', tag: 'dm:bob' }));
+});
+
+test('clicking it focuses an open tab and tells it where to go, or opens the app at ?open=', async () => {
+  const { scope, listeners } = workerScope();
+  const tab = { focus: vi.fn(async () => {}), postMessage: vi.fn() };
+  scope.clients.matchAll.mockResolvedValueOnce([tab]);
+  const notification = { close: vi.fn(), data: { dm: 'bob' } };
+  listeners.notificationclick(event({ notification }));
+  await event.last;
+  expect(notification.close).toHaveBeenCalled();
+  expect(tab.postMessage).toHaveBeenCalledWith({ type: 'OPEN', data: { dm: 'bob' } });
+  expect(tab.focus).toHaveBeenCalled();
+  listeners.notificationclick(event({ notification: { close: () => {}, data: { space: 'S', channel: 'general' } } }));
+  await event.last;
+  expect(scope.clients.openWindow).toHaveBeenCalledWith(`/?open=${encodeURIComponent(JSON.stringify({ space: 'S', channel: 'general' }))}`);
 });

@@ -57,8 +57,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-16 | Theme tokens → CSS vars (done in P1-21) | 2 | COMPLETE | S | none | index.css (@theme) |
 | P2-17 | Light theme + picker | 2 | COMPLETE | M | P2-16 | index.css, theme.js (new), index.html, ~12 components |
 | P2-18 | PWA + Web Push (Container: a, b) | 2 | PLANNED | M | see packet | sw.js, static.js, push |
-| P2-18a | Service worker + installable shell | 2 | REVIEW | S–M | P1-04 | web/public/sw.js (new), offline.html (new), static.js, main.jsx, Toasts |
-| P2-18b | Web Push for mentions and DMs while no socket is open | 2 | PLANNED | M | P2-18a, P2-04, P2-14 | push routes, push_subscriptions, NotificationSettings |
+| P2-18a | Service worker + installable shell | 2 | COMPLETE | S–M | P1-04 | web/public/sw.js (new), offline.html (new), static.js, main.jsx, Toasts |
+| P2-18b | Web Push for mentions and DMs while no socket is open | 2 | REVIEW | M | P2-18a, P2-04, P2-14 | push routes, push_subscriptions, NotificationSettings |
 | P2-19 | Custom server emoji (Container: a, b) | 2 | COMPLETE | M | see packet | migrations, routes/spaces, markdown, picker |
 | P2-19a | Custom emoji: storage + management API | 2 | COMPLETE | S–M | P1-01, P1-04 | migrations, db, routes/spaces, routes/uploads |
 | P2-19b | Custom emoji: `:name:` rendering, picker tab, reactions, settings | 2 | COMPLETE | M | P2-19a | markdown.jsx, EmojiPicker, MessageList, ChannelSettingsDialog/ServerSettings, gateway react op |

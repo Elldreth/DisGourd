@@ -369,6 +369,26 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 11,
+    name: 'push subscriptions',
+    up(db) {
+      // A browser's Web Push subscription (P2-18b). `previews`: whether its
+      // notifications may carry message text. Rows go with the user.
+      db.exec(`
+        CREATE TABLE push_subscriptions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          endpoint TEXT NOT NULL UNIQUE,
+          p256dh TEXT NOT NULL,
+          auth TEXT NOT NULL,
+          previews INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_push_user ON push_subscriptions(user_id);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

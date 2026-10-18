@@ -30,7 +30,7 @@ import QuickSwitcher, { itemKey, loadRecent, recordVisit, peopleItems } from './
 import { useShortcuts, stepChannel } from './shortcuts.js';
 import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
-import { registerServiceWorker } from './pwa.js';
+import { registerServiceWorker, onOpenRequest } from './pwa.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
@@ -202,6 +202,16 @@ export default function App() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // A push notification was clicked (in this tab, or it opened the app with
+  // ?open=…): go to that DM, channel or thread.
+  const openFromPush = useRef(null);
+  openFromPush.current = (data) => {
+    if (!data) return;
+    if (data.dm) return startDm(data.dm);
+    if (data.thread) return openThreadFromSearch(data.space, { channel: data.channel, name: data.thread.name, parentChannel: data.thread.parentChannel });
+    if (data.space && data.channel) openChannelFromSearch(data.space, data.channel);
+  };
+  useEffect(() => onOpenRequest((data) => openFromPush.current(data)), []);
   const undoDelete = useUndoDelete({ toast });
   const chatMessagesRef = useRef(chat.messages);
   chatMessagesRef.current = chat.messages;

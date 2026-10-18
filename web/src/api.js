@@ -185,6 +185,17 @@ export function getPins(space, channel) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/pins`);
 }
 
+// ---- Web Push (P2-18b) ----
+export function getVapidKey() {
+  return request('/push/vapid-key');
+}
+export function savePushSubscription(subscription, previews) {
+  return request('/push/subscriptions', { method: 'POST', body: { subscription, previews } });
+}
+export function deletePushSubscription(endpoint) {
+  return request('/push/subscriptions', { method: 'DELETE', body: { endpoint } });
+}
+
 // ---- Custom server emoji (P2-19) ----
 export function getEmoji(space) {
   return request(`/spaces/${encodeURIComponent(space)}/emoji`);

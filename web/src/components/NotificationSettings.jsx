@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getNotifyLevel, setNotifyLevel, getMessageSounds, setMessageSounds } from '../audio.js';
 import { playMention } from '../sounds.js';
+import { getPushSubscription, pushSupport, subscribeToPush, unsubscribeFromPush } from '../pwa.js';
+
+const PREVIEWS_KEY = 'disgourd.pushPreviews';
+const getPushPreviews = () => localStorage.getItem(PREVIEWS_KEY) !== '0';
 
 const LEVELS = [
   { value: 'off', label: 'Off', hint: 'No desktop notifications.' },
@@ -19,6 +23,56 @@ export default function NotificationSettings() {
   // True after the browser's prompt was closed without Allow or Block.
   const [dismissed, setDismissed] = useState(false);
   const [testFailed, setTestFailed] = useState(false);
+  // Web Push (P2-18b): on when this browser has a subscription saved.
+  const [support] = useState(() => pushSupport());
+  const [pushOn, setPushOn] = useState(null); // null until checked
+  const [pushPreviews, setPushPreviews] = useState(getPushPreviews);
+  const [pushError, setPushError] = useState('');
+  const [pushBusy, setPushBusy] = useState(false);
+  useEffect(() => {
+    if (!support.supported) return;
+    let live = true;
+    getPushSubscription()
+      .then((sub) => live && setPushOn(!!sub))
+      .catch(() => live && setPushOn(false));
+    return () => {
+      live = false;
+    };
+  }, [support.supported]);
+
+  async function togglePush(e) {
+    const on = e.target.checked;
+    setPushError('');
+    setPushBusy(true);
+    try {
+      if (on) {
+        await subscribeToPush({ previews: pushPreviews });
+        setPushOn(true);
+        setPermission(permissionNow());
+      } else {
+        await unsubscribeFromPush();
+        setPushOn(false);
+      }
+    } catch (err) {
+      setPushError(err.message || 'Could not change push notifications');
+      setPermission(permissionNow());
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function togglePushPreviews(e) {
+    const on = e.target.checked;
+    localStorage.setItem(PREVIEWS_KEY, on ? '1' : '0');
+    setPushPreviews(on);
+    if (!pushOn) return;
+    setPushError('');
+    try {
+      await subscribeToPush({ previews: on }); // re-saves the subscription with the choice
+    } catch (err) {
+      setPushError(err.message || 'Could not save that');
+    }
+  }
 
   async function choose(next) {
     setDismissed(false);
@@ -111,6 +165,57 @@ export default function NotificationSettings() {
         {permission === 'unsupported' && (
           <p role="status" className="mt-2 text-xs text-gray-500">
             This browser doesn't support desktop notifications. Message sounds still work.
+          </p>
+        )}
+      </fieldset>
+
+      <fieldset>
+        <legend className="mb-2 text-sm text-gray-200">When DisGourd is closed</legend>
+        {support.supported ? (
+          <div className="space-y-2">
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-200">
+                Push notifications for mentions and DMs
+                <span className="block text-xs text-gray-500">
+                  Sent to this device when you have no DisGourd tab open and aren’t in Do Not Disturb.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={!!pushOn}
+                disabled={pushOn === null || pushBusy}
+                onChange={togglePush}
+                className="h-4 w-4 accent-brand"
+                aria-label="Push notifications for mentions and DMs"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-200">
+                Include message text
+                <span className="block text-xs text-gray-500">Off: the notification only says who wrote and where.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={pushPreviews}
+                onChange={togglePushPreviews}
+                className="h-4 w-4 accent-brand"
+                aria-label="Include message text in push notifications"
+              />
+            </label>
+            {pushError && (
+              <p role="alert" className="text-xs text-pink">
+                {pushError}
+              </p>
+            )}
+          </div>
+        ) : support.needsHomeScreen ? (
+          <p role="status" className="text-xs text-gray-500">
+            On iPhone and iPad, add DisGourd to your Home Screen first (Share → Add to Home Screen), then open it from there to
+            turn on push notifications.
+          </p>
+        ) : (
+          <p role="status" className="text-xs text-gray-500">
+            This browser can’t receive push notifications while the app is closed.
           </p>
         )}
       </fieldset>

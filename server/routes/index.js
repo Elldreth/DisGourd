@@ -9,6 +9,7 @@ const modules = [
   require('./invites'),
   require('./uploads'),
   require('./media'),
+  require('./push'),
 ];
 
 async function dispatch(ctx) {
