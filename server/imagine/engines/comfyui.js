@@ -29,6 +29,12 @@ const SPLIT_FAMILIES = ['flux', 'zimage'];
 const VIDEO = /hunyuan.?video|(^|[\\/_\- ])ltx|minimax|(^|[\\/_\- ])wan[\d_.\- ]|mochi|cosmos|cogvideo|svd|animatediff/i;
 // The most pixels each VRAM tier is asked for (megapixels).
 const TIERS = { low: 1.0, medium: 1.5, high: 2.4 };
+// The hires fix (P3-28), for High quality only: the image is made at the
+// Standard size, enlarged with an upscale model to about 1.5× (at most this
+// many megapixels for the tier), then repainted lightly at that size.
+const HIRES_MP = { low: 1.6, medium: 2.4, high: 3.6 };
+const HIRES_SCALE = 1.5;
+const HIRES_DENOISE = 0.4;
 const RATIOS = { square: [1, 1], portrait: [2, 3], landscape: [3, 2], wide: [16, 9] };
 const NEGATIVE = 'lowres, worst quality, low quality, blurry, jpeg artifacts, watermark, signature, text';
 const SAFE_NEGATIVE = 'nsfw, nude, nudity';
@@ -66,6 +72,15 @@ function suggestParts(family, clips = [], vaes = []) {
   return { clip1: null, clip2: null, vae: null };
 }
 
+// A general-purpose upscale model, by name, from this ComfyUI's list (or null).
+function suggestUpscaler(list = []) {
+  for (const re of [/ultrasharp/i, /remacri/i, /realesrgan_x4plus(?!_anime)/i, /4x/i, /2x|x2/i]) {
+    const hit = list.find((x) => re.test(x));
+    if (hit) return hit;
+  }
+  return list[0] || null;
+}
+
 // A checkpoint's likely family from its folder and name.
 function guessFamily(name) {
   const n = String(name || '').toLowerCase();
@@ -95,12 +110,25 @@ function sizeFor(family, quality, shape, tier) {
   return { width: w, height: h };
 }
 
+// The hires fix's final size for a base size and tier: up to 1.5× each side,
+// within the tier's hires budget, in multiples of 64.
+function hiresSize({ width, height }, tier) {
+  const budget = (HIRES_MP[tier] || HIRES_MP.medium) * 1e6;
+  const scale = Math.min(HIRES_SCALE, Math.sqrt(budget / (width * height)));
+  return { width: Math.round((width * scale) / 64) * 64, height: Math.round((height * scale) / 64) * 64 };
+}
+// Whether a request gets the hires fix: High quality, switched on, with an upscale model.
+const hiresFor = (request, cfg) => request.quality === 'high' && cfg.hires !== false && !!cfg.upscaler;
+
 // The API-format workflow for one request.
 function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomInt(0, 2 ** 32) } = {}) {
   const split = cfg.kind === 'unet';
   const family = FAMILIES[cfg.family] && (split || !FAMILIES[cfg.family].splitOnly) ? cfg.family : 'sdxl';
   const f = FAMILIES[family];
-  const { width, height } = sizeFor(family, request.quality, request.shape, cfg.tier);
+  const hires = hiresFor(request, cfg);
+  // With the hires fix, the first pass is made at the Standard size.
+  const base = sizeFor(family, hires ? 'standard' : request.quality, request.shape, cfg.tier);
+  const { width, height } = hires ? hiresSize(base, cfg.tier) : base;
   const negative = family === 'flux' || family === 'zimage' ? '' : permissive ? NEGATIVE : `${NEGATIVE}, ${SAFE_NEGATIVE}`;
   // Where the model, text encoder and VAE come from: one checkpoint (node 4),
   // or separate loaders (11 diffusion model, 12 text encoder(s), 13 VAE).
@@ -118,7 +146,7 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   const vae = split ? ['13', 0] : ['4', 2];
   const wf = {
     ...loaders,
-    5: { class_type: family === 'flux' || family === 'zimage' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: { width, height, batch_size: 1 } },
+    5: { class_type: family === 'flux' || family === 'zimage' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: { width: base.width, height: base.height, batch_size: 1 } },
     6: { class_type: 'CLIPTextEncode', inputs: { text: request.prompt, clip } },
     7: { class_type: 'CLIPTextEncode', inputs: { text: negative, clip } },
     3: {
@@ -139,7 +167,21 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
     wf[10] = { class_type: 'FluxGuidance', inputs: { conditioning: ['6', 0], guidance: f.guidance } };
     wf[3].inputs.positive = ['10', 0];
   }
-  return { workflow: wf, width, height, seed };
+  if (hires) {
+    // Enlarge the first image with the upscale model, size it exactly, then
+    // repaint lightly with the same model and prompt.
+    wf[20] = { class_type: 'UpscaleModelLoader', inputs: { model_name: cfg.upscaler } };
+    wf[21] = { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['20', 0], image: ['8', 0] } };
+    wf[22] = { class_type: 'ImageScale', inputs: { image: ['21', 0], upscale_method: 'lanczos', width, height, crop: 'disabled' } };
+    wf[23] = { class_type: 'VAEEncode', inputs: { pixels: ['22', 0], vae } };
+    wf[24] = {
+      class_type: 'KSampler',
+      inputs: { ...wf[3].inputs, seed, steps: f.steps.standard, denoise: HIRES_DENOISE, latent_image: ['23', 0] },
+    };
+    wf[25] = { class_type: 'VAEDecode', inputs: { samples: ['24', 0], vae } };
+    wf[SAVE_NODE].inputs.images = ['25', 0];
+  }
+  return { workflow: wf, width, height, seed, hires };
 }
 
 // ---- Talking to ComfyUI ----
@@ -190,10 +232,11 @@ async function listAll(url) {
   const spec = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name;
   const names = Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options;
   if (!Array.isArray(names)) throw fail('ENGINE', 'That address answered, but not like ComfyUI');
-  const [unets, clips, vaes] = await Promise.all([
+  const [unets, clips, vaes, upscalers] = await Promise.all([
     loaderOptions(url, 'UNETLoader', 'unet_name'),
     loaderOptions(url, 'CLIPLoader', 'clip_name'),
     loaderOptions(url, 'VAELoader', 'vae_name'),
+    loaderOptions(url, 'UpscaleModelLoader', 'model_name'),
   ]);
   const models = names.map((name) => ({ name, kind: 'checkpoint', family: guessFamily(name) }));
   for (const name of unets.filter((n) => !VIDEO.test(n))) {
@@ -202,7 +245,9 @@ async function listAll(url) {
   }
   // The parts each split family probably wants (the same for every model of it).
   const suggested = Object.fromEntries(SPLIT_FAMILIES.map((f) => [f, suggestParts(f, clips, vaes)]));
-  return { models, clips, vaes, suggested };
+  // The hires fix's upscale model (P3-28): a general-purpose 4× one if there is one.
+  suggested.upscaler = suggestUpscaler(upscalers);
+  return { models, clips, vaes, upscalers, suggested };
 }
 // Kept for callers that only need the model list.
 async function listModels(url) {
@@ -217,6 +262,7 @@ function promptError(err, cfg) {
   if (says(/ckpt_name|unet_name/)) return fail('ENGINE', `The model "${cfg.model}" isn't in ComfyUI any more`);
   if (says(/clip_name/)) return fail('ENGINE', `A text encoder (${[cfg.clip1, cfg.clip2].filter(Boolean).join(', ')}) isn't in ComfyUI any more`);
   if (says(/vae_name/)) return fail('ENGINE', `The VAE "${cfg.vae}" isn't in ComfyUI any more`);
+  if (says(/model_name/)) return fail('ENGINE', `The upscale model "${cfg.upscaler}" isn't in ComfyUI any more`);
   const first = all[0] || err.data?.error;
   return fail('ENGINE', first ? `ComfyUI refused the workflow: ${first.message || first}` : err.message);
 }
@@ -327,6 +373,12 @@ function validateConfig(input, prev = {}) {
   } else if (FAMILIES[cfg.family]?.splitOnly) {
     return { error: 'Z-Image Turbo comes as separate parts, not a checkpoint' };
   }
+  // The hires fix (P3-28): on unless switched off; its upscale model by name.
+  if (i.hires !== undefined) cfg.hires = !!i.hires;
+  if (i.upscaler !== undefined) {
+    if (i.upscaler !== null && (typeof i.upscaler !== 'string' || !i.upscaler.trim() || i.upscaler.length > 300)) return { error: 'Pick an upscale model from the list' };
+    cfg.upscaler = i.upscaler;
+  }
   if (i.tier !== undefined) {
     if (!TIERS[i.tier]) return { error: 'The VRAM tier must be low, medium or high' };
     cfg.tier = i.tier;
@@ -339,6 +391,7 @@ function validateConfig(input, prev = {}) {
 const publicConfig = (cfg = {}) => ({
   enabled: !!cfg.enabled, url: cfg.url || '', model: cfg.model || null, family: cfg.family || null, tier: cfg.tier || 'medium',
   kind: cfg.kind || 'checkpoint', clip1: cfg.clip1 || null, clip2: cfg.clip2 || null, vae: cfg.vae || null,
+  hires: cfg.hires !== false, upscaler: cfg.upscaler || null,
 });
 
 module.exports = {
@@ -354,6 +407,9 @@ module.exports = {
   guessFamily,
   guessSplitFamily,
   suggestParts,
+  suggestUpscaler,
+  hiresSize,
+  HIRES_MP,
   sizeFor,
   buildWorkflow,
   FAMILIES,

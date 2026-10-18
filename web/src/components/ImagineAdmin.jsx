@@ -49,7 +49,7 @@ export default function ImagineAdmin() {
   const [defaultEngine, setDefaultEngine] = useState(null);
   const [general, setGeneral] = useState(null); // { dailyLimit, permissive }
   const [models, setModels] = useState(null); // [{ name, kind, family }] once tested
-  const [parts, setParts] = useState({ clips: [], vaes: [], suggested: {} }); // for split models
+  const [parts, setParts] = useState({ clips: [], vaes: [], upscalers: [], suggested: {} }); // for split models and the hires fix
   const [filter, setFilter] = useState('');
   const [testing, setTesting] = useState(false);
   const [testNote, setTestNote] = useState('');
@@ -67,6 +67,7 @@ export default function ImagineAdmin() {
     setComfy({
       enabled: !!c.enabled, url: c.url || '', model: c.model || '', kind: c.kind || 'checkpoint', family: c.family || (c.kind === 'unet' ? '' : 'sdxl'),
       tier: c.tier || 'medium', clip1: c.clip1 || '', clip2: c.clip2 || '', vae: c.vae || '',
+      hires: c.hires !== false, upscaler: c.upscaler || '',
     });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
     setKie({ enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' });
@@ -93,8 +94,9 @@ export default function ImagineAdmin() {
     try {
       const res = await api.testComfyUI(url);
       setModels(res.models);
-      setParts({ clips: res.clips || [], vaes: res.vaes || [], suggested: res.suggested || {} });
-      setComfy((c) => ({ ...c, url: res.url }));
+      setParts({ clips: res.clips || [], vaes: res.vaes || [], upscalers: res.upscalers || [], suggested: res.suggested || {} });
+      // The hires fix's upscale model: the suggested one until the host picks.
+      setComfy((c) => ({ ...c, url: res.url, upscaler: c.upscaler || res.suggested?.upscaler || '' }));
       const count = (kind) => res.models.filter((m) => (m.kind || 'checkpoint') === kind).length;
       const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
       const split = count('unet');
@@ -154,6 +156,8 @@ export default function ImagineAdmin() {
             clip1: comfy.kind === 'unet' ? comfy.clip1 || null : null,
             clip2: comfy.kind === 'unet' && comfy.family === 'flux' ? comfy.clip2 || null : null,
             vae: comfy.kind === 'unet' ? comfy.vae || null : null,
+            hires: comfy.hires,
+            upscaler: comfy.upscaler || null,
           },
           kie: {
             enabled: kie.enabled,
@@ -318,6 +322,28 @@ export default function ImagineAdmin() {
             ))}
           </div>
         </fieldset>
+
+        <div>
+          <label className="flex items-center gap-2 text-sm text-gray-200">
+            <input type="checkbox" checked={comfy.hires} onChange={(e) => setComfy((c) => ({ ...c, hires: e.target.checked }))} className="h-4 w-4 accent-brand" />
+            Hires fix for High quality
+          </label>
+          <p className="mt-1 text-xs text-gray-500">
+            High-quality images are made at the Standard size, enlarged about 1.5× with an upscale model, then lightly repainted for detail. Slower, sharper.
+          </p>
+          {comfy.hires && (
+            <div className="mt-2">
+              <label htmlFor="imagine-upscaler" className={heading}>Upscale model</label>
+              <select id="imagine-upscaler" value={comfy.upscaler} onChange={(e) => setComfy((c) => ({ ...c, upscaler: e.target.value }))} className="input">
+                <option value="">{parts.upscalers.length || comfy.upscaler ? 'None (no hires fix)' : 'Test the connection to list upscale models'}</option>
+                {(parts.upscalers.length ? parts.upscalers : comfy.upscaler ? [comfy.upscaler] : []).map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              {models && !parts.upscalers.length && (
+                <p className="mt-1 text-xs text-gray-500">This ComfyUI has no upscale models (models/upscale_models), so High is made without the hires fix.</p>
+              )}
+            </div>
+          )}
+        </div>
       </fieldset>
 
       <fieldset className="space-y-3 rounded-lg bg-ink-900/60 p-3">

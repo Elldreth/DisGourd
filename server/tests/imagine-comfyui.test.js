@@ -19,6 +19,7 @@ const MODELS = [String.raw`Flux\flux1-dev-fp8.safetensors`, String.raw`Illustrio
 const UNETS = ['flux1-dev-fp8.safetensors', String.raw`zturbo\z_image_turbo_bf16.safetensors`, 'krea2_turbo.safetensors', String.raw`hunyuan_video\t2v_720p.safetensors`];
 const CLIPS = ['clip_l.safetensors', 't5xxl_enconly.safetensors', String.raw`zturbo\qwen_3_4b.safetensors`];
 const VAES = [String.raw`FLUX1\ae.sft`, String.raw`zturbo\ae.safetensors`, String.raw`SDXL\sdxl_vae.safetensors`];
+const UPSCALERS = ['4x-AnimeSharp.pth', '4x-UltraSharp.pth', 'RealESRGAN_x2.pth'];
 let partsListed = true; // false: this ComfyUI can't list split parts
 
 // What the mock saw.
@@ -41,9 +42,13 @@ function startMock() {
       if (url.pathname === '/object_info/UNETLoader') return combo('UNETLoader', 'unet_name', UNETS);
       if (url.pathname === '/object_info/CLIPLoader') return combo('CLIPLoader', 'clip_name', CLIPS);
       if (url.pathname === '/object_info/VAELoader') return combo('VAELoader', 'vae_name', VAES);
+      if (url.pathname === '/object_info/UpscaleModelLoader') return combo('UpscaleModelLoader', 'model_name', UPSCALERS);
       if (url.pathname === '/prompt' && req.method === 'POST') {
         const { prompt } = JSON.parse(body);
         seen.prompts.push(prompt);
+        if (prompt['20']?.inputs.model_name === 'gone.pth') {
+          return json(400, { error: { message: 'Prompt outputs failed validation' }, node_errors: { 20: { errors: [{ message: 'Value not in list', details: "model_name: 'gone.pth' not in [...]" }] } } });
+        }
         if (prompt['13']?.inputs.vae_name === 'gone.sft') {
           return json(400, { error: { message: 'Prompt outputs failed validation' }, node_errors: { 13: { errors: [{ message: 'Value not in list', details: "vae_name: 'gone.sft' not in [...]" }] } } });
         }
@@ -129,12 +134,14 @@ describe('the engine', () => {
     expect(all.suggested).toEqual({
       flux: { clip1: 'clip_l.safetensors', clip2: 't5xxl_enconly.safetensors', vae: String.raw`FLUX1\ae.sft` },
       zimage: { clip1: String.raw`zturbo\qwen_3_4b.safetensors`, clip2: null, vae: String.raw`zturbo\ae.safetensors` },
+      upscaler: '4x-UltraSharp.pth', // P3-28: a general-purpose one, not the anime one listed first
     });
+    expect(all.upscalers).toEqual(UPSCALERS);
     // Another host's ComfyUI that can't list split parts: checkpoints only.
     partsListed = false;
     try {
       const old = await comfy.listAll(mockUrl);
-      expect(old).toMatchObject({ models: MODELS.map((name) => ({ name, kind: 'checkpoint' })), clips: [], vaes: [] });
+      expect(old).toMatchObject({ models: MODELS.map((name) => ({ name, kind: 'checkpoint' })), clips: [], vaes: [], upscalers: [], suggested: { upscaler: null } });
     } finally {
       partsListed = true;
     }
@@ -166,6 +173,50 @@ describe('the engine', () => {
     expect(out.images[0].buffer.equals(PNG)).toBe(true);
     expect(seen.prompts.at(-1)['11'].inputs.unet_name).toBe(UNETS[1]);
     await expect(comfy.generate(request(), cfg({ kind: 'unet', model: UNETS[1], family: 'zimage', clip1: CLIPS[2], vae: 'gone.sft' }))).rejects.toMatchObject({ message: 'The VAE "gone.sft" isn\'t in ComfyUI any more' });
+  });
+
+  test('P3-28: the hires fix at High quality: Standard-size first pass, upscale model, exact size, light repaint', () => {
+    const on = cfg({ upscaler: '4x-UltraSharp.pth', tier: 'medium' });
+    const { workflow: wf, width, height, hires } = comfy.buildWorkflow(request({ quality: 'high' }), on, { seed: 7 });
+    expect(hires).toBe(true);
+    expect(wf['5'].inputs).toMatchObject({ width: 1024, height: 1024 }); // the Standard size
+    expect([width, height]).toEqual([1536, 1536]);
+    expect(wf['20']).toEqual({ class_type: 'UpscaleModelLoader', inputs: { model_name: '4x-UltraSharp.pth' } });
+    expect(wf['21']).toEqual({ class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['20', 0], image: ['8', 0] } });
+    expect(wf['22']).toEqual({ class_type: 'ImageScale', inputs: { image: ['21', 0], upscale_method: 'lanczos', width: 1536, height: 1536, crop: 'disabled' } });
+    expect(wf['23']).toEqual({ class_type: 'VAEEncode', inputs: { pixels: ['22', 0], vae: ['4', 2] } });
+    expect(wf['24'].inputs).toMatchObject({ seed: 7, denoise: 0.4, steps: 28, model: ['4', 0], positive: ['6', 0], negative: ['7', 0], latent_image: ['23', 0] });
+    expect(wf['3'].inputs.steps).toBe(36); // the first pass keeps High's steps
+    expect(wf['9'].inputs.images).toEqual(['25', 0]);
+    // Flux in parts: the repaint uses the same guidance and loaders.
+    const flux = comfy.buildWorkflow(request({ quality: 'high' }), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0], upscaler: 'x.pth' })).workflow;
+    expect(flux['24'].inputs).toMatchObject({ model: ['11', 0], positive: ['10', 0], cfg: 1 });
+    expect(flux['23'].inputs.vae).toEqual(['13', 0]);
+    // Not applied: Standard quality, switched off, or no upscale model.
+    for (const [req, c] of [[request({ quality: 'standard' }), on], [request({ quality: 'high' }), { ...on, hires: false }], [request({ quality: 'high' }), cfg()]]) {
+      const out = comfy.buildWorkflow(req, c);
+      expect(out.hires).toBe(false);
+      expect(out.workflow['20']).toBeUndefined();
+      expect(out.workflow['9'].inputs.images).toEqual(['8', 0]);
+    }
+    // Each tier stays within its hires budget (10% rounding allowance).
+    for (const tier of ['low', 'medium', 'high']) {
+      for (const shape of ['square', 'portrait', 'landscape', 'wide']) {
+        const out = comfy.buildWorkflow(request({ quality: 'high', shape }), { ...on, tier });
+        expect(out.width % 64 + out.height % 64).toBe(0);
+        expect(out.width * out.height).toBeLessThanOrEqual(comfy.HIRES_MP[tier] * 1e6 * 1.1);
+      }
+    }
+  });
+
+  test('P3-28: a hires generation runs end to end; a missing upscale model is explained; config round-trips', async () => {
+    const out = await comfy.generate(request({ quality: 'high' }), cfg({ upscaler: '4x-UltraSharp.pth', tier: 'high' }));
+    expect(out).toMatchObject({ width: 1536, height: 1536 });
+    expect(seen.prompts.at(-1)['20'].inputs.model_name).toBe('4x-UltraSharp.pth');
+    await expect(comfy.generate(request({ quality: 'high' }), cfg({ upscaler: 'gone.pth' }))).rejects.toMatchObject({ message: 'The upscale model "gone.pth" isn\'t in ComfyUI any more' });
+    expect(comfy.validateConfig({ upscaler: 5 }).error).toMatch(/upscale model/);
+    expect(comfy.validateConfig({ hires: false, upscaler: '4x-UltraSharp.pth' })).toMatchObject({ hires: false, upscaler: '4x-UltraSharp.pth' });
+    expect(comfy.publicConfig({})).toMatchObject({ hires: true, upscaler: null }); // on unless switched off
   });
 
   test('P3-24: config for a split model needs its type and parts; Z-Image is split only', () => {
@@ -288,7 +339,7 @@ describe('the admin routes and the chat path', () => {
   test('saving the ComfyUI settings, a test image, and the always-refused check', async () => {
     expect((await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } })).body.error).toMatch(/pick a model/);
     const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[0], tier: 'high' } }, defaultEngine: 'comfyui' });
-    expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null });
+    expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);
     const tried = await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'a gourd', shape: 'wide', quality: 'draft' });
