@@ -15,6 +15,7 @@ import ChannelList from './components/ChannelList.jsx';
 import Gourd from './components/Gourd.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import ThreadPanel from './components/ThreadPanel.jsx';
+import { RoleColorsContext } from './components/RoleName.jsx';
 import VideoStage from './components/VideoStage.jsx';
 import MemberList from './components/MemberList.jsx';
 import InviteDialog from './components/InviteDialog.jsx';
@@ -34,6 +35,9 @@ import { registerServiceWorker, onOpenRequest } from './pwa.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
+// Names stay uncoloured outside the open server.
+const NO_COLORS = new Map();
+
 export default function App() {
   const [token, setToken] = useState(api.getToken());
   const user = useMemo(() => {
@@ -524,7 +528,8 @@ export default function App() {
           onOpenNav={() => setNavOpen(true)}
         />
       ) : (
-        <>
+        // Names take their role colours inside a server (P2-21d).
+        <RoleColorsContext.Provider value={sp.nameColors}>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {call.room && call.videos.length > 0 && <VideoStage videos={call.videos} />}
             <ChatPanel
@@ -562,6 +567,8 @@ export default function App() {
             />
           </div>
           {openThread && (
+            // A thread from another server (opened from the inbox) gets no colours.
+            <RoleColorsContext.Provider value={openThread.space === sp.currentSpace ? sp.nameColors : NO_COLORS}>
             <ThreadPanel
               space={openThread.space}
               thread={openThread}
@@ -595,6 +602,7 @@ export default function App() {
                 (follow ? api.followThread : api.unfollowThread)(openThread.space, openThread.channel).catch(() => {})
               }
             />
+            </RoleColorsContext.Provider>
           )}
           <MemberList
             space={sp.currentSpace}
@@ -614,7 +622,7 @@ export default function App() {
             open={membersOpen}
             onClose={() => setMembersOpen(false)}
           />
-        </>
+        </RoleColorsContext.Provider>
       )}
 
       {sp.inviteCode && (

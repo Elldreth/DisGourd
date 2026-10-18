@@ -12,7 +12,10 @@ export default function MemberRolesDialog({ space, member, roles, isOwner, myPos
   const has = new Set(member.roles || []);
   const list = roles.filter((r) => !r.isDefault);
 
+  // Clicks wait while a change is saving. The boxes aren't disabled for it:
+  // that would drop keyboard focus (and Esc) out of the dialog.
   async function toggle(role) {
+    if (busy != null) return;
     setBusy(role.id);
     setError('');
     try {
@@ -45,7 +48,7 @@ export default function MemberRolesDialog({ space, member, roles, isOwner, myPos
                 <input
                   type="checkbox"
                   checked={has.has(r.id)}
-                  disabled={locked || busy != null}
+                  disabled={locked}
                   onChange={() => toggle(r)}
                   className="h-4 w-4 accent-brand"
                 />

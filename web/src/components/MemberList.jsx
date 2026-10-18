@@ -4,6 +4,7 @@ import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import MemberRolesDialog from './MemberRolesDialog.jsx';
+import RoleName from './RoleName.jsx';
 
 // Right-hand roster grouped by online status. Clicking a member opens a menu:
 // message them, and (with permission) change their roles or remove them.
@@ -43,7 +44,18 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
   const offline = members.filter((m) => statusOf(m) === 'offline');
   const isOwner = myRole === 'owner';
   // The badge: Owner, else the member's highest role (roles come highest first).
-  const topRoleName = (m) => (m.role === 'owner' ? 'Owner' : roles.find((r) => !r.isDefault && (m.roles || []).includes(r.id))?.name || null);
+  // A member's highest role besides @everyone (roles come highest first).
+  const topRole = (m) => roles.find((r) => !r.isDefault && (m.roles || []).includes(r.id)) || null;
+  // The badge: Owner, else the member's highest role.
+  const topRoleName = (m) => (m.role === 'owner' ? 'Owner' : topRole(m)?.name || null);
+  // Online members grouped under their highest role, in role order; the
+  // rest under Online (P2-21d).
+  const onlineGroups = [
+    ...roles
+      .filter((r) => !r.isDefault)
+      .map((r) => ({ key: `role-${r.id}`, label: r.name, people: online.filter((m) => topRole(m)?.id === r.id) })),
+    { key: 'online', label: 'Online', people: online.filter((m) => !topRole(m)) },
+  ];
 
   function actionsFor(m) {
     const self = m.username === currentUser;
@@ -76,10 +88,10 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
     return acts;
   }
 
-  function renderGroup(label, people, status) {
+  function renderGroup(label, people, status, key = label) {
     if (!people.length) return null;
     return (
-      <div>
+      <div key={key}>
         <div className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
           {label} — {people.length}
         </div>
@@ -97,7 +109,7 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
               >
                 <Avatar name={m.username} size={30} status={statusOf(m)} src={m.avatar} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-gray-200">{m.username}</span>
+                  <RoleName name={m.username} className="block truncate text-sm text-gray-200" />
                   {STATUS_WORDS[statusOf(m)] && <span className="sr-only">, {STATUS_WORDS[statusOf(m)]}</span>}
                   {(m.statusText || m.statusEmoji) && (
                     // Plain text, never markdown or HTML.
@@ -159,7 +171,7 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
         </header>
         <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
           {members.length === 0 && <EmptyState compact icon="users" title="No members to show" />}
-          {renderGroup('Online', online, 'online')}
+          {onlineGroups.map((g) => renderGroup(g.label, g.people, 'online', g.key))}
           {renderGroup('Offline', offline, 'offline')}
         </div>
       </aside>

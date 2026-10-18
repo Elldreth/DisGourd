@@ -52,7 +52,10 @@ export default function RolesDialog({ space, roles, members, currentUser, isOwne
   // Members whose roles I may change: below me, or myself (the owner: anyone).
   const changeable = (m) => isOwner || m.username === currentUser || (m.position ?? 0) < myPosition;
 
+  // One change at a time. Buttons stay enabled meanwhile (disabling the
+  // focused one would drop keyboard focus out of the dialog); clicks wait.
   async function run(failure, fn) {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
@@ -149,7 +152,7 @@ export default function RolesDialog({ space, roles, members, currentUser, isOwne
                     <>
                       <button
                         onClick={() => move(r, 'up')}
-                        disabled={busy || at === 0}
+                        disabled={at === 0}
                         aria-label={`Move ${r.name} up`}
                         title="Move up"
                         className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-fg disabled:opacity-30"
@@ -158,7 +161,7 @@ export default function RolesDialog({ space, roles, members, currentUser, isOwne
                       </button>
                       <button
                         onClick={() => move(r, 'down')}
-                        disabled={busy || at === movable.length - 1}
+                        disabled={at === movable.length - 1}
                         aria-label={`Move ${r.name} down`}
                         title="Move down"
                         className="rounded p-1 text-gray-400 hover:bg-ink-600 hover:text-fg disabled:opacity-30"
@@ -250,7 +253,6 @@ export default function RolesDialog({ space, roles, members, currentUser, isOwne
                         {canEdit && (!m || changeable(m)) && (
                           <button
                             onClick={() => setHolder(name, false)}
-                            disabled={busy}
                             aria-label={`Remove ${name} from ${selected.name}`}
                             className="text-xs text-gray-400 hover:text-danger disabled:opacity-60"
                           >
