@@ -16,6 +16,7 @@ export const PERMISSION_ACTIONS = [
   { key: 'edit_server', label: 'Edit server (name, icon)' },
   { key: 'manage_emoji', label: 'Manage server emoji' },
   { key: 'manage_roles', label: 'Manage roles' },
+  { key: 'generate_images', label: 'Generate images (/imagine)' },
 ];
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif'];

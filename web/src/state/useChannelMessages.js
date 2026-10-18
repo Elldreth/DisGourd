@@ -40,7 +40,12 @@ export function messagesReducer(state, action) {
     case 'merged':
       return mergeMessages(state, action.messages);
     case 'updated':
-      return state.map((m) => (m.id === action.id ? { ...m, content: action.content, editedAt: action.editedAt } : m));
+      // The /imagine bot's updates also carry attachments (P2-20a).
+      return state.map((m) =>
+        m.id === action.id
+          ? { ...m, content: action.content, editedAt: action.editedAt, ...(action.attachments ? { attachments: action.attachments, attachment: action.attachments[0] || null } : {}) }
+          : m
+      );
     case 'deleted':
       return state.filter((m) => m.id !== action.id);
     case 'embeds':
@@ -272,7 +277,7 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       if (!f.followed) setUnread(withoutKey(k));
     },
     message_update: (u) => {
-      if (isOpen(u.space, u.channel)) dispatch({ type: 'updated', id: u.id, content: u.content, editedAt: u.editedAt });
+      if (isOpen(u.space, u.channel)) dispatch({ type: 'updated', id: u.id, content: u.content, editedAt: u.editedAt, attachments: u.attachments });
     },
     message_delete: (d) => {
       if (isOpen(d.space, d.channel)) dispatch({ type: 'deleted', id: d.id });

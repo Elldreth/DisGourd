@@ -114,7 +114,8 @@ const routes = [
         }
         const user = db.getUserByUsername(username);
         const check = await verifyPassword(password, user);
-        if (!user || !check.ok) {
+        // Bot accounts (the /imagine bot) never sign in.
+        if (!user || user.is_bot || !check.ok) {
           res.writeHead(401);
           return res.end(JSON.stringify({ error: 'Invalid credentials' }));
         }

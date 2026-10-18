@@ -206,4 +206,4 @@ async function handle(ctx) {
   return false;
 }
 
-module.exports = { handle, uploadFilePath, CONTENT_TYPES };
+module.exports = { handle, uploadFilePath, CONTENT_TYPES, UPLOADS_DIR };

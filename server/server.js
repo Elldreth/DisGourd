@@ -19,6 +19,10 @@ const { handleHttp, handleHttpError } = require('./http/handler');
 const { WEB_DIST } = require('./static');
 const { attachGateway } = require('./gateway');
 const { backupSettings, startBackupSchedule } = require('./backup');
+const imagine = require('./imagine');
+
+// /imagine: the bot account, and jobs a restart interrupted.
+imagine.start();
 
 // Create HTTP server
 const httpServer = http.createServer((req, res) => {

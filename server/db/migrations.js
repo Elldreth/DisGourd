@@ -428,6 +428,40 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 13,
+    name: 'imagine core',
+    up(db) {
+      // /imagine (P2-20a): bot accounts, 18+ channels, per-server settings and
+      // the generation jobs (who asked, where, which engine, how it went).
+      db.exec(`
+        ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE channels ADD COLUMN nsfw INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE spaces ADD COLUMN imagine_enabled INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE spaces ADD COLUMN imagine_daily_limit INTEGER;
+        CREATE TABLE imagine_jobs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          space_id INTEGER REFERENCES spaces(id) ON DELETE CASCADE,
+          channel_id INTEGER REFERENCES channels(id) ON DELETE SET NULL,
+          message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+          engine TEXT NOT NULL,
+          model TEXT,
+          prompt TEXT NOT NULL,
+          shape TEXT NOT NULL,
+          quality TEXT NOT NULL,
+          permissive INTEGER NOT NULL DEFAULT 0,
+          cost REAL NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'queued',
+          error TEXT,
+          created_at INTEGER NOT NULL,
+          started_at INTEGER,
+          finished_at INTEGER
+        );
+        CREATE INDEX idx_imagine_jobs_user ON imagine_jobs(user_id, created_at);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

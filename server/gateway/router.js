@@ -7,10 +7,11 @@ const { isPlainObject } = require('../http/util');
 const chat = require('./chat');
 const dm = require('./dm');
 const voice = require('./voice');
+const imagine = require('../imagine');
 
 // Fields that are always strings when present; a frame carrying an object or
 // number in one of them is malformed and dropped whole.
-const GATEWAY_STRING_FIELDS = ['op', 'space', 'channel', 'with', 'content', 'emoji'];
+const GATEWAY_STRING_FIELDS = ['op', 'space', 'channel', 'with', 'content', 'emoji', 'prompt', 'shape', 'quality', 'engine'];
 
 // A Map, not a plain object, so an op like 'constructor' can't resolve to an
 // inherited property.
@@ -38,6 +39,8 @@ const OPS = new Map([
   ['voice_signal', voice.ops.voice_signal],
   ['voice_mute', voice.ops.voice_mute],
   ['voice_share', voice.ops.voice_share],
+  // image generation (P2-20)
+  ['imagine', imagine.imagineOp],
 ]);
 
 function handleGatewayMessage(ws, raw) {
