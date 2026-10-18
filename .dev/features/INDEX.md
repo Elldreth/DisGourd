@@ -62,7 +62,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P2-19 | Custom server emoji (Container: a, b) | 2 | COMPLETE | M | see packet | migrations, routes/spaces, markdown, picker |
 | P2-19a | Custom emoji: storage + management API | 2 | COMPLETE | S–M | P1-01, P1-04 | migrations, db, routes/spaces, routes/uploads |
 | P2-19b | Custom emoji: `:name:` rendering, picker tab, reactions, settings | 2 | COMPLETE | M | P2-19a | markdown.jsx, EmojiPicker, MessageList, ChannelSettingsDialog/ServerSettings, gateway react op |
-| P2-20 | /imagine via kie.ai (Container: a, b, c) | 2 | PLANNED | M+ | see packet | integrations/kie.js, bot user |
+| P2-20 | /imagine with two engines, local ComfyUI or kie.ai (Container: a–d) | 2 | PLANNED | L | P2-21 | server/imagine/*, bot user, admin page, Composer |
 | P2-21 | Custom roles (Container: a–d) | 2 | COMPLETE | L | see packet | permissions.js, migrations, UI |
 | P2-21a | Roles schema seeded from tiers + a resolver that agrees with today's checks | 2 | COMPLETE | M | P1-01, P1-06 | migrations, db, permissions.js |
 | P2-21b | Permission resolution switched to roles | 2 | COMPLETE | M | P2-21a | permissions.js, db queries, routes, gateway |
@@ -161,7 +161,7 @@ Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at 
 - ~~P1-15: UID/GID for Unraid volumes (99:100?), plus a one-time chown needed.~~ 99:100 (2026-10-17); chown documented in the README.
 - ~~P2-12: proxy og:images to hide viewer IPs (v1 assumes no)?~~ Yes, built in P2-23 (2026-10-17).
 - P2-18: iOS install requirement for push; push message previews?
-- P2-20: kie.ai models, endpoints, cost, quota defaults, NSFW policy (unknown; do not invent).
+- P2-20: design agreed 2026-10-18 (two engines, shared options, NSFW only in 18+ channels). Still open: the ComfyUI models and VRAM, the kie.ai models and prices (check at build time), default limits.
 - P2-21: bitset permissions versus named thresholds.
 - ~~P2-22: thread model.~~ Decided 2026-10-17: hidden child channels; anyone who can post starts one; auto-archive after 7 quiet days; follow model (see P2-22-threads.md).
 - ~~P3-06: the template channel sets.~~ Approved as proposed (2026-10-17).
