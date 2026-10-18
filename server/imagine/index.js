@@ -165,14 +165,27 @@ function imagineOp({ ws, msg, userId }) {
   const engines = enabledEngines(settings);
   if (!engines.length) return refuse(ws, 'NO_ENGINE', 'No image engine is set up on this instance');
   if (!canDoAction(space.id, userId, 'generate_images')) return refuse(ws, 'NO_PERMISSION', 'You aren’t allowed to generate images here');
-  const prompt = typeof msg.prompt === 'string' ? msg.prompt.trim() : '';
+  // Retry / Variations (P3-23): `from` names one of the bot's messages in this
+  // channel; its finished job's prompt and options are used again.
+  let source = null;
+  if (msg.from != null) {
+    source = db.getImagineJobByMessage(Number(msg.from));
+    const here = db.channelRef(msg.space, msg.channel);
+    if (!source || source.space_id !== space.id || source.channel_id !== here?.channelId || !['done', 'failed'].includes(source.status)) {
+      return refuse(ws, 'NOT_FOUND', 'That image request can’t be repeated');
+    }
+  }
+  const prompt = source ? source.prompt : typeof msg.prompt === 'string' ? msg.prompt.trim() : '';
   if (!prompt || prompt.length > MAX_PROMPT) return refuse(ws, 'BAD_PROMPT', `Prompts are 1–${MAX_PROMPT} characters`);
-  const shape = msg.shape || 'square';
-  const quality = msg.quality || 'standard';
+  const shape = source ? source.shape : msg.shape || 'square';
+  const quality = source ? source.quality : msg.quality || 'standard';
   if (!SHAPES.includes(shape) || !QUALITIES.includes(quality)) return refuse(ws, 'BAD_OPTION', 'Unknown shape or quality');
-  const engine = msg.engine
-    ? engines.find((e) => e.id === msg.engine)
-    : engines.find((e) => e.id === settings.defaultEngine) || engines[0];
+  const fallback = () => engines.find((e) => e.id === settings.defaultEngine) || engines[0];
+  const engine = source
+    ? engines.find((e) => e.id === source.engine) || fallback() // the same engine while it's still on
+    : msg.engine
+      ? engines.find((e) => e.id === msg.engine)
+      : fallback();
   if (!engine) return refuse(ws, 'BAD_OPTION', 'That engine isn’t available');
   const limit = limitInfo(space.id, settings);
   if (usedToday(userId) >= limit.limit) return refuse(ws, 'LIMIT', limitMessage(msg.space, limit));

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #132)
 - **Effort:** S
 - **Depends on:** P2-20a / P2-20d (limits, server dialog), P2-20b (Settings section)
 - **Starting baseline:** main at ca68b0b (#131 merged)
