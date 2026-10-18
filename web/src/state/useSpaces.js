@@ -1,3 +1,4 @@
+import { nameColors } from '../roleColor.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../api.js';
 import {
@@ -58,6 +59,8 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const canManageEmoji = can('manage_emoji');
   const canKick = can('kick');
   const canManageRoles = can('manage_roles');
+  // username -> { dark, light } name colour from their highest coloured role.
+  const roleNameColors = useMemo(() => nameColors(members, roles), [members, roles]);
 
   async function loadSpaces() {
     try {
@@ -348,6 +351,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     myPosition,
     members,
     roles,
+    nameColors: roleNameColors,
     memberNames: members.map((m) => m.username),
     error,
     inviteCode,

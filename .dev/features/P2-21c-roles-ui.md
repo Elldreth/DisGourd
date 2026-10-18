@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P2-21)
 - **Phase:** 2
-- **State:** REVIEW
+- **State:** COMPLETE (merged #117)
 - **Effort:** M
 - **Depends on:** P2-21b (every check reads the roles tables)
 - **Starting baseline:** main at e37729a (P2-21b merged, #116)

@@ -166,3 +166,25 @@ test('member list: badges show the top role, and Roles… gives and takes roles'
   fireEvent.click(within(dialog).getByRole('checkbox', { name: /Mods/ }));
   await waitFor(() => expect(onToggleRole).toHaveBeenCalledWith('dee', 4, true));
 });
+
+test('the Roles… checklist keeps keyboard focus while a change saves, so Esc still closes it', async () => {
+  let finish;
+  const onToggleRole = vi.fn(() => new Promise((r) => (finish = r)));
+  render(
+    <MemberList space="S" members={members} roles={roles} currentUser="sandy" myRole="owner" canManageRoles myPosition={1e9} onMessageUser={() => {}} onToggleRole={onToggleRole} onKick={() => {}} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /dee/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Roles…' }));
+  const dialog = screen.getByRole('dialog', { name: 'Roles for dee' });
+  const box = within(dialog).getByRole('checkbox', { name: /Mods/ });
+  box.focus();
+  fireEvent.click(box);
+  expect(box.disabled).toBe(false);
+  expect(document.activeElement).toBe(box);
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: /Admin/ })); // ignored while saving
+  expect(onToggleRole).toHaveBeenCalledTimes(1);
+  finish();
+  await waitFor(() => expect(onToggleRole).toHaveBeenCalledWith('dee', 4, true));
+  fireEvent.keyDown(document.activeElement, { key: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Roles for dee' })).toBeNull());
+});

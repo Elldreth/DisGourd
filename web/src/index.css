@@ -196,6 +196,15 @@
   --code-muted: var(--color-gray-500);
 }
 
+/* Role colours on names (P2-21d): RoleName sets both theme versions, already
+   contrast-checked (roleColor.js); this picks the one for the theme. */
+.role-name {
+  color: var(--name-dark);
+}
+[data-theme='light'] .role-name {
+  color: var(--name-light);
+}
+
 html,
 body,
 #root {

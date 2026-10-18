@@ -3,6 +3,7 @@ import * as api from '../api.js';
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
+import RoleName from './RoleName.jsx';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
@@ -218,7 +219,7 @@ function RootMessage({ root, currentUser, emoji }) {
       <Avatar name={root.author || '?'} size={32} src={root.authorAvatar} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="text-sm font-semibold text-gray-100">{root.author || 'Unknown'}</span>
+          <RoleName name={root.author} className="text-sm font-semibold text-gray-100">{root.author || 'Unknown'}</RoleName>
           <span className="text-xs text-gray-500">{`Started by ${root.author || 'unknown'} · ${formatDay(root.timestamp)} ${formatTime(root.timestamp)}`}</span>
         </div>
         <div className="prose-chat mt-0.5 max-h-40 overflow-y-auto text-sm text-gray-200">

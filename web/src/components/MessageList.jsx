@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import RoleName from './RoleName.jsx';
 import Avatar from './Avatar.jsx';
 import Album from './Album.jsx';
 import Embed from './Embed.jsx';
@@ -766,7 +767,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
         )}
         {!grouped && (
           <div className="flex items-baseline gap-2">
-            <span className="font-semibold text-gray-100">{m.author || 'Unknown'}</span>
+            <RoleName name={m.author} className="font-semibold text-gray-100">{m.author || 'Unknown'}</RoleName>
             <span className="text-xs text-gray-500">{formatTime(m.timestamp)}</span>
           </div>
         )}

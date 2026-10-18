@@ -2,6 +2,7 @@ import EmptyState from './EmptyState.jsx';
 import { useEffect, useState } from 'react';
 import * as api from '../api.js';
 import Modal from './Modal.jsx';
+import RoleName from './RoleName.jsx';
 import Avatar from './Avatar.jsx';
 import { formatDay, formatTime } from '../util.js';
 
@@ -76,7 +77,7 @@ export default function PinsPanel({ space, channel, version, canPin = false, onU
                   <Avatar name={m.author || '?'} size={28} src={m.authorAvatar} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
-                      <span className="text-sm font-semibold text-gray-100">{m.author || 'Unknown'}</span>
+                      <RoleName name={m.author} className="text-sm font-semibold text-gray-100">{m.author || 'Unknown'}</RoleName>
                       <span className="text-xs text-gray-500">
                         {formatDay(m.timestamp)} {formatTime(m.timestamp)}
                       </span>
