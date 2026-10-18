@@ -7,6 +7,10 @@ const { canViewChannel, canPostChannel, canDoAction } = require('../permissions'
 const { deliverToChannelViewers } = require('../gateway/delivery');
 const { refusedReason } = require('./promptCheck');
 const runner = require('./runner');
+const fs = require('fs');
+const path = require('path');
+const { imageSize } = require('./imageSize');
+const { UPLOADS_DIR } = require('../routes/uploads');
 
 const ENGINES = new Map([
   ['comfyui', require('./engines/comfyui')],
@@ -16,6 +20,10 @@ const ENGINES = new Map([
 const SHAPES = ['square', 'portrait', 'landscape', 'wide'];
 const QUALITIES = ['draft', 'standard', 'high'];
 const MAX_PROMPT = 1000;
+// The Upscale button (P3-29): 2×, with the longest side capped.
+const UPSCALE_FACTOR = 2;
+const UPSCALE_MAX_SIDE = 4096;
+const MIN_UPSCALE = 1.25;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const DEFAULTS = { defaultEngine: null, permissive: false, dailyLimit: 20, dailyCeiling: 100, engines: {} };
@@ -142,6 +150,7 @@ function decorateSpaces(list, userId) {
         dailyLimit: space ? dailyLimitFor(space.id, settings) : 0,
         limitSource: space ? limitInfo(space.id, settings).source : 'instance', // P3-21
         instanceLimit: Math.min(settings.dailyLimit, settings.dailyCeiling), // what a blank server limit falls back to
+        canUpscale: engines.some((e) => e.id === 'comfyui'), // P3-29: the Upscale button runs on ComfyUI
         usedToday: used,
         engines,
       },
@@ -153,6 +162,38 @@ function decorateSpaces(list, userId) {
 // A refusal: { type: 'error', op: 'imagine', code, error }.
 function refuse(ws, code, error) {
   if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'error', op: 'imagine', code, error }));
+}
+
+// The image an upscale starts from (P3-29), sized and capped, or null after
+// refusing. The button needs a finished, not-yet-upscaled image; a Retry of a
+// failed upscale reuses the image it started from.
+function upscaleSource(ws, msg, source) {
+  const retry = source.kind === 'upscale' && source.status === 'failed';
+  if (!retry && (source.status !== 'done' || source.kind === 'upscale')) {
+    refuse(ws, 'NOT_FOUND', source.kind === 'upscale' ? 'That image is already upscaled' : 'That image can’t be upscaled');
+    return null;
+  }
+  const url = retry ? source.source_url : db.getMessageAttachments(source.message_id)[0];
+  const m = typeof url === 'string' && url.match(/^\/uploads\/([a-f0-9]+)\/([\w.-]+\.(png|jpe?g|webp))$/i);
+  const file = m && path.join(UPLOADS_DIR, m[1], m[2]);
+  if (!file || !fs.existsSync(file)) {
+    refuse(ws, 'NOT_FOUND', 'That image is gone');
+    return null;
+  }
+  const buffer = fs.readFileSync(file);
+  const size = imageSize(buffer);
+  if (!size) {
+    refuse(ws, 'NOT_FOUND', 'That image can’t be upscaled');
+    return null;
+  }
+  const factor = Math.min(UPSCALE_FACTOR, UPSCALE_MAX_SIDE / Math.max(size.width, size.height));
+  if (factor < MIN_UPSCALE) {
+    refuse(ws, 'TOO_BIG', `That image is already about as big as upscaling goes (${UPSCALE_MAX_SIDE} px)`);
+    return null;
+  }
+  const ext = m[3].toLowerCase().replace('jpeg', 'jpg');
+  const contentType = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' }[ext];
+  return { url, request: { buffer, contentType, ext, width: size.width, height: size.height, factor: Math.round(factor * 1000) / 1000 } };
 }
 
 function imagineOp({ ws, msg, userId }) {
@@ -175,13 +216,23 @@ function imagineOp({ ws, msg, userId }) {
       return refuse(ws, 'NOT_FOUND', 'That image request can’t be repeated');
     }
   }
+  // Upscale (P3-29): the button on a finished image, or Retry of a failed upscale.
+  const upscaling = !!source && (msg.upscale === true || (source.kind === 'upscale' && source.status === 'failed'));
+  let upscale = null;
+  if (upscaling) {
+    upscale = upscaleSource(ws, msg, source);
+    if (!upscale) return;
+  }
   const prompt = source ? source.prompt : typeof msg.prompt === 'string' ? msg.prompt.trim() : '';
   if (!prompt || prompt.length > MAX_PROMPT) return refuse(ws, 'BAD_PROMPT', `Prompts are 1–${MAX_PROMPT} characters`);
   const shape = source ? source.shape : msg.shape || 'square';
   const quality = source ? source.quality : msg.quality || 'standard';
   if (!SHAPES.includes(shape) || !QUALITIES.includes(quality)) return refuse(ws, 'BAD_OPTION', 'Unknown shape or quality');
   const fallback = () => engines.find((e) => e.id === settings.defaultEngine) || engines[0];
-  const engine = source
+  if (upscaling && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Upscaling needs ComfyUI with an upscale model (Settings → Image generation)');
+  const engine = upscaling
+    ? engines.find((e) => e.id === 'comfyui')
+    : source
     ? engines.find((e) => e.id === source.engine) || fallback() // the same engine while it's still on
     : msg.engine
       ? engines.find((e) => e.id === msg.engine)
@@ -189,11 +240,11 @@ function imagineOp({ ws, msg, userId }) {
   if (!engine) return refuse(ws, 'BAD_OPTION', 'That engine isn’t available');
   const limit = limitInfo(space.id, settings);
   if (usedToday(userId) >= limit.limit) return refuse(ws, 'LIMIT', limitMessage(msg.space, limit));
-  const refused = refusedReason(prompt);
+  const refused = upscaling ? null : refusedReason(prompt); // an upscale makes nothing new
   if (refused) return refuse(ws, 'REFUSED', refused);
 
   const config = engineConfig(settings, engine.id);
-  const request = { prompt, shape, quality };
+  const request = { prompt, shape, quality, ...(upscale ? { upscale: upscale.request } : {}) };
   const permissive = !!settings.permissive && db.isChannelNsfw(msg.space, msg.channel);
   const ref = db.channelRef(msg.space, msg.channel);
   const user = db.getUserById(userId);
@@ -201,10 +252,11 @@ function imagineOp({ ws, msg, userId }) {
   if (overBudget(engine, config, cost)) return refuse(ws, 'BUDGET', `This instance's ${engine.name} budget for the month is used up`);
   const job = {
     engine, config, request, permissive, cost,
-    space: msg.space, channel: msg.channel, username: user.username,
+    space: msg.space, channel: msg.channel, username: user.username, kind: upscale ? 'upscale' : 'generate',
   };
   job.id = db.createImagineJob({
     userId, spaceId: space.id, channelId: ref.channelId, engine: engine.id, prompt, shape, quality, permissive, cost: job.cost,
+    kind: job.kind, sourceUrl: upscale ? upscale.url : null,
   });
   const content = runner.text.queued(job, runner.placeFor(engine.id));
   const stored = db.postAsBot(msg.space, msg.channel, content);

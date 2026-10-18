@@ -13,10 +13,11 @@ const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 const ORDINAL = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
 
 // The placeholder's text at each stage.
+// An upscale (P3-29) says so; its failure reads like any other, so it gets Retry.
 const text = {
-  queued: (job, place) => `🎨 Imagining for **${job.username}**… ${ORDINAL(place)} in line`,
-  running: (job) => `🎨 Imagining for **${job.username}**… generating`,
-  done: (job) => `🎨 **${job.username}** imagined: ${job.request.prompt}`,
+  queued: (job, place) => `${job.kind === 'upscale' ? '🔍 Upscaling' : '🎨 Imagining'} for **${job.username}**… ${ORDINAL(place)} in line`,
+  running: (job) => `${job.kind === 'upscale' ? '🔍 Upscaling' : '🎨 Imagining'} for **${job.username}**… ${job.kind === 'upscale' ? 'working' : 'generating'}`,
+  done: (job) => (job.kind === 'upscale' ? `🔍 **${job.username}** upscaled: ${job.request.prompt}` : `🎨 **${job.username}** imagined: ${job.request.prompt}`),
   failed: (job, reason) => `⚠️ Couldn't imagine that for **${job.username}**: ${reason}`,
 };
 

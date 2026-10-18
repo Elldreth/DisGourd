@@ -1783,9 +1783,9 @@ function setChannelNsfw(spaceName, channelName, on) {
 const JOB_COLUMNS = { status: 'status', error: 'error', cost: 'cost', model: 'model', startedAt: 'started_at', finishedAt: 'finished_at', messageId: 'message_id' };
 function createImagineJob(j) {
   const info = db.prepare(`
-    INSERT INTO imagine_jobs(user_id, space_id, channel_id, engine, model, prompt, shape, quality, permissive, cost, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
-  `).run(j.userId, j.spaceId, j.channelId, j.engine, j.model || null, j.prompt, j.shape, j.quality, j.permissive ? 1 : 0, j.cost || 0, Date.now());
+    INSERT INTO imagine_jobs(user_id, space_id, channel_id, engine, model, prompt, shape, quality, permissive, cost, status, created_at, kind, source_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
+  `).run(j.userId, j.spaceId, j.channelId, j.engine, j.model || null, j.prompt, j.shape, j.quality, j.permissive ? 1 : 0, j.cost || 0, Date.now(), j.kind || 'generate', j.sourceUrl || null);
   return Number(info.lastInsertRowid);
 }
 function updateImagineJob(id, fields) {
@@ -1801,6 +1801,11 @@ function updateImagineJob(id, fields) {
 }
 function getImagineJob(id) {
   return db.prepare('SELECT * FROM imagine_jobs WHERE id = ?').get(id);
+}
+// A message's attachment URLs (P3-29: the image an upscale starts from).
+function getMessageAttachments(messageId) {
+  const row = db.prepare('SELECT attachment_url AS attachment, attachments FROM messages WHERE id = ?').get(messageId);
+  return row ? hydrateAttachments(row).attachments : [];
 }
 // The job behind one of the bot's messages (P3-23: Retry and Variations).
 function getImagineJobByMessage(messageId) {
@@ -1950,6 +1955,7 @@ module.exports = {
   updateImagineJob,
   getImagineJob,
   getImagineJobByMessage,
+  getMessageAttachments,
   countImagineJobsSince,
   lastImagineCost,
   imagineCreditsSince,
