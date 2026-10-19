@@ -7,7 +7,7 @@ const MODELS = [
   { name: 'SD1\\absolutereality_v16.safetensors', family: 'sd15' },
 ];
 // What Save sends when nothing in Advanced was touched (P3-31).
-const NO_ADVANCED = { sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, detailer: false, detector: null, workflowMode: 'builtin', workflow: null, upscaleWorkflow: null };
+const NO_ADVANCED = { sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, varyLoops: 2, detailer: false, detector: null, workflowMode: 'builtin', workflow: null, upscaleWorkflow: null };
 const view = (comfy = {}) => ({
   defaultEngine: null,
   permissive: false,
@@ -361,3 +361,13 @@ test('P3-34: a refused workflow shows the server’s reason; a saved one comes b
   expect(await screen.findByText('Workflow: your ComfyUI doesn’t have this node: MyCustomSampler')).toBeTruthy();
 });
 
+test('P3-36a: Variation loops in Advanced (a loopback, explained) are saved', async () => {
+  api.saveImagineSettings.mockImplementation(async (body) => ({ ...view(body.engines.comfyui), defaultEngine: 'comfyui' }));
+  render(<ImagineAdmin />);
+  const loops = await screen.findByLabelText('Variation loops');
+  expect(loops.value).toBe('2');
+  expect(screen.getByText(/each loop repaints the whole image/)).toBeTruthy();
+  fireEvent.change(loops, { target: { value: '3' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ varyLoops: 3 }));
+});

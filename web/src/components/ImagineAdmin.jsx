@@ -99,7 +99,7 @@ export default function ImagineAdmin() {
       sampler: c.sampler || '', scheduler: c.scheduler || '', cfgScale: c.cfgScale ?? '', negative: c.negative || '',
       steps: { draft: c.steps?.draft ?? '', standard: c.steps?.standard ?? '', high: c.steps?.high ?? '' },
       detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.4,
-      detailerPasses: c.detailerPasses || 1, tilePasses: c.tilePasses || 1,
+      detailerPasses: c.detailerPasses || 1, tilePasses: c.tilePasses || 1, varyLoops: c.varyLoops || 2,
       workflowMode: c.workflowMode || 'builtin', workflow: c.workflow || '', upscaleWorkflow: c.upscaleWorkflow || '',
     });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
@@ -202,6 +202,7 @@ export default function ImagineAdmin() {
             cfgScale: numOrNull(comfy.cfgScale),
             steps: { draft: numOrNull(comfy.steps.draft), standard: numOrNull(comfy.steps.standard), high: numOrNull(comfy.steps.high) },
             negative: comfy.negative.trim() || null,
+            varyLoops: Number(comfy.varyLoops),
             detailer: comfy.detailer,
             detector: comfy.detector || null,
             ...(comfy.detailer ? { detailerDenoise: Number(comfy.detailerDenoise), detailerPasses: Number(comfy.detailerPasses) } : {}),
@@ -584,6 +585,16 @@ export default function ImagineAdmin() {
                     onChange={(e) => setComfy((c) => ({ ...c, negative: e.target.value }))} className="input" />
                   <p className="mt-1 text-xs text-gray-500">Replaces the built-in one. Outside 18+ channels the safety words are still added for SD 1.5 / SDXL. Flux and Z-Image mostly ignore it.</p>
                 </div>
+                <div>
+                  <label htmlFor="imagine-vary-loops" className={heading}>Variation loops</label>
+                  <select id="imagine-vary-loops" value={comfy.varyLoops} onChange={(e) => setComfy((c) => ({ ...c, varyLoops: Number(e.target.value) }))} className="input">
+                    {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Subtle and Strong variations are a loopback: each loop repaints the whole image (about 0.3 for Subtle, 0.5 for Strong, a new seed each
+                    time), runs the face detailer if it’s on, and feeds the result into the next loop.
+                  </p>
+                </div>
                 <fieldset disabled={parts.detailerAvailable === false && !comfy.detailer}>
                   <label className="flex items-center gap-2 text-sm text-gray-200">
                     <input type="checkbox" checked={comfy.detailer} onChange={(e) => setComfy((c) => ({ ...c, detailer: e.target.checked }))} className="h-4 w-4 accent-brand" />
@@ -616,11 +627,14 @@ export default function ImagineAdmin() {
                           onChange={(e) => setComfy((c) => ({ ...c, detailerDenoise: e.target.value }))} className="input" />
                       </div>
                       <div>
-                        <label htmlFor="imagine-detailer-passes" className={heading}>Face detailer passes</label>
+                        <label htmlFor="imagine-detailer-passes" className={heading} title="Repeats the repaint inside each face crop; not a loopback of the whole image">Face detailer passes</label>
                         <select id="imagine-detailer-passes" value={comfy.detailerPasses} onChange={(e) => setComfy((c) => ({ ...c, detailerPasses: Number(e.target.value) }))} className="input">
                           {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                       </div>
+                      <p className="col-span-2 text-xs text-gray-500">
+                        Passes repeat the repaint inside each face crop (it isn’t a loopback of the whole image; that’s Variation loops above). 1 is usually enough.
+                      </p>
                     </div>
                   )}
                 </fieldset>

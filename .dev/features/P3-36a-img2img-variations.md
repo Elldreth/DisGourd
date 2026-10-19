@@ -27,7 +27,7 @@
   - SD 1.5 keeps guide 512 with max 768.
 
 ## Acceptance criteria
-- [x] Server: subtle / strong variations queue a `vary` job with strength and source_url, counted, posted for the presser. Varying an upscaled image works. Refused: a running or failed generate job (`NOT_FOUND`), ComfyUI off (`NO_ENGINE`). A failed variation retries as a variation with the same strength.
+- [x] Server: subtle / strong variations (0.3 / 0.5 per loop, after review) queue a `vary` job with strength and source_url, counted, posted for the presser. Varying an upscaled image works. Refused: a running or failed generate job (`NOT_FOUND`), ComfyUI off (`NO_ENGINE`). A failed variation retries as a variation with the same strength.
 - [x] Engine: the img2img workflow wiring (LoadImage → ImageScale → VAEEncode → KSampler denoise, no empty latent), with hires and detailer still applied; the detailer's max_size by tier, crop factor 2.
 - [x] Web: Subtle / Strong buttons on generated, varied and upscaled images when `canVary`; a single Variations without it; the presses send `{ from, vary }`.
 - [x] All suites pass; `vite build` is clean.
@@ -46,3 +46,25 @@
 | Server | `imagine-comfyui.test.js` (35, 3 new): `canVary`. A kie.ai-made image varied subtly → job vary / comfyui / strength 0.35 / source_url / same prompt and shape, counted; denoise 0.35 sent; the uploaded `disgourd-vary-…` image fed to LoadImage; message "🎲 **admin** varied (subtle): …". Strong from the variation → 0.6. An upscaled image can be varied. A failed variation retries as a variation at 0.6 from the same image. A failed generate → NOT_FOUND; ComfyUI off → NO_ENGINE. Engine: nodes 1 LoadImage → 2 ImageScale (the size of the hires first pass, centre) → 5 VAEEncode → 3 denoise 0.35 / latent 5; hires 24 and detailer 41 (from 25, max 1536 at medium, crop 2) still applied; Flux encodes with VAE 13; without an image, EmptyLatentImage and denoise 1; max_size by tier 1024 / 1536 / 2048, SD 1.5 512 / 768. All server suites: 361 |
 | Web | `ImagineAgain.test.jsx` (6, 2 new): the `varied` kind (and not for "wild"); with canVary, Subtle / Strong on generated, upscaled and varied images (3 each), no single Variations, Upscale on generated and varied only (2), Retry on the failure; presses send `{ from: 1, vary: 'subtle' }` and `{ from: 6, vary: 'strong' }`; without canVary the single Variations stays. Web suites: 76 files, 645; `vite build` clean |
 | Live (user's ComfyUI) | Detailer after the fix, the same High setup and seed: max_size 2048, crop 2 → mean change 12.57 (about double), with visibly crisper eyes, lashes and line work. Variations of the 1024² gourd image (the user's SDXL model): subtle (0.35) 4.2 s keeps the picture and touches it up; strong (0.6) 3.9 s keeps the layout and redraws the face, hair and details. Sandbox restarted on this branch (v19): Tx Check `canVary` true, and the latest image shows Subtle variation / Strong variation / Upscale 2× |
+
+## Change after review: variations are an img2img loopback (user, 2026-10-19)
+- **The ask** (on reviewing #148): "when you are doing the multi pass are you applying the detail on pass 1, then feeding the new image into pass 2? The idea is that the passes are a loopback. img2img loopback with face detail."
+- **What the face detailer's Passes did:** FaceDetailer's `cycle` repeats the repaint inside each face crop. It isn't a whole-image loopback. That setting stays, with a hint saying so.
+- **Decisions (user):**
+  - the loopback applies to Subtle / Strong variations;
+  - the loop count comes from Settings;
+  - Subtle repaints about 0.3 per loop and Strong about 0.5;
+  - each loop gets a different seed;
+  - the detailer's Passes stays, explained.
+- **Built:**
+  - Settings → Advanced "Variation loops" (1–4, default 2). `VARY` is now subtle 0.3 / strong 0.5.
+  - **A variation works at the final size,** the hires size on High. There's no separate hires pass; the loops refine at full size.
+  - **Loop 1** is LoadImage → ImageScale → VAEEncode → KSampler (3) → VAEDecode (8) → FaceDetailer (41, if on).
+  - **Loops 2…n** are VAEEncode (100+10k) → KSampler (+1, seed + k, same strength) → VAEDecode (+2) → FaceDetailer (+3, seed + k). The image is saved from the last loop.
+
+| Check | Evidence |
+|---|---|
+| Engine | `imagine-comfyui.test.js`: High portrait at medium with 3 loops and the detailer → output at the hires size, image scaled to it, node 3 seed 9 / 0.3, no node 24, 41 from 8 at max 1536; 110 encodes 41; 111 seed 10 / 0.3 / latent 110; 112 decodes; 113 details 112 at seed 10; 120 encodes 113; 121 seed 11; save from 123. The default of 2 loops without the detailer → save from 112. Flux's VAE (13) and guidance (10) are used in the loops. Without an image, no loops. `varyLoops` is validated 1–4. Chat: subtle 0.3 and strong 0.5 stored and sent; loop 2's seed is loop 1's + 1 |
+| Web | `ImagineAdmin.test.jsx`: Variation loops (default 2, with the loopback explanation) is saved as 3 |
+| Suites | Server 361, web 646, `vite build` clean |
+| Live (user's ComfyUI, the user's SDXL model and detailer, same seed) | gourd 1024²: Subtle with 2 loops 34.3 s; Strong with 1 loop 17.0 s, 2 loops 32.6 s, 3 loops 49.6 s. The changes build up with each loop (background branches, cords and outfit details evolve further each time) while the composition and face hold |

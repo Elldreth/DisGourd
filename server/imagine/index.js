@@ -24,9 +24,10 @@ const MAX_PROMPT = 1000;
 const UPSCALE_FACTOR = 2;
 const UPSCALE_MAX_SIDE = 4096;
 const MIN_UPSCALE = 1.25;
-// Variations (P3-36a): img2img from the image, at these strengths (denoise).
-const VARY = { subtle: 0.35, strong: 0.6 };
-const strengthName = (s) => Object.keys(VARY).find((k) => VARY[k] === s) || (s < 0.5 ? 'subtle' : 'strong');
+// Variations (P3-36a): an img2img loopback from the image, repainting this
+// much (denoise) on each loop; the loop count is a ComfyUI setting.
+const VARY = { subtle: 0.3, strong: 0.5 };
+const strengthName = (s) => Object.keys(VARY).find((k) => VARY[k] === s) || (s < 0.4 ? 'subtle' : 'strong');
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const DEFAULTS = { defaultEngine: null, permissive: false, dailyLimit: 20, dailyCeiling: 100, engines: {} };
