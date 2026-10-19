@@ -4,6 +4,7 @@ import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import TimedOutNotice from './TimedOutNotice.jsx';
+import { cooldownKey, useCooldown } from '../slowmode.js';
 import RoleName from './RoleName.jsx';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
@@ -28,6 +29,7 @@ export default function ThreadPanel({
   status,
   canPost = true,
   timedOut = null, // P3-26c: { until, reason } while I'm timed out here
+  slowmode = 0, // P3-26d: seconds between my posts here (0: off, or I'm exempt)
   messages,
   currentUser,
   typingUsers = [],
@@ -53,6 +55,7 @@ export default function ThreadPanel({
 }) {
   const [root, setRoot] = useState(thread.root || null); // null while loading; false = deleted
   const [replyingTo, setReplyingTo] = useState(null);
+  const cooldown = useCooldown(cooldownKey(space, thread.channel)); // slow mode (P3-26d), from the parent
   const composerRef = useRef(null);
   const listRef = useRef(null);
   const panelRef = useRef(null);
@@ -204,6 +207,7 @@ export default function ThreadPanel({
           customEmoji={emoji}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
+          cooldown={slowmode ? cooldown : 0}
         />
       ) : timedOut ? (
         <TimedOutNotice timeout={timedOut} />

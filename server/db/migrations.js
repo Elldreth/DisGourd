@@ -614,6 +614,15 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 23,
+    name: 'slow mode',
+    up(db) {
+      // P3-26d: seconds between one person's posts in a channel (0 = off).
+      // Threads use their parent's.
+      db.exec('ALTER TABLE channels ADD COLUMN slowmode_seconds INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

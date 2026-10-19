@@ -706,7 +706,7 @@ function getUserSpaces(userId) {
   // In layout order (P3-25a): the uncategorized top, then each category in
   // order, channels by position within each.
   const channelStmt = db.prepare(`
-    SELECT c.id, c.name, c.type, c.view_role AS view, c.post_role AS post, c.nsfw, c.topic, c.category_id AS category, c.position
+    SELECT c.id, c.name, c.type, c.view_role AS view, c.post_role AS post, c.nsfw, c.topic, c.category_id AS category, c.position, c.slowmode_seconds AS slowmode
     FROM channels c LEFT JOIN channel_categories k ON k.id = c.category_id
     WHERE c.space_id = ? AND c.type IS NOT 'thread'
     ORDER BY k.id IS NOT NULL, k.position, k.id, c.position, c.id
@@ -727,6 +727,7 @@ function getUserSpaces(userId) {
       channelMeta[c.name] = {
         type: c.type, view: c.view || 1, post: c.post || 1, canPost: c.can.post, nsfw: !!c.nsfw, topic: c.topic || null, private: !ev.view, readOnly: ev.view && !ev.post,
         category: c.category ?? null, position: c.position, // P3-25a
+        slowmode: c.slowmode || 0, // P3-26d: seconds, 0 = off
       };
     }
     return {
@@ -2002,6 +2003,30 @@ function setChannelTopic(spaceName, channelName, topic) {
     UPDATE channels SET topic = ? WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ? AND type IS NOT 'thread'
   `).run(topic || null, spaceName, channelName).changes > 0;
 }
+// ---- Slow mode (P3-26d) ----
+function setChannelSlowmode(spaceName, channelName, seconds) {
+  return db.prepare(`
+    UPDATE channels SET slowmode_seconds = ? WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ? AND type IS NOT 'thread'
+  `).run(seconds, spaceName, channelName).changes > 0;
+}
+// A channel's slow mode in seconds; a thread answers with its parent's.
+function slowmodeFor(spaceName, channelName) {
+  const row = db.prepare(`
+    SELECT COALESCE(p.slowmode_seconds, c.slowmode_seconds) AS s
+    FROM channels c JOIN spaces sp ON sp.id = c.space_id LEFT JOIN channels p ON p.id = c.parent_id
+    WHERE sp.name = ? AND c.name = ?
+  `).get(spaceName, channelName);
+  return row ? row.s || 0 : 0;
+}
+// When someone last posted in a channel (ms), or 0.
+function lastPostAt(spaceName, channelName, userId) {
+  const row = db.prepare(`
+    SELECT MAX(m.created_at) AS at FROM messages m JOIN channels c ON c.id = m.channel_id JOIN spaces sp ON sp.id = c.space_id
+    WHERE sp.name = ? AND c.name = ? AND m.author_id = ?
+  `).get(spaceName, channelName, userId);
+  return row && row.at ? row.at : 0;
+}
+
 function setChannelNsfw(spaceName, channelName, on) {
   return db.prepare(`
     UPDATE channels SET nsfw = ? WHERE space_id = (SELECT id FROM spaces WHERE name = ?) AND name = ? AND type IS NOT 'thread'
@@ -2164,6 +2189,9 @@ module.exports = {
   logModAction,
   getModLog,
   setMemberTimeout,
+  setChannelSlowmode,
+  slowmodeFor,
+  lastPostAt,
   getMemberTimeout,
   getTimeoutsMap,
   banMember,

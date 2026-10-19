@@ -16,7 +16,7 @@ const IMAGINE_RE = /^\/imagine(?:\s|$)/i;
 // it returns whether there was one to edit.
 // `imagine` (optional, from imagineState): offers /imagine — the panel while
 // the text starts with it, and Enter sends the request instead of a message.
-const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], customEmoji = [], replyingTo, onCancelReply, onEditLast, imagine = null }, ref) {
+const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyping, placeholder, mentionCandidates = [], customEmoji = [], replyingTo, onCancelReply, onEditLast, imagine = null, cooldown = 0 }, ref) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState([]); // [{ url, name, size }] — an album
   const [spoilerPending, setSpoilerPending] = useState(false);
@@ -198,7 +198,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
       return;
     }
     const content = text.trim();
-    if ((!content && pending.length === 0) || disabled) return;
+    if ((!content && pending.length === 0) || disabled || cooldown > 0) return; // slow mode: keep the text
     onSend(content, pending.map((p) => p.url), pending.length > 0 ? spoilerPending : false);
     setText('');
     setPending([]);
@@ -450,14 +450,24 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
         </div>
         <button
           onClick={submit}
-          disabled={disabled || (!text.trim() && pending.length === 0)}
-          aria-label="Send"
-          title="Send"
+          disabled={disabled || cooldown > 0 || (!text.trim() && pending.length === 0)}
+          aria-label={cooldown > 0 ? `Slow mode: ${cooldown} seconds` : 'Send'}
+          title={cooldown > 0 ? 'Slow mode is on in this channel' : 'Send'}
           className="tap flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover active:scale-95 disabled:opacity-40 disabled:active:scale-100"
         >
-          {/* Phones get the icon alone; the word comes back from md up. */}
-          <Icon name="send" size={18} className="md:hidden" />
-          <span className="hidden md:inline">Send</span>
+          {cooldown > 0 ? (
+            // Slow mode (P3-26d): count down instead of "Send".
+            <span className="flex items-center gap-1 tabular-nums">
+              <Icon name="clock" size={15} />
+              <span className="hidden md:inline">Slow mode:</span> {cooldown} s
+            </span>
+          ) : (
+            <>
+              {/* Phones get the icon alone; the word comes back from md up. */}
+              <Icon name="send" size={18} className="md:hidden" />
+              <span className="hidden md:inline">Send</span>
+            </>
+          )}
         </button>
       </div>
     </div>

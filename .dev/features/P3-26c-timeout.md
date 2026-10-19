@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-26)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #154)
 - **Starting baseline:** main at b0da6f8 (#153 merged)
 - **Effort:** M
 - **Added by the user (2026-10-19):** "Also end a banned or removed person's voice session while you're in the voice code" (P3-26b Discovered Work).
