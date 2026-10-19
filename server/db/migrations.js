@@ -572,6 +572,31 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 21,
+    name: 'bans',
+    up(db) {
+      // P3-26b: who is banned from which server. Per account, kept until unbanned.
+      db.exec(`
+        CREATE TABLE bans (
+          space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          actor_id INTEGER,
+          reason TEXT,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (space_id, user_id)
+        );
+      `);
+      // The new "Ban members" permission goes to each server's seeded Admin role.
+      const admins = db.prepare("SELECT id, permissions FROM roles WHERE name = 'Admin' AND is_default = 0").all();
+      const save = db.prepare('UPDATE roles SET permissions = ? WHERE id = ?');
+      for (const r of admins) {
+        let list = [];
+        try { list = JSON.parse(r.permissions) || []; } catch { list = []; }
+        if (!list.includes('ban_members')) save.run(JSON.stringify([...list, 'ban_members']), r.id);
+      }
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -290,6 +290,7 @@ function JoinPanel({ fieldRef, initialCode, onJoin, onDone, onCancel }) {
           <div className="text-xs text-gray-400">
             {preview.members} member{preview.members === 1 ? '' : 's'}
             {preview.alreadyMember && ' · You’re already a member'}
+            {preview.banned && <span className="text-danger"> · You’re banned from this server</span>}
           </div>
         </div>
       )}
@@ -298,7 +299,7 @@ function JoinPanel({ fieldRef, initialCode, onJoin, onDone, onCancel }) {
           {error}
         </p>
       )}
-      <Buttons busy={busy} disabled={!code} label={preview?.alreadyMember ? 'Open' : 'Join'} onCancel={onCancel} />
+      <Buttons busy={busy} disabled={!code || !!preview?.banned} label={preview?.alreadyMember ? 'Open' : 'Join'} onCancel={onCancel} />
     </form>
   );
 }

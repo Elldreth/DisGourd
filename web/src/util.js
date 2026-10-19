@@ -11,6 +11,7 @@ export const PERMISSION_ACTIONS = [
   { key: 'delete_channel', label: 'Delete channels' },
   { key: 'invite', label: 'Invite people' },
   { key: 'kick', label: 'Remove members' },
+  { key: 'ban_members', label: 'Ban members' },
   { key: 'delete_others_messages', label: "Delete others' messages" },
   { key: 'pin_messages', label: 'Pin messages' },
   { key: 'edit_server', label: 'Edit server (name, icon)' },

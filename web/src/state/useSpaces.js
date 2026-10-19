@@ -25,6 +25,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const [roles, setRoles] = useState([]); // the current server's roles, highest first
   const [error, setError] = useState('');
   const [inviteCode, setInviteCode] = useState(null);
+  const [bannedFrom, setBannedFrom] = useState(null); // P3-26b: { space, reason, at } after a ban
   const [iconCrop, setIconCrop] = useState(null); // { src: File|url, initialCrop } while framing a server icon
 
   // Handlers run outside render, so they read the latest selection from refs.
@@ -58,6 +59,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const canPin = can('pin_messages');
   const canManageEmoji = can('manage_emoji');
   const canKick = can('kick');
+  const canBan = can('ban_members');
   const canManageRoles = can('manage_roles');
   // username -> { dark, light } name colour from their highest coloured role.
   const roleNameColors = useMemo(() => nameColors(members, roles), [members, roles]);
@@ -189,6 +191,13 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
         if (spaceRef.current === f.space) goToFirst(next);
       });
     },
+    // You were banned: the server leaves the rail, and App shows the notice.
+    banned: (f) => {
+      setBannedFrom({ space: f.space, reason: f.reason || null, at: Date.now() });
+      loadSpaces().then((next) => {
+        if (spaceRef.current === f.space) goToFirst(next);
+      });
+    },
     members_changed: (f) => {
       if (f.space === spaceRef.current) refreshMembers(f.space);
       // A role change may affect *our own* permissions/channel visibility, so
@@ -268,6 +277,11 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       refreshMembers(currentSpace);
     }),
     reloadRoles: () => refreshMembers(spaceRef.current),
+    // Throws, so the Ban dialog can show the server's message.
+    banMember: async (username, options) => {
+      await api.banMember(currentSpace, username, options);
+      refreshMembers(currentSpace);
+    },
     kickMember: attempt('Could not remove member', async (username) => {
       await api.kickMember(currentSpace, username);
       refreshMembers(currentSpace);
@@ -348,7 +362,9 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     canPin,
     canManageEmoji,
     canKick,
+    canBan,
     canManageRoles,
+    bannedFrom,
     myPosition,
     members,
     roles,

@@ -120,3 +120,19 @@ test('the channel history query uses idx_messages_channel', () => {
     ORDER BY m.id DESC LIMIT 50`).all('x', 'y').map((r) => r.detail).join('\n');
   expect(plan).toMatch(/idx_messages_channel/);
 });
+
+test('v21 gives existing seeded Admin roles "Ban members", and leaves other roles alone', () => {
+  const raw = new Database(':memory:');
+  runMigrations(raw, MIGRATIONS.filter((m) => m.version < 21));
+  raw.prepare("INSERT INTO users(id, username, email, password_hash, salt) VALUES (1, 'o', 'o@x', 'h', 's')").run();
+  raw.prepare("INSERT INTO spaces(id, name, owner_id) VALUES (1, 'S', 1)").run();
+  const add = raw.prepare('INSERT INTO roles(space_id, name, color, position, permissions, is_default, created_at) VALUES (1, ?, NULL, ?, ?, ?, 0)');
+  add.run('@everyone', 0, '["invite"]', 1);
+  add.run('Admin', 2, '["kick","pin_messages"]', 0);
+  add.run('Helpers', 1, '["pin_messages"]', 0);
+  runMigrations(raw);
+  const perms = (name) => JSON.parse(raw.prepare('SELECT permissions FROM roles WHERE name = ?').get(name).permissions);
+  expect(perms('Admin')).toEqual(['kick', 'pin_messages', 'ban_members']);
+  expect(perms('Helpers')).toEqual(['pin_messages']);
+  expect(perms('@everyone')).toEqual(['invite']);
+});

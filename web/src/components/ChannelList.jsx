@@ -8,6 +8,7 @@ import ConfirmDialog from './ConfirmDialog.jsx';
 import UserFooter from './UserFooter.jsx';
 import RolesDialog from './RolesDialog.jsx';
 import ModLogDialog, { MOD_LOG_ABILITIES } from './ModLogDialog.jsx';
+import BansDialog from './BansDialog.jsx';
 import ServerImagineDialog from './ServerImagineDialog.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
 import ServerEmojiDialog from './ServerEmojiDialog.jsx';
@@ -100,6 +101,8 @@ export default function ChannelList({
   };
   const [permsOpen, setPermsOpen] = useState(false);
   const [modLogOpen, setModLogOpen] = useState(false);
+  const [bansOpen, setBansOpen] = useState(false);
+  const canBan = !!isOwner || abilities.includes('ban_members');
   const canViewModLog = !!isOwner || MOD_LOG_ABILITIES.some((a) => abilities.includes(a));
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [imagineOpen, setImagineOpen] = useState(false);
@@ -548,6 +551,16 @@ export default function ChannelList({
                   <Icon name="log" size={16} /> Moderation log
                 </MenuItem>
               )}
+              {canBan && (
+                <MenuItem
+                  onClick={() => {
+                    closeMenu();
+                    setBansOpen(true);
+                  }}
+                >
+                  <Icon name="ban" size={16} /> Bans
+                </MenuItem>
+              )}
               {isOwner && (
                 <>
                   <div role="separator" aria-orientation="horizontal" className="my-1 h-px bg-ink-500/60" />
@@ -845,6 +858,7 @@ export default function ChannelList({
       {emojiOpen && (
         <ServerEmojiDialog space={space} emoji={emoji} onClose={() => setEmojiOpen(false)} onChanged={onPermsChanged} />
       )}
+      {bansOpen && <BansDialog space={space} onClose={() => setBansOpen(false)} />}
       {modLogOpen && <ModLogDialog space={space} members={members} onClose={() => setModLogOpen(false)} />}
       {permsOpen && (
         <RolesDialog

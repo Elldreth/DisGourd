@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
+import BanDialog from './BanDialog.jsx';
 import MemberRolesDialog from './MemberRolesDialog.jsx';
 import RoleName from './RoleName.jsx';
 
@@ -18,8 +19,9 @@ const STATUS_WORDS = { idle: 'Idle', dnd: 'Do Not Disturb' };
 // canKickMembers / myPosition (from the server's roles): who I may remove.
 // roles (highest first) name each member's badge; canManageRoles offers
 // "Roles…", whose changes go through onToggleRole(username, roleId, on).
-export default function MemberList({ space, members, currentUser, myRole, roles = [], canKickMembers = false, canManageRoles = false, myPosition = 0, onMessageUser, onToggleRole, onKick, open = false, onClose }) {
+export default function MemberList({ space, members, currentUser, myRole, roles = [], canKickMembers = false, canBanMembers = false, canManageRoles = false, myPosition = 0, onMessageUser, onToggleRole, onKick, onBan, open = false, onClose }) {
   const panelRef = useRef(null);
+  const [banning, setBanning] = useState(null); // username in the Ban dialog (P3-26b)
   const [kicking, setKicking] = useState(null); // username awaiting "are you sure?"
   const [editingRoles, setEditingRoles] = useState(null); // username whose roles are open
   useEffect(() => {
@@ -82,6 +84,17 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
           // confirm dialog has somewhere to return it.
           panelRef.current?.querySelector(`button[title="${CSS.escape(m.username)}"]`)?.focus();
           setKicking(m.username);
+        },
+      });
+    }
+    // Banning (P3-26b): "ban members", and they sit strictly below me.
+    if (!self && canBanMembers && (m.position ?? 0) < myPosition) {
+      acts.push({
+        label: 'Ban…',
+        danger: true,
+        onClick: () => {
+          panelRef.current?.querySelector(`button[title="${CSS.escape(m.username)}"]`)?.focus();
+          setBanning(m.username);
         },
       });
     }
@@ -189,6 +202,9 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
           onToggle={onToggleRole}
           onClose={() => setEditingRoles(null)}
         />
+      )}
+      {banning && (
+        <BanDialog username={banning} space={space || 'this server'} onBan={(options) => onBan(banning, options)} onClose={() => setBanning(null)} />
       )}
       {kicking && (
         <ConfirmDialog
