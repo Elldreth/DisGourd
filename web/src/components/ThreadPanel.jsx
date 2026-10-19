@@ -159,6 +159,7 @@ export default function ThreadPanel({
         onHidePreview={(m) => api.hideChannelPreview(space, thread.channel, m.id).catch(() => {})}
         imagineAgain={imagine?.available ? imagine.run : null}
         imagineUpscale={!!imagine?.canUpscale}
+        imagineVary={!!imagine?.canVary}
         label={`Replies in thread ${thread.name}`}
         emoji={emoji}
         channel={thread.channel}

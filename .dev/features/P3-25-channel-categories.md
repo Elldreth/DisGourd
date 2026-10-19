@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (not implemented directly)
 - **Phase:** 3
-- **State:** PLANNED
+- **State:** COMPLETE (a–d merged, #142, #145, #146, #147)
 - **Effort:** L in total: a M, b M, c S–M, d M
 - **Depends on:** P2-21 (roles and channel overrides), P3-15 (server templates)
 - **Requirement Source:** the user, 2026-10-18 ("channel categories"). Design agreed with the user on 2026-10-18:

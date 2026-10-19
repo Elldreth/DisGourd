@@ -42,6 +42,14 @@ const UPSCALE_MODES = ['model', 'tiled'];
 const TILE = { denoise: 0.3, size: 1024 };
 // The face detailer (P3-31, Impact Pack's FaceDetailer): on Standard and High.
 const DETAILER_DENOISE = 0.4;
+// The largest the face crop is enlarged to before repainting, by VRAM tier
+// (P3-36a: 1024 left big faces barely enlarged, so the detailer did little).
+const DETAILER_MAX = { low: 1024, medium: 1536, high: 2048 };
+const DETAILER_CROP = 2;
+// Variations are an img2img loopback (P3-36a): each loop repaints the whole
+// image (a new seed each time), runs the face detailer, and feeds the next.
+const DEFAULT_LOOPS = 2;
+const MAX_LOOPS = 4;
 const DETAILER_QUALITIES = ['standard', 'high'];
 // Passes (P3-33): the face detailer repaints each face up to 5 times
 // (FaceDetailer's own `cycle`); tiled repaint runs up to 3 passes, the extra
@@ -169,10 +177,15 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   const split = cfg.kind === 'unet';
   const family = FAMILIES[cfg.family] && (split || !FAMILIES[cfg.family].splitOnly) ? cfg.family : 'sdxl';
   const f = FAMILIES[family];
-  const hires = hiresFor(request, cfg);
-  // With the hires fix, the first pass is made at the Standard size.
-  const base = sizeFor(family, hires ? 'standard' : request.quality, request.shape, cfg.tier);
-  const { width, height } = hires ? hiresSize(base, cfg.tier) : base;
+  // img2img (P3-36a): a variation starts from an image (node 1, uploaded).
+  const init = request.init && request.initName ? request.init : null;
+  const wantsHires = hiresFor(request, cfg);
+  // With the hires fix, the first pass is made at the Standard size. A
+  // variation instead works at the final size (its loops do the refining).
+  const hires = wantsHires && !init;
+  const small = sizeFor(family, wantsHires ? 'standard' : request.quality, request.shape, cfg.tier);
+  const { width, height } = wantsHires ? hiresSize(small, cfg.tier) : small;
+  const base = init ? { width, height } : small;
   const negative = negativeFor(family, cfg, permissive);
   const sampling = samplingFor(f, cfg);
   // Where the model, text encoder and VAE come from: one checkpoint (node 4),
@@ -191,19 +204,25 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   const vae = split ? ['13', 0] : ['4', 2];
   const wf = {
     ...loaders,
-    5: { class_type: family === 'flux' || family === 'zimage' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: { width: base.width, height: base.height, batch_size: 1 } },
+    5: init
+      ? { class_type: 'VAEEncode', inputs: { pixels: ['2', 0], vae } }
+      : { class_type: family === 'flux' || family === 'zimage' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: { width: base.width, height: base.height, batch_size: 1 } },
     6: { class_type: 'CLIPTextEncode', inputs: { text: request.prompt, clip } },
     7: { class_type: 'CLIPTextEncode', inputs: { text: negative, clip } },
     3: {
       class_type: 'KSampler',
       inputs: {
-        seed, steps: stepsFor(f, cfg, request.quality), ...sampling, denoise: 1,
+        seed, steps: stepsFor(f, cfg, request.quality), ...sampling, denoise: init ? init.denoise : 1,
         model, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0],
       },
     },
     8: { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae } },
     [SAVE_NODE]: { class_type: 'PreviewImage', inputs: { images: ['8', 0] } },
   };
+  if (init) {
+    wf[1] = { class_type: 'LoadImage', inputs: { image: request.initName } };
+    wf[2] = { class_type: 'ImageScale', inputs: { image: ['1', 0], upscale_method: 'lanczos', width: base.width, height: base.height, crop: 'center' } };
+  }
   if (family === 'zimage') {
     wf[14] = { class_type: 'ModelSamplingAuraFlow', inputs: { model, shift: f.shift } };
     wf[3].inputs.model = ['14', 0];
@@ -230,21 +249,37 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   if (detailer) {
     // Find faces in the finished image and repaint each at a good size.
     const guide = family === 'sd15' ? 512 : 1024;
+    const maxSize = family === 'sd15' ? 768 : DETAILER_MAX[cfg.tier] || DETAILER_MAX.medium;
     wf[40] = { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: cfg.detector } };
     wf[41] = {
       class_type: 'FaceDetailer',
       inputs: {
         image: wf[SAVE_NODE].inputs.images, model: wf[3].inputs.model, clip, vae, positive: wf[3].inputs.positive, negative: ['7', 0],
-        guide_size: guide, guide_size_for: true, max_size: guide, seed, steps: stepsFor(f, cfg, 'standard'), ...sampling,
+        guide_size: guide, guide_size_for: true, max_size: maxSize, seed, steps: stepsFor(f, cfg, 'standard'), ...sampling,
         denoise: cfg.detailerDenoise ?? DETAILER_DENOISE, feather: 5, noise_mask: true, force_inpaint: true,
-        bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: 3, sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
+        bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: DETAILER_CROP, sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
         sam_bbox_expansion: 0, sam_mask_hint_threshold: 0.7, sam_mask_hint_use_negative: 'False', drop_size: 10,
         bbox_detector: ['40', 0], wildcard: '', cycle: Math.min(MAX_DETAILER_PASSES, Math.max(1, cfg.detailerPasses || 1)),
       },
     };
     wf[SAVE_NODE].inputs.images = ['41', 0];
   }
-  return { workflow: wf, width, height, seed, hires, detailer };
+  // The loopback (P3-36a): loops 2…n start from the previous loop's image.
+  const loops = init ? Math.min(MAX_LOOPS, Math.max(1, cfg.varyLoops || DEFAULT_LOOPS)) : 1;
+  let last = wf[SAVE_NODE].inputs.images;
+  for (let k = 1; k < loops; k++) {
+    const b = 100 + k * 10;
+    wf[b] = { class_type: 'VAEEncode', inputs: { pixels: last, vae } };
+    wf[b + 1] = { class_type: 'KSampler', inputs: { ...wf[3].inputs, seed: seed + k, denoise: init.denoise, latent_image: [String(b), 0] } };
+    wf[b + 2] = { class_type: 'VAEDecode', inputs: { samples: [String(b + 1), 0], vae } };
+    last = [String(b + 2), 0];
+    if (detailer) {
+      wf[b + 3] = { class_type: 'FaceDetailer', inputs: { ...wf[41].inputs, image: last, seed: seed + k } };
+      last = [String(b + 3), 0];
+    }
+  }
+  wf[SAVE_NODE].inputs.images = last;
+  return { workflow: wf, width, height, seed, hires, detailer, loops };
 }
 
 // The Upscale button's workflow (P3-29) for an image already uploaded to
@@ -602,6 +637,11 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
     const name = await uploadImage(cfg.url, { ...request.upscale, filename: `disgourd-upscale-${crypto.randomBytes(6).toString('hex')}.${request.upscale.ext || 'png'}` }, signal);
     built = buildUpscaleWorkflow(request, cfg, name, { permissive });
   } else {
+    // img2img (P3-36a): put the starting image into ComfyUI first.
+    if (request.init) {
+      const initName = await uploadImage(cfg.url, { ...request.init, filename: `disgourd-vary-${crypto.randomBytes(6).toString('hex')}.${request.init.ext || 'png'}` }, signal);
+      request = { ...request, initName };
+    }
     built = buildWorkflow(request, cfg, { permissive });
   }
   return run(built, cfg, signal, notes);
@@ -755,6 +795,16 @@ function validateConfig(input, prev = {}) {
     if (!Number.isInteger(i.tilePasses) || i.tilePasses < 1 || i.tilePasses > MAX_TILE_PASSES) return { error: `Tiled passes are 1–${MAX_TILE_PASSES}` };
     cfg.tilePasses = i.tilePasses;
   }
+  // Variation strengths (P3-36a): how much each loop repaints.
+  for (const [k, lo, hi] of [['varySubtle', 0.1, 0.6], ['varyStrong', 0.3, 0.9]]) {
+    if (i[k] === undefined) continue;
+    if (typeof i[k] !== 'number' || !(i[k] >= lo && i[k] <= hi)) return { error: `${k === 'varySubtle' ? 'Subtle' : 'Strong'} variation strength is ${lo}–${hi}` };
+    cfg[k] = Math.round(i[k] * 100) / 100;
+  }
+  if (i.varyLoops !== undefined) {
+    if (!Number.isInteger(i.varyLoops) || i.varyLoops < 1 || i.varyLoops > MAX_LOOPS) return { error: `Variation loops are 1–${MAX_LOOPS}` };
+    cfg.varyLoops = i.varyLoops;
+  }
   if (i.detailerDenoise !== undefined) {
     if (typeof i.detailerDenoise !== 'number' || !(i.detailerDenoise >= 0.1 && i.detailerDenoise <= 0.8)) return { error: 'The face detailer strength is 0.1–0.8' };
     cfg.detailerDenoise = Math.round(i.detailerDenoise * 100) / 100;
@@ -791,7 +841,8 @@ const publicConfig = (cfg = {}) => ({
   upscaleMode: cfg.upscaleMode || 'model', tileDenoise: cfg.tileDenoise ?? TILE.denoise, tileSize: cfg.tileSize || TILE.size,
   sampler: cfg.sampler || null, scheduler: cfg.scheduler || null, cfgScale: cfg.cfgScale ?? null, steps: cfg.steps || null, negative: cfg.negative || null,
   detailer: !!cfg.detailer, detector: cfg.detector || null, detailerDenoise: cfg.detailerDenoise ?? DETAILER_DENOISE,
-  detailerPasses: cfg.detailerPasses || 1, tilePasses: cfg.tilePasses || 1,
+  detailerPasses: cfg.detailerPasses || 1, tilePasses: cfg.tilePasses || 1, varyLoops: cfg.varyLoops || DEFAULT_LOOPS,
+  varySubtle: cfg.varySubtle ?? 0.3, varyStrong: cfg.varyStrong ?? 0.65,
   workflowMode: cfg.workflowMode || 'builtin',
   workflow: cfg.workflow ? JSON.stringify(cfg.workflow, null, 2) : '',
   upscaleWorkflow: cfg.upscaleWorkflow ? JSON.stringify(cfg.upscaleWorkflow, null, 2) : '',
@@ -813,6 +864,7 @@ module.exports = {
   suggestUpscaler,
   hiresSize,
   HIRES_MP,
+  DETAILER_MAX,
   buildUpscaleWorkflow,
   resolveUpscaler,
   upscalerCache,

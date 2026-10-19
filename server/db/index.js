@@ -1927,9 +1927,9 @@ function setChannelNsfw(spaceName, channelName, on) {
 const JOB_COLUMNS = { status: 'status', error: 'error', cost: 'cost', model: 'model', startedAt: 'started_at', finishedAt: 'finished_at', messageId: 'message_id' };
 function createImagineJob(j) {
   const info = db.prepare(`
-    INSERT INTO imagine_jobs(user_id, space_id, channel_id, engine, model, prompt, shape, quality, permissive, cost, status, created_at, kind, source_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
-  `).run(j.userId, j.spaceId, j.channelId, j.engine, j.model || null, j.prompt, j.shape, j.quality, j.permissive ? 1 : 0, j.cost || 0, Date.now(), j.kind || 'generate', j.sourceUrl || null);
+    INSERT INTO imagine_jobs(user_id, space_id, channel_id, engine, model, prompt, shape, quality, permissive, cost, status, created_at, kind, source_url, strength)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)
+  `).run(j.userId, j.spaceId, j.channelId, j.engine, j.model || null, j.prompt, j.shape, j.quality, j.permissive ? 1 : 0, j.cost || 0, Date.now(), j.kind || 'generate', j.sourceUrl || null, j.strength ?? null);
   return Number(info.lastInsertRowid);
 }
 function updateImagineJob(id, fields) {

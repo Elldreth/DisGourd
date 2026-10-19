@@ -355,7 +355,7 @@ describe('the engine', () => {
       class_type: 'FaceDetailer',
       inputs: {
         image: ['8', 0], model: ['4', 0], clip: ['4', 1], vae: ['4', 2], positive: ['6', 0], negative: ['7', 0], bbox_detector: ['40', 0],
-        seed: 3, steps: 28, cfg: 6, sampler_name: 'euler', scheduler: 'karras', denoise: 0.35, guide_size: 1024, max_size: 1024, sam_mask_hint_use_negative: 'False', cycle: 1,
+        seed: 3, steps: 28, cfg: 6, sampler_name: 'euler', scheduler: 'karras', denoise: 0.35, guide_size: 1024, max_size: 2048, bbox_crop_factor: 2, sam_mask_hint_use_negative: 'False', cycle: 1,
       },
     });
     expect(std.workflow['9'].inputs.images).toEqual(['41', 0]);
@@ -493,6 +493,65 @@ describe('the engine', () => {
     expect(comfy.validateConfig({ ...ok, workflow: '' }, ok).error).toMatch(/Add your workflow/); // clearing it while My own is on
   });
 
+  test('P3-36a: a variation is an img2img loopback at the final size: each loop repaints the whole image, details faces, feeds the next', () => {
+    const req = request({ quality: 'high', shape: 'portrait', initName: 'disgourd-vary-x.png', init: { denoise: 0.3 } });
+    const out = comfy.buildWorkflow(req, cfg({ upscaler: 'u.pth', detailer: true, detector: 'd.pt', tier: 'medium', varyLoops: 3 }), { seed: 9 });
+    const wf = out.workflow;
+    const final = comfy.hiresSize(comfy.sizeFor('sdxl', 'standard', 'portrait', 'medium'), 'medium');
+    expect([out.width, out.height]).toEqual([final.width, final.height]);
+    expect(out.loops).toBe(3);
+    // Loop 1: the image, scaled to the final size, encoded, repainted at 0.3, detailed.
+    expect(wf['1']).toEqual({ class_type: 'LoadImage', inputs: { image: 'disgourd-vary-x.png' } });
+    expect(wf['2'].inputs).toMatchObject({ width: final.width, height: final.height, crop: 'center' });
+    expect(wf['5']).toEqual({ class_type: 'VAEEncode', inputs: { pixels: ['2', 0], vae: ['4', 2] } });
+    expect(wf['3'].inputs).toMatchObject({ seed: 9, denoise: 0.3, latent_image: ['5', 0] });
+    expect(wf['24']).toBeUndefined(); // no separate hires pass: the loops refine at full size
+    expect(wf['41'].inputs).toMatchObject({ image: ['8', 0], max_size: 1536 });
+    // Loops 2 and 3: from the previous loop's detailed image, new seeds.
+    expect(wf['110']).toEqual({ class_type: 'VAEEncode', inputs: { pixels: ['41', 0], vae: ['4', 2] } });
+    expect(wf['111'].inputs).toMatchObject({ seed: 10, denoise: 0.3, latent_image: ['110', 0], model: ['4', 0] });
+    expect(wf['112']).toEqual({ class_type: 'VAEDecode', inputs: { samples: ['111', 0], vae: ['4', 2] } });
+    expect(wf['113'].inputs).toMatchObject({ image: ['112', 0], seed: 10 });
+    expect(wf['120'].inputs.pixels).toEqual(['113', 0]);
+    expect(wf['121'].inputs).toMatchObject({ seed: 11 });
+    expect(wf['9'].inputs.images).toEqual(['123', 0]);
+    // Two loops by default; without the detailer a loop is encode → sample → decode.
+    const plainLoops = comfy.buildWorkflow(request({ initName: 'v.png', init: { denoise: 0.5 } }), cfg()).workflow;
+    expect(plainLoops['111'].inputs.denoise).toBe(0.5);
+    expect(plainLoops['113']).toBeUndefined();
+    expect(plainLoops['120']).toBeUndefined();
+    expect(plainLoops['9'].inputs.images).toEqual(['112', 0]);
+    // Flux in parts: its own VAE through every loop.
+    const flux = comfy.buildWorkflow(request({ initName: 'v.png', init: { denoise: 0.5 } }), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0] })).workflow;
+    expect(flux['5'].inputs.vae).toEqual(['13', 0]);
+    expect(flux['110'].inputs.vae).toEqual(['13', 0]);
+    expect(flux['111'].inputs.positive).toEqual(['10', 0]);
+    // Without an image: the empty latent at full strength, and no loops.
+    const plain = comfy.buildWorkflow(request(), cfg()).workflow;
+    expect(plain['5'].class_type).toBe('EmptyLatentImage');
+    expect(plain['3'].inputs.denoise).toBe(1);
+    expect(plain['1']).toBeUndefined();
+    expect(plain['110']).toBeUndefined();
+    // The detailer's biggest crop follows the tier; SD 1.5 stays small.
+    for (const [tier, max] of [['low', 1024], ['medium', 1536], ['high', 2048]]) {
+      expect(comfy.buildWorkflow(request(), cfg({ tier, detailer: true, detector: 'd.pt' })).workflow['41'].inputs.max_size).toBe(max);
+    }
+    expect(comfy.buildWorkflow(request(), cfg({ family: 'sd15', detailer: true, detector: 'd.pt' })).workflow['41'].inputs).toMatchObject({ guide_size: 512, max_size: 768 });
+    expect(comfy.validateConfig({ varyLoops: 5 }).error).toMatch(/1–4/);
+    expect(comfy.validateConfig({ varyLoops: 3 })).toMatchObject({ varyLoops: 3 });
+    expect(comfy.validateConfig({ varyStrong: 0.95 }).error).toMatch(/Strong variation strength is 0.3–0.9/);
+    expect(comfy.validateConfig({ varySubtle: 0.05 }).error).toMatch(/Subtle variation strength is 0.1–0.6/);
+    expect(comfy.validateConfig({ varySubtle: 0.25, varyStrong: 0.7 })).toMatchObject({ varySubtle: 0.25, varyStrong: 0.7 });
+  });
+
+  test('P3-36a: a variation uploads its image and runs end to end', async () => {
+    await comfy.generate(request({ init: { buffer: PNG, contentType: 'image/png', ext: 'png', width: 1, height: 1, denoise: 0.3 } }), cfg());
+    expect(seen.uploads.at(-1).name).toMatch(/^disgourd-vary-[a-f0-9]+\.png$/);
+    expect(seen.prompts.at(-1)['1'].inputs.image).toBe(seen.uploads.at(-1).name);
+    expect(seen.prompts.at(-1)['3'].inputs.denoise).toBe(0.3);
+    expect(seen.prompts.at(-1)['111'].inputs.denoise).toBe(0.3); // the second loop
+  });
+
   test('P3-24: config for a split model needs its type and parts; Z-Image is split only', () => {
     expect(comfy.validateConfig({ kind: 'disk' }).error).toMatch(/Unknown model kind/);
     expect(comfy.validateConfig({ kind: 'unet', model: UNETS[2] }).error).toMatch(/pick its type: Flux or Z-Image Turbo/);
@@ -614,7 +673,7 @@ describe('the admin routes and the chat path', () => {
     expect((await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } })).body.error).toMatch(/pick a model/);
     const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[0], tier: 'high' } }, defaultEngine: 'comfyui' });
     expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024,
-      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1,
+      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65,
       workflowMode: 'builtin', workflow: '', upscaleWorkflow: '' });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);
@@ -642,6 +701,86 @@ describe('the admin routes and the chat path', () => {
     expect(done.content).toBe('🎨 **admin** imagined: a gourd on a hill');
     const job = db.raw.prepare('SELECT * FROM imagine_jobs WHERE space_id = ? ORDER BY id DESC').get(spaceId);
     expect(job).toMatchObject({ engine: 'comfyui', status: 'done', model: MODELS[0] });
+  });
+
+  test('P3-36a: Subtle and Strong variations: img2img from the image, posted for the presser; varied and upscaled images too; Retry; refusals', async () => {
+    const S = 'Comfy Club';
+    const { channelId } = db.channelRef(S, 'general');
+    const spaceId = db.getSpaceByName(S).id;
+    await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[1], family: 'sdxl', upscaler: '4x-UltraSharp.pth', upscaleMode: 'model' } }, defaultEngine: 'comfyui' });
+    await call('admin', 'PATCH', `/spaces/${encodeURIComponent(S)}/imagine`, { dailyLimit: 100 });
+    const finished = (kind = 'generate', status = 'done', strength = null) => {
+      const token = require('crypto').randomBytes(9).toString('hex');
+      fs.mkdirSync(path.join(UPLOADS, token), { recursive: true });
+      fs.writeFileSync(path.join(UPLOADS, token, 'disgourd-x.png'), PNG);
+      const url = `/uploads/${token}/disgourd-x.png`;
+      const msg = db.postAsBot(S, 'general', '🎨 **pat** imagined: a gourd in the rain');
+      db.updateBotMessage(Number(msg.id), '🎨 **pat** imagined: a gourd in the rain', [url]);
+      const id = db.createImagineJob({ userId: users.admin.id, spaceId, channelId, engine: 'kie', prompt: 'a gourd in the rain', shape: 'portrait', quality: 'standard', kind, sourceUrl: kind === 'vary' ? url : null, strength });
+      db.updateImagineJob(id, { messageId: Number(msg.id), status });
+      return { messageId: Number(msg.id), jobId: id, url };
+    };
+    const frames = [];
+    const ws = new WebSocket(`ws://localhost:${port}/gateway?token=${users.admin.token}`);
+    ws.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
+    await new Promise((r) => ws.on('open', r));
+    const ask = async (fields) => {
+      const from = frames.length;
+      ws.send(JSON.stringify({ op: 'imagine', space: S, channel: 'general', ...fields }));
+      const end = Date.now() + 3000;
+      for (;;) {
+        const f = frames.slice(from).find((x) => x.type === 'imagine_queued' || (x.type === 'error' && x.op === 'imagine'));
+        if (f) return f.type === 'error' ? f.code : f;
+        if (Date.now() > end) throw new Error('no answer');
+        await new Promise((r) => setTimeout(r, 15));
+      }
+    };
+    const settle = async (jobId) => {
+      const end = Date.now() + 5000;
+      while (!['done', 'failed'].includes(db.getImagineJob(jobId).status) && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+      return db.getImagineJob(jobId);
+    };
+    try {
+      expect((await call('admin', 'GET', '/spaces')).body.find((s) => s.name === S).imagine.canVary).toBe(true);
+      // A kie.ai image, varied subtly on ComfyUI: img2img at 0.35, same prompt and shape.
+      const src = finished();
+      const used = db.countImagineJobsSince(users.admin.id, 0);
+      const subtle = await ask({ from: src.messageId, vary: 'subtle' });
+      expect(db.getImagineJob(subtle.jobId)).toMatchObject({ kind: 'vary', engine: 'comfyui', strength: 0.3, source_url: src.url, prompt: 'a gourd in the rain', shape: 'portrait' });
+      expect(db.countImagineJobsSince(users.admin.id, 0)).toBe(used + 1);
+      expect((await settle(subtle.jobId)).status).toBe('done');
+      expect(seen.prompts.at(-1)['3'].inputs.denoise).toBe(0.3);
+      expect(seen.prompts.at(-1)['111'].inputs.seed).toBe(seen.prompts.at(-1)['3'].inputs.seed + 1); // loop 2, a new seed
+      expect(seen.prompts.at(-1)['1'].inputs.image).toMatch(/^disgourd-vary-/);
+      expect(db.raw.prepare('SELECT content FROM messages WHERE id = ?').get(subtle.messageId).content).toBe('🎲 **admin** varied (subtle): a gourd in the rain');
+      // Strong, from the variation itself, and from an upscaled image.
+      const strong = await ask({ from: subtle.messageId, vary: 'strong' });
+      expect(db.getImagineJob(strong.jobId)).toMatchObject({ kind: 'vary', strength: 0.65 });
+      await settle(strong.jobId);
+      expect(seen.prompts.at(-1)['3'].inputs.denoise).toBe(0.65);
+      // The host's own strengths, from Settings.
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { varySubtle: 0.2, varyStrong: 0.8 } } });
+      const custom = await ask({ from: src.messageId, vary: 'strong' });
+      expect(db.getImagineJob(custom.jobId)).toMatchObject({ strength: 0.8 });
+      await settle(custom.jobId);
+      expect(db.raw.prepare('SELECT content FROM messages WHERE id = ?').get(custom.messageId).content).toMatch(/varied \(strong\)/);
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { varySubtle: 0.3, varyStrong: 0.65 } } });
+      const up = finished('upscale');
+      expect(await ask({ from: up.messageId, vary: 'subtle' })).toMatchObject({ messageId: expect.any(Number) });
+      await new Promise((r) => setTimeout(r, 300));
+      // A failed variation retries as one, with its strength.
+      const failed = finished('vary', 'failed', 0.6);
+      const retry = await ask({ from: failed.messageId });
+      expect(db.getImagineJob(retry.jobId)).toMatchObject({ kind: 'vary', strength: 0.6, source_url: failed.url });
+      await settle(retry.jobId);
+      // Refused: a failed generate (nothing to vary), and without ComfyUI.
+      expect(await ask({ from: finished('generate', 'failed').messageId, vary: 'subtle' })).toBe('NOT_FOUND');
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: false } } });
+      expect(await ask({ from: src.messageId, vary: 'strong' })).toBe('NO_ENGINE');
+    } finally {
+      ws.close();
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } });
+    }
   });
 
   test('P3-29: the Upscale button: 2× under the 4096 px cap, posted for the presser; Retry; refusals', async () => {

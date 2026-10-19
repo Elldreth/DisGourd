@@ -541,6 +541,14 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 19,
+    name: 'imagine variation strength',
+    up(db) {
+      // P3-36a: a variation's img2img strength (so a Retry repeats it).
+      db.exec('ALTER TABLE imagine_jobs ADD COLUMN strength REAL');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
