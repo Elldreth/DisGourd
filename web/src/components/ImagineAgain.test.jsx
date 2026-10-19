@@ -58,3 +58,29 @@ test('Upscale 2× on generated images when ComfyUI can upscale; upscaled ones ge
   expect(screen.queryByRole('button', { name: /Upscale/ })).toBeNull(); // no ComfyUI to upscale with
 });
 
+// P3-36a: Subtle / Strong variations (img2img from the image itself).
+const varied = { id: 6, author: 'Imagine', bot: true, content: '🎲 **cara** varied (strong): a gourd', attachments: ['/uploads/v/disgourd-1.png'], timestamp: at + 5000, reactions: [] };
+
+test('with ComfyUI: Subtle and Strong variation on generated, varied and upscaled images; Upscale not on upscaled ones', async () => {
+  expect(imagineResultKind(varied)).toBe('varied');
+  expect(imagineResultKind({ ...varied, content: '🎲 **cara** varied (wild): x' })).toBe(null);
+  const run = vi.fn().mockResolvedValue({ jobId: 1 });
+  render(<MessageList messages={[done, failed, upscaled, varied]} channel="general" currentUser="sandy" imagineAgain={run} imagineUpscale imagineVary />);
+  expect(screen.getAllByRole('button', { name: /Subtle variation/ })).toHaveLength(3);
+  expect(screen.getAllByRole('button', { name: /Strong variation/ })).toHaveLength(3);
+  expect(screen.queryByRole('button', { name: /^🎲 Variations/ })).toBeNull(); // replaced
+  expect(screen.getAllByRole('button', { name: /Upscale 2×/ })).toHaveLength(2); // generated and varied, not upscaled
+  expect(screen.getAllByRole('button', { name: /Retry/ })).toHaveLength(1);
+  fireEvent.click(screen.getAllByRole('button', { name: /Subtle variation/ })[0]);
+  expect(run).toHaveBeenCalledWith({ from: 1, vary: 'subtle' });
+  await screen.findAllByRole('button', { name: /Subtle variation/ });
+  fireEvent.click(screen.getAllByRole('button', { name: /Strong variation/ })[2]);
+  expect(run).toHaveBeenLastCalledWith({ from: 6, vary: 'strong' });
+});
+
+test('without ComfyUI: the single Variations (a new take) stays', () => {
+  render(<MessageList messages={[done]} channel="general" currentUser="sandy" imagineAgain={vi.fn()} />);
+  expect(screen.getByRole('button', { name: /🎲 Variations/ })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Subtle variation/ })).toBeNull();
+});
+

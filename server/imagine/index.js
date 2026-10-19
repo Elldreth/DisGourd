@@ -24,6 +24,9 @@ const MAX_PROMPT = 1000;
 const UPSCALE_FACTOR = 2;
 const UPSCALE_MAX_SIDE = 4096;
 const MIN_UPSCALE = 1.25;
+// Variations (P3-36a): img2img from the image, at these strengths (denoise).
+const VARY = { subtle: 0.35, strong: 0.6 };
+const strengthName = (s) => Object.keys(VARY).find((k) => VARY[k] === s) || (s < 0.5 ? 'subtle' : 'strong');
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const DEFAULTS = { defaultEngine: null, permissive: false, dailyLimit: 20, dailyCeiling: 100, engines: {} };
@@ -151,6 +154,7 @@ function decorateSpaces(list, userId) {
         limitSource: space ? limitInfo(space.id, settings).source : 'instance', // P3-21
         instanceLimit: Math.min(settings.dailyLimit, settings.dailyCeiling), // what a blank server limit falls back to
         canUpscale: engines.some((e) => e.id === 'comfyui'), // P3-29: the Upscale button runs on ComfyUI
+        canVary: engines.some((e) => e.id === 'comfyui'), // P3-36a: img2img Variations too
         usedToday: used,
         engines,
       },
@@ -162,6 +166,37 @@ function decorateSpaces(list, userId) {
 // A refusal: { type: 'error', op: 'imagine', code, error }.
 function refuse(ws, code, error) {
   if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'error', op: 'imagine', code, error }));
+}
+
+// An image of ours from its /uploads URL: { buffer, contentType, ext, width,
+// height }, or null (P3-36a: shared by upscales and variations).
+function readUpload(url) {
+  const m = typeof url === 'string' && url.match(/^\/uploads\/([a-f0-9]+)\/([\w.-]+\.(png|jpe?g|webp))$/i);
+  const file = m && path.join(UPLOADS_DIR, m[1], m[2]);
+  if (!file || !fs.existsSync(file)) return null;
+  const buffer = fs.readFileSync(file);
+  const size = imageSize(buffer);
+  if (!size) return null;
+  const ext = m[3].toLowerCase().replace('jpeg', 'jpg');
+  return { buffer, ext, contentType: { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' }[ext], width: size.width, height: size.height };
+}
+
+// The image a variation starts from (P3-36a): a finished image of any kind, or
+// a Retry of a failed variation (same image, same strength). Null after refusing.
+function varySource(ws, msg, source) {
+  const retry = source.kind === 'vary' && source.status === 'failed';
+  if (!retry && source.status !== 'done') {
+    refuse(ws, 'NOT_FOUND', 'That image can’t be varied');
+    return null;
+  }
+  const url = retry ? source.source_url : db.getMessageAttachments(source.message_id)[0];
+  const image = readUpload(url);
+  if (!image) {
+    refuse(ws, 'NOT_FOUND', 'That image is gone');
+    return null;
+  }
+  const strength = retry ? source.strength : VARY[msg.vary];
+  return { url, strength, name: strengthName(strength), request: { ...image, denoise: strength } };
 }
 
 // The image an upscale starts from (P3-29), sized and capped, or null after
@@ -216,8 +251,15 @@ function imagineOp({ ws, msg, userId }) {
       return refuse(ws, 'NOT_FOUND', 'That image request can’t be repeated');
     }
   }
+  // Variations (P3-36a): Subtle / Strong on a finished image, or Retry of a failed one.
+  const varying = !!source && (Object.hasOwn(VARY, msg.vary) || (source.kind === 'vary' && source.status === 'failed'));
+  let vary = null;
+  if (varying) {
+    vary = varySource(ws, msg, source);
+    if (!vary) return;
+  }
   // Upscale (P3-29): the button on a finished image, or Retry of a failed upscale.
-  const upscaling = !!source && (msg.upscale === true || (source.kind === 'upscale' && source.status === 'failed'));
+  const upscaling = !varying && !!source && (msg.upscale === true || (source.kind === 'upscale' && source.status === 'failed'));
   let upscale = null;
   if (upscaling) {
     upscale = upscaleSource(ws, msg, source);
@@ -230,7 +272,8 @@ function imagineOp({ ws, msg, userId }) {
   if (!SHAPES.includes(shape) || !QUALITIES.includes(quality)) return refuse(ws, 'BAD_OPTION', 'Unknown shape or quality');
   const fallback = () => engines.find((e) => e.id === settings.defaultEngine) || engines[0];
   if (upscaling && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Upscaling needs ComfyUI with an upscale model (Settings → Image generation)');
-  const engine = upscaling
+  if (varying && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Variations from an image need ComfyUI (Settings → Image generation)');
+  const engine = upscaling || varying
     ? engines.find((e) => e.id === 'comfyui')
     : source
     ? engines.find((e) => e.id === source.engine) || fallback() // the same engine while it's still on
@@ -244,7 +287,7 @@ function imagineOp({ ws, msg, userId }) {
   if (refused) return refuse(ws, 'REFUSED', refused);
 
   const config = engineConfig(settings, engine.id);
-  const request = { prompt, shape, quality, ...(upscale ? { upscale: upscale.request } : {}) };
+  const request = { prompt, shape, quality, ...(upscale ? { upscale: upscale.request } : {}), ...(vary ? { init: vary.request } : {}) };
   const permissive = !!settings.permissive && db.isChannelNsfw(msg.space, msg.channel);
   const ref = db.channelRef(msg.space, msg.channel);
   const user = db.getUserById(userId);
@@ -252,11 +295,12 @@ function imagineOp({ ws, msg, userId }) {
   if (overBudget(engine, config, cost)) return refuse(ws, 'BUDGET', `This instance's ${engine.name} budget for the month is used up`);
   const job = {
     engine, config, request, permissive, cost,
-    space: msg.space, channel: msg.channel, username: user.username, kind: upscale ? 'upscale' : 'generate',
+    space: msg.space, channel: msg.channel, username: user.username, kind: upscale ? 'upscale' : vary ? 'vary' : 'generate',
+    vary: vary ? vary.name : null,
   };
   job.id = db.createImagineJob({
     userId, spaceId: space.id, channelId: ref.channelId, engine: engine.id, prompt, shape, quality, permissive, cost: job.cost,
-    kind: job.kind, sourceUrl: upscale ? upscale.url : null,
+    kind: job.kind, sourceUrl: upscale ? upscale.url : vary ? vary.url : null, strength: vary ? vary.strength : null,
   });
   const content = runner.text.queued(job, runner.placeFor(engine.id));
   const stored = db.postAsBot(msg.space, msg.channel, content);

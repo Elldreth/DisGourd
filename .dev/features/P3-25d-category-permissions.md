@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-25)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #147)
 - **Starting baseline:** main at 1ffd632 (#146 merged)
 - **Effort:** M
 - **Depends on:** P3-25a (P3-25b for the UI entry point)

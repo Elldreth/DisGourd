@@ -9,14 +9,17 @@ export function imagineResultKind(m) {
   const hasImage = !!(m.attachments?.length || m.attachment);
   if (/^🎨 \*\*.+?\*\* imagined: /.test(m.content) && hasImage) return 'done';
   if (/^🔍 \*\*.+?\*\* upscaled: /.test(m.content) && hasImage) return 'upscaled'; // P3-29
+  if (/^🎲 \*\*.+?\*\* varied \((subtle|strong)\): /.test(m.content) && hasImage) return 'varied'; // P3-36a
   if (/^⚠️ Couldn't imagine that for \*\*/.test(m.content)) return 'failed';
   return null;
 }
 
 // `run(fields)` is the /imagine request for this channel; `{ from: id }` asks
 // the server to repeat that request (as the person pressing), and with
-// `upscale: true` (P3-29) to make it 2× bigger. `canUpscale`: ComfyUI is on.
-export default function ImagineAgain({ m, kind, run, canUpscale = false }) {
+// `upscale: true` (P3-29) to make it 2× bigger, or with `vary: 'subtle' |
+// 'strong'` (P3-36a) to make an img2img variation of this very image.
+// `canUpscale` / `canVary`: ComfyUI is on.
+export default function ImagineAgain({ m, kind, run, canUpscale = false, canVary = false }) {
   const [busy, setBusy] = useState(null); // which button is sending
   const [error, setError] = useState(null);
   const send = async (which, fields) => {
@@ -32,13 +35,24 @@ export default function ImagineAgain({ m, kind, run, canUpscale = false }) {
     }
   };
   const chip = 'tap-chip rounded-md bg-ink-600 px-2.5 py-1 text-xs font-medium text-gray-200 transition hover:bg-ink-500 aria-busy:opacity-60';
-  const repeat = kind === 'failed' ? { label: '↻ Retry', title: 'Try this again' } : { label: '🎲 Variations', title: 'Make another take of this prompt' };
+  const button = (which, label, title, fields) => (
+    <button type="button" onClick={() => send(which, fields)} aria-busy={busy === which} title={title} className={chip}>
+      {busy === which ? 'Sending…' : label}
+    </button>
+  );
   return (
     <div className="mt-1 flex flex-wrap items-center gap-2">
-      <button type="button" onClick={() => send('again', {})} aria-busy={busy === 'again'} title={repeat.title} className={chip}>
-        {busy === 'again' ? 'Sending…' : repeat.label}
-      </button>
-      {kind === 'done' && canUpscale && (
+      {kind === 'failed'
+        ? button('again', '↻ Retry', 'Try this again', {})
+        : canVary
+          ? (
+            <>
+              {button('subtle', '🎲 Subtle variation', 'A close variation of this image', { vary: 'subtle' })}
+              {button('strong', '🎲 Strong variation', 'A looser variation of this image', { vary: 'strong' })}
+            </>
+          )
+          : button('again', '🎲 Variations', 'Make another take of this prompt', {})}
+      {(kind === 'done' || kind === 'varied') && canUpscale && (
         <button type="button" onClick={() => send('upscale', { upscale: true })} aria-busy={busy === 'upscale'} title="Make this image twice as big" className={chip}>
           {busy === 'upscale' ? 'Sending…' : '🔍 Upscale 2×'}
         </button>

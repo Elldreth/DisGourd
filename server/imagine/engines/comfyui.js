@@ -42,6 +42,10 @@ const UPSCALE_MODES = ['model', 'tiled'];
 const TILE = { denoise: 0.3, size: 1024 };
 // The face detailer (P3-31, Impact Pack's FaceDetailer): on Standard and High.
 const DETAILER_DENOISE = 0.4;
+// The largest the face crop is enlarged to before repainting, by VRAM tier
+// (P3-36a: 1024 left big faces barely enlarged, so the detailer did little).
+const DETAILER_MAX = { low: 1024, medium: 1536, high: 2048 };
+const DETAILER_CROP = 2;
 const DETAILER_QUALITIES = ['standard', 'high'];
 // Passes (P3-33): the face detailer repaints each face up to 5 times
 // (FaceDetailer's own `cycle`); tiled repaint runs up to 3 passes, the extra
@@ -177,6 +181,9 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   const sampling = samplingFor(f, cfg);
   // Where the model, text encoder and VAE come from: one checkpoint (node 4),
   // or separate loaders (11 diffusion model, 12 text encoder(s), 13 VAE).
+  // img2img (P3-36a): the first pass starts from an image (node 1, uploaded),
+  // scaled to the size this request would have, instead of an empty latent.
+  const init = request.init && request.initName ? request.init : null;
   const loaders = split
     ? {
         11: { class_type: 'UNETLoader', inputs: { unet_name: cfg.model, weight_dtype: 'default' } },
@@ -191,19 +198,25 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   const vae = split ? ['13', 0] : ['4', 2];
   const wf = {
     ...loaders,
-    5: { class_type: family === 'flux' || family === 'zimage' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: { width: base.width, height: base.height, batch_size: 1 } },
+    5: init
+      ? { class_type: 'VAEEncode', inputs: { pixels: ['2', 0], vae } }
+      : { class_type: family === 'flux' || family === 'zimage' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: { width: base.width, height: base.height, batch_size: 1 } },
     6: { class_type: 'CLIPTextEncode', inputs: { text: request.prompt, clip } },
     7: { class_type: 'CLIPTextEncode', inputs: { text: negative, clip } },
     3: {
       class_type: 'KSampler',
       inputs: {
-        seed, steps: stepsFor(f, cfg, request.quality), ...sampling, denoise: 1,
+        seed, steps: stepsFor(f, cfg, request.quality), ...sampling, denoise: init ? init.denoise : 1,
         model, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0],
       },
     },
     8: { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae } },
     [SAVE_NODE]: { class_type: 'PreviewImage', inputs: { images: ['8', 0] } },
   };
+  if (init) {
+    wf[1] = { class_type: 'LoadImage', inputs: { image: request.initName } };
+    wf[2] = { class_type: 'ImageScale', inputs: { image: ['1', 0], upscale_method: 'lanczos', width: base.width, height: base.height, crop: 'center' } };
+  }
   if (family === 'zimage') {
     wf[14] = { class_type: 'ModelSamplingAuraFlow', inputs: { model, shift: f.shift } };
     wf[3].inputs.model = ['14', 0];
@@ -230,14 +243,15 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   if (detailer) {
     // Find faces in the finished image and repaint each at a good size.
     const guide = family === 'sd15' ? 512 : 1024;
+    const maxSize = family === 'sd15' ? 768 : DETAILER_MAX[cfg.tier] || DETAILER_MAX.medium;
     wf[40] = { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: cfg.detector } };
     wf[41] = {
       class_type: 'FaceDetailer',
       inputs: {
         image: wf[SAVE_NODE].inputs.images, model: wf[3].inputs.model, clip, vae, positive: wf[3].inputs.positive, negative: ['7', 0],
-        guide_size: guide, guide_size_for: true, max_size: guide, seed, steps: stepsFor(f, cfg, 'standard'), ...sampling,
+        guide_size: guide, guide_size_for: true, max_size: maxSize, seed, steps: stepsFor(f, cfg, 'standard'), ...sampling,
         denoise: cfg.detailerDenoise ?? DETAILER_DENOISE, feather: 5, noise_mask: true, force_inpaint: true,
-        bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: 3, sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
+        bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: DETAILER_CROP, sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
         sam_bbox_expansion: 0, sam_mask_hint_threshold: 0.7, sam_mask_hint_use_negative: 'False', drop_size: 10,
         bbox_detector: ['40', 0], wildcard: '', cycle: Math.min(MAX_DETAILER_PASSES, Math.max(1, cfg.detailerPasses || 1)),
       },
@@ -602,6 +616,11 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
     const name = await uploadImage(cfg.url, { ...request.upscale, filename: `disgourd-upscale-${crypto.randomBytes(6).toString('hex')}.${request.upscale.ext || 'png'}` }, signal);
     built = buildUpscaleWorkflow(request, cfg, name, { permissive });
   } else {
+    // img2img (P3-36a): put the starting image into ComfyUI first.
+    if (request.init) {
+      const initName = await uploadImage(cfg.url, { ...request.init, filename: `disgourd-vary-${crypto.randomBytes(6).toString('hex')}.${request.init.ext || 'png'}` }, signal);
+      request = { ...request, initName };
+    }
     built = buildWorkflow(request, cfg, { permissive });
   }
   return run(built, cfg, signal, notes);
@@ -813,6 +832,7 @@ module.exports = {
   suggestUpscaler,
   hiresSize,
   HIRES_MP,
+  DETAILER_MAX,
   buildUpscaleWorkflow,
   resolveUpscaler,
   upscalerCache,

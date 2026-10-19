@@ -305,6 +305,7 @@ export default function ChatPanel({
         onHidePreview={(m) => api.hideChannelPreview(space, channel, m.id).catch(() => {})}
         imagineAgain={imagine?.available ? imagine.run : null}
         imagineUpscale={!!imagine?.canUpscale}
+        imagineVary={!!imagine?.canVary}
         onPin={canPin && onSetPinned ? onSetPinned : undefined}
         messages={messages}
         channel={channel}
