@@ -15,7 +15,10 @@ const fromCell = (c) => (c === '1' ? 1 : c === '0' ? 0 : null);
 // Manager panel for one channel: per-role access (P2-21c) — for each role,
 // View and Post each Default / Allow / Deny — and deleting the channel. Roles
 // at or above your own are shown but locked (the owner: none locked).
-export default function ChannelSettingsDialog({ space, channel, meta, roles = [], isOwner = false, myPosition = 0, onClose, onSaved }) {
+// `placement` (P3-25b): { categories, category, canUp, canDown, onMove(delta),
+// onMoveTo(categoryId|null) } — where the channel sits in the list. Moves apply
+// at once (not on Save).
+export default function ChannelSettingsDialog({ space, channel, meta, roles = [], isOwner = false, myPosition = 0, placement = null, onClose, onSaved }) {
   const [cells, setCells] = useState(null); // roleId -> { view, post } cells; null while loading
   const [nsfw, setNsfw] = useState(!!meta?.nsfw); // Age-restricted (18+), text channels
   const [topic, setTopic] = useState(meta?.topic || ''); // P3-20a
@@ -97,6 +100,28 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
       </div>
 
       <div ref={bodyRef} className="space-y-3 overflow-y-auto p-6">
+        {placement && (
+          <div role="group" aria-label="Place in the channel list" className="flex flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="channel-category" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Category</label>
+              <select
+                id="channel-category"
+                value={placement.category ?? ''}
+                onChange={(e) => placement.onMoveTo(e.target.value === '' ? null : Number(e.target.value))}
+                className="input"
+              >
+                <option value="">No category (top of the list)</option>
+                {placement.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <button type="button" disabled={!placement.canUp} onClick={() => placement.onMove(-1)} className="rounded-lg bg-ink-600 px-3 py-2 text-sm text-gray-200 transition hover:bg-ink-500 disabled:opacity-40">
+              Move up
+            </button>
+            <button type="button" disabled={!placement.canDown} onClick={() => placement.onMove(1)} className="rounded-lg bg-ink-600 px-3 py-2 text-sm text-gray-200 transition hover:bg-ink-500 disabled:opacity-40">
+              Move down
+            </button>
+          </div>
+        )}
         <div>
           <label htmlFor="channel-topic" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Topic</label>
           <textarea

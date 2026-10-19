@@ -11,6 +11,8 @@ import ServerImagineDialog from './ServerImagineDialog.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
 import ServerEmojiDialog from './ServerEmojiDialog.jsx';
 import { displayCaptureSupported } from '../audio.js';
+import * as api from '../api.js';
+import { buildGroups, layoutBody, moveCategory, moveChannel, moveChannelTo, visibleWhenCollapsed, loadCollapsed, saveCollapsed } from '../channelLayout.js';
 
 export default function ChannelList({
   space,
@@ -70,6 +72,7 @@ export default function ChannelList({
   onRolesChanged,
   imagineInfo = null, // the server's /imagine info (GET /spaces), for its settings dialog
   channelMeta = {},
+  categories = [], // P3-25b: the server's categories, in order
   onPermsChanged,
   user,
   avatar,
@@ -82,10 +85,6 @@ export default function ChannelList({
   onEditStatus,
   onLogout,
 }) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [addingVoice, setAddingVoice] = useState(false);
-  const [voiceName, setVoiceName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef(null);
   const [confirmDeleteServer, setConfirmDeleteServer] = useState(false);
@@ -116,23 +115,190 @@ export default function ChannelList({
     setRenaming(false);
   }
 
-  async function submit(e) {
-    e.preventDefault();
-    const trimmed = name.trim().replace(/\s+/g, '-').toLowerCase();
-    if (!trimmed) return;
-    await onCreateChannel(trimmed);
-    setName('');
-    setAdding(false);
+  // ---- Categories (P3-25b) ----
+  const groups = buildGroups(categories, channelMeta, channels, voiceChannels);
+  const [collapsed, setCollapsed] = useState(() => loadCollapsed(space));
+  const [collapsedFor, setCollapsedFor] = useState(space);
+  if (collapsedFor !== space) {
+    setCollapsedFor(space);
+    setCollapsed(loadCollapsed(space));
   }
-
-  async function submitVoice(e) {
-    e.preventDefault();
-    const trimmed = voiceName.trim().replace(/\s+/g, '-').toLowerCase();
-    if (!trimmed) return;
-    await onCreateChannel(trimmed, 'voice');
-    setVoiceName('');
-    setAddingVoice(false);
+  const toggleCollapsed = (id) => {
+    const next = new Set(collapsed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setCollapsed(next);
+    saveCollapsed(space, next);
+  };
+  const [creatingIn, setCreatingIn] = useState(undefined); // undefined: no form; null: the top; or a category id
+  const [catMenu, setCatMenu] = useState(null);
+  const [renamingCat, setRenamingCat] = useState(null);
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState(null);
+  const [arrangeError, setArrangeError] = useState('');
+  // Send a new arrangement (the server tells everyone; the list reloads).
+  async function arrange(next) {
+    if (!next) return;
+    setArrangeError('');
+    try {
+      await api.setLayout(space, layoutBody(next));
+    } catch (err) {
+      setArrangeError(err.message || 'Could not move that');
+    }
   }
+  async function createIn(categoryId, channelName, type) {
+    const trimmed = channelName.trim().replace(/\s+/g, '-').toLowerCase();
+    if (!trimmed) return;
+    await onCreateChannel(trimmed, type, categoryId);
+    setCreatingIn(undefined);
+  }
+  async function renameCat(id, value) {
+    const next = value.trim();
+    setRenamingCat(null);
+    if (!next) return;
+    try {
+      await api.renameCategory(space, id, next);
+    } catch (err) {
+      setArrangeError(err.message || 'Could not rename the category');
+    }
+  }
+  async function createCategory() {
+    try {
+      const made = await api.createCategory(space, 'New category');
+      setRenamingCat(made.id);
+    } catch (err) {
+      setArrangeError(err.message || 'Could not create a category');
+    }
+  }
+  // Where the channel whose settings are open sits, and its moves.
+  const placementFor = (name) => {
+    const gi = groups.findIndex((g) => g.items.some((i) => i.name === name));
+    if (gi < 0) return null;
+    const ii = groups[gi].items.findIndex((i) => i.name === name);
+    return {
+      categories,
+      category: groups[gi].id,
+      canUp: gi > 0 || ii > 0,
+      canDown: gi < groups.length - 1 || ii < groups[gi].items.length - 1,
+      onMove: (delta) => arrange(moveChannel(groups, name, delta)),
+      onMoveTo: (id) => arrange(moveChannelTo(groups, name, id)),
+    };
+  };
+  const renderItem = (item) => (item.type === 'voice' ? renderVoice(item.name) : renderText(item.name));
+  const renderText = (c) => {
+          const active = c === currentChannel;
+          const hasUnread = (unread[c] || 0) > 0 && !active;
+          const mentionCount = active ? 0 : mentions[c] || 0;
+          // From the role overrides: what @everyone may do here.
+          const access = channelMeta[c]?.private ? 'Private' : channelMeta[c]?.readOnly ? 'Read-only' : null;
+          return (
+            <div key={c} className="group relative mb-0.5">
+              <button
+                onClick={() => onSelect(c)}
+                className={`tap-row flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
+                  // Make room for the gear whenever it shows, so it doesn't cover the 18+ tag or badges.
+                  canManage
+                    ? channelSettings === c
+                      ? 'pr-8 coarse:pr-13'
+                      : 'group-hover:pr-8 group-focus-within:pr-8 coarse:group-hover:pr-13 coarse:group-focus-within:pr-13'
+                    : ''
+                } ${
+                  active
+                    ? 'bg-ink-600 text-fg'
+                    : hasUnread || mentionCount
+                      ? 'font-semibold text-fg hover:bg-ink-700/60'
+                      : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
+                }`}
+              >
+                <Icon name="hash" size={17} className="shrink-0 text-gray-500" />
+                <span className="flex-1 truncate">{c}</span>
+                {(hasUnread || mentionCount > 0) && (
+                  <span className="sr-only">, {unreadLabel({ unread: hasUnread ? unread[c] : 0, mentions: mentionCount })}</span>
+                )}
+                {channelMeta[c]?.nsfw && (
+                  <span title="Age-restricted (18+)" className="shrink-0 rounded-sm bg-ink-600 px-1 text-[10px] font-semibold text-gray-300">
+                    18+
+                  </span>
+                )}
+                {access && <span title={access} className="shrink-0 text-gray-500"><Icon name="shield" size={13} /></span>}
+                {mentionCount > 0 ? (
+                  <span aria-hidden="true" className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-ink-900 tabular-nums">
+                    {mentionCount}
+                  </span>
+                ) : hasUnread ? (
+                  <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-gray-300" />
+                ) : null}
+              </button>
+              {canManage && (
+                <IconButton
+                  icon="settings"
+                  size={15}
+                  label={`Channel settings for ${c}`}
+                  title="Channel settings"
+                  ref={(el) => (gearRefs.current[c] = el)}
+                  onClick={() => setChannelSettings(c)}
+                  className={`tap absolute right-1 top-1/2 -translate-y-1/2 items-center justify-center rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
+                  // stays shown while its dialog is open, so focus can come back to it
+                  channelSettings === c ? 'flex' : 'hidden'
+                }`}
+                />
+              )}
+            </div>
+          );
+  };
+  const renderVoice = (vc) => {
+  const inThis = myVoice && myVoice.channel === vc && myVoice.space === space;
+  const people = inThis ? activeVoiceParticipants : voiceParticipants[vc] || [];
+  return (
+    <div key={vc} className="mb-0.5">
+      <div className="group relative">
+        <button
+          onClick={() => onJoinVoice(space, vc)}
+          className={`tap-row flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
+            inThis ? 'bg-ink-600 text-fg' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
+          }`}
+        >
+          <Icon name="volume" size={17} className="shrink-0 text-gray-500" />
+          <span className="flex-1 truncate">{vc}</span>
+          {people.length > 0 && (
+            <span className="text-xs text-gray-500 group-hover:hidden">{people.length}</span>
+          )}
+        </button>
+        {canManage && (
+          <IconButton
+            icon="settings"
+            size={15}
+            label={`Channel settings for ${vc}`}
+            title="Channel settings"
+            ref={(el) => (gearRefs.current[vc] = el)}
+            onClick={() => setChannelSettings(vc)}
+            className={`tap absolute right-1 top-1/2 -translate-y-1/2 items-center justify-center rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
+      // stays shown while its dialog is open, so focus can come back to it
+      channelSettings === vc ? 'flex' : 'hidden'
+    }`}
+          />
+        )}
+      </div>
+      {people.map((p) => (
+        <div key={p.username}>
+          <div className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
+            <Avatar name={p.username} size={20} src={p.avatar} status="online" speaking={p.speaking} />
+            <span className="min-w-0 flex-1 truncate">{p.username}</span>
+            {p.muted && <span title="Muted" className="shrink-0 text-danger"><Icon name="micOff" size={14} /></span>}
+          </div>
+          {p.sharing && (
+            <ShareRow
+              p={p}
+              controllable={inThis && p.userId !== selfId}
+              isSelf={p.userId === selfId}
+              onToggleMute={() => onToggleShareMute(p.userId)}
+              onVolume={(v) => onSetShareVolume(p.userId, v)}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+  };
 
   return (
     <nav aria-label="Channels" className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
@@ -174,6 +340,26 @@ export default function ChannelList({
               >
                 <Icon name="plus" size={16} className="text-brand-hi" /> Invite people
               </MenuItem>
+              {canManage && (
+                <MenuItem
+                  onClick={() => {
+                    closeMenu();
+                    setCreatingIn(null);
+                  }}
+                >
+                  <Icon name="plus" size={16} /> Create channel
+                </MenuItem>
+              )}
+              {canManage && (
+                <MenuItem
+                  onClick={() => {
+                    closeMenu();
+                    createCategory();
+                  }}
+                >
+                  <Icon name="plus" size={16} /> Create category
+                </MenuItem>
+              )}
               {canManage && (
                 <MenuItem onClick={startRename}>
                   <Icon name="edit" size={16} /> Rename server
@@ -270,191 +456,113 @@ export default function ChannelList({
       </header>
 
       <div className="flex-1 overflow-y-auto px-2 py-3">
-        <div className="mb-1 flex items-center justify-between px-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Text channels
-          </span>
-          {space && canManage && (
-            <button
-              onClick={() => setAdding((v) => !v)}
-              title="Create channel"
-              aria-label="Create channel"
-              aria-expanded={adding}
-              className="tap flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
-            >
-              <Icon name="plus" size={16} />
-            </button>
-          )}
-        </div>
-
-        {adding && (
-          <form onSubmit={submit} className="mb-1 px-1">
-            <input
-              autoFocus
-              aria-label="New channel name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => !name && setAdding(false)}
-              placeholder="new-channel"
-              className="w-full rounded-sm bg-ink-900 px-2 py-1 text-sm outline-hidden ring-1 ring-ink-500 focus:ring-brand-hi"
-            />
-          </form>
+        {creatingIn === null && (
+          <CreateChannelForm onCancel={() => setCreatingIn(undefined)} onCreate={(n, type) => createIn(null, n, type)} />
         )}
-
-        {channels.map((c) => {
-          const active = c === currentChannel;
-          const hasUnread = (unread[c] || 0) > 0 && !active;
-          const mentionCount = active ? 0 : mentions[c] || 0;
-          // From the role overrides: what @everyone may do here.
-          const access = channelMeta[c]?.private ? 'Private' : channelMeta[c]?.readOnly ? 'Read-only' : null;
+        {groups.map((g) => {
+          if (g.id === null) return <div key="top">{g.items.map(renderItem)}</div>;
+          if (!canManage && g.items.length === 0) return null; // empty categories are for managers
+          const isCollapsed = collapsed.has(g.id);
+          const shown = isCollapsed ? g.items.filter((i) => visibleWhenCollapsed(i, { current: currentChannel, mentions, voiceChannel: myVoice?.space === space ? myVoice.channel : null })) : g.items;
+          const gi = groups.indexOf(g);
           return (
-            <div key={c} className="group relative mb-0.5">
-              <button
-                onClick={() => onSelect(c)}
-                className={`tap-row flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
-                  // Make room for the gear whenever it shows, so it doesn't cover the 18+ tag or badges.
-                  canManage
-                    ? channelSettings === c
-                      ? 'pr-8 coarse:pr-13'
-                      : 'group-hover:pr-8 group-focus-within:pr-8 coarse:group-hover:pr-13 coarse:group-focus-within:pr-13'
-                    : ''
-                } ${
-                  active
-                    ? 'bg-ink-600 text-fg'
-                    : hasUnread || mentionCount
-                      ? 'font-semibold text-fg hover:bg-ink-700/60'
-                      : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
-                }`}
-              >
-                <Icon name="hash" size={17} className="shrink-0 text-gray-500" />
-                <span className="flex-1 truncate">{c}</span>
-                {(hasUnread || mentionCount > 0) && (
-                  <span className="sr-only">, {unreadLabel({ unread: hasUnread ? unread[c] : 0, mentions: mentionCount })}</span>
+            <section key={g.id} aria-label={g.name} className="mt-3 first:mt-0">
+              <div className="group/cat relative mb-1 flex items-center gap-1 pl-1 pr-1">
+                {renamingCat === g.id ? (
+                  <form
+                    className="flex-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      renameCat(g.id, e.currentTarget.elements.name.value);
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      name="name"
+                      aria-label="Category name"
+                      defaultValue={g.name}
+                      maxLength={50}
+                      onBlur={() => setRenamingCat(null)}
+                      onKeyDown={(e) => e.key === 'Escape' && setRenamingCat(null)}
+                      className="w-full rounded-sm bg-ink-900 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide outline-hidden ring-1 ring-brand-hi"
+                    />
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    aria-expanded={!isCollapsed}
+                    onClick={() => toggleCollapsed(g.id)}
+                    className="tap-row flex min-w-0 flex-1 items-center gap-1 rounded-sm px-1 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-gray-200"
+                  >
+                    <Icon name="chevronDown" size={12} className={`shrink-0 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                    <span className="truncate">{g.name}</span>
+                  </button>
                 )}
-                {channelMeta[c]?.nsfw && (
-                  <span title="Age-restricted (18+)" className="shrink-0 rounded-sm bg-ink-600 px-1 text-[10px] font-semibold text-gray-300">
-                    18+
-                  </span>
+                {canManage && renamingCat !== g.id && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCreatingIn(creatingIn === g.id ? undefined : g.id)}
+                      title="Create channel"
+                      aria-label={`Create channel in ${g.name}`}
+                      aria-expanded={creatingIn === g.id}
+                      className="tap flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
+                    >
+                      <Icon name="plus" size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCatMenu(catMenu === g.id ? null : g.id)}
+                      title="Category options"
+                      aria-label={`Options for ${g.name}`}
+                      aria-haspopup="menu"
+                      aria-expanded={catMenu === g.id}
+                      className="tap flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
+                    >
+                      <Icon name="more" size={16} />
+                    </button>
+                  </>
                 )}
-                {access && <span title={access} className="shrink-0 text-gray-500"><Icon name="shield" size={13} /></span>}
-                {mentionCount > 0 ? (
-                  <span aria-hidden="true" className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-ink-900 tabular-nums">
-                    {mentionCount}
-                  </span>
-                ) : hasUnread ? (
-                  <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-gray-300" />
-                ) : null}
-              </button>
-              {canManage && (
-                <IconButton
-                  icon="settings"
-                  size={15}
-                  label={`Channel settings for ${c}`}
-                  title="Channel settings"
-                  ref={(el) => (gearRefs.current[c] = el)}
-                  onClick={() => setChannelSettings(c)}
-                  className={`tap absolute right-1 top-1/2 -translate-y-1/2 items-center justify-center rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
-                  // stays shown while its dialog is open, so focus can come back to it
-                  channelSettings === c ? 'flex' : 'hidden'
-                }`}
+                {catMenu === g.id && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setCatMenu(null)} />
+                    <div role="menu" aria-label={`Options for ${g.name}`} className="anim-pop absolute right-0 top-6 z-20 w-44 rounded-lg bg-ink-900 p-1.5 shadow-xl ring-1 ring-ink-500/50">
+                      <MenuItem role="menuitem" onClick={() => { setCatMenu(null); setRenamingCat(g.id); }}>
+                        <Icon name="edit" size={16} /> Rename
+                      </MenuItem>
+                      {gi > 1 && (
+                        <MenuItem role="menuitem" onClick={() => { setCatMenu(null); arrange(moveCategory(groups, g.id, -1)); }}>
+                          <Icon name="chevronDown" size={16} className="rotate-180" /> Move up
+                        </MenuItem>
+                      )}
+                      {gi < groups.length - 1 && (
+                        <MenuItem role="menuitem" onClick={() => { setCatMenu(null); arrange(moveCategory(groups, g.id, 1)); }}>
+                          <Icon name="chevronDown" size={16} /> Move down
+                        </MenuItem>
+                      )}
+                      <MenuItem role="menuitem" danger onClick={() => { setCatMenu(null); setConfirmDeleteCat(g); }}>
+                        <Icon name="trash" size={16} /> Delete category
+                      </MenuItem>
+                    </div>
+                  </>
+                )}
+              </div>
+              {creatingIn === g.id && (
+                <CreateChannelForm
+                  defaultType={g.items.length && g.items.every((i) => i.type === 'voice') ? 'voice' : 'text'}
+                  onCancel={() => setCreatingIn(undefined)}
+                  onCreate={(n, type) => createIn(g.id, n, type)}
                 />
               )}
-            </div>
+              {shown.map(renderItem)}
+            </section>
           );
         })}
 
-        {space && channels.length === 0 && !adding && (
-          <EmptyState compact icon="hash" title="No channels yet" body={canManage ? 'Add one with the + above.' : undefined} />
+        {space && channels.length === 0 && voiceChannels.length === 0 && creatingIn === undefined && (
+          <EmptyState compact icon="hash" title="No channels yet" body={canManage ? 'Add one from the server menu or a category’s +.' : undefined} />
         )}
-
-        {/* Voice channels */}
-        {space && (voiceChannels.length > 0 || canManage) && (
-          <>
-            <div className="mb-1 mt-4 flex items-center justify-between px-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Voice channels
-              </span>
-              {canManage && (
-                <button
-                  onClick={() => setAddingVoice((v) => !v)}
-                  title="Create voice channel"
-                  aria-label="Create voice channel"
-                  aria-expanded={addingVoice}
-                  className="tap flex h-5 w-5 items-center justify-center rounded-sm text-gray-400 hover:bg-ink-700 hover:text-fg"
-                >
-                  <Icon name="plus" size={16} />
-                </button>
-              )}
-            </div>
-            {addingVoice && (
-              <form onSubmit={submitVoice} className="mb-1 px-1">
-                <input
-                  autoFocus
-                  aria-label="New voice channel name"
-                  value={voiceName}
-                  onChange={(e) => setVoiceName(e.target.value)}
-                  onBlur={() => !voiceName && setAddingVoice(false)}
-                  placeholder="voice-channel"
-                  className="w-full rounded-sm bg-ink-900 px-2 py-1 text-sm outline-hidden ring-1 ring-ink-500 focus:ring-brand-hi"
-                />
-              </form>
-            )}
-            {voiceChannels.map((vc) => {
-              const inThis = myVoice && myVoice.channel === vc && myVoice.space === space;
-              const people = inThis ? activeVoiceParticipants : voiceParticipants[vc] || [];
-              return (
-                <div key={vc} className="mb-0.5">
-                  <div className="group relative">
-                    <button
-                      onClick={() => onJoinVoice(space, vc)}
-                      className={`tap-row flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm transition ${
-                        inThis ? 'bg-ink-600 text-fg' : 'text-gray-400 hover:bg-ink-700/60 hover:text-gray-200'
-                      }`}
-                    >
-                      <Icon name="volume" size={17} className="shrink-0 text-gray-500" />
-                      <span className="flex-1 truncate">{vc}</span>
-                      {people.length > 0 && (
-                        <span className="text-xs text-gray-500 group-hover:hidden">{people.length}</span>
-                      )}
-                    </button>
-                    {canManage && (
-                      <IconButton
-                        icon="settings"
-                        size={15}
-                        label={`Channel settings for ${vc}`}
-                        title="Channel settings"
-                        ref={(el) => (gearRefs.current[vc] = el)}
-                        onClick={() => setChannelSettings(vc)}
-                        className={`tap absolute right-1 top-1/2 -translate-y-1/2 items-center justify-center rounded-md bg-ink-600 p-1 text-gray-300 hover:text-fg group-hover:flex group-focus-within:flex focus-visible:flex ${
-                  // stays shown while its dialog is open, so focus can come back to it
-                  channelSettings === vc ? 'flex' : 'hidden'
-                }`}
-                      />
-                    )}
-                  </div>
-                  {people.map((p) => (
-                    <div key={p.username}>
-                      <div className="flex items-center gap-2 py-0.5 pl-8 pr-2 text-sm text-gray-300">
-                        <Avatar name={p.username} size={20} src={p.avatar} status="online" speaking={p.speaking} />
-                        <span className="min-w-0 flex-1 truncate">{p.username}</span>
-                        {p.muted && <span title="Muted" className="shrink-0 text-danger"><Icon name="micOff" size={14} /></span>}
-                      </div>
-                      {p.sharing && (
-                        <ShareRow
-                          p={p}
-                          controllable={inThis && p.userId !== selfId}
-                          isSelf={p.userId === selfId}
-                          onToggleMute={() => onToggleShareMute(p.userId)}
-                          onVolume={(v) => onSetShareVolume(p.userId, v)}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </>
-        )}
+        {arrangeError && <p role="alert" className="mt-2 px-2 text-xs text-danger">{arrangeError}</p>}
       </div>
 
       {!myVoice && voiceNotice && (
@@ -618,6 +726,7 @@ export default function ChannelList({
           space={space}
           channel={channelSettings}
           meta={channelMeta[channelSettings]}
+          placement={placementFor(channelSettings)}
           roles={roles}
           isOwner={isOwner}
           myPosition={myPosition}
@@ -627,6 +736,24 @@ export default function ChannelList({
             setChannelSettings(null);
           }}
           onSaved={onPermsChanged}
+        />
+      )}
+      {confirmDeleteCat && (
+        <ConfirmDialog
+          title={`Delete the ${confirmDeleteCat.name} category?`}
+          body={`Its channels are kept: they move to the top of the list. Nothing is deleted but the category.`}
+          confirmLabel="Delete category"
+          danger
+          onCancel={() => setConfirmDeleteCat(null)}
+          onConfirm={async () => {
+            const cat = confirmDeleteCat;
+            setConfirmDeleteCat(null);
+            try {
+              await api.deleteCategory(space, cat.id);
+            } catch (err) {
+              setArrangeError(err.message || 'Could not delete the category');
+            }
+          }}
         />
       )}
     </nav>
@@ -671,9 +798,10 @@ function ShareRow({ p, controllable, isSelf, onToggleMute, onVolume }) {
   );
 }
 
-function MenuItem({ children, onClick, danger }) {
+function MenuItem({ children, onClick, danger, role }) {
   return (
     <button
+      role={role}
       onClick={onClick}
       className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition hover:bg-ink-600 ${
         danger ? 'text-danger' : 'text-gray-200'
@@ -681,5 +809,39 @@ function MenuItem({ children, onClick, danger }) {
     >
       {children}
     </button>
+  );
+}
+
+// A new channel's name and kind, inline in the list (P3-25b: per category).
+function CreateChannelForm({ defaultType = 'text', onCreate, onCancel }) {
+  const [value, setValue] = useState('');
+  const [type, setType] = useState(defaultType);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onCreate(value, type);
+      }}
+      onKeyDown={(e) => e.key === 'Escape' && onCancel()}
+      className="mb-1 flex gap-1 px-1"
+    >
+      <input
+        autoFocus
+        aria-label="New channel name"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={type === 'voice' ? 'voice-channel' : 'new-channel'}
+        className="min-w-0 flex-1 rounded-sm bg-ink-900 px-2 py-1 text-sm outline-hidden ring-1 ring-ink-500 focus:ring-brand-hi"
+      />
+      <select
+        aria-label="Channel type"
+        value={type}
+        onChange={(e) => setType(e.target.value)}
+        className="rounded-sm bg-ink-900 px-1 text-xs text-gray-300 ring-1 ring-ink-500"
+      >
+        <option value="text">Text</option>
+        <option value="voice">Voice</option>
+      </select>
+    </form>
   );
 }

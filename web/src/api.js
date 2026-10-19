@@ -193,11 +193,26 @@ export function setChannelOverrides(space, channel, overrides) {
     body: { overrides },
   });
 }
-export function createChannel(space, name, type) {
+// `category` (P3-25b): an id, or null for the top; left out, the default for the type.
+export function createChannel(space, name, type, category) {
   return request(`/spaces/${encodeURIComponent(space)}/channels`, {
     method: 'POST',
-    body: type ? { name, type } : { name },
+    body: { name, ...(type ? { type } : {}), ...(category !== undefined ? { category } : {}) },
   });
+}
+// ---- Channel categories (P3-25) ----
+export function createCategory(space, name) {
+  return request(`/spaces/${encodeURIComponent(space)}/categories`, { method: 'POST', body: { name } });
+}
+export function renameCategory(space, id, name) {
+  return request(`/spaces/${encodeURIComponent(space)}/categories/${id}`, { method: 'PATCH', body: { name } });
+}
+export function deleteCategory(space, id) {
+  return request(`/spaces/${encodeURIComponent(space)}/categories/${id}`, { method: 'DELETE' });
+}
+// The whole order: { categories: [id…], channels: [{ name, category }…] }.
+export function setLayout(space, layout) {
+  return request(`/spaces/${encodeURIComponent(space)}/layout`, { method: 'PUT', body: layout });
 }
 export function deleteChannel(space, channel) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, {

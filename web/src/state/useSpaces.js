@@ -248,9 +248,9 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       const s = next.find((x) => x.name === res.name);
       goTo(res.name, next, s && s.channels[0] ? s.channels[0] : 'general');
     },
-    createChannel: attempt('Could not create channel', async (name, type = 'text') => {
+    createChannel: attempt('Could not create channel', async (name, type = 'text', category) => {
       if (!currentSpace) return;
-      const created = await api.createChannel(currentSpace, name, type);
+      const created = await api.createChannel(currentSpace, name, type, category);
       const next = await loadSpaces();
       const s = next.find((x) => x.name === currentSpace);
       if (type === 'text' && s && created.name && s.channels.includes(created.name)) {
@@ -340,6 +340,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     channels,
     voiceChannels,
     channelMeta,
+    categories: activeSpace ? activeSpace.categories || [] : [], // P3-25b
     role,
     canManage,
     canPostCurrent,
