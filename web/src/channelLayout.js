@@ -78,6 +78,64 @@ export function moveCategory(groups, id, delta) {
   return next;
 }
 
+// ---- Drag and drop (P3-25c) ----
+// Drop a channel into a group at `index`, counted in the list as shown (before
+// the dragged channel is lifted out). Returns new groups, or null if nothing
+// changes.
+export function dropChannel(groups, name, groupId, index) {
+  const next = clone(groups);
+  const [gi, ii] = locate(next, name);
+  const dest = next.find((g) => g.id === groupId);
+  if (gi < 0 || !dest) return null;
+  let at = Math.max(0, Math.min(index, dest.items.length));
+  if (next[gi] === dest && ii < at) at -= 1;
+  if (next[gi] === dest && ii === at) return null;
+  const [item] = next[gi].items.splice(ii, 1);
+  dest.items.splice(at, 0, item);
+  return next;
+}
+
+// Drop a category before the group at `index` (as shown; the top group stays
+// first, so 1 is the first category place). Returns new groups, or null.
+export function dropCategory(groups, id, index) {
+  const next = clone(groups);
+  const from = next.findIndex((g) => g.id === id);
+  if (from < 1) return null;
+  let at = Math.max(1, Math.min(index, next.length));
+  if (from < at) at -= 1;
+  if (from === at) return null;
+  const [g] = next.splice(from, 1);
+  next.splice(at, 0, g);
+  return next;
+}
+
+// Where a channel dropped at height `y` lands, from the shown rows and
+// headings in page order: [{ kind: 'row' | 'heading', group, index, top, bottom }].
+// Above a heading's middle is the end of the group before it; below, that
+// category's start. Returns { group, index }.
+export function channelDropTarget(targets, y, groups) {
+  for (const t of targets) {
+    if (y >= t.bottom) continue;
+    const mid = (t.top + t.bottom) / 2;
+    if (t.kind === 'row') return { group: t.group, index: y < mid ? t.index : t.index + 1 };
+    if (y >= mid) return { group: t.group, index: 0 };
+    const gi = groups.findIndex((g) => g.id === t.group);
+    const before = groups[Math.max(0, gi - 1)];
+    return { group: before.id, index: before.items.length };
+  }
+  const last = groups[groups.length - 1];
+  return { group: last.id, index: last.items.length };
+}
+
+// Where a category dropped at `y` lands among the category sections
+// ([{ index, top, bottom }] in order): the group index to go before.
+export function categoryDropIndex(sections, y, groupCount) {
+  for (const s of sections) {
+    if (y < (s.top + s.bottom) / 2) return s.index;
+  }
+  return groupCount;
+}
+
 // Which channel a group shows while collapsed: the one you're in, and any with
 // unread mentions (and the voice channel you're connected to).
 export function visibleWhenCollapsed(item, { current, mentions = {}, voiceChannel }) {

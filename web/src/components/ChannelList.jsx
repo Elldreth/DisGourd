@@ -1,5 +1,5 @@
 import EmptyState from './EmptyState.jsx';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
@@ -12,7 +12,10 @@ import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
 import ServerEmojiDialog from './ServerEmojiDialog.jsx';
 import { displayCaptureSupported } from '../audio.js';
 import * as api from '../api.js';
-import { buildGroups, layoutBody, moveCategory, moveChannel, moveChannelTo, visibleWhenCollapsed, loadCollapsed, saveCollapsed } from '../channelLayout.js';
+import {
+  buildGroups, layoutBody, moveCategory, moveChannel, moveChannelTo, visibleWhenCollapsed, loadCollapsed, saveCollapsed,
+  dropChannel, dropCategory, channelDropTarget, categoryDropIndex,
+} from '../channelLayout.js';
 
 export default function ChannelList({
   space,
@@ -184,6 +187,100 @@ export default function ChannelList({
     };
   };
   const renderItem = (item) => (item.type === 'voice' ? renderVoice(item.name) : renderText(item.name));
+
+  // ---- Drag and drop (P3-25c): managers drag channels and category headings
+  // with a mouse or pen (phones use the Move menus). A drag starts after 5 px;
+  // Esc cancels; the click that ends a drag doesn't select anything. ----
+  const navRef = useRef(null);
+  const [drag, setDrag] = useState(null); // { kind: 'channel' | 'category', id, x, y, active }
+  const [dropAt, setDropAt] = useState(null); // { group, index } or { catIndex }
+  const dropRef = useRef(null);
+  const swallowClick = useRef(false);
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
+  function startDrag(e, kind, id) {
+    if (!canManage || e.button !== 0 || e.pointerType === 'touch') return;
+    setDrag({ kind, id, x: e.clientX, y: e.clientY, active: false });
+  }
+  useEffect(() => {
+    if (!drag) return undefined;
+    const readTargets = () => {
+      const nav = navRef.current;
+      if (!nav) return [];
+      const group = (el) => (el.dataset.group === 'top' ? null : Number(el.dataset.group));
+      return [...nav.querySelectorAll('[data-drop-row], [data-drop-heading]')].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { kind: el.hasAttribute('data-drop-row') ? 'row' : 'heading', group: group(el), index: Number(el.dataset.index || 0), top: r.top, bottom: r.bottom };
+      });
+    };
+    const readSections = () => [...(navRef.current?.querySelectorAll('[data-drop-section]') || [])].map((el) => {
+      const r = el.getBoundingClientRect();
+      return { index: Number(el.dataset.index), top: r.top, bottom: r.bottom };
+    });
+    const onMove = (e) => {
+      if (!drag.active) {
+        if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
+        setDrag((d) => d && { ...d, active: true });
+      }
+      const at = drag.kind === 'channel'
+        ? channelDropTarget(readTargets(), e.clientY, groupsRef.current)
+        : { catIndex: categoryDropIndex(readSections(), e.clientY, groupsRef.current.length) };
+      dropRef.current = at;
+      setDropAt(at);
+    };
+    const end = () => {
+      setDrag(null);
+      setDropAt(null);
+      dropRef.current = null;
+    };
+    const onUp = () => {
+      const at = dropRef.current;
+      if (drag.active || at) {
+        swallowClick.current = true;
+        setTimeout(() => (swallowClick.current = false), 0);
+      }
+      if (at) {
+        arrange(drag.kind === 'channel' ? dropChannel(groupsRef.current, drag.id, at.group, at.index) : dropCategory(groupsRef.current, drag.id, at.catIndex));
+      }
+      end();
+    };
+    const onKey = (e) => e.key === 'Escape' && end();
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('keydown', onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drag]);
+  const dragging = drag?.active ? drag : null;
+  // The drop line takes no room (it's drawn over the gap), so rows don't shift
+  // under the pointer while dragging.
+  const line = <div data-testid="drop-line" aria-hidden="true" className="pointer-events-none absolute inset-x-2 -top-px h-0.5 rounded-full bg-brand-hi" />;
+  const dropLine = (groupId, index) =>
+    dragging?.kind === 'channel' && dropAt && dropAt.group === groupId && dropAt.index === index ? line : null;
+  const catLine = (index) => (dragging?.kind === 'category' && dropAt?.catIndex === index ? line : null);
+  // A zero-height anchor for a line after the last row (or category).
+  const endLine = (el) => (el ? <div className="relative h-0">{el}</div> : null);
+  // A channel row in place: what drags, and where a drop would land.
+  const placed = (g) => (item) => {
+    const index = g.items.indexOf(item);
+    return (
+      <div
+        key={item.name}
+        data-drop-row=""
+        data-group={g.id ?? 'top'}
+        data-index={index}
+        onPointerDown={canManage ? (e) => startDrag(e, 'channel', item.name) : undefined}
+        className={`relative ${dragging?.kind === 'channel' && dragging.id === item.name ? 'opacity-40' : ''}`}
+      >
+        {dropLine(g.id, index)}
+        {renderItem(item)}
+      </div>
+    );
+  };
   const renderText = (c) => {
           const active = c === currentChannel;
           const hasUnread = (unread[c] || 0) > 0 && !active;
@@ -301,7 +398,7 @@ export default function ChannelList({
   };
 
   return (
-    <nav aria-label="Channels" className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
+    <nav ref={navRef} aria-label="Channels" className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
       <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-xs shadow-black/20">
         {/* Server identity + the active highlight live in the left rail; the header
             just needs the name and its menu (which holds change/reposition icon). */}
@@ -455,19 +552,41 @@ export default function ChannelList({
         />
       </header>
 
-      <div className="flex-1 overflow-y-auto px-2 py-3">
+      <div
+        className={`flex-1 overflow-y-auto px-2 py-3 ${dragging ? 'cursor-grabbing select-none' : ''}`}
+        onClickCapture={(e) => {
+          if (swallowClick.current) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
         {creatingIn === null && (
           <CreateChannelForm onCancel={() => setCreatingIn(undefined)} onCreate={(n, type) => createIn(null, n, type)} />
         )}
         {groups.map((g) => {
-          if (g.id === null) return <div key="top">{g.items.map(renderItem)}</div>;
+          if (g.id === null) {
+            return (
+              <div key="top" className={dragging?.kind === 'channel' && !g.items.length ? 'min-h-2' : undefined}>
+                {g.items.map(placed(g))}
+                {endLine(dropLine(null, g.items.length))}
+              </div>
+            );
+          }
           if (!canManage && g.items.length === 0) return null; // empty categories are for managers
           const isCollapsed = collapsed.has(g.id);
           const shown = isCollapsed ? g.items.filter((i) => visibleWhenCollapsed(i, { current: currentChannel, mentions, voiceChannel: myVoice?.space === space ? myVoice.channel : null })) : g.items;
           const gi = groups.indexOf(g);
           return (
-            <section key={g.id} aria-label={g.name} className="mt-3 first:mt-0">
-              <div className="group/cat relative mb-1 flex items-center gap-1 pl-1 pr-1">
+            <section
+              key={g.id}
+              aria-label={g.name}
+              data-drop-section=""
+              data-index={gi}
+              className={`relative mt-3 first:mt-0 ${dragging?.kind === 'category' && dragging.id === g.id ? 'opacity-40' : ''}`}
+            >
+              {catLine(gi)}
+              <div data-drop-heading="" data-group={g.id} className="group/cat relative mb-1 flex items-center gap-1 pl-1 pr-1">
                 {renamingCat === g.id ? (
                   <form
                     className="flex-1"
@@ -492,6 +611,7 @@ export default function ChannelList({
                     type="button"
                     aria-expanded={!isCollapsed}
                     onClick={() => toggleCollapsed(g.id)}
+                    onPointerDown={canManage ? (e) => startDrag(e, 'category', g.id) : undefined}
                     className="tap-row flex min-w-0 flex-1 items-center gap-1 rounded-sm px-1 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-gray-200"
                   >
                     <Icon name="chevronDown" size={12} className={`shrink-0 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
@@ -554,10 +674,12 @@ export default function ChannelList({
                   onCreate={(n, type) => createIn(g.id, n, type)}
                 />
               )}
-              {shown.map(renderItem)}
+              {shown.map(placed(g))}
+              {endLine(dropLine(g.id, g.items.length))}
             </section>
           );
         })}
+        {endLine(catLine(groups.length))}
 
         {space && channels.length === 0 && voiceChannels.length === 0 && creatingIn === undefined && (
           <EmptyState compact icon="hash" title="No channels yet" body={canManage ? 'Add one from the server menu or a category’s +.' : undefined} />

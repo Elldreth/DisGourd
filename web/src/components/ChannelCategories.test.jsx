@@ -130,3 +130,84 @@ test('managers: the server menu creates a category (then names it), and a channe
   await waitFor(() => expect(api.setLayout.mock.calls.at(-1)[1].channels.filter((c) => c.category === null).map((c) => c.name)).toEqual(['rules', 'news']));
   expect(within(place).getByRole('button', { name: 'Move up' }).disabled).toBe(false);
 });
+
+// P3-25c: drag and drop. Each drop target gets a fake 20 px box, in page order.
+function layOut() {
+  const nav = screen.getByRole('navigation', { name: 'Channels' });
+  const boxes = [...nav.querySelectorAll('[data-drop-row], [data-drop-heading], [data-drop-section]')];
+  let y = 0;
+  const rows = boxes.filter((el) => !el.hasAttribute('data-drop-section'));
+  rows.forEach((el) => {
+    const top = y;
+    el.getBoundingClientRect = () => ({ top, bottom: top + 20, left: 0, right: 200, width: 200, height: 20 });
+    y += 20;
+  });
+  // A section spans its heading to its last row.
+  boxes.filter((el) => el.hasAttribute('data-drop-section')).forEach((el) => {
+    const inside = rows.filter((r) => el.contains(r)).map((r) => r.getBoundingClientRect());
+    el.getBoundingClientRect = () => ({ top: inside[0].top, bottom: inside.at(-1).bottom, left: 0, right: 200 });
+  });
+  return Object.fromEntries(rows.map((el) => [el.textContent.trim().split(/[\s,]/)[0] || el.dataset.group, el.getBoundingClientRect()]));
+}
+const pointer = (type, target, y) => fireEvent[type](target, { clientX: 10, clientY: y, button: 0, pointerType: 'mouse' });
+
+test('dragging a channel onto another category sends the new layout; the click after the drag selects nothing', async () => {
+  const onSelect = vi.fn();
+  setup({ canManage: true, onSelect });
+  const box = layOut(); // rules 0, Text 20, general 40, news 60, memes 80, Voice 100, lounge 120, Empty 140
+  const general = screen.getByRole('button', { name: /^general/ });
+  pointer('pointerDown', general, box.general.top + 5);
+  pointer('pointerMove', window, box.general.top + 30); // past the 5 px threshold
+  pointer('pointerMove', window, box.lounge.top + 15); // lower half of lounge
+  expect(screen.getAllByTestId('drop-line')).toHaveLength(1);
+  pointer('pointerUp', window, box.lounge.top + 15);
+  fireEvent.click(general); // the click that ends the drag
+  await waitFor(() => expect(api.setLayout).toHaveBeenCalledTimes(1));
+  const sent = api.setLayout.mock.calls[0][1];
+  expect(sent.channels.filter((c) => c.category === 2).map((c) => c.name)).toEqual(['lounge', 'general']);
+  expect(sent.channels.filter((c) => c.category === 1).map((c) => c.name)).toEqual(['news', 'memes']);
+  expect(onSelect).not.toHaveBeenCalled();
+});
+
+test('dragging a category heading reorders categories; Esc cancels; a small wobble is just a click', async () => {
+  const onSelect = vi.fn();
+  setup({ canManage: true, onSelect });
+  const box = layOut();
+  const voice = screen.getByRole('button', { name: 'Voice channels' });
+  pointer('pointerDown', voice, box.Voice.top + 5);
+  pointer('pointerMove', window, box.Voice.top - 30);
+  pointer('pointerMove', window, box.Text.top + 2); // above the middle of the Text section → before it
+  pointer('pointerUp', window, box.Text.top + 2);
+  await waitFor(() => expect(api.setLayout).toHaveBeenCalledWith('S', expect.objectContaining({ categories: [2, 1, 3] })));
+  // Esc during a drag: nothing sent.
+  api.setLayout.mockClear();
+  const news = screen.getByRole('button', { name: /^news/ });
+  pointer('pointerDown', news, box.news.top + 5);
+  pointer('pointerMove', window, box.lounge.top + 5);
+  fireEvent.keyDown(window, { key: 'Escape' });
+  pointer('pointerUp', window, box.lounge.top + 5);
+  expect(screen.queryByTestId('drop-line')).toBeNull();
+  // A 2 px wobble is a click, not a drag.
+  pointer('pointerDown', news, box.news.top + 5);
+  pointer('pointerMove', window, box.news.top + 7);
+  pointer('pointerUp', window, box.news.top + 7);
+  fireEvent.click(news);
+  expect(onSelect).toHaveBeenCalledWith('news');
+  expect(api.setLayout).not.toHaveBeenCalled();
+});
+
+test('members and touch screens can’t drag', () => {
+  setup();
+  const box = layOut();
+  const general = screen.getByRole('button', { name: /^general/ });
+  pointer('pointerDown', general, box.general.top + 5);
+  pointer('pointerMove', window, box.lounge.top + 15);
+  expect(screen.queryByTestId('drop-line')).toBeNull();
+  cleanup();
+  setup({ canManage: true });
+  const box2 = layOut();
+  fireEvent.pointerDown(screen.getByRole('button', { name: /^general/ }), { clientY: box2.general.top + 5, button: 0, pointerType: 'touch' });
+  pointer('pointerMove', window, box2.lounge.top + 15);
+  expect(screen.queryByTestId('drop-line')).toBeNull();
+});
+
