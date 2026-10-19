@@ -445,7 +445,14 @@ async function listModels(url) {
 }
 
 // A /prompt refusal in plain words.
-function promptError(err, cfg) {
+function promptError(err, cfg, custom = false) {
+  // A node type ComfyUI doesn't know (a custom workflow's node gone, P3-34).
+  const top = err.data?.error || {};
+  const missing = top.extra_info?.class_type || (`${top.message || ''}`.match(/Node '([^']+)' not found|node (\S+) does not exist/i) || []).slice(1).find(Boolean);
+  if (top.type === 'missing_node_type' || missing) {
+    const name = missing || 'a node';
+    return fail('ENGINE', custom ? `Your custom workflow needs ${name}, which ComfyUI doesn't have` : `ComfyUI doesn't have the node ${name}`);
+  }
   const nodeErrors = err.data && err.data.node_errors ? Object.values(err.data.node_errors) : [];
   const all = nodeErrors.flatMap((n) => n.errors || []);
   const says = (re) => all.some((e) => re.test(`${e.details || ''} ${e.message || ''}`));
@@ -482,7 +489,94 @@ async function cancel(url, promptId) {
   }
 }
 
+// ---- Custom workflows (P3-34) ----
+// The host's own workflow from ComfyUI's Export (API), with placeholders that
+// DisGourd fills per request. Anything else in it is left as the host built it.
+const PLACEHOLDERS = {
+  generate: ['prompt', 'negative', 'seed', 'width', 'height', 'steps', 'quality'],
+  upscale: ['image', 'scale', 'prompt', 'negative', 'seed'],
+};
+const REQUIRED_PLACEHOLDER = { generate: 'prompt', upscale: 'image' };
+const NUMERIC = new Set(['seed', 'width', 'height', 'steps', 'scale']);
+const MAX_WORKFLOW_BYTES = 256 * 1024;
+const TOKEN = /\{\{\s*(\w+)\s*\}\}/g;
+
+// Check a workflow (JSON text or an object) for `kind` ('generate' or
+// 'upscale'): { workflow, classTypes } or { error }.
+function checkWorkflow(input, kind = 'generate') {
+  let wf = input;
+  if (typeof input === 'string') {
+    if (Buffer.byteLength(input) > MAX_WORKFLOW_BYTES) return { error: 'The workflow is over 256 KB' };
+    try {
+      wf = JSON.parse(input);
+    } catch {
+      return { error: 'That isn’t valid JSON' };
+    }
+  } else if (Buffer.byteLength(JSON.stringify(input || null)) > MAX_WORKFLOW_BYTES) {
+    return { error: 'The workflow is over 256 KB' };
+  }
+  if (wf && typeof wf === 'object' && Array.isArray(wf.nodes)) return { error: 'That’s the regular workflow file. In ComfyUI, use Export (API) instead' };
+  const nodes = wf && typeof wf === 'object' && !Array.isArray(wf) ? Object.values(wf) : [];
+  if (!nodes.length || !nodes.every((n) => n && typeof n === 'object' && typeof n.class_type === 'string' && n.inputs && typeof n.inputs === 'object')) {
+    return { error: 'That doesn’t look like a ComfyUI API workflow (each node needs class_type and inputs). Use Export (API)' };
+  }
+  const found = new Set();
+  for (const n of nodes) {
+    for (const v of Object.values(n.inputs)) if (typeof v === 'string') for (const m of v.matchAll(TOKEN)) found.add(m[1]);
+  }
+  const unknown = [...found].filter((p) => !PLACEHOLDERS[kind].includes(p));
+  if (unknown.length) return { error: `Unknown placeholder${unknown.length > 1 ? 's' : ''}: ${unknown.map((p) => `{{${p}}}`).join(', ')}. Use ${PLACEHOLDERS[kind].map((p) => `{{${p}}}`).join(', ')}` };
+  if (!found.has(REQUIRED_PLACEHOLDER[kind])) return { error: `The workflow needs {{${REQUIRED_PLACEHOLDER[kind]}}} in one of its fields` };
+  return { workflow: wf, classTypes: [...new Set(nodes.map((n) => n.class_type))] };
+}
+
+// Which of a workflow's node types this ComfyUI doesn't have (asked fresh).
+async function workflowMissingNodes(url, classTypes) {
+  const has = await Promise.all(classTypes.map((c) => hasNode(url, c)));
+  return classTypes.filter((_, i) => !has[i]);
+}
+
+// A copy of the workflow with the placeholders filled: a field that is just
+// one placeholder takes the value's own type (numbers stay numbers); inside
+// longer text it's replaced in place.
+function fillWorkflow(wf, values) {
+  const out = JSON.parse(JSON.stringify(wf));
+  for (const node of Object.values(out)) {
+    for (const [k, v] of Object.entries(node.inputs)) {
+      if (typeof v !== 'string' || !v.includes('{{')) continue;
+      const whole = v.match(/^\{\{\s*(\w+)\s*\}\}$/);
+      if (whole && whole[1] in values) node.inputs[k] = NUMERIC.has(whole[1]) ? Number(values[whole[1]]) : values[whole[1]];
+      else node.inputs[k] = v.replace(TOKEN, (m, name) => (name in values ? String(values[name]) : m));
+    }
+  }
+  return out;
+}
+
+// The host's workflow for one request (`image`: the uploaded name, for an upscale).
+function buildCustomWorkflow(wf, request, cfg, { permissive = false, image = null, seed = crypto.randomInt(0, 2 ** 32) } = {}) {
+  const family = FAMILIES[cfg.family] ? cfg.family : 'sdxl';
+  const f = FAMILIES[family];
+  const negative = negativeFor(family, cfg, permissive);
+  if (request.upscale) {
+    const { width: w0, height: h0, factor } = request.upscale;
+    const values = { image, scale: factor, prompt: request.prompt, negative, seed };
+    return { workflow: fillWorkflow(wf, values), width: Math.round((w0 * factor) / 8) * 8, height: Math.round((h0 * factor) / 8) * 8, seed, custom: true };
+  }
+  const { width, height } = sizeFor(family, request.quality, request.shape, cfg.tier);
+  const values = { prompt: request.prompt, negative, seed, width, height, steps: stepsFor(f, cfg, request.quality), quality: request.quality };
+  return { workflow: fillWorkflow(wf, values), width, height, seed, custom: true };
+}
+
 async function generate(request, cfg, { permissive = false, signal } = {}) {
+  // P3-34: the host's own workflow, when chosen (an upscale without its own
+  // upscale workflow keeps the built-in one). Nothing built-in is added to it.
+  const customWf = cfg.workflowMode === 'custom' ? (request.upscale ? cfg.upscaleWorkflow : cfg.workflow) : null;
+  if (customWf) {
+    const image = request.upscale
+      ? await uploadImage(cfg.url, { ...request.upscale, filename: `disgourd-upscale-${crypto.randomBytes(6).toString('hex')}.${request.upscale.ext || 'png'}` }, signal)
+      : null;
+    return run(buildCustomWorkflow(customWf, request, cfg, { permissive, image }), cfg, signal, []);
+  }
   // The hires fix and the Upscale button need an upscale model: the saved one,
   // or the one suggested from this ComfyUI's list.
   const wantsUpscaler = !!request.upscale || (request.quality === 'high' && cfg.hires !== false);
@@ -510,12 +604,18 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
   } else {
     built = buildWorkflow(request, cfg, { permissive });
   }
+  return run(built, cfg, signal, notes);
+}
+
+// Queue a built workflow, wait for it, and fetch its images (the built-in
+// ones save from node 9; a custom workflow's come from every output node).
+async function run(built, cfg, signal, notes) {
   const { workflow, width, height } = built;
   let queued;
   try {
     queued = await comfy(cfg.url, '/prompt', { method: 'POST', body: { prompt: workflow, client_id: `disgourd-${crypto.randomUUID()}` }, signal });
   } catch (err) {
-    if (err.code === 'ENGINE' && err.data) throw promptError(err, cfg);
+    if (err.code === 'ENGINE' && err.data) throw promptError(err, cfg, built.custom);
     throw err;
   }
   const promptId = queued && queued.prompt_id;
@@ -533,7 +633,9 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
         throw fail('ENGINE', execErr ? `ComfyUI failed: ${execErr[1].exception_message || 'error'}`.trim() : 'ComfyUI failed');
       }
       if (status.completed === false) continue;
-      const files = entry.outputs?.[SAVE_NODE]?.images || [];
+      const files = built.custom
+        ? Object.values(entry.outputs || {}).flatMap((o) => o.images || []).slice(0, 4)
+        : entry.outputs?.[SAVE_NODE]?.images || [];
       if (!files.length) throw fail('ENGINE', 'ComfyUI finished without an image');
       const images = [];
       for (const f of files) {
@@ -663,7 +765,23 @@ function validateConfig(input, prev = {}) {
   }
   cfg.tier = cfg.tier || 'medium';
   if (cfg.kind === 'checkpoint') cfg.family = cfg.family || (cfg.model ? guessFamily(cfg.model) : 'sdxl');
-  if (cfg.enabled && (!cfg.url || !cfg.model)) return { error: 'Set the ComfyUI address and pick a model before turning it on' };
+  // Custom workflows (P3-34): stored parsed; node checks happen on save.
+  if (i.workflowMode !== undefined) {
+    if (!['builtin', 'custom'].includes(i.workflowMode)) return { error: 'The workflow must be "builtin" or "custom"' };
+    cfg.workflowMode = i.workflowMode;
+  }
+  for (const [key, kind, label] of [['workflow', 'generate', 'Workflow'], ['upscaleWorkflow', 'upscale', 'Upscale workflow']]) {
+    if (i[key] === undefined) continue;
+    if (i[key] === null || (typeof i[key] === 'string' && !i[key].trim())) {
+      cfg[key] = null;
+      continue;
+    }
+    const checked = checkWorkflow(i[key], kind);
+    if (checked.error) return { error: `${label}: ${checked.error}` };
+    cfg[key] = checked.workflow;
+  }
+  if (cfg.workflowMode === 'custom' && !cfg.workflow) return { error: 'Add your workflow (Export (API) in ComfyUI) before choosing My own' };
+  if (cfg.enabled && (!cfg.url || (!cfg.model && cfg.workflowMode !== 'custom'))) return { error: 'Set the ComfyUI address and pick a model before turning it on' };
   return cfg;
 }
 const publicConfig = (cfg = {}) => ({
@@ -674,6 +792,9 @@ const publicConfig = (cfg = {}) => ({
   sampler: cfg.sampler || null, scheduler: cfg.scheduler || null, cfgScale: cfg.cfgScale ?? null, steps: cfg.steps || null, negative: cfg.negative || null,
   detailer: !!cfg.detailer, detector: cfg.detector || null, detailerDenoise: cfg.detailerDenoise ?? DETAILER_DENOISE,
   detailerPasses: cfg.detailerPasses || 1, tilePasses: cfg.tilePasses || 1,
+  workflowMode: cfg.workflowMode || 'builtin',
+  workflow: cfg.workflow ? JSON.stringify(cfg.workflow, null, 2) : '',
+  upscaleWorkflow: cfg.upscaleWorkflow ? JSON.stringify(cfg.upscaleWorkflow, null, 2) : '',
 });
 
 module.exports = {
@@ -698,6 +819,11 @@ module.exports = {
   detectorCache,
   nodeCache,
   missingNodes,
+  checkWorkflow,
+  workflowMissingNodes,
+  fillWorkflow,
+  buildCustomWorkflow,
+  PLACEHOLDERS,
   suggestDetector,
   sizeFor,
   buildWorkflow,

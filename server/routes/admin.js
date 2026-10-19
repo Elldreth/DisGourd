@@ -20,7 +20,26 @@ const routes = [
       if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
       if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can change this' });
       if (req.method === 'GET') return sendJson(res, 200, imagine.adminView());
-      const out = imagine.updateSettings(await getJsonBody(req));
+      const body = await getJsonBody(req);
+      // P3-34: a custom workflow is only saved once every node in it exists
+      // on that ComfyUI (asked now, by name).
+      const c = body && body.engines && body.engines.comfyui;
+      if (c && (c.workflow || c.upscaleWorkflow)) {
+        const comfy = imagine.ENGINES.get('comfyui');
+        const url = c.url || (imagine.getSettings().engines.comfyui || {}).url;
+        for (const [key, kind, label] of [['workflow', 'generate', 'Workflow'], ['upscaleWorkflow', 'upscale', 'Upscale workflow']]) {
+          if (!c[key] || (typeof c[key] === 'string' && !c[key].trim())) continue;
+          const checked = comfy.checkWorkflow(c[key], kind);
+          if (checked.error) return sendJson(res, 400, { error: `${label}: ${checked.error}` });
+          // Unchanged since the last save: no need to ask ComfyUI again.
+          const before = (imagine.getSettings().engines.comfyui || {})[key];
+          if (before && JSON.stringify(before) === JSON.stringify(checked.workflow)) continue;
+          if (!url) return sendJson(res, 400, { error: 'Set the ComfyUI address first, so the workflow can be checked' });
+          const missing = await comfy.workflowMissingNodes(comfy.validateConfig({ url }).url || url, checked.classTypes);
+          if (missing.length) return sendJson(res, 400, { error: `${label}: your ComfyUI doesn’t have ${missing.length > 1 ? 'these nodes' : 'this node'}: ${missing.join(', ')}` });
+        }
+      }
+      const out = imagine.updateSettings(body);
       return out.error ? sendJson(res, 400, out) : sendJson(res, 200, out);
     },
   },
