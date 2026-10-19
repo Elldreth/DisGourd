@@ -198,7 +198,7 @@ test('split models: grouped in the list; picking one fills its text encoders and
   // Z-Image Turbo: one text encoder.
   fireEvent.change(model, { target: { value: `unet:${SPLIT.models[2].name}` } });
   expect(screen.getByLabelText('Model type').value).toBe('zimage');
-  expect(within(screen.getByLabelText('Model type')).getAllByRole('option').map((o) => o.value)).toEqual(['flux', 'zimage']);
+  expect(within(screen.getByLabelText('Model type')).getAllByRole('option').map((o) => o.value)).toEqual(['flux', 'zimage', 'anima']);
   expect(screen.getByLabelText('Text encoder').value).toBe(SPLIT.clips[2]);
   expect(screen.queryByLabelText('Text encoder (T5-XXL)')).toBeNull();
   expect(screen.getByLabelText('VAE').value).toBe(SPLIT.vaes[1]);

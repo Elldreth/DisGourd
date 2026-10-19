@@ -119,10 +119,10 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-32 | Update notice behind dialogs; date/time image names | 3 | COMPLETE | XS | P3-19, P2-20 | Toasts.jsx, imagine/runner.js |
 | P3-33 | Passes for the face detailer and tiled upscale; missing-node fallbacks | 3 | COMPLETE | S–M | P3-29, P3-31 | engines/comfyui.js, runner.js, ImagineAdmin |
 | P3-34 | Custom ComfyUI workflows with placeholders | 3 | COMPLETE | M | P3-24–P3-33 | engines/comfyui.js, imagine/index.js, routes/admin.js, ImagineAdmin |
-| P3-35 | Anima models (ComfyUI split-model family) | 3 | PLANNED | S–M | P3-24 | engines/comfyui.js, ImagineAdmin |
-| P3-36 | img2img: Subtle / Strong Variations, start from your own image (Container: a–b) | 3 | PLANNED | M–L | P3-23–P3-34 | see children |
+| P3-35 | Anima models (ComfyUI split-model family) | 3 | REVIEW | S–M | P3-24 | engines/comfyui.js, ImagineAdmin |
+| P3-36 | img2img: Subtle / Strong Variations, start from your own image (Container: a–b) | 3 | COMPLETE | M–L | P3-23–P3-34 | see children |
 | P3-36a | Subtle / Strong Variations (img2img) and a stronger face detailer | 3 | COMPLETE | M | P3-36 | migrations, imagine/index.js, runner, engines/comfyui.js, ImagineAgain |
-| P3-36b | Start /imagine from your own image; image-to-image custom workflow | 3 | REVIEW | M | P3-36a | ImaginePanel, Composer, imagine/index.js, ImagineAdmin |
+| P3-36b | Start /imagine from your own image; image-to-image custom workflow | 3 | COMPLETE | M | P3-36a | ImaginePanel, Composer, imagine/index.js, ImagineAdmin |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
 | P4-02 | Settings with section navigation | 4 | COMPLETE | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |

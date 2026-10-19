@@ -10,6 +10,7 @@ const FAMILIES = [
 const SPLIT_FAMILIES = [
   { v: 'flux', label: 'Flux' },
   { v: 'zimage', label: 'Z-Image Turbo' },
+  { v: 'anima', label: 'Anima' },
 ];
 // Each model type's tuned defaults (match the server's FAMILIES), shown as
 // "Default (…)" in the Advanced settings (P3-31).
@@ -18,6 +19,7 @@ const TYPE_DEFAULTS = {
   sdxl: { sampler: 'dpmpp_2m', scheduler: 'karras', cfg: 6, steps: { draft: 18, standard: 28, high: 36 } },
   flux: { sampler: 'euler', scheduler: 'simple', cfg: 1, steps: { draft: 12, standard: 20, high: 28 } },
   zimage: { sampler: 'res_multistep', scheduler: 'simple', cfg: 1, steps: { draft: 6, standard: 8, high: 10 } },
+  anima: { sampler: 'er_sde', scheduler: 'simple', cfg: 4, steps: { draft: 20, standard: 30, high: 40 } },
 };
 const QUALITY_NAMES = { draft: 'Draft', standard: 'Standard', high: 'High' };
 // A number field's value for the API: blank is null.
