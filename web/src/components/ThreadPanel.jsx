@@ -18,6 +18,9 @@ import { emojiLookup } from '../emoji.js';
 //     `root` is the root message when it's at hand; otherwise it's fetched.
 //   An archived thread (quiet for a while) stays readable; a reply reopens it,
 //   and `onSetArchived(archived)` (moderators) archives or reopens by hand.
+// The first picture in a message (P3-36b: /imagine can start from it).
+const firstPicture = (m) => [...(m.attachments || []), m.attachment].find((u) => u && /\.(png|jpe?g|webp)$/i.test(u.split('?')[0])) || null;
+
 export default function ThreadPanel({
   space,
   thread,
@@ -170,7 +173,7 @@ export default function ThreadPanel({
         canModerate={canModerate}
         onReact={onReact}
         onPin={canPin && onSetPinned ? onSetPinned : undefined}
-        onReply={canPost ? (m) => setReplyingTo({ id: m.id, author: m.author }) : null}
+        onReply={canPost ? (m) => setReplyingTo({ id: m.id, author: m.author, picture: firstPicture(m) }) : null}
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={onLoadOlder}

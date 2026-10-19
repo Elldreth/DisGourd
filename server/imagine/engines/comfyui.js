@@ -530,9 +530,11 @@ async function cancel(url, promptId) {
 const PLACEHOLDERS = {
   generate: ['prompt', 'negative', 'seed', 'width', 'height', 'steps', 'quality'],
   upscale: ['image', 'scale', 'prompt', 'negative', 'seed'],
+  // P3-36b: starting from a picture (Variations and "Start from an image").
+  img2img: ['image', 'denoise', 'prompt', 'negative', 'seed', 'width', 'height', 'steps', 'quality'],
 };
-const REQUIRED_PLACEHOLDER = { generate: 'prompt', upscale: 'image' };
-const NUMERIC = new Set(['seed', 'width', 'height', 'steps', 'scale']);
+const REQUIRED_PLACEHOLDER = { generate: 'prompt', upscale: 'image', img2img: 'image' };
+const NUMERIC = new Set(['seed', 'width', 'height', 'steps', 'scale', 'denoise']);
 const MAX_WORKFLOW_BYTES = 256 * 1024;
 const TOKEN = /\{\{\s*(\w+)\s*\}\}/g;
 
@@ -599,16 +601,22 @@ function buildCustomWorkflow(wf, request, cfg, { permissive = false, image = nul
   }
   const { width, height } = sizeFor(family, request.quality, request.shape, cfg.tier);
   const values = { prompt: request.prompt, negative, seed, width, height, steps: stepsFor(f, cfg, request.quality), quality: request.quality };
+  if (request.init) Object.assign(values, { image, denoise: request.init.denoise }); // P3-36b
   return { workflow: fillWorkflow(wf, values), width, height, seed, custom: true };
 }
 
 async function generate(request, cfg, { permissive = false, signal } = {}) {
   // P3-34: the host's own workflow, when chosen (an upscale without its own
   // upscale workflow keeps the built-in one). Nothing built-in is added to it.
-  const customWf = cfg.workflowMode === 'custom' ? (request.upscale ? cfg.upscaleWorkflow : cfg.workflow) : null;
+  // Starting from a picture (P3-36b) uses the host's image-to-image workflow;
+  // without one, the built-in img2img (as an upscale without its own workflow).
+  const customWf = cfg.workflowMode === 'custom'
+    ? (request.upscale ? cfg.upscaleWorkflow : request.init ? cfg.img2imgWorkflow : cfg.workflow)
+    : null;
   if (customWf) {
-    const image = request.upscale
-      ? await uploadImage(cfg.url, { ...request.upscale, filename: `disgourd-upscale-${crypto.randomBytes(6).toString('hex')}.${request.upscale.ext || 'png'}` }, signal)
+    const source = request.upscale || request.init;
+    const image = source
+      ? await uploadImage(cfg.url, { ...source, filename: `disgourd-${request.upscale ? 'upscale' : 'vary'}-${crypto.randomBytes(6).toString('hex')}.${source.ext || 'png'}` }, signal)
       : null;
     return run(buildCustomWorkflow(customWf, request, cfg, { permissive, image }), cfg, signal, []);
   }
@@ -820,7 +828,7 @@ function validateConfig(input, prev = {}) {
     if (!['builtin', 'custom'].includes(i.workflowMode)) return { error: 'The workflow must be "builtin" or "custom"' };
     cfg.workflowMode = i.workflowMode;
   }
-  for (const [key, kind, label] of [['workflow', 'generate', 'Workflow'], ['upscaleWorkflow', 'upscale', 'Upscale workflow']]) {
+  for (const [key, kind, label] of [['workflow', 'generate', 'Workflow'], ['upscaleWorkflow', 'upscale', 'Upscale workflow'], ['img2imgWorkflow', 'img2img', 'Image-to-image workflow']]) {
     if (i[key] === undefined) continue;
     if (i[key] === null || (typeof i[key] === 'string' && !i[key].trim())) {
       cfg[key] = null;
@@ -846,6 +854,7 @@ const publicConfig = (cfg = {}) => ({
   workflowMode: cfg.workflowMode || 'builtin',
   workflow: cfg.workflow ? JSON.stringify(cfg.workflow, null, 2) : '',
   upscaleWorkflow: cfg.upscaleWorkflow ? JSON.stringify(cfg.upscaleWorkflow, null, 2) : '',
+  img2imgWorkflow: cfg.img2imgWorkflow ? JSON.stringify(cfg.img2imgWorkflow, null, 2) : '',
 });
 
 module.exports = {

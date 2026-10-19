@@ -552,6 +552,23 @@ describe('the engine', () => {
     expect(seen.prompts.at(-1)['111'].inputs.denoise).toBe(0.3); // the second loop
   });
 
+  test('P3-36b: a custom image-to-image workflow: {{image}} and {{denoise}} filled; checked like the others', async () => {
+    const IMG2IMG = { ...CUSTOM, 1: { class_type: 'LoadImage', inputs: { image: '{{image}}' } }, 3: { ...CUSTOM['3'], inputs: { ...CUSTOM['3'].inputs, denoise: '{{denoise}}' } } };
+    expect(comfy.checkWorkflow(JSON.stringify(IMG2IMG), 'img2img').classTypes).toContain('LoadImage');
+    expect(comfy.checkWorkflow(JSON.stringify(CUSTOM), 'img2img').error).toMatch(/needs \{\{image\}\}/);
+    expect(comfy.validateConfig({ img2imgWorkflow: JSON.stringify(CUSTOM) }).error).toMatch(/^Image-to-image workflow: /);
+    const init = { buffer: PNG, contentType: 'image/png', ext: 'png', width: 1, height: 1, denoise: 0.45 };
+    await comfy.generate(request({ init }), cfg({ workflowMode: 'custom', workflow: CUSTOM, img2imgWorkflow: IMG2IMG }));
+    const sent = seen.prompts.at(-1);
+    expect(sent['1'].inputs.image).toBe(seen.uploads.at(-1).name);
+    expect(sent['3'].inputs.denoise).toBe(0.45); // a number
+    expect(sent['6'].inputs.text).toBe('masterpiece, a gourd in a hat');
+    // My own without an image-to-image workflow: the built-in img2img.
+    await comfy.generate(request({ init }), cfg({ workflowMode: 'custom', workflow: CUSTOM }));
+    expect(seen.prompts.at(-1)['2'].class_type).toBe('ImageScale');
+    expect(seen.prompts.at(-1)['3'].inputs.denoise).toBe(0.45);
+  });
+
   test('P3-24: config for a split model needs its type and parts; Z-Image is split only', () => {
     expect(comfy.validateConfig({ kind: 'disk' }).error).toMatch(/Unknown model kind/);
     expect(comfy.validateConfig({ kind: 'unet', model: UNETS[2] }).error).toMatch(/pick its type: Flux or Z-Image Turbo/);
@@ -674,7 +691,7 @@ describe('the admin routes and the chat path', () => {
     const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[0], tier: 'high' } }, defaultEngine: 'comfyui' });
     expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024,
       sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65,
-      workflowMode: 'builtin', workflow: '', upscaleWorkflow: '' });
+      workflowMode: 'builtin', workflow: '', upscaleWorkflow: '', img2imgWorkflow: '' });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);
     const tried = await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'a gourd', shape: 'wide', quality: 'draft' });
@@ -777,6 +794,73 @@ describe('the admin routes and the chat path', () => {
       expect(await ask({ from: finished('generate', 'failed').messageId, vary: 'subtle' })).toBe('NOT_FOUND');
       await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: false } } });
       expect(await ask({ from: src.messageId, vary: 'strong' })).toBe('NO_ENGINE');
+    } finally {
+      ws.close();
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } });
+    }
+  });
+
+  test('P3-36b: starting /imagine from a picture: an upload or the replied-to image, a strength, the shape from the picture; refusals; Retry', async () => {
+    const S = 'Comfy Club';
+    await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[1], family: 'sdxl', varySubtle: 0.3, varyStrong: 0.65 } }, defaultEngine: 'comfyui' });
+    await call('admin', 'PATCH', `/spaces/${encodeURIComponent(S)}/imagine`, { dailyLimit: 100 });
+    // A person's upload (a name with spaces), 1200×800 → landscape.
+    const token = require('crypto').randomBytes(9).toString('hex');
+    fs.mkdirSync(path.join(UPLOADS, token), { recursive: true });
+    const head = Buffer.alloc(33);
+    head.writeUInt32BE(0x89504e47, 0);
+    head.writeUInt32BE(1200, 16);
+    head.writeUInt32BE(800, 20);
+    fs.writeFileSync(path.join(UPLOADS, token, 'My Photo.png'), head);
+    const upload = `/uploads/${token}/${encodeURIComponent('My Photo.png')}`;
+    const frames = [];
+    const ws = new WebSocket(`ws://localhost:${port}/gateway?token=${users.admin.token}`);
+    ws.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
+    await new Promise((r) => ws.on('open', r));
+    const ask = async (fields, channel = 'general') => {
+      const from = frames.length;
+      ws.send(JSON.stringify({ op: 'imagine', space: S, channel, prompt: 'make it a watercolor', quality: 'standard', ...fields }));
+      const end = Date.now() + 3000;
+      for (;;) {
+        const f = frames.slice(from).find((x) => x.type === 'imagine_queued' || (x.type === 'error' && x.op === 'imagine'));
+        if (f) return f.type === 'error' ? f.code : f;
+        if (Date.now() > end) throw new Error('no answer');
+        await new Promise((r) => setTimeout(r, 15));
+      }
+    };
+    const settle = async (jobId) => {
+      const end = Date.now() + 5000;
+      while (!['done', 'failed'].includes(db.getImagineJob(jobId).status) && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+      return db.getImagineJob(jobId);
+    };
+    try {
+      const used = db.countImagineJobsSince(users.admin.id, 0);
+      const fromUpload = await ask({ init: { url: upload, strength: 'medium' } });
+      expect(db.getImagineJob(fromUpload.jobId)).toMatchObject({ kind: 'img2img', engine: 'comfyui', strength: 0.48, source_url: upload, shape: 'landscape', prompt: 'make it a watercolor' });
+      expect(db.countImagineJobsSince(users.admin.id, 0)).toBe(used + 1);
+      await settle(fromUpload.jobId);
+      expect(seen.prompts.at(-1)['3'].inputs.denoise).toBe(0.48);
+      expect(seen.prompts.at(-1)['1'].inputs.image).toMatch(/^disgourd-vary-/);
+      // The picture in a message being replied to, in this channel.
+      const msg = db.storeMessage(S, 'general', 'look at this', users.admin.id, [upload]);
+      const fromReply = await ask({ init: { messageId: Number(msg.id), strength: 'strong' } });
+      expect(db.getImagineJob(fromReply.jobId)).toMatchObject({ kind: 'img2img', strength: 0.65, source_url: upload });
+      await settle(fromReply.jobId);
+      // Refused: a bad strength, no picture, another channel's message, a path outside uploads.
+      expect(await ask({ init: { url: upload, strength: 'max' } })).toBe('BAD_OPTION');
+      expect(await ask({ init: { messageId: Number(db.storeMessage(S, 'general', 'words only', users.admin.id).id), strength: 'subtle' } })).toBe('NOT_FOUND');
+      db.createChannel(S, 'other-room');
+      const elsewhere = db.storeMessage(S, 'other-room', 'pic', users.admin.id, [upload]);
+      expect(await ask({ init: { messageId: Number(elsewhere.id), strength: 'subtle' } })).toBe('NOT_FOUND');
+      expect(await ask({ init: { url: `/uploads/${token}/..%2F..%2Fsecret.png`, strength: 'subtle' } })).toBe('NOT_FOUND');
+      // A failed one retries from the same picture and strength.
+      db.updateImagineJob(fromReply.jobId, { status: 'failed' });
+      const retry = await ask({ from: fromReply.messageId });
+      expect(db.getImagineJob(retry.jobId)).toMatchObject({ kind: 'img2img', strength: 0.65, source_url: upload, prompt: 'make it a watercolor' });
+      await settle(retry.jobId);
+      // Without ComfyUI: refused.
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: false } } });
+      expect(await ask({ init: { url: upload, strength: 'subtle' } })).toBe('NO_ENGINE');
     } finally {
       ws.close();
       await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } });

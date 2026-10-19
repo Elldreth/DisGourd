@@ -38,6 +38,31 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   const [imgEngine, setImgEngine] = useState('');
   const [imgBusy, setImgBusy] = useState(false);
   const [imgError, setImgError] = useState('');
+  // Starting from a picture (P3-36b): { url, name } uploaded here, or the
+  // picture in the message being replied to (unless switched off).
+  const [imgSource, setImgSource] = useState(null);
+  const [useReplyPicture, setUseReplyPicture] = useState(true);
+  const [imgStrength, setImgStrength] = useState('medium');
+  const [imgUploading, setImgUploading] = useState(false);
+  const replyPicture = imagine?.canVary && useReplyPicture && replyingTo?.picture ? replyingTo.picture : null;
+  const startPicture = imgSource || (replyPicture ? { url: replyPicture, name: attachmentInfo(replyPicture)?.name, fromReply: true } : null);
+  async function pickPicture(file) {
+    if (!file) return;
+    setImgUploading(true);
+    setImgError('');
+    try {
+      const res = await api.uploadFile(file);
+      setImgSource({ url: res.url, name: file.name });
+    } catch (err) {
+      setImgError(err.message || 'Could not upload the picture');
+    } finally {
+      setImgUploading(false);
+    }
+  }
+  function clearPicture() {
+    if (imgSource) setImgSource(null);
+    else setUseReplyPicture(false);
+  }
   const isImagine = !!imagine && IMAGINE_RE.test(text);
   // Typing "/" (or the start of "/imagine") suggests the command.
   const suggestImagine = !!imagine?.available && text.length > 0 && '/imagine'.startsWith(text.toLowerCase()) && !IMAGINE_RE.test(text);
@@ -53,9 +78,15 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
     setImgError('');
     try {
       const fields = { prompt, shape: imgShape, quality: imgQuality };
+      if (startPicture) {
+        fields.init = startPicture.fromReply ? { messageId: replyingTo.id, strength: imgStrength } : { url: startPicture.url, strength: imgStrength };
+        delete fields.shape; // the shape follows the picture
+      }
       if (imgEngine && imagine.engines.some((e) => e.id === imgEngine)) fields.engine = imgEngine;
       await imagine.run(fields);
       setText('');
+      setImgSource(null);
+      if (startPicture?.fromReply) onCancelReply?.(); // its picture was used; the image isn't a reply
       if (taRef.current) taRef.current.style.height = 'auto';
     } catch (err) {
       setImgError(err.message || 'Could not generate');
@@ -65,8 +96,9 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
     }
   }
 
-  // Starting a reply puts the cursor in the message box.
+  // Starting a reply puts the cursor in the message box (and offers its picture again).
   useEffect(() => {
+    setUseReplyPicture(true);
     if (replyingTo) taRef.current?.focus();
   }, [replyingTo]);
 
@@ -346,8 +378,14 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
           onShape={setImgShape}
           onQuality={setImgQuality}
           onEngine={setImgEngine}
-          busy={imgBusy}
+          busy={imgBusy || imgUploading}
           error={imgError}
+          picture={startPicture}
+          strength={imgStrength}
+          onStrength={setImgStrength}
+          onPickPicture={pickPicture}
+          onClearPicture={clearPicture}
+          uploadingPicture={imgUploading}
         />
       )}
 

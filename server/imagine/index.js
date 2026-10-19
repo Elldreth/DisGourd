@@ -176,14 +176,58 @@ function refuse(ws, code, error) {
 // An image of ours from its /uploads URL: { buffer, contentType, ext, width,
 // height }, or null (P3-36a: shared by upscales and variations).
 function readUpload(url) {
-  const m = typeof url === 'string' && url.match(/^\/uploads\/([a-f0-9]+)\/([\w.-]+\.(png|jpe?g|webp))$/i);
-  const file = m && path.join(UPLOADS_DIR, m[1], m[2]);
-  if (!file || !fs.existsSync(file)) return null;
+  const m = typeof url === 'string' && url.match(/^\/uploads\/([a-f0-9]+)\/([^/\\]+)$/i);
+  if (!m) return null;
+  let name;
+  try {
+    name = decodeURIComponent(m[2]);
+  } catch {
+    return null;
+  }
+  // A plain file name in its own upload folder (people's uploads keep their
+  // names, spaces and all — P3-36b), and a picture we can read.
+  const ext = (name.match(/\.(png|jpe?g|webp)$/i) || [])[1];
+  if (!ext || path.basename(name) !== name || name.startsWith('.')) return null;
+  const file = path.join(UPLOADS_DIR, m[1], name);
+  if (!fs.existsSync(file)) return null;
   const buffer = fs.readFileSync(file);
   const size = imageSize(buffer);
   if (!size) return null;
-  const ext = m[3].toLowerCase().replace('jpeg', 'jpg');
-  return { buffer, ext, contentType: { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' }[ext], width: size.width, height: size.height };
+  const e = ext.toLowerCase().replace('jpeg', 'jpg');
+  return { buffer, ext: e, contentType: { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' }[e], width: size.width, height: size.height };
+}
+
+// Starting /imagine from a picture (P3-36b): an image someone uploaded (its
+// /uploads URL) or the one in a message they're replying to here. Strength
+// subtle / medium / strong (medium is halfway between the host's two).
+const STRENGTHS = ['subtle', 'medium', 'strong'];
+// The shape nearest the picture's proportions.
+function shapeOf({ width, height }) {
+  const r = width / height;
+  return r >= 1.6 ? 'wide' : r >= 1.2 ? 'landscape' : r <= 0.83 ? 'portrait' : 'square';
+}
+function initSource(ws, msg, retrySource) {
+  const strengths = varyStrengths();
+  if (retrySource) {
+    const image = readUpload(retrySource.source_url);
+    if (!image) return refuse(ws, 'NOT_FOUND', 'That picture is gone'), null;
+    return { url: retrySource.source_url, strength: retrySource.strength, request: { ...image, denoise: retrySource.strength }, shape: shapeOf(image) };
+  }
+  const init = msg.init && typeof msg.init === 'object' ? msg.init : {};
+  if (!STRENGTHS.includes(init.strength)) return refuse(ws, 'BAD_OPTION', 'Pick Subtle, Medium or Strong'), null;
+  let url = null;
+  if (init.messageId != null) {
+    // Only a message in this very channel (like replies), and only its picture.
+    const ref = db.channelRef(msg.space, msg.channel);
+    const row = ref && db.raw.prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?').get(Number(init.messageId), ref.channelId);
+    url = row ? db.getMessageAttachments(row.id).find((u) => readUpload(u)) || null : null;
+  } else if (typeof init.url === 'string') {
+    url = init.url;
+  }
+  const image = url && readUpload(url);
+  if (!image) return refuse(ws, 'NOT_FOUND', 'That picture can’t be used (a PNG, JPEG or WebP image here)'), null;
+  const strength = init.strength === 'medium' ? Math.round(((strengths.subtle + strengths.strong) / 2) * 100) / 100 : strengths[init.strength];
+  return { url, strength, request: { ...image, denoise: strength }, shape: shapeOf(image) };
 }
 
 // The image a variation starts from (P3-36a): a finished image of any kind, or
@@ -259,15 +303,22 @@ function imagineOp({ ws, msg, userId }) {
       return refuse(ws, 'NOT_FOUND', 'That image request can’t be repeated');
     }
   }
+  // Starting from a picture (P3-36b): msg.init, or Retry of a failed one.
+  const fromPicture = (!source && msg.init != null) || (!!source && source.kind === 'img2img' && source.status === 'failed');
+  let picture = null;
+  if (fromPicture) {
+    picture = initSource(ws, msg, source);
+    if (!picture) return;
+  }
   // Variations (P3-36a): Subtle / Strong on a finished image, or Retry of a failed one.
-  const varying = !!source && (Object.hasOwn(VARY, msg.vary) || (source.kind === 'vary' && source.status === 'failed'));
+  const varying = !fromPicture && !!source && (Object.hasOwn(VARY, msg.vary) || (source.kind === 'vary' && source.status === 'failed'));
   let vary = null;
   if (varying) {
     vary = varySource(ws, msg, source);
     if (!vary) return;
   }
   // Upscale (P3-29): the button on a finished image, or Retry of a failed upscale.
-  const upscaling = !varying && !!source && (msg.upscale === true || (source.kind === 'upscale' && source.status === 'failed'));
+  const upscaling = !varying && !fromPicture && !!source && (msg.upscale === true || (source.kind === 'upscale' && source.status === 'failed'));
   let upscale = null;
   if (upscaling) {
     upscale = upscaleSource(ws, msg, source);
@@ -275,13 +326,14 @@ function imagineOp({ ws, msg, userId }) {
   }
   const prompt = source ? source.prompt : typeof msg.prompt === 'string' ? msg.prompt.trim() : '';
   if (!prompt || prompt.length > MAX_PROMPT) return refuse(ws, 'BAD_PROMPT', `Prompts are 1–${MAX_PROMPT} characters`);
-  const shape = source ? source.shape : msg.shape || 'square';
+  const shape = picture ? picture.shape : source ? source.shape : msg.shape || 'square';
   const quality = source ? source.quality : msg.quality || 'standard';
   if (!SHAPES.includes(shape) || !QUALITIES.includes(quality)) return refuse(ws, 'BAD_OPTION', 'Unknown shape or quality');
   const fallback = () => engines.find((e) => e.id === settings.defaultEngine) || engines[0];
   if (upscaling && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Upscaling needs ComfyUI with an upscale model (Settings → Image generation)');
   if (varying && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Variations from an image need ComfyUI (Settings → Image generation)');
-  const engine = upscaling || varying
+  if (fromPicture && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Starting from a picture needs ComfyUI (Settings → Image generation)');
+  const engine = upscaling || varying || fromPicture
     ? engines.find((e) => e.id === 'comfyui')
     : source
     ? engines.find((e) => e.id === source.engine) || fallback() // the same engine while it's still on
@@ -295,7 +347,7 @@ function imagineOp({ ws, msg, userId }) {
   if (refused) return refuse(ws, 'REFUSED', refused);
 
   const config = engineConfig(settings, engine.id);
-  const request = { prompt, shape, quality, ...(upscale ? { upscale: upscale.request } : {}), ...(vary ? { init: vary.request } : {}) };
+  const request = { prompt, shape, quality, ...(upscale ? { upscale: upscale.request } : {}), ...(vary ? { init: vary.request } : {}), ...(picture ? { init: picture.request } : {}) };
   const permissive = !!settings.permissive && db.isChannelNsfw(msg.space, msg.channel);
   const ref = db.channelRef(msg.space, msg.channel);
   const user = db.getUserById(userId);
@@ -303,12 +355,13 @@ function imagineOp({ ws, msg, userId }) {
   if (overBudget(engine, config, cost)) return refuse(ws, 'BUDGET', `This instance's ${engine.name} budget for the month is used up`);
   const job = {
     engine, config, request, permissive, cost,
-    space: msg.space, channel: msg.channel, username: user.username, kind: upscale ? 'upscale' : vary ? 'vary' : 'generate',
+    space: msg.space, channel: msg.channel, username: user.username, kind: upscale ? 'upscale' : vary ? 'vary' : picture ? 'img2img' : 'generate',
     vary: vary ? vary.name : null,
   };
   job.id = db.createImagineJob({
     userId, spaceId: space.id, channelId: ref.channelId, engine: engine.id, prompt, shape, quality, permissive, cost: job.cost,
-    kind: job.kind, sourceUrl: upscale ? upscale.url : vary ? vary.url : null, strength: vary ? vary.strength : null,
+    kind: job.kind, sourceUrl: upscale ? upscale.url : vary ? vary.url : picture ? picture.url : null,
+    strength: vary ? vary.strength : picture ? picture.strength : null,
   });
   const content = runner.text.queued(job, runner.placeFor(engine.id));
   const stored = db.postAsBot(msg.space, msg.channel, content);
