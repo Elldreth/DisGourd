@@ -68,3 +68,16 @@
 | Web | `ImagineAdmin.test.jsx`: Variation loops (default 2, with the loopback explanation) is saved as 3 |
 | Suites | Server 361, web 646, `vite build` clean |
 | Live (user's ComfyUI, the user's SDXL model and detailer, same seed) | gourd 1024²: Subtle with 2 loops 34.3 s; Strong with 1 loop 17.0 s, 2 loops 32.6 s, 3 loops 49.6 s. The changes build up with each loop (background branches, cords and outfit details evolve further each time) while the composition and face hold |
+
+## Change after review 2: Strong goes further; both strengths in Settings (user, 2026-10-19)
+- **The ask:** "it should vary the image, not just the face … Strong variation should change the image a bit more."
+- **Already true:** each loop repaints the whole image, and the face detailer is only a step in the loop (the strip showed background, cords and outfit changing).
+- **Changed:**
+  - Strong goes from 0.5 to 0.65 per loop by default.
+  - Settings → Advanced → Variations now has Loops, "Subtle strength" (0.1–0.6, default 0.3) and "Strong strength" (0.3–0.9, default 0.65), with a hint on what the ranges do.
+  - A retry's label (subtle / strong) is whichever setting its stored strength is nearer.
+
+| Check | Evidence |
+|---|---|
+| Tests | Server: default strong 0.65 stored and sent; with the host's 0.2 / 0.8 a strong variation stores 0.8 and is posted "varied (strong)"; validation 0.95 and 0.05 refused, 0.25 / 0.7 kept; saved config shows varySubtle 0.3 / varyStrong 0.65. Web: Strong strength shows 0.65 and saves 0.75 alongside Loops 3. Server 361, web 646, build clean |
+| Live (user's ComfyUI, 2 loops, the starting seed pinned for a fair comparison) | Strong at 0.5, 0.65 and 0.75 on the gourd image, about 33 s each. 0.5 keeps nearly everything; 0.65 keeps the layout but redraws hair, gourds and background; 0.75 is close to a new picture (new pose, a chair) |

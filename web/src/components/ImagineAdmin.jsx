@@ -100,6 +100,7 @@ export default function ImagineAdmin() {
       steps: { draft: c.steps?.draft ?? '', standard: c.steps?.standard ?? '', high: c.steps?.high ?? '' },
       detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.4,
       detailerPasses: c.detailerPasses || 1, tilePasses: c.tilePasses || 1, varyLoops: c.varyLoops || 2,
+      varySubtle: c.varySubtle ?? 0.3, varyStrong: c.varyStrong ?? 0.65,
       workflowMode: c.workflowMode || 'builtin', workflow: c.workflow || '', upscaleWorkflow: c.upscaleWorkflow || '',
     });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
@@ -203,6 +204,8 @@ export default function ImagineAdmin() {
             steps: { draft: numOrNull(comfy.steps.draft), standard: numOrNull(comfy.steps.standard), high: numOrNull(comfy.steps.high) },
             negative: comfy.negative.trim() || null,
             varyLoops: Number(comfy.varyLoops),
+            varySubtle: Number(comfy.varySubtle),
+            varyStrong: Number(comfy.varyStrong),
             detailer: comfy.detailer,
             detector: comfy.detector || null,
             ...(comfy.detailer ? { detailerDenoise: Number(comfy.detailerDenoise), detailerPasses: Number(comfy.detailerPasses) } : {}),
@@ -585,16 +588,32 @@ export default function ImagineAdmin() {
                     onChange={(e) => setComfy((c) => ({ ...c, negative: e.target.value }))} className="input" />
                   <p className="mt-1 text-xs text-gray-500">Replaces the built-in one. Outside 18+ channels the safety words are still added for SD 1.5 / SDXL. Flux and Z-Image mostly ignore it.</p>
                 </div>
-                <div>
-                  <label htmlFor="imagine-vary-loops" className={heading}>Variation loops</label>
-                  <select id="imagine-vary-loops" value={comfy.varyLoops} onChange={(e) => setComfy((c) => ({ ...c, varyLoops: Number(e.target.value) }))} className="input">
-                    {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
+                <fieldset>
+                  <legend className={heading}>Variations</legend>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label htmlFor="imagine-vary-loops" className="mb-1 block text-xs text-gray-400">Loops</label>
+                      <select id="imagine-vary-loops" value={comfy.varyLoops} onChange={(e) => setComfy((c) => ({ ...c, varyLoops: Number(e.target.value) }))} className="input">
+                        {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="imagine-vary-subtle" className="mb-1 block text-xs text-gray-400">Subtle strength</label>
+                      <input id="imagine-vary-subtle" type="number" min="0.1" max="0.6" step="0.05" value={comfy.varySubtle}
+                        onChange={(e) => setComfy((c) => ({ ...c, varySubtle: e.target.value }))} className="input" />
+                    </div>
+                    <div>
+                      <label htmlFor="imagine-vary-strong" className="mb-1 block text-xs text-gray-400">Strong strength</label>
+                      <input id="imagine-vary-strong" type="number" min="0.3" max="0.9" step="0.05" value={comfy.varyStrong}
+                        onChange={(e) => setComfy((c) => ({ ...c, varyStrong: e.target.value }))} className="input" />
+                    </div>
+                  </div>
                   <p className="mt-1 text-xs text-gray-500">
-                    Subtle and Strong variations are a loopback: each loop repaints the whole image (about 0.3 for Subtle, 0.5 for Strong, a new seed each
-                    time), runs the face detailer if it’s on, and feeds the result into the next loop.
+                    Subtle and Strong variations are a loopback: each loop repaints the whole image at its strength (a new seed each time), runs the face
+                    detailer if it’s on, and feeds the result into the next loop. Around 0.3 keeps the picture; 0.6–0.7 keeps the layout but redraws details,
+                    pose and background; above 0.8 it’s mostly a new picture.
                   </p>
-                </div>
+                </fieldset>
                 <fieldset disabled={parts.detailerAvailable === false && !comfy.detailer}>
                   <label className="flex items-center gap-2 text-sm text-gray-200">
                     <input type="checkbox" checked={comfy.detailer} onChange={(e) => setComfy((c) => ({ ...c, detailer: e.target.checked }))} className="h-4 w-4 accent-brand" />

@@ -795,6 +795,12 @@ function validateConfig(input, prev = {}) {
     if (!Number.isInteger(i.tilePasses) || i.tilePasses < 1 || i.tilePasses > MAX_TILE_PASSES) return { error: `Tiled passes are 1–${MAX_TILE_PASSES}` };
     cfg.tilePasses = i.tilePasses;
   }
+  // Variation strengths (P3-36a): how much each loop repaints.
+  for (const [k, lo, hi] of [['varySubtle', 0.1, 0.6], ['varyStrong', 0.3, 0.9]]) {
+    if (i[k] === undefined) continue;
+    if (typeof i[k] !== 'number' || !(i[k] >= lo && i[k] <= hi)) return { error: `${k === 'varySubtle' ? 'Subtle' : 'Strong'} variation strength is ${lo}–${hi}` };
+    cfg[k] = Math.round(i[k] * 100) / 100;
+  }
   if (i.varyLoops !== undefined) {
     if (!Number.isInteger(i.varyLoops) || i.varyLoops < 1 || i.varyLoops > MAX_LOOPS) return { error: `Variation loops are 1–${MAX_LOOPS}` };
     cfg.varyLoops = i.varyLoops;
@@ -836,6 +842,7 @@ const publicConfig = (cfg = {}) => ({
   sampler: cfg.sampler || null, scheduler: cfg.scheduler || null, cfgScale: cfg.cfgScale ?? null, steps: cfg.steps || null, negative: cfg.negative || null,
   detailer: !!cfg.detailer, detector: cfg.detector || null, detailerDenoise: cfg.detailerDenoise ?? DETAILER_DENOISE,
   detailerPasses: cfg.detailerPasses || 1, tilePasses: cfg.tilePasses || 1, varyLoops: cfg.varyLoops || DEFAULT_LOOPS,
+  varySubtle: cfg.varySubtle ?? 0.3, varyStrong: cfg.varyStrong ?? 0.65,
   workflowMode: cfg.workflowMode || 'builtin',
   workflow: cfg.workflow ? JSON.stringify(cfg.workflow, null, 2) : '',
   upscaleWorkflow: cfg.upscaleWorkflow ? JSON.stringify(cfg.upscaleWorkflow, null, 2) : '',

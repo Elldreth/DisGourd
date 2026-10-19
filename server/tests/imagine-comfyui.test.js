@@ -539,6 +539,9 @@ describe('the engine', () => {
     expect(comfy.buildWorkflow(request(), cfg({ family: 'sd15', detailer: true, detector: 'd.pt' })).workflow['41'].inputs).toMatchObject({ guide_size: 512, max_size: 768 });
     expect(comfy.validateConfig({ varyLoops: 5 }).error).toMatch(/1–4/);
     expect(comfy.validateConfig({ varyLoops: 3 })).toMatchObject({ varyLoops: 3 });
+    expect(comfy.validateConfig({ varyStrong: 0.95 }).error).toMatch(/Strong variation strength is 0.3–0.9/);
+    expect(comfy.validateConfig({ varySubtle: 0.05 }).error).toMatch(/Subtle variation strength is 0.1–0.6/);
+    expect(comfy.validateConfig({ varySubtle: 0.25, varyStrong: 0.7 })).toMatchObject({ varySubtle: 0.25, varyStrong: 0.7 });
   });
 
   test('P3-36a: a variation uploads its image and runs end to end', async () => {
@@ -670,7 +673,7 @@ describe('the admin routes and the chat path', () => {
     expect((await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } })).body.error).toMatch(/pick a model/);
     const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[0], tier: 'high' } }, defaultEngine: 'comfyui' });
     expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024,
-      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1, varyLoops: 2,
+      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65,
       workflowMode: 'builtin', workflow: '', upscaleWorkflow: '' });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);
@@ -752,9 +755,16 @@ describe('the admin routes and the chat path', () => {
       expect(db.raw.prepare('SELECT content FROM messages WHERE id = ?').get(subtle.messageId).content).toBe('🎲 **admin** varied (subtle): a gourd in the rain');
       // Strong, from the variation itself, and from an upscaled image.
       const strong = await ask({ from: subtle.messageId, vary: 'strong' });
-      expect(db.getImagineJob(strong.jobId)).toMatchObject({ kind: 'vary', strength: 0.5 });
+      expect(db.getImagineJob(strong.jobId)).toMatchObject({ kind: 'vary', strength: 0.65 });
       await settle(strong.jobId);
-      expect(seen.prompts.at(-1)['3'].inputs.denoise).toBe(0.5);
+      expect(seen.prompts.at(-1)['3'].inputs.denoise).toBe(0.65);
+      // The host's own strengths, from Settings.
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { varySubtle: 0.2, varyStrong: 0.8 } } });
+      const custom = await ask({ from: src.messageId, vary: 'strong' });
+      expect(db.getImagineJob(custom.jobId)).toMatchObject({ strength: 0.8 });
+      await settle(custom.jobId);
+      expect(db.raw.prepare('SELECT content FROM messages WHERE id = ?').get(custom.messageId).content).toMatch(/varied \(strong\)/);
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { varySubtle: 0.3, varyStrong: 0.65 } } });
       const up = finished('upscale');
       expect(await ask({ from: up.messageId, vary: 'subtle' })).toMatchObject({ messageId: expect.any(Number) });
       await new Promise((r) => setTimeout(r, 300));

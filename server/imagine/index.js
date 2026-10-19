@@ -26,8 +26,12 @@ const UPSCALE_MAX_SIDE = 4096;
 const MIN_UPSCALE = 1.25;
 // Variations (P3-36a): an img2img loopback from the image, repainting this
 // much (denoise) on each loop; the loop count is a ComfyUI setting.
-const VARY = { subtle: 0.3, strong: 0.5 };
-const strengthName = (s) => Object.keys(VARY).find((k) => VARY[k] === s) || (s < 0.4 ? 'subtle' : 'strong');
+// The defaults; the host can change both in Settings → Advanced.
+const VARY = { subtle: 0.3, strong: 0.65 };
+function varyStrengths(settings = getSettings()) {
+  const c = settings.engines.comfyui || {};
+  return { subtle: c.varySubtle ?? VARY.subtle, strong: c.varyStrong ?? VARY.strong };
+}
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const DEFAULTS = { defaultEngine: null, permissive: false, dailyLimit: 20, dailyCeiling: 100, engines: {} };
@@ -196,8 +200,11 @@ function varySource(ws, msg, source) {
     refuse(ws, 'NOT_FOUND', 'That image is gone');
     return null;
   }
-  const strength = retry ? source.strength : VARY[msg.vary];
-  return { url, strength, name: strengthName(strength), request: { ...image, denoise: strength } };
+  const strengths = varyStrengths();
+  const strength = retry ? source.strength : strengths[msg.vary];
+  // A retry's name: whichever setting its strength is nearer.
+  const name = retry ? (strength >= (strengths.subtle + strengths.strong) / 2 ? 'strong' : 'subtle') : msg.vary;
+  return { url, strength, name, request: { ...image, denoise: strength } };
 }
 
 // The image an upscale starts from (P3-29), sized and capped, or null after
