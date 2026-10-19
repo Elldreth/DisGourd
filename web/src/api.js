@@ -238,6 +238,14 @@ export function getMembers(space) {
 export function createInvite(space) {
   return request(`/spaces/${encodeURIComponent(space)}/invites`, { method: 'POST' });
 }
+// P3-26a: a page of the moderation log (newest first).
+export function getModLog(space, { before, action, user } = {}) {
+  const qs = new URLSearchParams();
+  if (before) qs.set('before', before);
+  if (action) qs.set('action', action);
+  if (user) qs.set('user', user);
+  return request(`/spaces/${encodeURIComponent(space)}/mod-log${qs.size ? `?${qs}` : ''}`);
+}
 export function kickMember(space, username) {
   return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}`, {
     method: 'DELETE',

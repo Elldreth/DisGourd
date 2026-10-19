@@ -235,6 +235,16 @@ const ICONS = {
     </>
   ),
   shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+  // A clipboard with lines: the moderation log.
+  log: (
+    <>
+      <rect x="5" y="4" width="14" height="18" rx="2" />
+      <path d="M9 2h6v4H9z" />
+      <line x1="9" y1="11" x2="15" y2="11" />
+      <line x1="9" y1="15" x2="15" y2="15" />
+      <line x1="9" y1="19" x2="13" y2="19" />
+    </>
+  ),
   ban: (
     <>
       <circle cx="12" cy="12" r="10" />

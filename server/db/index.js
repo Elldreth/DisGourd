@@ -1203,7 +1203,7 @@ const createThread = db.transaction((spaceName, parentName, messageId, name, use
 
 function getMessageLocation(messageId) {
   return db.prepare(`
-    SELECT s.name AS space, c.name AS channel, m.author_id AS authorId
+    SELECT s.name AS space, c.name AS channel, m.author_id AS authorId, m.content
     FROM messages m
     JOIN channels c ON m.channel_id = c.id
     JOIN spaces s ON c.space_id = s.id
@@ -1565,6 +1565,36 @@ function deleteMessage(messageId, authorId) {
 // Unconditional delete; the caller has already checked moderation rights.
 function deleteMessageById(messageId) {
   return db.prepare('DELETE FROM messages WHERE id = ?').run(messageId).changes > 0;
+}
+
+// ---- Moderation log (P3-26a) ----
+const MOD_LOG_PAGE = 50;
+
+// Record a moderator's action. Names are stored as they are now.
+function logModAction(spaceId, { actorId, targetId = null, action, reason = null, details = null }) {
+  const nameOf = (id) => (id == null ? null : db.prepare('SELECT username FROM users WHERE id = ?').get(id)?.username ?? null);
+  db.prepare(`
+    INSERT INTO mod_log(space_id, actor_id, actor_name, target_id, target_name, action, reason, details, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(spaceId, actorId, nameOf(actorId), targetId, nameOf(targetId), action, reason || null,
+    details ? JSON.stringify(details) : null, Date.now());
+}
+
+// A page of a server's log, newest first: entries older than `before` (an id),
+// optionally one action, optionally involving one user (as actor or target).
+function getModLog(spaceId, { before = null, action = null, userId = null } = {}) {
+  const where = ['space_id = ?'];
+  const args = [spaceId];
+  if (before) { where.push('id < ?'); args.push(before); }
+  if (action) { where.push('action = ?'); args.push(action); }
+  if (userId != null) { where.push('(actor_id = ? OR target_id = ?)'); args.push(userId, userId); }
+  const rows = db.prepare(`
+    SELECT id, actor_name AS actor, target_name AS target, action, reason, details, created_at AS createdAt
+    FROM mod_log WHERE ${where.join(' AND ')} ORDER BY id DESC LIMIT ?
+  `).all(...args, MOD_LOG_PAGE + 1);
+  const more = rows.length > MOD_LOG_PAGE;
+  const entries = rows.slice(0, MOD_LOG_PAGE).map((r) => ({ ...r, details: r.details ? JSON.parse(r.details) : null }));
+  return { entries, more };
 }
 
 function createUser(username, email, passwordHash, salt) {
@@ -2076,6 +2106,8 @@ module.exports = {
   deletePushEndpoint,
   getReplyTarget,
   deleteMessageById,
+  logModAction,
+  getModLog,
   getCoMemberIds,
   markRead,
   getUnreadCounts,

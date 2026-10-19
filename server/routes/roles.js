@@ -41,6 +41,13 @@ function rolesView(spaceId) {
   return db.getRoles(spaceId).reverse().map((r) => ({ ...r, members: r.isDefault ? [] : holders.get(r.id) || [] }));
 }
 
+// For the moderation log: each changed role's name and its new view / post
+// (true allowed, false denied, null inherited).
+function accessDetails(roles, overrides) {
+  const flag = (v) => (v == null ? null : v === true || v === 1);
+  return overrides.map((o) => ({ role: roles.get(Number(o.roleId)).name, view: flag(tri(o.view)), post: flag(tri(o.post)) }));
+}
+
 // Returns true when it handled the request.
 async function handle({ req, res, pathSegments: seg, space, spaceName, userId, access, canManage }) {
   const reply = (status, body) => {
@@ -136,7 +143,10 @@ async function handle({ req, res, pathSegments: seg, space, spaceName, userId, a
       return reply(403, { error: "You can't change the roles of someone at or above you" });
     }
     const changed = req.method === 'PUT' ? db.addMemberRole(space.id, target.id, role.id) : db.removeMemberRole(space.id, target.id, role.id);
-    if (changed) rolesChanged();
+    if (changed) {
+      db.logModAction(space.id, { actorId: userId, targetId: target.id, action: req.method === 'PUT' ? 'role_add' : 'role_remove', details: { role: role.name } });
+      rolesChanged();
+    }
     return reply(200, { roles: db.getMemberRoleIds(space.id, target.id) });
   }
 
@@ -156,6 +166,7 @@ async function handle({ req, res, pathSegments: seg, space, spaceName, userId, a
         if (!role.isDefault && !isBelow(access, role)) return reply(403, { error: 'You can only set access for roles below your own' });
       }
       for (const o of overrides) db.setChannelOverride(ref.channelId, Number(o.roleId), { view: tri(o.view), post: tri(o.post) });
+      if (overrides.length) db.logModAction(space.id, { actorId: userId, action: 'channel_access', details: { channel: seg[3], roles: accessDetails(roles, overrides) } });
       deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
     }
     return reply(200, { overrides: db.getChannelOverrides(ref.channelId) });
@@ -184,6 +195,8 @@ async function handle({ req, res, pathSegments: seg, space, spaceName, userId, a
         if (!role.isDefault && !isBelow(access, role)) return reply(403, { error: 'You can only set access for roles below your own' });
       }
       for (const o of overrides) db.setCategoryOverride(categoryId, Number(o.roleId), { view: tri(o.view), post: tri(o.post) });
+      const category = db.getCategories(space.id).find((c) => c.id === categoryId);
+      if (overrides.length) db.logModAction(space.id, { actorId: userId, action: 'category_access', details: { category: category.name, roles: accessDetails(roles, overrides) } });
     } else if (req.method !== 'GET') {
       return reply(405, { error: 'Method not allowed' });
     }

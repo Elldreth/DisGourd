@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #150)
 - **Starting baseline:** main at a10d38c (#149 merged)
 - **Effort:** S–M
 - **Depends on:** P3-24 (split models), P3-34 (custom workflows, an interim route)

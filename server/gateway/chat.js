@@ -11,6 +11,12 @@ const push = require('../push');
 
 // A thread's reply count changed: refresh the summary under its root message
 // for the parent channel's viewers.
+// The start of a deleted message, for the moderation log.
+function excerpt(content) {
+  const text = String(content || '').replace(/\s+/g, ' ').trim();
+  return text.length > 100 ? `${text.slice(0, 99)}…` : text;
+}
+
 function threadUpdated(space, channel) {
   if (!db.isThreadChannel(channel)) return;
   const thread = db.getThread(space, channel);
@@ -130,6 +136,13 @@ const ops = {
       ? db.deleteMessage(id, userId)
       : canModerateMessage(loc.space, loc.channel, userId, loc.authorId) && db.deleteMessageById(id);
     if (deleted) {
+      if (Number(loc.authorId) !== Number(userId)) {
+        const space = db.getSpaceByName(loc.space);
+        db.logModAction(space.id, {
+          actorId: userId, targetId: loc.authorId, action: 'message_delete',
+          details: { channel: loc.channel, excerpt: excerpt(loc.content) },
+        });
+      }
       deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
         type: 'message_delete', id, space: loc.space, channel: loc.channel,
       }));
