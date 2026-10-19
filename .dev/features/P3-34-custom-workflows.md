@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #144)
 - **Effort:** M
 - **Depends on:** P3-24 – P3-33 (the ComfyUI engine and Settings). Branched from P3-33 (#143).
 - **Requirement Source:** the user, 2026-10-18: "offer the ability to load a custom workflow that the end user provides … there are people who have built their own nodes for some of these tasks". Agreed shape (2026-10-18): the host pastes an API-format workflow with placeholders, DisGourd fills them per request, every node is checked before it's switched on, and the built-in hires fix / detailer / Advanced don't apply while it's in use.

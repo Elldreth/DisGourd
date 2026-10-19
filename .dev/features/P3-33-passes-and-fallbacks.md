@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #143)
 - **Effort:** S–M
 - **Depends on:** P3-29 (tiled upscale), P3-31 (face detailer). Branched from P3-25a (#142) only to keep INDEX.md conflict-free; merge after it.
 - **Requirement Source:** the user, 2026-10-18: detailers "allow a number of loops", and the tiled upscaler should too; "how do we deal with the required nodes if the user doesn't have them installed". Agreed: passes settings, fall back instead of failing, clearer install notes, and no installing nodes on the host's behalf.

@@ -504,6 +504,7 @@ export default function App() {
             onRolesChanged={sp.reloadRoles}
             imagineInfo={sp.activeSpace?.imagine || null}
             channelMeta={sp.channelMeta}
+            categories={sp.categories}
             onPermsChanged={sp.reloadSpaces}
             emoji={sp.activeSpace?.emoji || []}
             canManageEmoji={sp.canManageEmoji}

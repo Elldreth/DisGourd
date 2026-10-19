@@ -81,11 +81,14 @@ test('channel, voice and DM rows are tap-sized rows', () => {
       selfId={1}
       canManage
       onSelect={() => {}}
+      categories={[{ id: 1, name: 'Text channels', position: 0 }]}
+      channelMeta={{ general: { type: 'text', category: 1, position: 0 }, Lounge: { type: 'voice', category: 1, position: 1 } }}
     />
   );
   expect(screen.getByRole('button', { name: 'general' }).className).toMatch(/\btap-row\b/);
   expect(screen.getByRole('button', { name: 'Lounge' }).className).toMatch(/\btap-row\b/);
-  expect(screen.getByRole('button', { name: 'Create channel' }).className).toMatch(/\btap\b/);
+  expect(screen.getByRole('button', { name: 'Create channel in Text channels' }).className).toMatch(/\btap\b/); // P3-25b: per category
+  expect(screen.getByRole('button', { name: 'Text channels' }).className).toMatch(/\btap-row\b/); // the category heading
   expect(screen.getByRole('button', { name: 'Sign out' }).className).toMatch(/\btap\b/);
   expect(screen.getByRole('button', { name: /Set status/ }).className).toMatch(/\btap\b/);
   cleanup();
