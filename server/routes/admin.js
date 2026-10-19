@@ -24,10 +24,10 @@ const routes = [
       // P3-34: a custom workflow is only saved once every node in it exists
       // on that ComfyUI (asked now, by name).
       const c = body && body.engines && body.engines.comfyui;
-      if (c && (c.workflow || c.upscaleWorkflow)) {
+      if (c && (c.workflow || c.upscaleWorkflow || c.img2imgWorkflow)) {
         const comfy = imagine.ENGINES.get('comfyui');
         const url = c.url || (imagine.getSettings().engines.comfyui || {}).url;
-        for (const [key, kind, label] of [['workflow', 'generate', 'Workflow'], ['upscaleWorkflow', 'upscale', 'Upscale workflow']]) {
+        for (const [key, kind, label] of [['workflow', 'generate', 'Workflow'], ['upscaleWorkflow', 'upscale', 'Upscale workflow'], ['img2imgWorkflow', 'img2img', 'Image-to-image workflow']]) {
           if (!c[key] || (typeof c[key] === 'string' && !c[key].trim())) continue;
           const checked = comfy.checkWorkflow(c[key], kind);
           if (checked.error) return sendJson(res, 400, { error: `${label}: ${checked.error}` });

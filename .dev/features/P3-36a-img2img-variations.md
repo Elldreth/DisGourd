@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-36)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #148)
 - **Effort:** M
 - **Starting baseline:** main at 637ead4 (#147 merged)
 

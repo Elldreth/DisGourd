@@ -37,6 +37,11 @@ const UPSCALE_PLACEHOLDER_HELP = [
   ['{{scale}}', 'how much to enlarge it (2, or less to stay within 4096 px)'],
   ['{{prompt}}, {{negative}}, {{seed}}', 'as above'],
 ];
+const IMG2IMG_PLACEHOLDER_HELP = [
+  ['{{image}}', 'the picture to start from, for a LoadImage node (required)'],
+  ['{{denoise}}', 'how much to repaint: the Subtle / Medium / Strong strength'],
+  ['{{prompt}}, {{negative}}, {{seed}}, {{width}}, {{height}}, {{steps}}, {{quality}}', 'as for the main workflow'],
+];
 
 // The model <select> value: kind and file name (the same name can be in both lists).
 const modelKey = (kind, name) => (name ? `${kind}:${name}` : '');
@@ -101,7 +106,7 @@ export default function ImagineAdmin() {
       detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.4,
       detailerPasses: c.detailerPasses || 1, tilePasses: c.tilePasses || 1, varyLoops: c.varyLoops || 2,
       varySubtle: c.varySubtle ?? 0.3, varyStrong: c.varyStrong ?? 0.65,
-      workflowMode: c.workflowMode || 'builtin', workflow: c.workflow || '', upscaleWorkflow: c.upscaleWorkflow || '',
+      workflowMode: c.workflowMode || 'builtin', workflow: c.workflow || '', upscaleWorkflow: c.upscaleWorkflow || '', img2imgWorkflow: c.img2imgWorkflow || '',
     });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
     setKie({ enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' });
@@ -213,6 +218,7 @@ export default function ImagineAdmin() {
             workflowMode: comfy.workflowMode,
             workflow: comfy.workflow.trim() || null,
             upscaleWorkflow: comfy.upscaleWorkflow.trim() || null,
+            img2imgWorkflow: comfy.img2imgWorkflow.trim() || null,
           },
           kie: {
             enabled: kie.enabled,
@@ -330,6 +336,7 @@ export default function ImagineAdmin() {
               {[
                 ['workflow', 'Workflow (API format)', PLACEHOLDER_HELP, 'Paste the JSON from ComfyUI’s Export (API)…'],
                 ['upscaleWorkflow', 'Upscale workflow (optional)', UPSCALE_PLACEHOLDER_HELP, 'Optional: a workflow for the Upscale button. Blank uses the built-in upscale.'],
+                ['img2imgWorkflow', 'Image-to-image workflow (optional)', IMG2IMG_PLACEHOLDER_HELP, 'Optional: a workflow for Variations and “Start from a picture”. Blank uses the built-in image-to-image.'],
               ].map(([key, label, help, placeholder]) => (
                 <div key={key}>
                   <div className="mb-1 flex items-center justify-between gap-2">

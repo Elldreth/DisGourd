@@ -1,5 +1,6 @@
 // P2-20d: /imagine in the message box, and the hook behind it.
 import { afterEach, expect, test, vi } from 'vitest';
+vi.mock('../api.js', async (orig) => ({ ...(await orig()), uploadFile: vi.fn(async (file) => ({ url: `/uploads/abc/${encodeURIComponent(file.name)}` })) }));
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import Composer from './Composer.jsx';
 import { imagineFor, imagineState } from './ImaginePanel.jsx';
@@ -140,3 +141,46 @@ test('a paid engine shows its price for the chosen quality', () => {
   fireEvent.click(within(panel).getByRole('button', { name: 'High' }));
   expect(within(panel).getByText(/^5.5 credits/)).toBeTruthy();
 });
+
+// P3-36b: starting from a picture.
+test('Start from a picture: attach one, pick a strength; the request carries it and no shape', async () => {
+  const run = vi.fn(async () => ({ jobId: 1 }));
+  const { box, type } = setup({ imagine: imagineState(info({ canVary: true }), run) });
+  type('/imagine make it a watercolor');
+  const group = screen.getByRole('group', { name: 'Start from a picture' });
+  const file = new File(['x'], 'My Photo.png', { type: 'image/png' });
+  fireEvent.change(within(group).getByLabelText('Start from a picture'), { target: { files: [file] } });
+  expect(await within(group).findByText('My Photo.png')).toBeTruthy();
+  expect(screen.queryByRole('group', { name: 'Shape' })).toBeNull(); // the shape follows the picture
+  fireEvent.click(within(group).getByRole('button', { name: 'Strong' }));
+  fireEvent.keyDown(box, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenCalledWith({ prompt: 'make it a watercolor', quality: 'standard', init: { url: '/uploads/abc/My%20Photo.png', strength: 'strong' } }));
+  await waitFor(() => expect(box.value).toBe(''));
+  type('/imagine again');
+  expect(within(screen.getByRole('group', { name: 'Start from a picture' })).getByLabelText('Start from a picture')).toBeTruthy(); // cleared after sending
+});
+
+test('replying to a message with a picture starts from it (Medium by default) unless switched off', async () => {
+  const run = vi.fn(async () => ({ jobId: 1 }));
+  const imagine = imagineState(info({ canVary: true }), run);
+  const onCancelReply = vi.fn();
+  render(<Composer channel="general" onSend={vi.fn()} imagine={imagine} replyingTo={{ id: 42, author: 'bob', picture: '/uploads/x/cat.png' }} onCancelReply={onCancelReply} />);
+  const box = screen.getByRole('textbox', { name: 'Message #general' });
+  fireEvent.change(box, { target: { value: '/imagine as a robot' } });
+  const group = screen.getByRole('group', { name: 'Start from a picture' });
+  expect(within(group).getByText('From the picture you’re replying to')).toBeTruthy();
+  fireEvent.keyDown(box, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenCalledWith({ prompt: 'as a robot', quality: 'standard', init: { messageId: 42, strength: 'medium' } }));
+  await waitFor(() => expect(onCancelReply).toHaveBeenCalledTimes(1)); // the reply bar closes once its picture is used
+  fireEvent.change(box, { target: { value: '/imagine as a robot' } });
+  fireEvent.click(within(screen.getByRole('group', { name: 'Start from a picture' })).getByRole('button', { name: 'Don’t start from this picture' }));
+  fireEvent.keyDown(box, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenLastCalledWith({ prompt: 'as a robot', shape: 'square', quality: 'standard' }));
+});
+
+test('no picture option without ComfyUI (canVary false)', () => {
+  const { type } = setup();
+  type('/imagine a cat');
+  expect(screen.queryByRole('group', { name: 'Start from a picture' })).toBeNull();
+});
+

@@ -13,6 +13,9 @@ import { useFileDrop } from '../useFileDrop.js';
 import { renderMarkdown } from '../markdown.jsx';
 import * as api from '../api.js';
 
+// The first picture in a message (P3-36b: /imagine can start from it).
+const firstPicture = (m) => [...(m.attachments || []), m.attachment].find((u) => u && /\.(png|jpe?g|webp)$/i.test(u.split('?')[0])) || null;
+
 export default function ChatPanel({
   space,
   channel,
@@ -314,7 +317,7 @@ export default function ChatPanel({
         onDelete={onDelete}
         canModerate={canModerate}
         onReact={onReact}
-        onReply={canPost ? (m) => setReplyingTo({ id: m.id, author: m.author }) : null}
+        onReply={canPost ? (m) => setReplyingTo({ id: m.id, author: m.author, picture: firstPicture(m) }) : null}
         onCreateThread={onOpenThread && canPost ? (m) => setThreadFrom(m) : undefined}
         onOpenThread={onOpenThread ? (t, m, opener) => onOpenThread(t, { root: m, opener }) : undefined}
         threadBadge={threadBadge}
