@@ -22,9 +22,13 @@ const FAMILIES = {
   flux: { name: 'Flux', mp: { draft: 0.6, standard: 1.0, high: 1.6 }, steps: { draft: 12, standard: 20, high: 28 }, cfg: 1, guidance: 3.5, sampler: 'euler', scheduler: 'simple' },
   // Z-Image Turbo (P3-24): separate parts only; Qwen 3 4B text encoder (lumina2).
   zimage: { name: 'Z-Image Turbo', splitOnly: true, mp: { draft: 0.8, standard: 1.0, high: 1.6 }, steps: { draft: 6, standard: 8, high: 10 }, cfg: 1, shift: 3, sampler: 'res_multistep', scheduler: 'simple' },
+  // Anima (P3-35): separate parts only; Qwen-3 0.6B text encoder
+  // (CLIPLoader type stable_diffusion) and the Qwen-Image VAE. From Comfy's
+  // official templates: EmptyLatentImage, 30 steps, CFG 4, er_sde / simple.
+  anima: { name: 'Anima', splitOnly: true, mp: { draft: 0.8, standard: 1.0, high: 1.6 }, steps: { draft: 20, standard: 30, high: 40 }, cfg: 4, sampler: 'er_sde', scheduler: 'simple', clipType: 'stable_diffusion', negative: 'worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia' },
 };
 // Families a split model (UNETLoader) can be.
-const SPLIT_FAMILIES = ['flux', 'zimage'];
+const SPLIT_FAMILIES = ['flux', 'zimage', 'anima'];
 // Diffusion models that make video, not images: left out of the list.
 const VIDEO = /hunyuan.?video|(^|[\\/_\- ])ltx|minimax|(^|[\\/_\- ])wan[\d_.\- ]|mochi|cosmos|cogvideo|svd|animatediff/i;
 // The most pixels each VRAM tier is asked for (megapixels).
@@ -71,6 +75,7 @@ const SAVE_NODE = '9';
 function guessSplitFamily(name) {
   const n = String(name || '').toLowerCase();
   if (/z[_\- ]?image|zturbo/.test(n)) return 'zimage';
+  if (/anima/.test(n)) return 'anima';
   if (/flux/.test(n)) return 'flux';
   return null;
 }
@@ -95,6 +100,13 @@ function suggestParts(family, clips = [], vaes = []) {
   }
   if (family === 'zimage') {
     return { clip1: find(clips, /qwen_?3_?4b/i, /qwen.*4b/i), clip2: null, vae: ae('z[_\\- ]?image|zturbo') };
+  }
+  if (family === 'anima') {
+    return {
+      clip1: find(clips, /anima[\\/].*qwen_?3_?0_?6b/i, /qwen_?3_?0_?6b/i, /qwen.*0\.?6b/i),
+      clip2: null,
+      vae: find(vaes, /anima[\\/].*qwen_image_vae/i, /qwen_image_vae/i, /qwen.*image.*vae/i),
+    };
   }
   return { clip1: null, clip2: null, vae: null };
 }
@@ -166,7 +178,8 @@ const samplingFor = (f, cfg) => ({ cfg: cfg.cfgScale ?? f.cfg, sampler_name: cfg
 function negativeFor(family, cfg, permissive) {
   const own = typeof cfg.negative === 'string' && cfg.negative.trim() ? cfg.negative.trim() : null;
   if (family === 'flux' || family === 'zimage') return own || '';
-  return [own || NEGATIVE, permissive ? null : SAFE_NEGATIVE].filter(Boolean).join(', ');
+  // Anima (CFG 4) uses negatives; its own built-in one, plus the safety words.
+  return [own || FAMILIES[family]?.negative || NEGATIVE, permissive ? null : SAFE_NEGATIVE].filter(Boolean).join(', ');
 }
 // Whether a request gets the face detailer: switched on, a detector known, and
 // Standard or High quality.
@@ -195,7 +208,7 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
         11: { class_type: 'UNETLoader', inputs: { unet_name: cfg.model, weight_dtype: 'default' } },
         12: family === 'flux'
           ? { class_type: 'DualCLIPLoader', inputs: { clip_name1: cfg.clip1, clip_name2: cfg.clip2, type: 'flux' } }
-          : { class_type: 'CLIPLoader', inputs: { clip_name: cfg.clip1, type: 'lumina2' } },
+          : { class_type: 'CLIPLoader', inputs: { clip_name: cfg.clip1, type: f.clipType || 'lumina2' } },
         13: { class_type: 'VAELoader', inputs: { vae_name: cfg.vae } },
       }
     : { 4: { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: cfg.model } } };
@@ -737,7 +750,7 @@ function validateConfig(input, prev = {}) {
   }
   cfg.kind = cfg.kind || 'checkpoint';
   if (cfg.kind === 'unet') {
-    if (cfg.model && !SPLIT_FAMILIES.includes(cfg.family)) return { error: 'For a model in separate parts, pick its type: Flux or Z-Image Turbo' };
+    if (cfg.model && !SPLIT_FAMILIES.includes(cfg.family)) return { error: 'For a model in separate parts, pick its type: Flux, Z-Image Turbo or Anima' };
     if (cfg.enabled && (!cfg.clip1 || !cfg.vae || (cfg.family === 'flux' && !cfg.clip2))) {
       return { error: cfg.family === 'flux' ? 'Pick both text encoders and the VAE for this model' : 'Pick the text encoder and the VAE for this model' };
     }

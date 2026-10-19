@@ -185,6 +185,7 @@ describe('the engine', () => {
     expect(all.suggested).toEqual({
       flux: { clip1: 'clip_l.safetensors', clip2: 't5xxl_enconly.safetensors', vae: String.raw`FLUX1\ae.sft` },
       zimage: { clip1: String.raw`zturbo\qwen_3_4b.safetensors`, clip2: null, vae: String.raw`zturbo\ae.safetensors` },
+      anima: { clip1: null, clip2: null, vae: null }, // P3-35: this ComfyUI has no Anima encoder or VAE
       upscaler: '4x-UltraSharp.pth', // P3-28: a general-purpose one, not the anime one listed first
       detector: 'bbox/face_yolov8m.pt', // P3-31: the medium face model, not the hand one listed first
     });
@@ -569,9 +570,29 @@ describe('the engine', () => {
     expect(seen.prompts.at(-1)['3'].inputs.denoise).toBe(0.45);
   });
 
+  test('P3-35: Anima: guessed by name, parts suggested, and the official graph (CLIPLoader stable_diffusion, 30 steps, CFG 4, er_sde, its own negative)', () => {
+    expect(comfy.guessSplitFamily(String.raw`Anima\anima-preview3-base.safetensors`)).toBe('anima');
+    expect(comfy.suggestParts('anima', [String.raw`Anima\qwen_3_06b_base.safetensors`, 'clip_l.safetensors', String.raw`zturbo\qwen_3_4b.safetensors`], [String.raw`Anima\qwen_image_vae.safetensors`, 'ae.safetensors']))
+      .toEqual({ clip1: String.raw`Anima\qwen_3_06b_base.safetensors`, clip2: null, vae: String.raw`Anima\qwen_image_vae.safetensors` });
+    const anima = cfg({ kind: 'unet', model: 'anima-preview3-base.safetensors', family: 'anima', clip1: 'qwen_3_06b_base.safetensors', vae: 'qwen_image_vae.safetensors' });
+    const { workflow: wf } = comfy.buildWorkflow(request(), anima);
+    expect(wf['11']).toEqual({ class_type: 'UNETLoader', inputs: { unet_name: 'anima-preview3-base.safetensors', weight_dtype: 'default' } });
+    expect(wf['12']).toEqual({ class_type: 'CLIPLoader', inputs: { clip_name: 'qwen_3_06b_base.safetensors', type: 'stable_diffusion' } });
+    expect(wf['13']).toEqual({ class_type: 'VAELoader', inputs: { vae_name: 'qwen_image_vae.safetensors' } });
+    expect(wf['5'].class_type).toBe('EmptyLatentImage');
+    expect(wf['3'].inputs).toMatchObject({ steps: 30, cfg: 4, sampler_name: 'er_sde', scheduler: 'simple', model: ['11', 0], positive: ['6', 0] });
+    expect(wf['14']).toBeUndefined(); // no AuraFlow sampling (that's Z-Image)
+    expect(wf['10']).toBeUndefined(); // no Flux guidance
+    expect(wf['7'].inputs.text).toBe('worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia, nsfw, nude, nudity');
+    expect(comfy.buildWorkflow(request(), anima, { permissive: true }).workflow['7'].inputs.text).toBe('worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia');
+    expect(comfy.buildWorkflow(request(), { ...anima, negative: 'bad hands' }).workflow['7'].inputs.text).toBe('bad hands, nsfw, nude, nudity');
+    expect(comfy.validateConfig({ kind: 'checkpoint', model: 'x.safetensors', family: 'anima' }).error).toMatch(/separate parts, not a checkpoint/);
+    expect(comfy.validateConfig({ kind: 'unet', model: 'anima-preview3-base.safetensors', family: 'anima' })).toMatchObject({ family: 'anima' });
+  });
+
   test('P3-24: config for a split model needs its type and parts; Z-Image is split only', () => {
     expect(comfy.validateConfig({ kind: 'disk' }).error).toMatch(/Unknown model kind/);
-    expect(comfy.validateConfig({ kind: 'unet', model: UNETS[2] }).error).toMatch(/pick its type: Flux or Z-Image Turbo/);
+    expect(comfy.validateConfig({ kind: 'unet', model: UNETS[2] }).error).toMatch(/pick its type: Flux, Z-Image Turbo or Anima/);
     expect(comfy.validateConfig({ kind: 'unet', model: UNETS[0], family: 'sdxl' }).error).toMatch(/pick its type/);
     expect(comfy.validateConfig({ kind: 'checkpoint', model: MODELS[1], family: 'zimage' }).error).toMatch(/separate parts, not a checkpoint/);
     expect(comfy.validateConfig({ enabled: true, url: mockUrl, kind: 'unet', model: UNETS[0], clip1: CLIPS[0], vae: VAES[0] }).error).toMatch(/both text encoders and the VAE/);

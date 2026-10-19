@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container
 - **Phase:** 3
-- **State:** PLANNED (a ACTIVE)
+- **State:** COMPLETE (a #148, b #149)
 - **Depends on:** P3-23 (Variations), P3-24 – P3-34 (ComfyUI engine, upscale, detailer, custom workflows)
 - **Requirement Source:** the user, 2026-10-19: "incorporate img2img as an option and … the 'variations' option to use the image that you select 'variations' with as the source image for img2img … subtle variations and strong variations." Also: "it doesn't look like face detailer is doing anything to high quality images". Decisions (user, 2026-10-19):
   - Variations becomes two buttons, **Subtle variation** (img2img from that image, repaint about 0.35) and **Strong variation** (about 0.6).

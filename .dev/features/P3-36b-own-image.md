@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-36)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #149)
 - **Effort:** M
 - **Starting baseline:** main at c047130 (#148 merged)
 - **Requirement Source:** P3-36 (user, 2026-10-19): "Start from an image" in the /imagine panel, attaching a picture or using the one you're replying to, with a strength choice; ComfyUI first; an image-to-image box for custom-workflow hosts.
