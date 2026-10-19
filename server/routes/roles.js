@@ -161,6 +161,35 @@ async function handle({ req, res, pathSegments: seg, space, spaceName, userId, a
     return reply(200, { overrides: db.getChannelOverrides(ref.channelId) });
   }
 
+  // ---- Category permissions (P3-25d): GET/PUT /spaces/:s/categories/:id/overrides,
+  // and POST …/apply to copy them onto every channel in it (that I can see). ----
+  if (seg[2] === 'categories' && seg[3] && (seg[4] === 'overrides' || seg[4] === 'apply') && seg.length === 5) {
+    const categoryId = Number(seg[3]);
+    if (!db.getCategories(space.id).some((c) => c.id === categoryId)) return reply(404, { error: 'No such category' });
+    if (!canManage) return reply(403, { error: 'Only the owner or admins can change category access' });
+    if (seg[4] === 'apply') {
+      if (req.method !== 'POST') return reply(405, { error: 'Method not allowed' });
+      const visible = new Set(db.spaceChannelNames(space.id).filter((n) => { const ref = db.channelRef(spaceName, n); return ref && access.channel(ref.channelId).view; }));
+      const changed = db.applyCategoryOverrides(space.id, categoryId, visible);
+      deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+      return reply(200, { changed });
+    }
+    if (req.method === 'PUT') {
+      const { overrides } = await readJsonBody(req);
+      if (!Array.isArray(overrides)) return reply(400, { error: 'overrides must be a list' });
+      const roles = new Map(db.getRoles(space.id).map((r) => [r.id, r]));
+      for (const o of overrides) {
+        const role = roles.get(Number(o && o.roleId));
+        if (!role) return reply(400, { error: 'Unknown role' });
+        if (!role.isDefault && !isBelow(access, role)) return reply(403, { error: 'You can only set access for roles below your own' });
+      }
+      for (const o of overrides) db.setCategoryOverride(categoryId, Number(o.roleId), { view: tri(o.view), post: tri(o.post) });
+    } else if (req.method !== 'GET') {
+      return reply(405, { error: 'Method not allowed' });
+    }
+    return reply(200, { overrides: db.getCategoryOverrides(categoryId) });
+  }
+
   return false;
 }
 

@@ -210,6 +210,17 @@ export function renameCategory(space, id, name) {
 export function deleteCategory(space, id) {
   return request(`/spaces/${encodeURIComponent(space)}/categories/${id}`, { method: 'DELETE' });
 }
+// Category permissions (P3-25d): per-role access copied onto channels created
+// in or moved into the category; `apply` copies it onto every channel in it.
+export function getCategoryOverrides(space, id) {
+  return request(`/spaces/${encodeURIComponent(space)}/categories/${id}/overrides`);
+}
+export function setCategoryOverrides(space, id, overrides) {
+  return request(`/spaces/${encodeURIComponent(space)}/categories/${id}/overrides`, { method: 'PUT', body: { overrides } });
+}
+export function applyCategoryOverrides(space, id) {
+  return request(`/spaces/${encodeURIComponent(space)}/categories/${id}/apply`, { method: 'POST' });
+}
 // The whole order: { categories: [id…], channels: [{ name, category }…] }.
 export function setLayout(space, layout) {
   return request(`/spaces/${encodeURIComponent(space)}/layout`, { method: 'PUT', body: layout });

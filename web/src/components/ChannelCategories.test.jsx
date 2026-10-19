@@ -9,6 +9,9 @@ vi.mock('../api.js', () => ({
   renameCategory: vi.fn().mockResolvedValue({}),
   deleteCategory: vi.fn().mockResolvedValue({ ok: true }),
   getChannelOverrides: vi.fn().mockResolvedValue({ overrides: [] }),
+  getCategoryOverrides: vi.fn().mockResolvedValue({ overrides: [{ roleId: 1, view: 0, post: 0 }] }),
+  setCategoryOverrides: vi.fn().mockResolvedValue({ overrides: [] }),
+  applyCategoryOverrides: vi.fn().mockResolvedValue({ changed: 2 }),
 }));
 const api = await import('../api.js');
 const { default: ChannelList } = await import('./ChannelList.jsx');
@@ -209,5 +212,47 @@ test('members and touch screens can’t drag', () => {
   fireEvent.pointerDown(screen.getByRole('button', { name: /^general/ }), { clientY: box2.general.top + 5, button: 0, pointerType: 'touch' });
   pointer('pointerMove', window, box2.lounge.top + 15);
   expect(screen.queryByTestId('drop-line')).toBeNull();
+});
+
+// P3-25d: category permissions.
+const roles = [{ id: 1, name: '@everyone', isDefault: true, position: 0 }, { id: 2, name: 'Staff', position: 1, color: '#e66' }];
+
+test('a category’s Permissions… edits its access, and Apply to all copies it onto its channels after asking', async () => {
+  const onPermsChanged = vi.fn();
+  setup({ canManage: true, isOwner: true, roles, onPermsChanged });
+  fireEvent.click(screen.getByRole('button', { name: 'Options for Text channels' }));
+  fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: /Permissions/ }));
+  const dialog = await screen.findByRole('dialog', { name: 'Text channels permissions' });
+  await waitFor(() => expect(api.getCategoryOverrides).toHaveBeenCalledWith('S', 1));
+  expect(within(dialog).getByText(/start with this access/)).toBeTruthy();
+  expect(within(dialog).queryByLabelText('Topic')).toBeNull(); // channel-only settings are hidden
+  expect(within(dialog).queryByText(/Delete channel/)).toBeNull();
+  await waitFor(() => expect(within(dialog).getByLabelText('@everyone: view').value).toBe('0')); // Deny
+  fireEvent.change(within(dialog).getByLabelText('Staff: view'), { target: { value: '1' } }); // Allow
+  fireEvent.click(within(dialog).getByRole('button', { name: /Apply to all channels in Text channels/ }));
+  expect(within(dialog).getByText(/Their own settings are/)).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to all' }));
+  await waitFor(() => expect(api.applyCategoryOverrides).toHaveBeenCalledWith('S', 1));
+  expect(api.setCategoryOverrides).toHaveBeenCalledWith('S', 1, expect.arrayContaining([{ roleId: 2, view: 1, post: null }, { roleId: 1, view: 0, post: 0 }]));
+  expect(await within(dialog).findByText('Applied to 2 channels.')).toBeTruthy();
+  expect(onPermsChanged).toHaveBeenCalled();
+});
+
+test('moving a channel into a category with its own access asks first; a plain category doesn’t', async () => {
+  const gated = categories.map((c) => (c.id === 3 ? { ...c, hasOverrides: true } : c));
+  setup({ canManage: true, roles: [], categories: gated });
+  fireEvent.click(screen.getByRole('button', { name: 'Channel settings for news' }));
+  const place = await screen.findByRole('group', { name: 'Place in the channel list' });
+  // Into a plain category (Voice channels): straight away.
+  fireEvent.change(within(place).getByLabelText('Category'), { target: { value: '2' } });
+  await waitFor(() => expect(api.setLayout).toHaveBeenCalledTimes(1));
+  // Into "Empty", which has its own access: a confirmation first.
+  fireEvent.change(within(place).getByLabelText('Category'), { target: { value: '3' } });
+  const confirm = await screen.findByRole('dialog', { name: 'Move into Empty?' });
+  expect(confirm.textContent).toMatch(/#news will take Empty’s permissions, replacing its own/);
+  expect(api.setLayout).toHaveBeenCalledTimes(1);
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Move' }));
+  await waitFor(() => expect(api.setLayout).toHaveBeenCalledTimes(2));
+  expect(api.setLayout.mock.calls[1][1].channels.find((c) => c.name === 'news')).toEqual({ name: 'news', category: 3 });
 });
 
