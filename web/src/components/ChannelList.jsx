@@ -30,6 +30,7 @@ export default function ChannelList({
   activeVoiceParticipants = [],
   myVoice,
   voiceMuted,
+  voiceForcedMute = false, // P3-26c: timed out, so the mic stays off
   voiceDeafened,
   voicePttEnabled,
   voiceStatus,
@@ -766,8 +767,9 @@ export default function ChannelList({
                 icon={voiceMuted ? 'micOff' : 'mic'}
                 size={17}
                 label="Mute (Ctrl+Shift+M)"
-                title={voiceMuted ? 'Unmute (Ctrl+Shift+M)' : 'Mute (Ctrl+Shift+M)'}
+                title={voiceForcedMute ? 'You’re timed out in this server, so your mic stays off' : voiceMuted ? 'Unmute (Ctrl+Shift+M)' : 'Mute (Ctrl+Shift+M)'}
                 pressed={!!voiceMuted}
+                disabled={voiceForcedMute}
                 onClick={onToggleMute}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${
                   voiceMuted ? 'bg-danger/80 text-ink-900 hover:bg-danger' : 'bg-ink-600 text-gray-200 hover:bg-ink-500'

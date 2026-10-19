@@ -472,6 +472,7 @@ export default function App() {
             activeVoiceParticipants={call.participants}
             myVoice={call.room}
             voiceMuted={call.muted}
+            voiceForcedMute={call.forcedMute}
             voiceDeafened={call.deafened}
             voicePttEnabled={call.pttEnabled}
             voiceStatus={call.status}
@@ -570,7 +571,8 @@ export default function App() {
               space={sp.currentSpace}
               channel={sp.currentChannel}
               status={status}
-              canPost={sp.canPostCurrent}
+              canPost={sp.canPostCurrent && !sp.myTimeout}
+              timedOut={sp.myTimeout}
               messages={shownChatMessages}
               currentUser={user}
               typingUsers={chat.typingNames}
@@ -610,7 +612,8 @@ export default function App() {
               space={openThread.space}
               thread={openThread}
               status={status}
-              canPost={sp.canPostCurrent}
+              canPost={sp.canPostCurrent && !sp.myTimeout}
+              timedOut={sp.myTimeout}
               messages={shownThreadMessages}
               currentUser={user}
               typingUsers={thread.typingNames}
@@ -651,6 +654,7 @@ export default function App() {
             canManageRoles={sp.canManageRoles}
             canKickMembers={sp.canKick}
             canBanMembers={sp.canBan}
+            canTimeoutMembers={sp.canTimeout}
             myPosition={sp.myPosition}
             onMessageUser={(name) => {
               setMembersOpen(false);
@@ -659,6 +663,8 @@ export default function App() {
             onToggleRole={sp.setMemberHasRole}
             onKick={sp.kickMember}
             onBan={sp.banMember}
+            onTimeout={sp.timeoutMember}
+            onRemoveTimeout={sp.removeTimeout}
             open={membersOpen}
             onClose={() => setMembersOpen(false)}
           />

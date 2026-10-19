@@ -4,6 +4,8 @@ import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import BanDialog from './BanDialog.jsx';
+import TimeoutDialog from './TimeoutDialog.jsx';
+import { timeoutEnd } from './TimedOutNotice.jsx';
 import MemberRolesDialog from './MemberRolesDialog.jsx';
 import RoleName from './RoleName.jsx';
 
@@ -19,9 +21,10 @@ const STATUS_WORDS = { idle: 'Idle', dnd: 'Do Not Disturb' };
 // canKickMembers / myPosition (from the server's roles): who I may remove.
 // roles (highest first) name each member's badge; canManageRoles offers
 // "Roles…", whose changes go through onToggleRole(username, roleId, on).
-export default function MemberList({ space, members, currentUser, myRole, roles = [], canKickMembers = false, canBanMembers = false, canManageRoles = false, myPosition = 0, onMessageUser, onToggleRole, onKick, onBan, open = false, onClose }) {
+export default function MemberList({ space, members, currentUser, myRole, roles = [], canKickMembers = false, canBanMembers = false, canTimeoutMembers = false, canManageRoles = false, myPosition = 0, onMessageUser, onToggleRole, onKick, onBan, onTimeout, onRemoveTimeout, open = false, onClose }) {
   const panelRef = useRef(null);
   const [banning, setBanning] = useState(null); // username in the Ban dialog (P3-26b)
+  const [timingOut, setTimingOut] = useState(null); // username in the Time out dialog (P3-26c)
   const [kicking, setKicking] = useState(null); // username awaiting "are you sure?"
   const [editingRoles, setEditingRoles] = useState(null); // username whose roles are open
   useEffect(() => {
@@ -87,6 +90,21 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
         },
       });
     }
+    // Timeouts (P3-26c): "time out members", and they sit strictly below me.
+    if (!self && canTimeoutMembers && (m.position ?? 0) < myPosition) {
+      if (timedOut(m)) {
+        acts.push({ label: 'Remove timeout', onClick: () => onRemoveTimeout(m.username) });
+      } else {
+        acts.push({
+          label: 'Time out…',
+          danger: true,
+          onClick: () => {
+            panelRef.current?.querySelector(`button[title="${CSS.escape(m.username)}"]`)?.focus();
+            setTimingOut(m.username);
+          },
+        });
+      }
+    }
     // Banning (P3-26b): "ban members", and they sit strictly below me.
     if (!self && canBanMembers && (m.position ?? 0) < myPosition) {
       acts.push({
@@ -136,6 +154,11 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
                     </span>
                   )}
                 </span>
+                {timedOut(m) && (
+                  <span role="img" aria-label={`Timed out until ${timeoutEnd(m.timedOutUntil)}`} title={`Timed out until ${timeoutEnd(m.timedOutUntil)}`} className="shrink-0 text-danger">
+                    <Icon name="clock" size={14} />
+                  </span>
+                )}
                 {topRoleName(m) && <RoleBadge>{topRoleName(m)}</RoleBadge>}
               </button>
               {open && acts.length > 0 && (
@@ -203,6 +226,9 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
           onClose={() => setEditingRoles(null)}
         />
       )}
+      {timingOut && (
+        <TimeoutDialog username={timingOut} space={space || 'this server'} onTimeout={(options) => onTimeout(timingOut, options)} onClose={() => setTimingOut(null)} />
+      )}
       {banning && (
         <BanDialog username={banning} space={space || 'this server'} onBan={(options) => onBan(banning, options)} onClose={() => setBanning(null)} />
       )}
@@ -222,6 +248,9 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
     </>
   );
 }
+
+// Whether a member is timed out right now (P3-26c).
+const timedOut = (m) => !!m.timedOutUntil && m.timedOutUntil > Date.now();
 
 function RoleBadge({ children }) {
   return (

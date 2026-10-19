@@ -1,6 +1,7 @@
 import { nameColors } from '../roleColor.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../api.js';
+import { useActiveTimeout } from '../components/TimedOutNotice.jsx';
 import {
   OWNER_POSITION,
   loadViewState,
@@ -60,6 +61,9 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const canManageEmoji = can('manage_emoji');
   const canKick = can('kick');
   const canBan = can('ban_members');
+  const canTimeout = can('timeout_members');
+  // My timeout here (P3-26c), while it lasts.
+  const myTimeout = useActiveTimeout(activeSpace?.timeout);
   const canManageRoles = can('manage_roles');
   // username -> { dark, light } name colour from their highest coloured role.
   const roleNameColors = useMemo(() => nameColors(members, roles), [members, roles]);
@@ -191,6 +195,12 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
         if (spaceRef.current === f.space) goToFirst(next);
       });
     },
+    // I was timed out (or it was lifted) somewhere: reload my servers, so the
+    // message box changes.
+    timed_out: (f) => {
+      loadSpaces();
+      if (f.space === spaceRef.current) refreshMembers(f.space);
+    },
     // You were banned: the server leaves the rail, and App shows the notice.
     banned: (f) => {
       setBannedFrom({ space: f.space, reason: f.reason || null, at: Date.now() });
@@ -277,6 +287,15 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       refreshMembers(currentSpace);
     }),
     reloadRoles: () => refreshMembers(spaceRef.current),
+    // Throws, so the Time out dialog can show the server's message.
+    timeoutMember: async (username, options) => {
+      await api.timeoutMember(currentSpace, username, options);
+      refreshMembers(currentSpace);
+    },
+    removeTimeout: attempt('Could not remove the timeout', async (username) => {
+      await api.removeTimeout(currentSpace, username);
+      refreshMembers(currentSpace);
+    }),
     // Throws, so the Ban dialog can show the server's message.
     banMember: async (username, options) => {
       await api.banMember(currentSpace, username, options);
@@ -363,6 +382,8 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     canManageEmoji,
     canKick,
     canBan,
+    canTimeout,
+    myTimeout,
     canManageRoles,
     bannedFrom,
     myPosition,

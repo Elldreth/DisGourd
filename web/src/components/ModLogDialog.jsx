@@ -13,6 +13,8 @@ const ACTIONS = [
   ['kick', 'Removals'],
   ['ban', 'Bans'],
   ['unban', 'Unbans'],
+  ['timeout', 'Timeouts'],
+  ['timeout_remove', 'Timeouts removed'],
   ['role_add', 'Roles given'],
   ['role_remove', 'Roles taken'],
   ['channel_access', 'Channel access'],
@@ -31,6 +33,9 @@ function accessSummary(roles = []) {
     })
     .join('; ');
 }
+
+const DURATIONS = { 5: '5 minutes', 60: '1 hour', 1440: '1 day', 10080: '1 week' };
+const durationWords = (minutes) => DURATIONS[minutes] || `${minutes} minutes`;
 
 export function describeEntry(e) {
   const d = e.details || {};
@@ -51,6 +56,10 @@ export function describeEntry(e) {
           {d.deleted ? <span className="text-gray-400"> and deleted {d.deleted} message{d.deleted === 1 ? '' : 's'} from the last {d.deleteMessages}</span> : null}
         </>
       );
+    case 'timeout':
+      return <><B>{e.actor}</B> timed out <B>{e.target}</B> for {durationWords(d.minutes)}</>;
+    case 'timeout_remove':
+      return <><B>{e.actor}</B> removed <B>{e.target}</B>’s timeout</>;
     case 'unban':
       return <><B>{e.actor}</B> unbanned <B>{e.target}</B></>;
     case 'role_add':

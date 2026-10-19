@@ -81,6 +81,7 @@ const DEFAULT_PERMISSIONS = {
   invite: 1,
   kick: 2,
   ban_members: 2,
+  timeout_members: 2,
   edit_server: 2,
   delete_others_messages: 2,
   pin_messages: 2,
@@ -744,6 +745,7 @@ function getUserSpaces(userId) {
       voiceChannels: chans.filter((c) => c.type === 'voice').map((c) => c.name),
       channelMeta,
       categories: getCategories(s.id), // P3-25a: in order
+      timeout: getMemberTimeout(s.id, userId), // P3-26c: { until, reason } while I'm timed out
     };
   });
 }
@@ -1568,6 +1570,23 @@ function deleteMessageById(messageId) {
   return db.prepare('DELETE FROM messages WHERE id = ?').run(messageId).changes > 0;
 }
 
+// ---- Timeouts (P3-26c) ----
+// Time someone out until `until` (ms), or clear it with null.
+function setMemberTimeout(spaceId, userId, until, reason = null) {
+  return db.prepare('UPDATE space_members SET timeout_until = ?, timeout_reason = ? WHERE space_id = ? AND user_id = ?')
+    .run(until, until ? reason || null : null, spaceId, userId).changes > 0;
+}
+// { until, reason } while someone is timed out, else null. An ended timeout
+// needs no clean-up: it just stops counting.
+function getMemberTimeout(spaceId, userId, now = Date.now()) {
+  const row = db.prepare('SELECT timeout_until AS until, timeout_reason AS reason FROM space_members WHERE space_id = ? AND user_id = ?').get(spaceId, userId);
+  return row && row.until && row.until > now ? { until: row.until, reason: row.reason || null } : null;
+}
+// userId -> until, for everyone timed out in a server right now.
+function getTimeoutsMap(spaceId, now = Date.now()) {
+  return new Map(db.prepare('SELECT user_id AS userId, timeout_until AS until FROM space_members WHERE space_id = ? AND timeout_until > ?').all(spaceId, now).map((r) => [r.userId, r.until]));
+}
+
 // ---- Bans (P3-26b) ----
 // Ban someone: they leave the server and no invite lets them back in.
 const banMember = db.transaction((spaceId, userId, actorId, reason) => {
@@ -2144,6 +2163,9 @@ module.exports = {
   deleteMessageById,
   logModAction,
   getModLog,
+  setMemberTimeout,
+  getMemberTimeout,
+  getTimeoutsMap,
   banMember,
   unbanMember,
   isBanned,

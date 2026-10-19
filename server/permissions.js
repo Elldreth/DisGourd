@@ -64,4 +64,16 @@ function canModerateMessage(spaceName, channelName, actorId, authorId) {
   return (author ? author.position : -1) < actor.position;
 }
 
-module.exports = { canViewChannel, canPostChannel, canView, canModerateMessage, canDoAction, resolvePermissions };
+// P3-26c: { until, reason } while a member is timed out in this server
+// (by name), else null. Timed-out people can read and listen, but not post,
+// edit, react, start threads, /imagine or speak.
+function timeoutIn(spaceName, userId) {
+  const space = db.getSpaceByName(spaceName);
+  return space ? db.getMemberTimeout(space.id, userId) : null;
+}
+// The refusal frame for a timed-out member.
+function timedOutFrame(op, t) {
+  return { type: 'error', op, code: 'TIMED_OUT', until: t.until, error: "You're timed out in this server" };
+}
+
+module.exports = { canViewChannel, canPostChannel, canView, canModerateMessage, canDoAction, resolvePermissions, timeoutIn, timedOutFrame };

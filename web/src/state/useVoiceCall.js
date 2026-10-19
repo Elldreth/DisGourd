@@ -40,7 +40,19 @@ export function useVoiceCall({ send, myId }) {
       setStates((prev) => ({ ...prev, [unreadKey(f.space, f.channel)]: f.participants || [] }));
       v() && v().handleState(f);
     },
-    voice_peers: (f) => v() && v().handlePeers(f.peers || []),
+    voice_peers: (f) => {
+      if (!v()) return;
+      v().handlePeers(f.peers || []);
+      v().setForcedMute(!!f.forcedMute); // timed out here (P3-26c)
+    },
+    voice_forced_mute: (f) => {
+      if (v() && call.room && call.room.space === f.space) v().setForcedMute(f.on);
+    },
+    // Removed or banned from the call's server: the server already dropped us.
+    voice_ended: (f) => {
+      const why = f.reason === 'banned' ? 'you were banned from' : 'you were removed from';
+      v() && v().endCall(`Your call in #${f.channel} ended: ${why} ${f.space}.`);
+    },
     voice_peer_joined: (f) => v() && v().handlePeerJoined(f.peer),
     voice_peer_left: (f) => v() && v().handlePeerLeft(f.userId),
     voice_signal: (f) => v() && v().handleSignal(f.from, f.data),

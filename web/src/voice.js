@@ -56,6 +56,7 @@ export function createVoiceController({ send, myId, onChange }) {
   let rejoining = false; // sent voice_join again after a reconnect; awaiting voice_peers
   let rejoinTimer = null;
   let notice = ''; // why the call ended on its own, for the UI
+  let forcedMute = false; // timed out in this server (P3-26c): the mic stays off
 
   // A peer link is "unstable" once it has dropped and is trying to recover.
   function unstable() {
@@ -75,6 +76,7 @@ export function createVoiceController({ send, myId, onChange }) {
       micError,
       unstable: unstable() || rejoining,
       notice,
+      forcedMute,
       sharing,
       shareError,
       cameraOn: !!cameraStream,
@@ -93,7 +95,7 @@ export function createVoiceController({ send, myId, onChange }) {
   // Whether the local mic should currently send audio, given mute, deafen and
   // push-to-talk state.
   function micShouldTransmit() {
-    if (!localStream || muted || deafened) return false;
+    if (!localStream || muted || deafened || forcedMute) return false;
     if (getPttEnabled()) return pttActive;
     return true;
   }
@@ -419,6 +421,7 @@ export function createVoiceController({ send, myId, onChange }) {
     room = null;
     status = 'idle';
     micError = false;
+    forcedMute = false;
     deafened = false;
     pttActive = false;
     sharing = false;
@@ -430,6 +433,7 @@ export function createVoiceController({ send, myId, onChange }) {
   }
 
   function toggleMute() {
+    if (forcedMute && muted) return; // timed out: can't unmute
     muted = !muted;
     applyMic();
     if (room) send({ op: 'voice_mute', muted });
@@ -444,7 +448,7 @@ export function createVoiceController({ send, myId, onChange }) {
       mutedBeforeDeafen = muted;
       muted = true;
     } else {
-      muted = mutedBeforeDeafen;
+      muted = mutedBeforeDeafen || forcedMute;
     }
     applyDeafen();
     applyMic();
@@ -722,6 +726,26 @@ export function createVoiceController({ send, myId, onChange }) {
     emit();
   }
 
+  // Timed out in this call's server (on), or the timeout lifted (off; you stay
+  // muted until you unmute). The server enforces it too.
+  function setForcedMute(on) {
+    forcedMute = !!on && !!room;
+    if (forcedMute && !muted) {
+      muted = true;
+      send({ op: 'voice_mute', muted: true });
+    }
+    applyMic();
+    emit();
+  }
+
+  // The server ended this call (you were removed or banned from the server).
+  function endCall(text) {
+    if (!room) return;
+    leave();
+    notice = text;
+    emit();
+  }
+
   // ---- Gateway frames ----
   // Only the joiner starts each connection (from the peer list); people
   // already in the call create theirs when the joiner's offer arrives
@@ -833,6 +857,8 @@ export function createVoiceController({ send, myId, onChange }) {
     leave,
     rejoin,
     clearNotice,
+    setForcedMute,
+    endCall,
     toggleMute,
     toggleDeafen,
     setPttActive,

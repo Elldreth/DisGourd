@@ -288,6 +288,7 @@ function imagineOp({ ws, msg, userId }) {
   const type = space ? db.channelType(msg.space, msg.channel) : null;
   if (!space || !db.isMember(space.id, userId) || (type !== 'text' && type !== 'thread')) return refuse(ws, 'NOT_ALLOWED', 'You can’t post there');
   if (!canViewChannel(msg.space, msg.channel, userId) || !canPostChannel(msg.space, msg.channel, userId)) return refuse(ws, 'NOT_ALLOWED', 'You can’t post there');
+  if (db.getMemberTimeout(space.id, userId)) return refuse(ws, 'TIMED_OUT', 'You’re timed out in this server');
   const settings = getSettings();
   if (!db.getSpaceImagine(space.id)?.enabled) return refuse(ws, 'DISABLED', '/imagine is off in this server');
   const engines = enabledEngines(settings);
