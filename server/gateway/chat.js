@@ -3,7 +3,7 @@
 const WebSocket = require('ws');
 const db = require('../db');
 const { MAX_MESSAGE_LENGTH, parseMentionUsernames, normalizeAttachments, parseReactionEmoji, parseCustomReaction } = require('../validate');
-const { canViewChannel, canPostChannel, canView, canModerateMessage, canDoAction } = require('../permissions');
+const { canViewChannel, canPostChannel, canView, canModerateMessage, canDoAction, timeoutIn, timedOutFrame } = require('../permissions');
 const { userClients, deliverToChannelViewers, tellFollow } = require('./delivery');
 const { rejectFrame, TOO_LONG } = require('./frames');
 const linkPreviews = require('../linkPreviews');
@@ -11,6 +11,14 @@ const push = require('../push');
 
 // A thread's reply count changed: refresh the summary under its root message
 // for the parent channel's viewers.
+// Refuse a frame from someone timed out in `spaceName`; true when refused.
+function refuseIfTimedOut(ws, op, spaceName, userId) {
+  const t = timeoutIn(spaceName, userId);
+  if (!t) return false;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(timedOutFrame(op, t)));
+  return true;
+}
+
 // The start of a deleted message, for the moderation log.
 function excerpt(content) {
   const text = String(content || '').replace(/\s+/g, ' ').trim();
@@ -57,6 +65,7 @@ const ops = {
     if (!space || !db.isMember(space.id, userId) || (type !== 'text' && type !== 'thread')) return;
     // Enforce the channel's view/post gates (from the member's roles).
     if (!canViewChannel(msg.space, msg.channel, userId) || !canPostChannel(msg.space, msg.channel, userId)) return;
+    if (refuseIfTimedOut(ws, 'message', msg.space, userId)) return;
     const content = typeof msg.content === 'string' ? msg.content : '';
     if (content.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
     const attachments = normalizeAttachments(msg);
@@ -117,6 +126,7 @@ const ops = {
     if (newContent.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
     const loc = db.getMessageLocation(id);
     if (!loc || !canView(loc.space, loc.channel, userId)) return;
+    if (refuseIfTimedOut(ws, 'edit', loc.space, userId)) return;
     const editedAt = db.editMessage(id, userId, newContent); // author-only in DB
     if (editedAt) {
       deliverToChannelViewers(loc.space, loc.channel, JSON.stringify({
@@ -158,12 +168,13 @@ const ops = {
   unpin({ ws, msg, userId }) {
     return setPinned(ws, msg, userId, false);
   },
-  react({ msg, userId }) {
+  react({ ws, msg, userId }) {
     const id = parseInt(msg.id, 10);
     const emoji = parseReactionEmoji(msg.emoji);
     if (!id || !emoji) return;
     const loc = db.getMessageLocation(id);
     if (!loc || !canView(loc.space, loc.channel, userId)) return;
+    if (refuseIfTimedOut(ws, 'react', loc.space, userId)) return;
     // A custom emoji must belong to this message's server, under that name.
     const custom = parseCustomReaction(emoji);
     if (custom && !db.spaceHasEmoji(loc.space, custom.id, custom.name)) return;
@@ -177,6 +188,7 @@ const ops = {
   typing({ ws, msg, userId }) {
     const space = db.getSpaceByName(msg.space);
     if (!space || !canView(msg.space, msg.channel, userId)) return;
+    if (db.getMemberTimeout(space.id, userId)) return; // they can't post, so no "typing…"
     const user = db.getUserById(userId);
     const frame = JSON.stringify({
       type: 'typing', user: user ? user.username : String(userId), space: msg.space, channel: msg.channel,

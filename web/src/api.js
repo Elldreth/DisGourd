@@ -246,6 +246,13 @@ export function getModLog(space, { before, action, user } = {}) {
   if (user) qs.set('user', user);
   return request(`/spaces/${encodeURIComponent(space)}/mod-log${qs.size ? `?${qs}` : ''}`);
 }
+// P3-26c: timeouts (minutes: 5, 60, 1440 or 10080).
+export function timeoutMember(space, username, { minutes, reason } = {}) {
+  return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}/timeout`, { method: 'PUT', body: { minutes, reason } });
+}
+export function removeTimeout(space, username) {
+  return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}/timeout`, { method: 'DELETE' });
+}
 // P3-26b: bans.
 export function banMember(space, username, { reason, deleteMessages } = {}) {
   return request(`/spaces/${encodeURIComponent(space)}/bans`, { method: 'POST', body: { user: username, reason, deleteMessages } });

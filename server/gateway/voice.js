@@ -84,16 +84,18 @@ const ops = {
     const existing = [...room.members.values()].map((p) => ({
       userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
     }));
-    const me = { ws, userId, username: user.username, avatar: user.avatar_url || null, muted: false, sharing: false };
+    // Timed out (P3-26c): they can listen, but join muted and can't unmute.
+    const forcedMute = !!db.getMemberTimeout(space.id, userId);
+    const me = { ws, userId, username: user.username, avatar: user.avatar_url || null, muted: forcedMute, sharing: false };
     room.members.set(userId, me);
     ws.voiceRoom = key;
     // The joiner initiates offers to everyone already here.
-    ws.send(JSON.stringify({ type: 'voice_peers', space: msg.space, channel: msg.channel, peers: existing }));
+    ws.send(JSON.stringify({ type: 'voice_peers', space: msg.space, channel: msg.channel, peers: existing, forcedMute }));
     for (const p of room.members.values()) {
       if (p.userId !== userId && p.ws.readyState === WebSocket.OPEN) {
         p.ws.send(JSON.stringify({
           type: 'voice_peer_joined', space: msg.space, channel: msg.channel,
-          peer: { userId, username: me.username, avatar: me.avatar, muted: false },
+          peer: { userId, username: me.username, avatar: me.avatar, muted: me.muted },
         }));
       }
     }
@@ -118,7 +120,8 @@ const ops = {
     if (!room) return;
     const entry = room.members.get(userId);
     if (entry) {
-      entry.muted = !!msg.muted;
+      const space = db.getSpaceByName(room.space);
+      entry.muted = !!msg.muted || !!(space && db.getMemberTimeout(space.id, userId));
       broadcastVoiceState(room);
     }
     return;
@@ -135,4 +138,37 @@ const ops = {
   },
 };
 
-module.exports = { ops, voiceLeave, voiceStatesFor };
+// Someone's voice session in a server, if any: { room, entry }.
+function voiceSessionIn(userId, spaceName) {
+  for (const room of voiceRooms.values()) {
+    if (room.space !== spaceName) continue;
+    const entry = room.members.get(Number(userId));
+    if (entry) return { room, entry };
+  }
+  return null;
+}
+
+// Banned or removed (P3-26c): end their call in that server and tell them why.
+function voiceEject(userId, spaceName, reason) {
+  const s = voiceSessionIn(userId, spaceName);
+  if (!s) return false;
+  const { ws } = s.entry;
+  voiceLeave(ws);
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'voice_ended', space: spaceName, channel: s.room.channel, reason }));
+  return true;
+}
+
+// Timed out (on) or the timeout removed (off): force their mute in a call there.
+function voiceForceMute(userId, spaceName, on) {
+  const s = voiceSessionIn(userId, spaceName);
+  if (!s) return false;
+  if (on && !s.entry.muted) {
+    s.entry.muted = true;
+    broadcastVoiceState(s.room);
+  }
+  const { ws } = s.entry;
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'voice_forced_mute', space: spaceName, on }));
+  return true;
+}
+
+module.exports = { ops, voiceLeave, voiceStatesFor, voiceEject, voiceForceMute };

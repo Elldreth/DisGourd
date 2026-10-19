@@ -255,3 +255,37 @@ test('a remote video tile goes away when the sender stops it (the track is remov
   scr.stream.onremovetrack?.({ track: scr.track });
   expect(state.videos).toEqual([]);
 });
+
+// P3-26c: timed out in the call's server, and calls ended by the server.
+test('a forced mute turns the mic off, and unmuting does nothing until it lifts', async () => {
+  await inCallWithBob();
+  voice.setForcedMute(true);
+  expect(state).toMatchObject({ muted: true, forcedMute: true });
+  expect(sent).toContainEqual({ op: 'voice_mute', muted: true });
+  sent.length = 0;
+  voice.toggleMute();
+  expect(state.muted).toBe(true);
+  expect(sent).toEqual([]);
+  // Deafen and undeafen keeps you muted while it lasts.
+  voice.toggleDeafen();
+  voice.toggleDeafen();
+  expect(state.muted).toBe(true);
+  // Lifted: still muted, but you can unmute now.
+  voice.setForcedMute(false);
+  expect(state).toMatchObject({ muted: true, forcedMute: false });
+  voice.toggleMute();
+  expect(state.muted).toBe(false);
+});
+
+test('the server ending the call leaves it and says why; a new call starts unforced', async () => {
+  await inCallWithBob();
+  voice.setForcedMute(true);
+  voice.endCall('Your call in #lounge ended: you were banned from S.');
+  expect(state).toMatchObject({ room: null, status: 'idle', forcedMute: false, notice: 'Your call in #lounge ended: you were banned from S.' });
+  expect(pcs[0].closed).toBe(true);
+  // Not in a call: nothing to end, nothing to force.
+  voice.endCall('again');
+  expect(state.notice).toBe('Your call in #lounge ended: you were banned from S.');
+  voice.setForcedMute(true);
+  expect(state.forcedMute).toBe(false);
+});

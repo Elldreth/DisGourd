@@ -5,6 +5,7 @@ import ThreadsList from './ThreadsList.jsx';
 import CreateThreadDialog from './CreateThreadDialog.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
+import TimedOutNotice from './TimedOutNotice.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
 import EmptyState from './EmptyState.jsx';
@@ -21,6 +22,7 @@ export default function ChatPanel({
   channel,
   status,
   canPost = true,
+  timedOut = null, // P3-26c: { until, reason } while I'm timed out here
   messages,
   currentUser,
   typingUsers = [],
@@ -348,6 +350,8 @@ export default function ChatPanel({
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
         />
+      ) : timedOut ? (
+        <TimedOutNotice timeout={timedOut} />
       ) : (
         <div className="mx-4 mb-5 mt-1 flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-3 text-center text-sm text-gray-400 ring-1 ring-ink-500/40">
           <Icon name="shield" size={15} className="shrink-0" /> You don’t have permission to post in this channel.

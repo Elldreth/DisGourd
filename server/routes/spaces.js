@@ -8,6 +8,7 @@ const { validateSpaceName, normalizeChannelName, validateChannelName } = require
 const { canViewChannel, canPostChannel, canModerateMessage } = require('../permissions');
 const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence, tellFollow } = require('../gateway/delivery');
 const { threadUpdated } = require('../gateway/chat');
+const { voiceEject, voiceForceMute } = require('../gateway/voice');
 const fs = require('fs');
 const path = require('path');
 const { uploadFilePath } = require('./uploads');
@@ -24,6 +25,8 @@ const getJsonBody = readJsonBody;
 // longest reason kept.
 const BAN_DELETE_WINDOWS = { none: 0, hour: 3600e3, day: 86400e3, week: 7 * 86400e3 };
 const MAX_REASON = 200;
+// Timeouts (P3-26c): 5 minutes, an hour, a day or a week.
+const TIMEOUT_MINUTES = [5, 60, 1440, 10080];
 
 // Any one of these lets you read the moderation log (P3-26a).
 const MOD_LOG_VIEWERS = ['ban_members', 'timeout_members', 'kick', 'delete_others_messages', 'manage_roles'];
@@ -146,11 +149,12 @@ const routes = [
       // GET /spaces/:name/members
       if (pathSegments[2] === 'members' && pathSegments.length === 3 && req.method === 'GET') {
         const memberRoles = db.getMemberRolesMap(space.id);
+        const timeouts = db.getTimeoutsMap(space.id);
         const members = db.getSpaceMembers(space.id).map((m) => {
           const p = publicPresence(m.userId); // status online | idle | dnd | offline, plus custom status
           const a = db.resolveAccess(space.id, m.userId);
           const position = a ? (a.owner ? db.OWNER_POSITION : a.position) : 0;
-          return { username: m.username, avatar: m.avatar, role: m.role, position, roles: memberRoles.get(m.userId) || [], ...p, online: p.status !== 'offline' };
+          return { username: m.username, avatar: m.avatar, role: m.role, position, roles: memberRoles.get(m.userId) || [], timedOutUntil: timeouts.get(m.userId) || null, ...p, online: p.status !== 'offline' };
         });
         return sendJson(res, 200, { members });
       }
@@ -171,7 +175,7 @@ const routes = [
 
       // DELETE /spaces/:name/members/:username — remove a member (owner: anyone but
       // the owner; admin: members only)
-      if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'DELETE') {
+      if (pathSegments[2] === 'members' && pathSegments[3] && pathSegments.length === 4 && req.method === 'DELETE') {
         if (!access.actions.has('kick')) return sendJson(res, 403, { error: 'You are not allowed to remove members' });
         const target = db.getUserByUsername(pathSegments[3]);
         if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
@@ -181,8 +185,42 @@ const routes = [
         if (!targetAccess || targetAccess.position >= access.position) return sendJson(res, 403, { error: 'You cannot remove this member' });
         db.removeMember(space.id, target.id);
         db.logModAction(space.id, { actorId: userId, targetId: target.id, action: 'kick' });
+        voiceEject(target.id, spaceName, 'removed');
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
         sendToUser(target.id, JSON.stringify({ type: 'space_left', space: spaceName }));
+        return sendJson(res, 200, { ok: true });
+      }
+
+      // ---- Timeouts (P3-26c) ----
+      // PUT /spaces/:name/members/:username/timeout { minutes, reason? } — time
+      // someone out (rank rules as for removing); DELETE — lift it early.
+      if (pathSegments[2] === 'members' && pathSegments[3] && pathSegments[4] === 'timeout' && pathSegments.length === 5 && (req.method === 'PUT' || req.method === 'DELETE')) {
+        if (!access.actions.has('timeout_members')) return sendJson(res, 403, { error: 'You are not allowed to time out members' });
+        const target = db.getUserByUsername(pathSegments[3]);
+        if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
+        if (target.id === userId) return sendJson(res, 400, { error: "You can't time yourself out" });
+        const targetAccess = db.resolveAccess(space.id, target.id);
+        if (!targetAccess || targetAccess.position >= access.position) return sendJson(res, 403, { error: 'You cannot time out this member' });
+        if (req.method === 'PUT') {
+          const body = await getJsonBody(req);
+          const minutes = Number(body.minutes);
+          if (!TIMEOUT_MINUTES.includes(minutes)) return sendJson(res, 400, { error: 'minutes is 5, 60, 1440 or 10080' });
+          const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, MAX_REASON) : '';
+          const until = Date.now() + minutes * 60e3;
+          db.setMemberTimeout(space.id, target.id, until, reason);
+          db.logModAction(space.id, { actorId: userId, targetId: target.id, action: 'timeout', reason, details: { minutes, until } });
+          voiceForceMute(target.id, spaceName, true);
+          sendToUser(target.id, JSON.stringify({ type: 'timed_out', space: spaceName, until, reason: reason || null }));
+          deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
+          return sendJson(res, 200, { until });
+        }
+        const was = db.getMemberTimeout(space.id, target.id);
+        db.setMemberTimeout(space.id, target.id, null);
+        if (!was) return sendJson(res, 404, { error: "They aren't timed out" });
+        db.logModAction(space.id, { actorId: userId, targetId: target.id, action: 'timeout_remove' });
+        voiceForceMute(target.id, spaceName, false);
+        sendToUser(target.id, JSON.stringify({ type: 'timed_out', space: spaceName, until: null, reason: null }));
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
         return sendJson(res, 200, { ok: true });
       }
 
@@ -211,6 +249,7 @@ const routes = [
           for (const ch of new Set(doomed.map((m) => m.channel))) threadUpdated(spaceName, ch);
           db.logModAction(space.id, { actorId: userId, targetId: target.id, action: 'ban', reason, details: { deleteMessages: body.deleteMessages ?? 'none', deleted: doomed.length } });
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
+          voiceEject(target.id, spaceName, 'banned');
           sendToUser(target.id, JSON.stringify({ type: 'banned', space: spaceName, reason: reason || null }));
           return sendJson(res, 200, { ok: true, deleted: doomed.length });
         }
@@ -372,6 +411,7 @@ const routes = [
           if (type !== 'text') return sendJson(res, 400, { error: 'Threads can only be started in text channels' });
           if (req.method === 'GET') return sendJson(res, 200, db.getThreads(spaceName, channelName, parsedUrl.query.archived === '1', userId));
           if (!canPostChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot post in this channel' });
+          if (db.getMemberTimeout(space.id, userId)) return sendJson(res, 403, { error: "You're timed out in this server", code: 'TIMED_OUT' });
           const body = await getJsonBody(req);
           const messageId = parseInt(body.messageId, 10);
           const result = messageId > 0 ? db.createThread(spaceName, channelName, messageId, body.name, userId) : { error: 'not_found' };

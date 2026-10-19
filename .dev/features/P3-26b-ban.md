@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-26)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #153)
 - **Starting baseline:** main at 4b14c78 (#152 merged)
 - **Effort:** M
 - **Depends on:** P3-26a
@@ -43,4 +43,4 @@
 | Sandbox (:3005, restarted on this branch; sandy in one tab, bob in a second at 127.0.0.1) | Bob posted "FREE GOURDS, click my totally real link". Sandy → bob → Ban…, reason "Spam links in #general", "The last hour" → Ban. Bob's tab dropped Tx Check from the rail, with the red notice "You were banned from Tx Check. Reason: Spam links in #general". The spam message was deleted (`deleted: 1`); bob's older messages stayed. Bob's invite preview said `banned: true`, and joining gave 403 "You're banned from this server". Sandy → Bans showed "bob · by sandy · Today · Spam links in #general"; Unban → "Nobody is banned."; bob then joined with an invite (200). The log has `ban` (hour, 1 deleted) and `unban`. (Bob's sandbox "Mods" role, dropped by the ban, was given back afterwards.) |
 
 ## Discovered Work
-- Someone who is in one of the server's voice channels when they're banned (or removed) stays connected until they leave; they can't join again. A fix would end their voice session on ban / kick. Not done here; it's the same for kick today.
+- Someone who is in one of the server's voice channels when they're banned (or removed) stays connected until they leave; they can't join again. A fix would end their voice session on ban / kick. Not done here; it's the same for kick today. **Done in P3-26c** (at the user's request).

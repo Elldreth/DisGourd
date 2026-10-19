@@ -130,9 +130,25 @@ test('v21 gives existing seeded Admin roles "Ban members", and leaves other role
   add.run('@everyone', 0, '["invite"]', 1);
   add.run('Admin', 2, '["kick","pin_messages"]', 0);
   add.run('Helpers', 1, '["pin_messages"]', 0);
-  runMigrations(raw);
+  runMigrations(raw, MIGRATIONS.filter((m) => m.version <= 21));
   const perms = (name) => JSON.parse(raw.prepare('SELECT permissions FROM roles WHERE name = ?').get(name).permissions);
   expect(perms('Admin')).toEqual(['kick', 'pin_messages', 'ban_members']);
   expect(perms('Helpers')).toEqual(['pin_messages']);
   expect(perms('@everyone')).toEqual(['invite']);
+});
+
+test('v22 adds timeout columns and gives existing seeded Admin roles "Time out members"', () => {
+  const raw = new Database(':memory:');
+  runMigrations(raw, MIGRATIONS.filter((m) => m.version < 22));
+  raw.prepare("INSERT INTO users(id, username, email, password_hash, salt) VALUES (1, 'o', 'o@x', 'h', 's')").run();
+  raw.prepare("INSERT INTO spaces(id, name, owner_id) VALUES (1, 'S', 1)").run();
+  const add = raw.prepare('INSERT INTO roles(space_id, name, color, position, permissions, is_default, created_at) VALUES (1, ?, NULL, ?, ?, ?, 0)');
+  add.run('Admin', 2, '["kick","ban_members"]', 0);
+  add.run('Helpers', 1, '["pin_messages"]', 0);
+  runMigrations(raw);
+  const perms = (name) => JSON.parse(raw.prepare('SELECT permissions FROM roles WHERE name = ?').get(name).permissions);
+  expect(perms('Admin')).toEqual(['kick', 'ban_members', 'timeout_members']);
+  expect(perms('Helpers')).toEqual(['pin_messages']);
+  const cols = raw.prepare('PRAGMA table_info(space_members)').all().map((c) => c.name);
+  expect(cols).toEqual(expect.arrayContaining(['timeout_until', 'timeout_reason']));
 });

@@ -597,6 +597,23 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 22,
+    name: 'timeouts',
+    up(db) {
+      // P3-26c: a timeout is an end time (ms); nothing has to lift it.
+      db.exec('ALTER TABLE space_members ADD COLUMN timeout_until INTEGER');
+      db.exec('ALTER TABLE space_members ADD COLUMN timeout_reason TEXT');
+      // "Time out members" goes to each server's seeded Admin role.
+      const admins = db.prepare("SELECT id, permissions FROM roles WHERE name = 'Admin' AND is_default = 0").all();
+      const save = db.prepare('UPDATE roles SET permissions = ? WHERE id = ?');
+      for (const r of admins) {
+        let list = [];
+        try { list = JSON.parse(r.permissions) || []; } catch { list = []; }
+        if (!list.includes('timeout_members')) save.run(JSON.stringify([...list, 'timeout_members']), r.id);
+      }
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
