@@ -436,7 +436,7 @@ export default function ImagineAdmin() {
                 </select>
               </div>
               <p className="col-span-2 text-xs text-gray-500">
-                Lower strength keeps the image as it is; higher adds detail but can change faces or repeat things across tiles (0.2–0.35 is usual). Bigger tiles need more VRAM. Each extra pass repaints the enlarged image again and is slower than the first (it works at full size: about 3× as long for a 2048 px image).
+                Lower strength keeps the image as it is; higher adds detail but can change faces or repeat things across tiles (0.2–0.35 is usual). Bigger tiles need more VRAM. Each extra pass repaints the enlarged image again and takes about as long as the first.
               </p>
             </div>
           )}
