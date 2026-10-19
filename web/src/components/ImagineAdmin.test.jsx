@@ -7,7 +7,7 @@ const MODELS = [
   { name: 'SD1\\absolutereality_v16.safetensors', family: 'sd15' },
 ];
 // What Save sends when nothing in Advanced was touched (P3-31).
-const NO_ADVANCED = { sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, detailer: false, detector: null };
+const NO_ADVANCED = { sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, detailer: false, detector: null, workflowMode: 'builtin', workflow: null, upscaleWorkflow: null };
 const view = (comfy = {}) => ({
   defaultEngine: null,
   permissive: false,
@@ -324,5 +324,40 @@ test('P3-33: a feature that is on but missing from this ComfyUI is flagged, and 
   const alerts = screen.getAllByRole('alert').map((a) => a.textContent);
   expect(alerts).toContain('Tiled repaint is chosen, but this ComfyUI doesn’t have it, so the Upscale button uses the upscale model only.');
   expect(alerts).toContain('The face detailer is on, but this ComfyUI doesn’t have it, so images are made without it.');
+});
+
+// P3-34: the host's own workflow.
+const SAVED_WF = JSON.stringify({ 6: {} }, null, 2);
+const WF = JSON.stringify({ 6: { class_type: 'CLIPTextEncode', inputs: { text: '{{prompt}}' } } });
+
+test('P3-34: My own: paste or load a workflow, see the placeholders, and save it; built-in options say they are not used', async () => {
+  api.saveImagineSettings.mockImplementation(async (body) => ({ ...view(body.engines.comfyui), defaultEngine: 'comfyui' }));
+  render(<ImagineAdmin />);
+  await screen.findByLabelText('ComfyUI address');
+  expect(screen.queryByLabelText('Workflow (API format)')).toBeNull(); // Built-in by default
+  fireEvent.click(screen.getByRole('radio', { name: /My own/ }));
+  fireEvent.change(screen.getByLabelText('Workflow (API format)'), { target: { value: WF } });
+  // Loading a file fills the upscale box.
+  const file = new File(['{"1":{"class_type":"LoadImage","inputs":{"image":"{{image}}"}}}'], 'up.json', { type: 'application/json' });
+  fireEvent.change(screen.getByLabelText('Load upscale workflow (optional) from a file'), { target: { files: [file] } });
+  await waitFor(() => expect(screen.getByLabelText('Upscale workflow (optional)').value).toContain('{{image}}'));
+  expect(screen.getAllByText('{{prompt}}').length).toBeGreaterThan(0);
+  expect(screen.getByLabelText('Hires fix for High quality').disabled).toBe(true);
+  expect(screen.getByText('Your upscale workflow is used instead of these.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({
+      workflowMode: 'custom', workflow: WF, upscaleWorkflow: expect.stringContaining('LoadImage'),
+    })
+  );
+});
+
+test('P3-34: a refused workflow shows the server’s reason; a saved one comes back into the box', async () => {
+  api.getImagineSettings.mockResolvedValue(view({ workflowMode: 'custom', workflow: SAVED_WF, upscaleWorkflow: '' }));
+  api.saveImagineSettings.mockRejectedValue(new Error('Workflow: your ComfyUI doesn’t have this node: MyCustomSampler'));
+  render(<ImagineAdmin />);
+  expect((await screen.findByLabelText('Workflow (API format)')).value).toBe(SAVED_WF);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(await screen.findByText('Workflow: your ComfyUI doesn’t have this node: MyCustomSampler')).toBeTruthy();
 });
 

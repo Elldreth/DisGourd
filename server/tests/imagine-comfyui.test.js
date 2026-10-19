@@ -20,7 +20,9 @@ const UNETS = ['flux1-dev-fp8.safetensors', String.raw`zturbo\z_image_turbo_bf16
 const CLIPS = ['clip_l.safetensors', 't5xxl_enconly.safetensors', String.raw`zturbo\qwen_3_4b.safetensors`];
 const VAES = [String.raw`FLUX1\ae.sft`, String.raw`zturbo\ae.safetensors`, String.raw`SDXL\sdxl_vae.safetensors`];
 const UPSCALERS = ['4x-AnimeSharp.pth', '4x-UltraSharp.pth', 'RealESRGAN_x2.pth'];
-let partsListed = true; // false: this ComfyUI can't list split parts
+let partsListed = true;
+// Core nodes the mock knows by name (P3-34 checks a custom workflow's nodes).
+const KNOWN_NODES = ['CheckpointLoaderSimple', 'KSampler', 'EmptyLatentImage', 'CLIPTextEncode', 'VAEDecode', 'SaveImage', 'PreviewImage', 'LoadImage', 'ImageScaleBy', 'GoneNode']; // false: this ComfyUI can't list split parts
 
 // What the mock saw.
 const seen = { prompts: [], deleted: [], interrupts: 0, uploads: [] };
@@ -79,7 +81,11 @@ function startMock() {
           return json(400, { error: { message: 'Prompt outputs failed validation' }, node_errors: { 4: { errors: [{ message: 'Value not in list', details: "ckpt_name: 'missing.safetensors' not in [...]" }] } } });
         }
         const id = `p${++promptCount}`;
-        promptsById.set(id, { text: prompt['6']?.inputs.text || 'upscale', polls: 0 });
+        // P3-34: a node ComfyUI doesn't have.
+        if (Object.values(prompt).some((n) => n.class_type === 'GoneNode')) {
+          return json(400, { error: { type: 'missing_node_type', message: "Node 'GoneNode' not found. The custom node may not be installed.", extra_info: { class_type: 'GoneNode' } } });
+        }
+        promptsById.set(id, { text: prompt['6']?.inputs.text || 'upscale', polls: 0, prompt });
         return json(200, { prompt_id: id, number: promptCount });
       }
       if (url.pathname.startsWith('/history/')) {
@@ -89,7 +95,11 @@ function startMock() {
         p.polls += 1;
         if (p.text.includes('[slow]') || p.text.includes('[queued]') || p.polls < 2) return json(200, {}); // not done yet
         if (p.text.includes('[boom]')) return json(200, { [id]: { status: { status_str: 'error', completed: false, messages: [['execution_error', { exception_message: 'CUDA out of memory' }]] }, outputs: {} } });
-        return json(200, { [id]: { status: { status_str: 'success', completed: true }, outputs: { 9: { images: [{ filename: 'ComfyUI_temp_1.png', subfolder: '', type: 'temp' }] } } } });
+        // The built-in workflows save from node 9; a custom one from each Save / Preview node.
+        const saves = Object.entries(p.prompt).filter(([, n]) => n.class_type === 'SaveImage' || n.class_type === 'PreviewImage').map(([nid]) => nid);
+        const outputs = p.prompt['9'] ? { 9: { images: [{ filename: 'ComfyUI_temp_1.png', subfolder: '', type: 'temp' }] } }
+          : Object.fromEntries(saves.map((nid) => [nid, { images: [{ filename: `out_${nid}.png`, subfolder: '', type: 'output' }] }]));
+        return json(200, { [id]: { status: { status_str: 'success', completed: true }, outputs } });
       }
       if (url.pathname === '/view') {
         res.writeHead(200, { 'content-type': 'image/png' });
@@ -108,6 +118,8 @@ function startMock() {
         seen.interrupts += 1;
         return json(200, {});
       }
+      const node = url.pathname.match(/^\/object_info\/(\w+)$/);
+      if (node && KNOWN_NODES.includes(node[1])) return json(200, { [node[1]]: { input: { required: {} } } });
       json(404, {});
     });
   });
@@ -133,6 +145,22 @@ afterAll(async () => {
   await new Promise((r) => mock.close(r));
 });
 
+// A host's own workflow (P3-34), as ComfyUI's Export (API) gives it, with placeholders.
+const CUSTOM = {
+  3: { class_type: 'KSampler', inputs: { seed: '{{seed}}', steps: '{{steps}}', cfg: 5, sampler_name: 'euler', scheduler: 'normal', denoise: 1, model: ['4', 0], positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0] } },
+  4: { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: 'my-model.safetensors' } },
+  5: { class_type: 'EmptyLatentImage', inputs: { width: '{{width}}', height: '{{height}}', batch_size: 1 } },
+  6: { class_type: 'CLIPTextEncode', inputs: { text: 'masterpiece, {{prompt}}', clip: ['4', 1] } },
+  7: { class_type: 'CLIPTextEncode', inputs: { text: '{{negative}}', clip: ['4', 1] } },
+  8: { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['4', 2] } },
+  50: { class_type: 'SaveImage', inputs: { images: ['8', 0], filename_prefix: 'mine' } },
+  51: { class_type: 'PreviewImage', inputs: { images: ['8', 0] } },
+};
+const CUSTOM_UP = {
+  1: { class_type: 'LoadImage', inputs: { image: '{{image}}' } },
+  2: { class_type: 'ImageScaleBy', inputs: { image: ['1', 0], upscale_method: 'lanczos', scale_by: '{{scale}}' } },
+  3: { class_type: 'SaveImage', inputs: { images: ['2', 0], filename_prefix: 'up' } },
+};
 const cfg = (over = {}) => ({ url: mockUrl, model: MODELS[1], family: 'sdxl', tier: 'high', ...over });
 const request = (over = {}) => ({ prompt: 'a gourd in a hat', shape: 'square', quality: 'standard', ...over });
 
@@ -408,6 +436,63 @@ describe('the engine', () => {
     expect(seen.prompts.at(-1)['41'].class_type).toBe('FaceDetailer');
   });
 
+  test('P3-34: checking a custom workflow: API format, placeholders, size', () => {
+    expect(comfy.checkWorkflow('{ not json').error).toBe('That isn’t valid JSON');
+    expect(comfy.checkWorkflow(JSON.stringify({ nodes: [], links: [] })).error).toMatch(/regular workflow file.*Export \(API\)/);
+    expect(comfy.checkWorkflow(JSON.stringify({ 1: { inputs: {} } })).error).toMatch(/class_type and inputs/);
+    expect(comfy.checkWorkflow(JSON.stringify({ 1: { class_type: 'KSampler', inputs: { seed: 1 } } })).error).toBe('The workflow needs {{prompt}} in one of its fields');
+    expect(comfy.checkWorkflow(JSON.stringify({ 1: { class_type: 'CLIPTextEncode', inputs: { text: '{{prompt}} {{lora}}' } } })).error).toMatch(/^Unknown placeholder: \{\{lora\}\}\. Use \{\{prompt\}\}/);
+    expect(comfy.checkWorkflow(JSON.stringify({ 1: { class_type: 'LoadImage', inputs: { image: '{{image}}' } } }), 'upscale').classTypes).toEqual(['LoadImage']);
+    expect(comfy.checkWorkflow(JSON.stringify({ 1: { class_type: 'CLIPTextEncode', inputs: { text: '{{prompt}}' } } }), 'upscale').error).toMatch(/needs \{\{image\}\}/);
+    expect(comfy.checkWorkflow('x'.repeat(256 * 1024 + 1)).error).toBe('The workflow is over 256 KB');
+    expect(comfy.checkWorkflow(CUSTOM)).toMatchObject({ classTypes: ['KSampler', 'CheckpointLoaderSimple', 'EmptyLatentImage', 'CLIPTextEncode', 'VAEDecode', 'SaveImage', 'PreviewImage'] });
+  });
+
+  test('P3-34: placeholders: whole fields keep their type, text is filled in place, each request a new seed', () => {
+    const a = comfy.buildCustomWorkflow(CUSTOM, request({ prompt: 'a gourd', quality: 'high', shape: 'wide' }), cfg({ family: 'sdxl', tier: 'medium', steps: { high: 44 } })).workflow;
+    expect(a['5'].inputs).toEqual({ ...comfy.sizeFor('sdxl', 'high', 'wide', 'medium'), batch_size: 1 }); // numbers, as the built-in sizes
+    expect(typeof a['5'].inputs.width).toBe('number');
+    expect(a['6'].inputs.text).toBe('masterpiece, a gourd');
+    expect(a['7'].inputs.text).toMatch(/nsfw, nude, nudity$/); // the safety words outside 18+
+    expect(a['3'].inputs).toMatchObject({ steps: 44, cfg: 5, sampler_name: 'euler' }); // the host's own values stay
+    expect(typeof a['3'].inputs.seed).toBe('number');
+    const b = comfy.buildCustomWorkflow(CUSTOM, request(), cfg()).workflow;
+    expect(b['3'].inputs.seed).not.toBe(a['3'].inputs.seed);
+    expect(CUSTOM['6'].inputs.text).toBe('masterpiece, {{prompt}}'); // the stored one is untouched
+    expect(comfy.fillWorkflow({ 1: { class_type: 'X', inputs: { a: '{{ quality }}', b: '{{scale}}', c: ['2', 0] } } }, { quality: 'draft', scale: 1.5 })['1'].inputs).toEqual({ a: 'draft', b: 1.5, c: ['2', 0] });
+  });
+
+  test('P3-34: a custom workflow runs end to end; every output image comes back; nothing built-in is added', async () => {
+    const out = await comfy.generate(request({ prompt: 'a gourd in a hat', quality: 'high' }), cfg({ workflowMode: 'custom', workflow: CUSTOM, detailer: true, detector: 'd.pt', upscaler: 'u.pth' }));
+    expect(out.images).toHaveLength(2); // SaveImage and PreviewImage
+    const sent = seen.prompts.at(-1);
+    expect(Object.keys(sent).sort()).toEqual(Object.keys(CUSTOM).sort()); // no hires / detailer nodes added
+    expect(sent['6'].inputs.text).toBe('masterpiece, a gourd in a hat');
+    // An upscale with the host's upscale workflow: the uploaded image and the scale.
+    const up = await comfy.generate(request({ upscale: { buffer: PNG, width: 600, height: 400, factor: 2 } }), cfg({ workflowMode: 'custom', workflow: CUSTOM, upscaleWorkflow: CUSTOM_UP }));
+    expect(seen.uploads.at(-1).name).toMatch(/^disgourd-upscale-/);
+    expect(seen.prompts.at(-1)['1'].inputs.image).toBe(seen.uploads.at(-1).name);
+    expect(seen.prompts.at(-1)['2'].inputs.scale_by).toBe(2);
+    expect(up).toMatchObject({ width: 1200, height: 800 });
+    // Without an upscale workflow, the built-in upscale is used.
+    await comfy.generate(request({ upscale: { buffer: PNG, width: 600, height: 400, factor: 2 } }), cfg({ workflowMode: 'custom', workflow: CUSTOM, upscaler: 'u.pth' }));
+    expect(seen.prompts.at(-1)['22'].class_type).toBe('ImageScale');
+    // A node gone from ComfyUI later: a plain failure naming it.
+    const gone = { ...CUSTOM, 60: { class_type: 'GoneNode', inputs: {} } };
+    await expect(comfy.generate(request(), cfg({ workflowMode: 'custom', workflow: gone }))).rejects.toMatchObject({ message: "Your custom workflow needs GoneNode, which ComfyUI doesn't have" });
+  });
+
+  test('P3-34: config: My own needs a workflow, and then no model; bad workflows are refused with the reason', () => {
+    expect(comfy.validateConfig({ workflowMode: 'other' }).error).toMatch(/builtin" or "custom/);
+    expect(comfy.validateConfig({ workflowMode: 'custom' }).error).toMatch(/Add your workflow/);
+    expect(comfy.validateConfig({ workflow: '{"nodes": []}' }).error).toMatch(/^Workflow: That’s the regular workflow file/);
+    expect(comfy.validateConfig({ upscaleWorkflow: JSON.stringify(CUSTOM) }).error).toMatch(/^Upscale workflow: Unknown placeholders: \{\{steps\}\}, \{\{width\}\}, \{\{height\}\}/); // generate-only ones
+    const ok = comfy.validateConfig({ enabled: true, url: mockUrl, workflowMode: 'custom', workflow: JSON.stringify(CUSTOM) });
+    expect(ok).toMatchObject({ enabled: true, workflowMode: 'custom', workflow: CUSTOM });
+    expect(comfy.publicConfig(ok).workflow).toBe(JSON.stringify(CUSTOM, null, 2));
+    expect(comfy.validateConfig({ ...ok, workflow: '' }, ok).error).toMatch(/Add your workflow/); // clearing it while My own is on
+  });
+
   test('P3-24: config for a split model needs its type and parts; Z-Image is split only', () => {
     expect(comfy.validateConfig({ kind: 'disk' }).error).toMatch(/Unknown model kind/);
     expect(comfy.validateConfig({ kind: 'unet', model: UNETS[2] }).error).toMatch(/pick its type: Flux or Z-Image Turbo/);
@@ -529,7 +614,8 @@ describe('the admin routes and the chat path', () => {
     expect((await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } })).body.error).toMatch(/pick a model/);
     const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[0], tier: 'high' } }, defaultEngine: 'comfyui' });
     expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024,
-      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1 });
+      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1,
+      workflowMode: 'builtin', workflow: '', upscaleWorkflow: '' });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);
     const tried = await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'a gourd', shape: 'wide', quality: 'draft' });
@@ -640,5 +726,24 @@ describe('the admin routes and the chat path', () => {
       ws.close();
       await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, upscaleMode: 'model' } } });
     }
+  });
+
+  test('P3-34: saving a custom workflow checks its nodes on that ComfyUI; chat then uses it', async () => {
+    const put = (comfyui) => call('admin', 'PUT', '/admin/imagine', { engines: { comfyui } });
+    const unknown = { ...CUSTOM, 70: { class_type: 'MyCustomSampler', inputs: {} }, 71: { class_type: 'OtherNode', inputs: {} } };
+    expect((await put({ url: mockUrl, workflowMode: 'custom', workflow: JSON.stringify(unknown) })).body)
+      .toEqual({ error: 'Workflow: your ComfyUI doesn’t have these nodes: MyCustomSampler, OtherNode' });
+    expect((await put({ workflowMode: 'custom', workflow: '{"nodes": []}' })).body.error).toMatch(/^Workflow: That’s the regular workflow file/);
+    expect((await put({ workflow: JSON.stringify(CUSTOM), upscaleWorkflow: JSON.stringify({ 1: { class_type: 'LoadImage', inputs: { image: '{{image}}' } }, 2: { class_type: 'Nope', inputs: {} } }) })).body.error)
+      .toBe('Upscale workflow: your ComfyUI doesn’t have this node: Nope');
+    const saved = await put({ enabled: true, url: mockUrl, workflowMode: 'custom', workflow: JSON.stringify(CUSTOM), upscaleWorkflow: '' });
+    expect(saved.status).toBe(200);
+    expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toMatchObject({ workflowMode: 'custom', workflow: JSON.stringify(CUSTOM, null, 2), upscaleWorkflow: '' });
+    // The test image and chat both run it (two outputs → two images).
+    const tried = await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'a gourd' });
+    expect(tried.status).toBe(200);
+    expect(seen.prompts.at(-1)['6'].inputs.text).toBe('masterpiece, a gourd');
+    await put({ workflowMode: 'builtin' }); // back to the built-in one for the rest
+    expect(seen.prompts.length).toBeGreaterThan(0);
   });
 });

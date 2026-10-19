@@ -23,6 +23,21 @@ const QUALITY_NAMES = { draft: 'Draft', standard: 'Standard', high: 'High' };
 // A number field's value for the API: blank is null.
 const numOrNull = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
 
+// Custom workflow placeholders (P3-34), shown as help next to the boxes.
+const PLACEHOLDER_HELP = [
+  ['{{prompt}}', 'the prompt (required)'],
+  ['{{negative}}', 'the negative prompt, with the safety words outside 18+ channels'],
+  ['{{seed}}', 'a new random seed each time'],
+  ['{{width}} / {{height}}', 'from Shape, Quality and the VRAM tier'],
+  ['{{steps}}', 'by Quality (Advanced steps, or the model type’s defaults)'],
+  ['{{quality}}', 'draft, standard or high'],
+];
+const UPSCALE_PLACEHOLDER_HELP = [
+  ['{{image}}', 'the picture to upscale, for a LoadImage node (required)'],
+  ['{{scale}}', 'how much to enlarge it (2, or less to stay within 4096 px)'],
+  ['{{prompt}}, {{negative}}, {{seed}}', 'as above'],
+];
+
 // The model <select> value: kind and file name (the same name can be in both lists).
 const modelKey = (kind, name) => (name ? `${kind}:${name}` : '');
 const TIERS = [
@@ -85,6 +100,7 @@ export default function ImagineAdmin() {
       steps: { draft: c.steps?.draft ?? '', standard: c.steps?.standard ?? '', high: c.steps?.high ?? '' },
       detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.4,
       detailerPasses: c.detailerPasses || 1, tilePasses: c.tilePasses || 1,
+      workflowMode: c.workflowMode || 'builtin', workflow: c.workflow || '', upscaleWorkflow: c.upscaleWorkflow || '',
     });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
     setKie({ enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' });
@@ -189,6 +205,10 @@ export default function ImagineAdmin() {
             detailer: comfy.detailer,
             detector: comfy.detector || null,
             ...(comfy.detailer ? { detailerDenoise: Number(comfy.detailerDenoise), detailerPasses: Number(comfy.detailerPasses) } : {}),
+            // Custom workflows (P3-34): the boxes are kept even while Built-in is chosen.
+            workflowMode: comfy.workflowMode,
+            workflow: comfy.workflow.trim() || null,
+            upscaleWorkflow: comfy.upscaleWorkflow.trim() || null,
           },
           kie: {
             enabled: kie.enabled,
@@ -290,6 +310,72 @@ export default function ImagineAdmin() {
           </p>
         </div>
 
+        <fieldset>
+          <legend className={heading}>Workflow</legend>
+          <div className="space-y-1">
+            {[['builtin', 'Built-in', 'DisGourd builds it from the settings below'], ['custom', 'My own', 'a workflow you built in ComfyUI, with placeholders']].map(([v, label, hint]) => (
+              <label key={v} className="flex items-baseline gap-2 text-sm text-gray-200">
+                <input type="radio" name="imagine-workflow-mode" checked={comfy.workflowMode === v} onChange={() => setComfy((c) => ({ ...c, workflowMode: v }))} className="accent-brand" />
+                {label}
+                <span className="text-xs text-gray-500">{hint}</span>
+              </label>
+            ))}
+          </div>
+          {comfy.workflowMode === 'custom' && (
+            <div className="mt-2 space-y-3">
+              {[
+                ['workflow', 'Workflow (API format)', PLACEHOLDER_HELP, 'Paste the JSON from ComfyUI’s Export (API)…'],
+                ['upscaleWorkflow', 'Upscale workflow (optional)', UPSCALE_PLACEHOLDER_HELP, 'Optional: a workflow for the Upscale button. Blank uses the built-in upscale.'],
+              ].map(([key, label, help, placeholder]) => (
+                <div key={key}>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label htmlFor={`imagine-${key}`} className={heading.replace('mb-1 ', '')}>{label}</label>
+                    <label className="cursor-pointer rounded-md px-2 py-0.5 text-xs font-medium text-brand-hi hover:bg-ink-700">
+                      Load file…
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        className="sr-only"
+                        aria-label={`Load ${label.toLowerCase()} from a file`}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const text = await file.text();
+                            setComfy((c) => ({ ...c, [key]: text }));
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <textarea
+                    id={`imagine-${key}`}
+                    rows={6}
+                    spellCheck={false}
+                    value={comfy[key]}
+                    placeholder={placeholder}
+                    onChange={(e) => setComfy((c) => ({ ...c, [key]: e.target.value }))}
+                    className="input font-mono text-xs"
+                  />
+                  <details className="mt-1 text-xs text-gray-500">
+                    <summary className="cursor-pointer select-none">Placeholders</summary>
+                    <ul className="mt-1 space-y-0.5">
+                      {help.map(([name, what]) => (
+                        <li key={name}><code className="text-brand-hi">{name}</code> — {what}</li>
+                      ))}
+                    </ul>
+                  </details>
+                </div>
+              ))}
+              <p className="text-xs text-gray-500">
+                In ComfyUI, put the placeholders in your workflow’s fields (e.g. a prompt box reading <code>masterpiece, {'{{prompt}}'}</code>, a seed of
+                {' '}<code>{'{{seed}}'}</code>), then use <strong>Export (API)</strong>. On Save, DisGourd checks that every node in it is installed. Every image the
+                workflow saves or previews is posted (up to 4).
+              </p>
+            </div>
+          )}
+        </fieldset>
+
         <div>
           <label htmlFor="imagine-model" className={heading}>Model</label>
           {models && models.length > 12 && (
@@ -367,17 +453,21 @@ export default function ImagineAdmin() {
         </div>
 
         <div>
-          <label className="flex items-center gap-2 text-sm text-gray-200">
-            <input type="checkbox" checked={comfy.hires} onChange={(e) => setComfy((c) => ({ ...c, hires: e.target.checked }))} className="h-4 w-4 accent-brand" />
+          <label className={`flex items-center gap-2 text-sm ${comfy.workflowMode === 'custom' ? 'text-gray-500' : 'text-gray-200'}`}>
+            <input type="checkbox" checked={comfy.hires} disabled={comfy.workflowMode === 'custom'} onChange={(e) => setComfy((c) => ({ ...c, hires: e.target.checked }))} className="h-4 w-4 accent-brand" />
             Hires fix for High quality
           </label>
+          {comfy.workflowMode === 'custom' && <p className="mt-1 text-xs text-gray-500">Not used with your own workflow: it decides this.</p>}
           <p className="mt-1 text-xs text-gray-500">
             High-quality images are made at the Standard size, enlarged about 1.5× with the upscale model, then lightly repainted for detail. Slower, sharper.
           </p>
         </div>
 
-        <fieldset>
+        <fieldset disabled={comfy.workflowMode === 'custom' && !!comfy.upscaleWorkflow.trim()}>
           <legend className={heading}>Upscale button (2×, up to 4096 px)</legend>
+          {comfy.workflowMode === 'custom' && comfy.upscaleWorkflow.trim() && (
+            <p className="mb-1 text-xs text-gray-500">Your upscale workflow is used instead of these.</p>
+          )}
           <div className="space-y-1">
             <label className="flex items-baseline gap-2 text-sm text-gray-200">
               <input type="radio" name="imagine-upscale-mode" checked={comfy.upscaleMode !== 'tiled'} onChange={() => setComfy((c) => ({ ...c, upscaleMode: 'model' }))} className="accent-brand" />
@@ -450,6 +540,11 @@ export default function ImagineAdmin() {
             return (
               <div className="mt-3 space-y-3">
                 <p className="text-xs text-gray-500">For every /imagine on this instance. Blank uses the model type’s tuned default.</p>
+                {comfy.workflowMode === 'custom' && (
+                  <p className="rounded-md bg-ink-900/60 px-2 py-1 text-xs text-gray-400">
+                    With your own workflow, only Steps and the Negative prompt are used (through {'{{steps}}'} and {'{{negative}}'}); the rest is up to the workflow.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="imagine-sampler" className={heading}>Sampler</label>

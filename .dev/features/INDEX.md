@@ -118,6 +118,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-31 | ComfyUI advanced settings: sampler, CFG, steps, negative, face detailer | 3 | COMPLETE | M | P3-24, P3-28, P3-29 | engines/comfyui.js, ImagineAdmin |
 | P3-32 | Update notice behind dialogs; date/time image names | 3 | COMPLETE | XS | P3-19, P2-20 | Toasts.jsx, imagine/runner.js |
 | P3-33 | Passes for the face detailer and tiled upscale; missing-node fallbacks | 3 | REVIEW | S–M | P3-29, P3-31 | engines/comfyui.js, runner.js, ImagineAdmin |
+| P3-34 | Custom ComfyUI workflows with placeholders | 3 | REVIEW | M | P3-24–P3-33 | engines/comfyui.js, imagine/index.js, routes/admin.js, ImagineAdmin |
 | P4-00 | "Shine" polish round (Container: 01–07) | 4 | COMPLETE | 3 M + 4 S | none | see children; source design/UX-REVIEW-2026-10.md |
 | P4-01 | Phone touch targets and header | 4 | COMPLETE | M | none | index.css, IconButton.jsx, ChatPanel.jsx, ChannelList.jsx, DmSidebar.jsx, MessageList.jsx, Composer.jsx, ThreadPanel.jsx |
 | P4-02 | Settings with section navigation | 4 | COMPLETE | M | none | ProfileDialog.jsx, AudioSettings.jsx, NotificationSettings.jsx, AppearanceSettings.jsx, RegistrationAdmin.jsx |
