@@ -524,6 +524,23 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 18,
+    name: 'category permissions',
+    up(db) {
+      // P3-25d: per-role access on a category, the same shape as a channel's.
+      // Copied onto channels created in or moved into it; never synced.
+      db.exec(`
+        CREATE TABLE category_role_overrides (
+          category_id INTEGER NOT NULL REFERENCES channel_categories(id) ON DELETE CASCADE,
+          role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+          view INTEGER,
+          post INTEGER,
+          PRIMARY KEY (category_id, role_id)
+        );
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

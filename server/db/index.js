@@ -225,6 +225,47 @@ function setChannelOverride(channelId, roleId, { view = null, post = null } = {}
   `).run(channelId, roleId, v, p);
 }
 
+// ---- Category permissions (P3-25d) ----
+function getCategoryOverrides(categoryId) {
+  return db.prepare('SELECT role_id AS roleId, view, post FROM category_role_overrides WHERE category_id = ?').all(categoryId);
+}
+function setCategoryOverride(categoryId, roleId, { view = null, post = null } = {}) {
+  const norm = (v) => (v === 1 || v === true ? 1 : v === 0 || v === false ? 0 : null);
+  const v = norm(view);
+  const p = norm(post);
+  if (v === null && p === null) {
+    db.prepare('DELETE FROM category_role_overrides WHERE category_id = ? AND role_id = ?').run(categoryId, roleId);
+    return;
+  }
+  db.prepare(`
+    INSERT INTO category_role_overrides(category_id, role_id, view, post) VALUES (?, ?, ?, ?)
+    ON CONFLICT(category_id, role_id) DO UPDATE SET view = excluded.view, post = excluded.post
+  `).run(categoryId, roleId, v, p);
+}
+// A channel's access becomes a copy of its category's (no link afterwards).
+// Only when the category has any: a plain category leaves the channel as it is.
+function copyCategoryOverrides(categoryId, channelId) {
+  const rows = categoryId == null ? [] : getCategoryOverrides(categoryId);
+  if (!rows.length) return false;
+  db.prepare('DELETE FROM channel_role_overrides WHERE channel_id = ?').run(channelId);
+  const put = db.prepare('INSERT INTO channel_role_overrides(channel_id, role_id, view, post) VALUES (?, ?, ?, ?)');
+  for (const r of rows) put.run(channelId, r.roleId, r.view, r.post);
+  return true;
+}
+// "Apply to all channels in this category": the ones listed (those the person
+// can see). Returns how many were changed.
+const applyCategoryOverrides = db.transaction((spaceId, categoryId, visibleNames) => {
+  const rows = getCategoryOverrides(categoryId);
+  const chans = db.prepare("SELECT id, name FROM channels WHERE space_id = ? AND category_id = ? AND type IS NOT 'thread'").all(spaceId, categoryId)
+    .filter((c) => visibleNames.has(c.name));
+  const put = db.prepare('INSERT INTO channel_role_overrides(channel_id, role_id, view, post) VALUES (?, ?, ?, ?)');
+  for (const c of chans) {
+    db.prepare('DELETE FROM channel_role_overrides WHERE channel_id = ?').run(c.id);
+    for (const r of rows) put.run(c.id, r.roleId, r.view, r.post);
+  }
+  return chans.length;
+});
+
 // A tier threshold as a seeded role's override: 0 deny, 1 allow, null default.
 const tierOverride = (threshold, rank) => (threshold > rank ? 0 : threshold === rank && rank > 1 ? 1 : null);
 const tierAllowed = (perms, max) => Object.keys(DEFAULT_PERMISSIONS).filter((a) => (perms[a] || 3) <= max);
@@ -473,9 +514,11 @@ function createChannel(spaceName, channelName, type = 'text', categoryId) {
   const space = db.prepare('SELECT id FROM spaces WHERE name = ?').get(spaceName);
   const kind = type === 'voice' ? 'voice' : 'text';
   const category = categoryId !== undefined ? categoryOf(space.id, categoryId) : defaultCategory(space.id, kind);
-  const made = db.prepare('INSERT OR IGNORE INTO channels(space_id, name, type, category_id, position) VALUES (?, ?, ?, ?, ?)')
-    .run(space.id, channelName, kind, category, nextChannelPosition(space.id, category)).changes > 0;
+  const info = db.prepare('INSERT OR IGNORE INTO channels(space_id, name, type, category_id, position) VALUES (?, ?, ?, ?, ?)')
+    .run(space.id, channelName, kind, category, nextChannelPosition(space.id, category));
+  const made = info.changes > 0;
   if (made && !hasRoles(space.id)) syncSpaceRoles(space.id); // seed a bare server's roles
+  if (made) copyCategoryOverrides(category, Number(info.lastInsertRowid)); // P3-25d: start with the category's access
   return made;
 }
 
@@ -500,7 +543,11 @@ function spaceChannelNames(spaceId) {
 }
 // A server's categories in order: [{ id, name, position }].
 function getCategories(spaceId) {
-  return db.prepare('SELECT id, name, position FROM channel_categories WHERE space_id = ? ORDER BY position, id').all(spaceId);
+  // hasOverrides (P3-25d): whether moving a channel in replaces its access.
+  return db.prepare(`
+    SELECT id, name, position, EXISTS(SELECT 1 FROM category_role_overrides o WHERE o.category_id = k.id) AS hasOverrides
+    FROM channel_categories k WHERE space_id = ? ORDER BY position, id
+  `).all(spaceId).map((c) => ({ ...c, hasOverrides: !!c.hasOverrides }));
 }
 function createCategory(spaceId, name) {
   const pos = db.prepare('SELECT COALESCE(MAX(position) + 1, 0) AS p FROM channel_categories WHERE space_id = ?').get(spaceId).p;
@@ -545,7 +592,14 @@ const setLayout = db.transaction((spaceId, categories, channels, visible) => {
     const hidden = all.filter((c) => !visible.has(c.name) && c.category === group);
     [...listed, ...hidden].forEach((c, i) => place.run(group, i, c.id));
   }
-  return { ok: true };
+  // P3-25d: a channel moved into a different category takes a copy of that
+  // category's access (if it has any); moved to the top, it keeps its own.
+  const copied = [];
+  for (const c of channels) {
+    const before = byName.get(c.name);
+    if (c.category !== null && c.category !== before.category && copyCategoryOverrides(c.category, before.id)) copied.push(c.name);
+  }
+  return { ok: true, copied };
 });
 
 function channelType(spaceName, channelName) {
@@ -1932,6 +1986,10 @@ module.exports = {
   renameCategory,
   deleteCategory,
   setLayout,
+  getCategoryOverrides,
+  setCategoryOverride,
+  copyCategoryOverrides,
+  applyCategoryOverrides,
   deleteSpace,
   deleteChannel,
   renameSpace,

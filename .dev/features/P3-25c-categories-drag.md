@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-25)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #146)
 - **Starting baseline:** main at 0a31ace (#145 merged)
 - **Effort:** S–M
 - **Depends on:** P3-25b

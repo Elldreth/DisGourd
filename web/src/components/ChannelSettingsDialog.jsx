@@ -18,13 +18,17 @@ const fromCell = (c) => (c === '1' ? 1 : c === '0' ? 0 : null);
 // `placement` (P3-25b): { categories, category, canUp, canDown, onMove(delta),
 // onMoveTo(categoryId|null) } — where the channel sits in the list. Moves apply
 // at once (not on Save).
-export default function ChannelSettingsDialog({ space, channel, meta, roles = [], isOwner = false, myPosition = 0, placement = null, onClose, onSaved }) {
+// `category` (P3-25d): { id, name } — edit a category's access instead of a
+// channel's (no topic, 18+, place or delete; adds "Apply to all channels").
+export default function ChannelSettingsDialog({ space, channel, meta, roles = [], isOwner = false, myPosition = 0, placement = null, category = null, onClose, onSaved }) {
   const [cells, setCells] = useState(null); // roleId -> { view, post } cells; null while loading
   const [nsfw, setNsfw] = useState(!!meta?.nsfw); // Age-restricted (18+), text channels
   const [topic, setTopic] = useState(meta?.topic || ''); // P3-20a
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmApply, setConfirmApply] = useState(false);
+  const [applied, setApplied] = useState(null); // how many channels "Apply to all" changed
   // Voice channels only gate visibility/joining — "who can post" doesn't apply.
   const isVoice = meta?.type === 'voice';
   const bodyRef = useRef(null); // focus starts on the first setting, not the header's Close
@@ -34,8 +38,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
 
   useEffect(() => {
     let live = true;
-    api
-      .getChannelOverrides(space, channel)
+    (category ? api.getCategoryOverrides(space, category.id) : api.getChannelOverrides(space, channel))
       .then(({ overrides }) => {
         if (!live) return;
         const next = {};
@@ -50,7 +53,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
     return () => {
       live = false;
     };
-  }, [space, channel]);
+  }, [space, channel, category?.id]);
 
   const cell = (roleId, field) => cells?.[roleId]?.[field] ?? '';
   const setCell = (roleId, field, v) => setCells((c) => ({ ...c, [roleId]: { view: '', post: '', ...c?.[roleId], [field]: v } }));
@@ -64,13 +67,35 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
         view: fromCell(cell(r.id, 'view')),
         post: isVoice ? null : fromCell(cell(r.id, 'post')),
       }));
-      await api.setChannelOverrides(space, channel, overrides);
-      if (!isVoice && nsfw !== !!meta?.nsfw) await api.setChannelNsfw(space, channel, nsfw);
-      if (topic.trim() !== (meta?.topic || '')) await api.setChannelTopic(space, channel, topic.trim());
+      if (category) {
+        await api.setCategoryOverrides(space, category.id, overrides);
+      } else {
+        await api.setChannelOverrides(space, channel, overrides);
+        if (!isVoice && nsfw !== !!meta?.nsfw) await api.setChannelNsfw(space, channel, nsfw);
+        if (topic.trim() !== (meta?.topic || '')) await api.setChannelTopic(space, channel, topic.trim());
+      }
       onSaved();
       onClose();
     } catch (err) {
       setError(err.message || 'Could not save channel settings');
+      setBusy(false);
+    }
+  }
+
+  // Save, then copy onto every channel in the category (P3-25d).
+  async function applyToAll() {
+    setBusy(true);
+    setError('');
+    try {
+      const overrides = ordered.filter(editable).map((r) => ({ roleId: r.id, view: fromCell(cell(r.id, 'view')), post: fromCell(cell(r.id, 'post')) }));
+      await api.setCategoryOverrides(space, category.id, overrides);
+      const { changed } = await api.applyCategoryOverrides(space, category.id);
+      setApplied(changed);
+      setConfirmApply(false);
+      onSaved();
+    } catch (err) {
+      setError(err.message || 'Could not apply the access');
+    } finally {
       setBusy(false);
     }
   }
@@ -95,12 +120,18 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
       panelClassName="flex max-h-[90vh] w-full max-w-md flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
     >
       <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
-        <Modal.Title>{isVoice ? channel : `#${channel}`} settings</Modal.Title>
+        <Modal.Title>{category ? `${category.name} permissions` : `${isVoice ? channel : `#${channel}`} settings`}</Modal.Title>
         <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">Close</button>
       </div>
 
       <div ref={bodyRef} className="space-y-3 overflow-y-auto p-6">
-        {placement && (
+        {category && (
+          <p className="text-sm text-gray-400">
+            Channels created in this category, or moved into it, start with this access. Channels already in it aren’t changed unless you use
+            {' '}<strong>Apply to all channels</strong>.
+          </p>
+        )}
+        {!category && placement && (
           <div role="group" aria-label="Place in the channel list" className="flex flex-wrap items-end gap-2">
             <div className="min-w-0 flex-1">
               <label htmlFor="channel-category" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Category</label>
@@ -122,6 +153,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
             </button>
           </div>
         )}
+        {!category && (
         <div>
           <label htmlFor="channel-topic" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Topic</label>
           <textarea
@@ -135,8 +167,9 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
           />
           <p className="mt-0.5 text-right text-xs text-gray-500" aria-live="polite">{topic.length}/300</p>
         </div>
+        )}
         <p className="text-sm text-gray-400">
-          {isVoice
+          {category ? 'Who can see and post in its channels, by role.' : isVoice
             ? 'Who can see and join this channel, by role.'
             : 'Who can see and post here, by role. Deny @everyone and allow a role for a private channel; deny posting for a read-only one.'}
         </p>
@@ -185,7 +218,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
         <p className="text-xs text-gray-500">
           Default follows @everyone, whose default is allowed. If any of someone’s roles allows, they’re allowed; posting always needs viewing.
         </p>
-        {!isVoice && (
+        {!isVoice && !category && (
           <label className="flex items-start gap-2 border-t border-ink-500/30 pt-3 text-sm text-gray-200">
             <input type="checkbox" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand" />
             <span>
@@ -199,6 +232,31 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
         {error && <div role="alert" className="text-sm text-danger">{error}</div>}
       </div>
 
+      {category ? (
+        <div className="border-t border-ink-500/40 px-6 py-4">
+          {applied !== null && <p role="status" className="mb-2 text-sm text-online">Applied to {applied} channel{applied === 1 ? '' : 's'}.</p>}
+          {!confirmApply ? (
+            <button onClick={() => setConfirmApply(true)} disabled={cells === null} className="text-sm font-medium text-brand-hi transition hover:underline disabled:opacity-50">
+              Apply to all channels in {category.name}…
+            </button>
+          ) : (
+            <div className="rounded-lg bg-ink-900/60 p-3 ring-1 ring-ink-500/40">
+              <p className="text-sm text-gray-200">
+                Replace the access of every channel in <span className="font-semibold">{category.name}</span> with this? Their own settings are
+                overwritten.
+              </p>
+              <div className="mt-3 flex justify-end gap-2">
+                <button onClick={() => setConfirmApply(false)} disabled={busy} className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-fg">
+                  Cancel
+                </button>
+                <button onClick={applyToAll} disabled={busy} className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60">
+                  {busy ? 'Applying…' : 'Apply to all'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="border-t border-ink-500/40 px-6 py-4">
         {!confirmDelete ? (
           <button
@@ -233,6 +291,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
           </div>
         )}
       </div>
+      )}
 
       <div className="flex justify-end gap-2 border-t border-ink-500/40 px-6 py-3">
         <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-fg">Cancel</button>

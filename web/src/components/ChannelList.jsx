@@ -138,9 +138,22 @@ export default function ChannelList({
   const [renamingCat, setRenamingCat] = useState(null);
   const [confirmDeleteCat, setConfirmDeleteCat] = useState(null);
   const [arrangeError, setArrangeError] = useState('');
+  const [catPerms, setCatPerms] = useState(null); // { id, name }: its permissions dialog (P3-25d)
+  const [confirmMove, setConfirmMove] = useState(null); // { next, names, category } (P3-25d)
   // Send a new arrangement (the server tells everyone; the list reloads).
-  async function arrange(next) {
+  // Moving channels into a category with its own access replaces theirs, so
+  // that asks first (P3-25d).
+  async function arrange(next, { confirmed = false } = {}) {
     if (!next) return;
+    if (!confirmed) {
+      const was = new Map(groups.flatMap((g) => g.items.map((i) => [i.name, g.id])));
+      const into = next.flatMap((g) => g.items.filter((i) => g.id !== null && was.get(i.name) !== g.id).map((i) => ({ name: i.name, category: g })));
+      const gated = into.filter((m) => categories.find((c) => c.id === m.category.id)?.hasOverrides);
+      if (gated.length) {
+        setConfirmMove({ next, names: gated.map((m) => m.name), category: gated[0].category.name });
+        return;
+      }
+    }
     setArrangeError('');
     try {
       await api.setLayout(space, layoutBody(next));
@@ -650,6 +663,9 @@ export default function ChannelList({
                       <MenuItem role="menuitem" onClick={() => { setCatMenu(null); setRenamingCat(g.id); }}>
                         <Icon name="edit" size={16} /> Rename
                       </MenuItem>
+                      <MenuItem role="menuitem" onClick={() => { setCatMenu(null); setCatPerms({ id: g.id, name: g.name }); }}>
+                        <Icon name="shield" size={16} /> Permissions…
+                      </MenuItem>
                       {gi > 1 && (
                         <MenuItem role="menuitem" onClick={() => { setCatMenu(null); arrange(moveCategory(groups, g.id, -1)); }}>
                           <Icon name="chevronDown" size={16} className="rotate-180" /> Move up
@@ -858,6 +874,30 @@ export default function ChannelList({
             setChannelSettings(null);
           }}
           onSaved={onPermsChanged}
+        />
+      )}
+      {catPerms && (
+        <ChannelSettingsDialog
+          space={space}
+          category={catPerms}
+          roles={roles}
+          isOwner={isOwner}
+          myPosition={myPosition}
+          onClose={() => setCatPerms(null)}
+          onSaved={onPermsChanged}
+        />
+      )}
+      {confirmMove && (
+        <ConfirmDialog
+          title={`Move into ${confirmMove.category}?`}
+          body={`${confirmMove.names.map((n) => `#${n}`).join(', ')} will take ${confirmMove.category}’s permissions, replacing ${confirmMove.names.length === 1 ? 'its' : 'their'} own.`}
+          confirmLabel="Move"
+          onCancel={() => setConfirmMove(null)}
+          onConfirm={() => {
+            const { next } = confirmMove;
+            setConfirmMove(null);
+            arrange(next, { confirmed: true });
+          }}
         />
       )}
       {confirmDeleteCat && (

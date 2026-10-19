@@ -108,8 +108,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-25 | Channel categories (Container: a–d) | 3 | PLANNED | L | P2-21, P3-15 | see children |
 | P3-25a | Categories: data and API (v17, layout route, live event, templates) | 3 | COMPLETE | M | none | migrations, db/index.js, routes/spaces.js, templates |
 | P3-25b | Categories in the channel list (collapse, manage, keyboard moves) | 3 | COMPLETE | M | P3-25a | ChannelList.jsx, CategoryDialog |
-| P3-25c | Drag and drop channels and categories | 3 | REVIEW | S–M | P3-25b | ChannelList.jsx, drag hook |
-| P3-25d | Category permissions, copied to channels | 3 | PLANNED | M | P3-25a (b for UI) | migrations, roles, ChannelSettingsDialog |
+| P3-25c | Drag and drop channels and categories | 3 | COMPLETE | S–M | P3-25b | ChannelList.jsx, drag hook |
+| P3-25d | Category permissions, copied to channels | 3 | REVIEW | M | P3-25a (b for UI) | migrations, roles, ChannelSettingsDialog |
 | P3-26 | Moderation tools (packet to plan with the user) | 3 | PLANNED | L | P2-21 | tbd |
 | P3-27 | Message edit history (packet to plan with the user) | 3 | PLANNED | M | none | migrations, chat gateway, MessageList |
 | P3-28 | ComfyUI hires fix (High quality: upscale model + light repaint) | 3 | COMPLETE | S–M | P3-24 | engines/comfyui.js, ImagineAdmin |
