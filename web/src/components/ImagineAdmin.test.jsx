@@ -260,7 +260,7 @@ test('P3-29: the Upscale button mode; tiled needs the node, and saves its streng
   await screen.findByText(/Connected/);
   expect(screen.getByRole('radio', { name: /Upscale model only/ }).checked).toBe(true);
   expect(screen.getByRole('radio', { name: /Tiled repaint/ }).disabled).toBe(true);
-  expect(screen.getByText(/needs the Ultimate SD Upscale custom node/)).toBeTruthy();
+  expect(screen.getByText(/Tiled repaint needs the/).textContent).toMatch(/ComfyUI_UltimateSDUpscale custom node \(by ssitu\), which ComfyUI Manager can install/);
   cleanup();
   api.testComfyUI.mockResolvedValue({ ...SPLIT, upscalers: ['4x-UltraSharp.pth'], suggested: SPLIT.suggested, tiledAvailable: true });
   render(<ImagineAdmin />);
@@ -270,9 +270,10 @@ test('P3-29: the Upscale button mode; tiled needs the node, and saves its streng
   fireEvent.click(screen.getByRole('radio', { name: /Tiled repaint/ }));
   fireEvent.change(screen.getByLabelText('Repaint strength'), { target: { value: '0.25' } });
   fireEvent.change(screen.getByLabelText('Tile size'), { target: { value: '768' } });
+  fireEvent.change(screen.getByLabelText('Tiled passes'), { target: { value: '2' } }); // P3-33
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ upscaleMode: 'tiled', tileDenoise: 0.25, tileSize: 768, upscaler: null })); // blank upscaler = automatic
+  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ upscaleMode: 'tiled', tileDenoise: 0.25, tileSize: 768, tilePasses: 2, upscaler: null })); // blank upscaler = automatic
 });
 
 test('P3-31: Advanced starts closed; its lists come from the test; defaults are shown; values and blanks are saved', async () => {
@@ -295,11 +296,12 @@ test('P3-31: Advanced starts closed; its lists come from the test; defaults are 
   fireEvent.click(screen.getByLabelText('Face detailer on Standard and High'));
   expect(screen.getByLabelText('Face detector').value).toBe('bbox/face_yolov8m.pt');
   fireEvent.change(screen.getByLabelText('Face repaint strength'), { target: { value: '0.35' } });
+  fireEvent.change(screen.getByLabelText('Face detailer passes'), { target: { value: '3' } }); // P3-33
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() =>
     expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({
       sampler: 'dpmpp_2m_sde', scheduler: null, cfgScale: 4.5, steps: { draft: null, standard: null, high: 40 }, negative: 'extra fingers',
-      detailer: true, detector: 'bbox/face_yolov8m.pt', detailerDenoise: 0.35,
+      detailer: true, detector: 'bbox/face_yolov8m.pt', detailerDenoise: 0.35, detailerPasses: 3,
     })
   );
 });
@@ -311,6 +313,16 @@ test('P3-31: the face detailer is unavailable without the Impact Pack', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
   await screen.findByText(/Connected/);
   expect(screen.getByLabelText('Face detailer on Standard and High').matches(':disabled')).toBe(true); // via its fieldset
-  expect(screen.getByText(/Needs the Impact Pack/)).toBeTruthy();
+  expect(screen.getByText(/Needs the/).textContent).toMatch(/ComfyUI-Impact-Pack and ComfyUI-Impact-Subpack.*face_yolov8m\.pt in models\/ultralytics\/bbox/);
+});
+
+test('P3-33: a feature that is on but missing from this ComfyUI is flagged, and says it is left out', async () => {
+  api.getImagineSettings.mockResolvedValue(view({ url: 'http://127.0.0.1:8188', model: 'sdxl_base.safetensors', kind: 'checkpoint', family: 'sdxl', detailer: true, upscaleMode: 'tiled' }));
+  api.testComfyUI.mockResolvedValue({ ...SPLIT, tiledAvailable: false, tiledPassesAvailable: false, detailerAvailable: false });
+  render(<ImagineAdmin />);
+  await screen.findByText(/Connected/); // the saved address is tested on open
+  const alerts = screen.getAllByRole('alert').map((a) => a.textContent);
+  expect(alerts).toContain('Tiled repaint is chosen, but this ComfyUI doesn’t have it, so the Upscale button uses the upscale model only.');
+  expect(alerts).toContain('The face detailer is on, but this ComfyUI doesn’t have it, so images are made without it.');
 });
 
