@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 const previews = {
   abc123: { space: 'Tx Check', members: 2, alreadyMember: false },
   mine99: { space: 'Smoke Test', members: 5, alreadyMember: true },
+  gone42: { space: 'Tx Check', members: 2, alreadyMember: false, banned: true },
 };
 vi.mock('../api.js', () => ({
   previewInvite: vi.fn(async (code) => {
@@ -110,6 +111,13 @@ test('Join: says when you are already a member', async () => {
   setup({ initialTab: 'join' });
   fireEvent.change(screen.getByRole('textbox', { name: 'Invite code or link' }), { target: { value: 'mine99' } });
   await waitFor(() => expect(screen.getByText(/already a member/i)).toBeTruthy());
+});
+
+test('Join: says when you are banned, and Join is disabled (P3-26b)', async () => {
+  setup({ initialTab: 'join' });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Invite code or link' }), { target: { value: 'gone42' } });
+  await waitFor(() => expect(screen.getByText(/banned from this server/i)).toBeTruthy());
+  expect(screen.getByRole('button', { name: 'Join' }).disabled).toBe(true);
 });
 
 test('Join: an invalid code shows the server error inline', async () => {

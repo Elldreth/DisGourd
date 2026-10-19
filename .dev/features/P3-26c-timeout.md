@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-26)
 - **Phase:** 3
-- **State:** PLANNED (READY once P3-26a merges)
+- **State:** READY
 - **Effort:** M
 - **Depends on:** P3-26a
 

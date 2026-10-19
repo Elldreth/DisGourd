@@ -11,6 +11,8 @@ const ACTIONS = [
   ['', 'All actions'],
   ['message_delete', 'Message deletes'],
   ['kick', 'Removals'],
+  ['ban', 'Bans'],
+  ['unban', 'Unbans'],
   ['role_add', 'Roles given'],
   ['role_remove', 'Roles taken'],
   ['channel_access', 'Channel access'],
@@ -42,6 +44,15 @@ export function describeEntry(e) {
       );
     case 'kick':
       return <><B>{e.actor}</B> removed <B>{e.target}</B> from the server</>;
+    case 'ban':
+      return (
+        <>
+          <B>{e.actor}</B> banned <B>{e.target}</B>
+          {d.deleted ? <span className="text-gray-400"> and deleted {d.deleted} message{d.deleted === 1 ? '' : 's'} from the last {d.deleteMessages}</span> : null}
+        </>
+      );
+    case 'unban':
+      return <><B>{e.actor}</B> unbanned <B>{e.target}</B></>;
     case 'role_add':
       return <><B>{e.actor}</B> gave <B>{e.target}</B> the {d.role} role</>;
     case 'role_remove':

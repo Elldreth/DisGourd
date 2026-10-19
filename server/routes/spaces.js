@@ -20,6 +20,11 @@ const MAX_EMOJI_BYTES = 256 * 1024;
 
 const getJsonBody = readJsonBody;
 
+// Banning (P3-26b): how far back "delete their messages" reaches, and the
+// longest reason kept.
+const BAN_DELETE_WINDOWS = { none: 0, hour: 3600e3, day: 86400e3, week: 7 * 86400e3 };
+const MAX_REASON = 200;
+
 // Any one of these lets you read the moderation log (P3-26a).
 const MOD_LOG_VIEWERS = ['ban_members', 'timeout_members', 'kick', 'delete_others_messages', 'manage_roles'];
 
@@ -179,6 +184,43 @@ const routes = [
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
         sendToUser(target.id, JSON.stringify({ type: 'space_left', space: spaceName }));
         return sendJson(res, 200, { ok: true });
+      }
+
+      // ---- Bans (P3-26b) ----
+      // GET /spaces/:name/bans — the list; POST { user, reason?, deleteMessages } —
+      // ban (rank rules as for removing); DELETE /bans/:username — unban.
+      if (pathSegments[2] === 'bans') {
+        if (!access.actions.has('ban_members')) return sendJson(res, 403, { error: 'You are not allowed to ban members' });
+        if (pathSegments.length === 3 && req.method === 'GET') return sendJson(res, 200, { bans: db.getBans(space.id) });
+        if (pathSegments.length === 3 && req.method === 'POST') {
+          const body = await getJsonBody(req);
+          const target = typeof body.user === 'string' ? db.getUserByUsername(body.user) : null;
+          if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
+          if (target.id === userId) return sendJson(res, 400, { error: "You can't ban yourself" });
+          const targetAccess = db.resolveAccess(space.id, target.id);
+          if (!targetAccess || targetAccess.position >= access.position) return sendJson(res, 403, { error: 'You cannot ban this member' });
+          const windowMs = BAN_DELETE_WINDOWS[body.deleteMessages ?? 'none'];
+          if (windowMs === undefined) return sendJson(res, 400, { error: 'deleteMessages is none, hour, day or week' });
+          const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, MAX_REASON) : '';
+          const doomed = windowMs ? db.memberMessagesSince(space.id, target.id, Date.now() - windowMs) : [];
+          db.banMember(space.id, target.id, userId, reason);
+          for (const m of doomed) {
+            if (!db.deleteMessageById(m.id)) continue;
+            deliverToChannelViewers(spaceName, m.channel, JSON.stringify({ type: 'message_delete', id: m.id, space: spaceName, channel: m.channel }));
+          }
+          for (const ch of new Set(doomed.map((m) => m.channel))) threadUpdated(spaceName, ch);
+          db.logModAction(space.id, { actorId: userId, targetId: target.id, action: 'ban', reason, details: { deleteMessages: body.deleteMessages ?? 'none', deleted: doomed.length } });
+          deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
+          sendToUser(target.id, JSON.stringify({ type: 'banned', space: spaceName, reason: reason || null }));
+          return sendJson(res, 200, { ok: true, deleted: doomed.length });
+        }
+        if (pathSegments.length === 4 && req.method === 'DELETE') {
+          const target = db.getUserByUsername(pathSegments[3]);
+          if (!target || !db.unbanMember(space.id, target.id)) return sendJson(res, 404, { error: 'Not banned' });
+          db.logModAction(space.id, { actorId: userId, targetId: target.id, action: 'unban' });
+          return sendJson(res, 200, { ok: true });
+        }
+        return sendJson(res, 405, { error: 'Method not allowed' });
       }
 
       // POST /spaces/:name/invites — gated by the "invite" threshold

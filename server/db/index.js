@@ -80,6 +80,7 @@ const DEFAULT_PERMISSIONS = {
   delete_channel: 2,
   invite: 1,
   kick: 2,
+  ban_members: 2,
   edit_server: 2,
   delete_others_messages: 2,
   pin_messages: 2,
@@ -1567,6 +1568,40 @@ function deleteMessageById(messageId) {
   return db.prepare('DELETE FROM messages WHERE id = ?').run(messageId).changes > 0;
 }
 
+// ---- Bans (P3-26b) ----
+// Ban someone: they leave the server and no invite lets them back in.
+const banMember = db.transaction((spaceId, userId, actorId, reason) => {
+  db.prepare(`
+    INSERT INTO bans(space_id, user_id, actor_id, reason, created_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(space_id, user_id) DO UPDATE SET actor_id = excluded.actor_id, reason = excluded.reason, created_at = excluded.created_at
+  `).run(spaceId, userId, actorId, reason || null, Date.now());
+  db.prepare('DELETE FROM member_roles WHERE space_id = ? AND user_id = ?').run(spaceId, userId);
+  removeMember(spaceId, userId);
+});
+function unbanMember(spaceId, userId) {
+  return db.prepare('DELETE FROM bans WHERE space_id = ? AND user_id = ?').run(spaceId, userId).changes > 0;
+}
+function isBanned(spaceId, userId) {
+  return !!db.prepare('SELECT 1 FROM bans WHERE space_id = ? AND user_id = ?').get(spaceId, userId);
+}
+// A server's bans, newest first: [{ username, avatar, by, reason, createdAt }].
+function getBans(spaceId) {
+  return db.prepare(`
+    SELECT u.username, u.avatar_url AS avatar, a.username AS "by", b.reason, b.created_at AS createdAt
+    FROM bans b JOIN users u ON u.id = b.user_id LEFT JOIN users a ON a.id = b.actor_id
+    WHERE b.space_id = ? ORDER BY b.created_at DESC
+  `).all(spaceId);
+}
+// Someone's messages in a server (threads included) sent since `since` (ms):
+// [{ id, channel }], for "delete their messages from the last …".
+function memberMessagesSince(spaceId, userId, since) {
+  return db.prepare(`
+    SELECT m.id, c.name AS channel FROM messages m JOIN channels c ON c.id = m.channel_id
+    WHERE c.space_id = ? AND m.author_id = ?
+      AND COALESCE(m.created_at, CAST(strftime('%s', m.timestamp) AS INTEGER) * 1000) >= ?
+  `).all(spaceId, userId, since);
+}
+
 // ---- Moderation log (P3-26a) ----
 const MOD_LOG_PAGE = 50;
 
@@ -1836,6 +1871,7 @@ const storeMessageWithMentions = db.transaction(
 const redeemInvite = db.transaction((code, userId) => {
   const invite = getInvite(code);
   if (!invite) return 'invalid';
+  if (isBanned(invite.space_id, userId)) return 'banned';
   if (invite.expires_at && Date.now() > invite.expires_at) return 'expired';
   if (invite.max_uses && invite.uses >= invite.max_uses) return 'exhausted';
   if (isMember(invite.space_id, userId)) return 'already';
@@ -2108,6 +2144,11 @@ module.exports = {
   deleteMessageById,
   logModAction,
   getModLog,
+  banMember,
+  unbanMember,
+  isBanned,
+  getBans,
+  memberMessagesSince,
   getCoMemberIds,
   markRead,
   getUnreadCounts,

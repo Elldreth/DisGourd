@@ -22,6 +22,7 @@ const routes = [
           space: space.name,
           members: db.getSpaceMembers(space.id).length,
           alreadyMember: db.isMember(space.id, userId),
+          banned: db.isBanned(space.id, userId),
         });
       }
       if (req.method === 'POST') {
@@ -29,6 +30,7 @@ const routes = [
         // transaction, so concurrent joiners can't overrun max_uses.
         const result = db.redeemInvite(pathSegments[1], userId);
         if (result === 'invalid') return sendJson(res, 404, { error: 'This invite is invalid or has expired' });
+        if (result === 'banned') return sendJson(res, 403, { error: "You're banned from this server" });
         if (result === 'expired') return sendJson(res, 410, { error: 'This invite has expired' });
         if (result === 'exhausted') return sendJson(res, 410, { error: 'This invite has been fully used' });
         if (result === 'joined') {

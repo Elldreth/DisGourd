@@ -246,6 +246,16 @@ export function getModLog(space, { before, action, user } = {}) {
   if (user) qs.set('user', user);
   return request(`/spaces/${encodeURIComponent(space)}/mod-log${qs.size ? `?${qs}` : ''}`);
 }
+// P3-26b: bans.
+export function banMember(space, username, { reason, deleteMessages } = {}) {
+  return request(`/spaces/${encodeURIComponent(space)}/bans`, { method: 'POST', body: { user: username, reason, deleteMessages } });
+}
+export function getBans(space) {
+  return request(`/spaces/${encodeURIComponent(space)}/bans`);
+}
+export function unbanMember(space, username) {
+  return request(`/spaces/${encodeURIComponent(space)}/bans/${encodeURIComponent(username)}`, { method: 'DELETE' });
+}
 export function kickMember(space, username) {
   return request(`/spaces/${encodeURIComponent(space)}/members/${encodeURIComponent(username)}`, {
     method: 'DELETE',

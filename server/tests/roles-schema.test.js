@@ -78,7 +78,7 @@ test('the seeded roles, memberships and overrides mirror the tiers', () => {
   const everyone = roles.find((r) => r.isDefault);
   const admin = roles.find((r) => r.name === 'Admin');
   expect(everyone.permissions.sort()).toEqual(['manage_emoji', 'pin_messages']); // thresholds of 1 in the fixture
-  expect(admin.permissions.sort()).toEqual(['create_channel', 'delete_channel', 'delete_others_messages', 'edit_server', 'generate_images', 'invite', 'manage_emoji', 'pin_messages']); // up to 2; kick is 3
+  expect(admin.permissions.sort()).toEqual(['ban_members', 'create_channel', 'delete_channel', 'delete_others_messages', 'edit_server', 'generate_images', 'invite', 'manage_emoji', 'pin_messages']); // up to 2; kick is 3
   expect(db.getMemberRoleIds(spaceId, users.adm1)).toEqual([admin.id]);
   expect(db.getMemberRoleIds(spaceId, users.mem1)).toEqual([]);
   const ov = (name, roleId) => db.getChannelOverrides(channelId(name)).find((o) => o.roleId === roleId) || null;

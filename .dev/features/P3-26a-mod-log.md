@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P3-26)
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged #152)
 - **Starting baseline:** main at df928ba (#150, #151 merged)
 - **Effort:** M
 - **Depends on:** none (P3-26 design agreed)

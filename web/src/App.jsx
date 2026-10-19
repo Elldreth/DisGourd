@@ -233,6 +233,20 @@ export default function App() {
   };
   useEffect(() => onOpenRequest((data) => openFromPush.current(data)), []);
   const undoDelete = useUndoDelete({ toast });
+  // Banned from a server (P3-26b): it has left the rail; say why, until dismissed.
+  useEffect(() => {
+    const b = sp.bannedFrom;
+    if (!b) return;
+    toast.show({
+      id: `banned-${b.space}`,
+      message: `You were banned from ${b.space}.${b.reason ? ` Reason: ${b.reason}` : ''}`,
+      tone: 'error',
+      duration: 60 * 60 * 1000,
+      placement: 'top',
+      dismissible: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sp.bannedFrom]);
   const chatMessagesRef = useRef(chat.messages);
   chatMessagesRef.current = chat.messages;
   const dmMessagesRef = useRef(dm.messages);
@@ -636,6 +650,7 @@ export default function App() {
             roles={sp.roles}
             canManageRoles={sp.canManageRoles}
             canKickMembers={sp.canKick}
+            canBanMembers={sp.canBan}
             myPosition={sp.myPosition}
             onMessageUser={(name) => {
               setMembersOpen(false);
@@ -643,6 +658,7 @@ export default function App() {
             }}
             onToggleRole={sp.setMemberHasRole}
             onKick={sp.kickMember}
+            onBan={sp.banMember}
             open={membersOpen}
             onClose={() => setMembersOpen(false)}
           />
