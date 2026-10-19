@@ -43,6 +43,17 @@ const TILE = { denoise: 0.3, size: 1024 };
 // The face detailer (P3-31, Impact Pack's FaceDetailer): on Standard and High.
 const DETAILER_DENOISE = 0.4;
 const DETAILER_QUALITIES = ['standard', 'high'];
+// Passes (P3-33): the face detailer repaints each face up to 5 times
+// (FaceDetailer's own `cycle`); tiled repaint runs up to 3 passes, the extra
+// ones with Ultimate SD Upscale (No Upscale) at the full size.
+const MAX_DETAILER_PASSES = 5;
+const MAX_TILE_PASSES = 3;
+// The custom nodes each optional feature needs, by ComfyUI node name.
+const NEEDS = {
+  detailer: ['FaceDetailer', 'UltralyticsDetectorProvider'],
+  tiled: ['UltimateSDUpscale'],
+  tilePasses: ['UltimateSDUpscaleNoUpscale'],
+};
 const RATIOS = { square: [1, 1], portrait: [2, 3], landscape: [3, 2], wide: [16, 9] };
 const NEGATIVE = 'lowres, worst quality, low quality, blurry, jpeg artifacts, watermark, signature, text';
 const SAFE_NEGATIVE = 'nsfw, nude, nudity';
@@ -228,7 +239,7 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
         denoise: cfg.detailerDenoise ?? DETAILER_DENOISE, feather: 5, noise_mask: true, force_inpaint: true,
         bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: 3, sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
         sam_bbox_expansion: 0, sam_mask_hint_threshold: 0.7, sam_mask_hint_use_negative: 'False', drop_size: 10,
-        bbox_detector: ['40', 0], wildcard: '', cycle: 1,
+        bbox_detector: ['40', 0], wildcard: '', cycle: Math.min(MAX_DETAILER_PASSES, Math.max(1, cfg.detailerPasses || 1)),
       },
     };
     wf[SAVE_NODE].inputs.images = ['41', 0];
@@ -276,7 +287,16 @@ function buildUpscaleWorkflow(request, cfg, imageName, { permissive = false, see
       force_uniform_tiles: true, tiled_decode: false, batch_size: 1,
     },
   };
-  wf[SAVE_NODE] = { class_type: 'PreviewImage', inputs: { images: ['30', 0] } };
+  // Extra passes (P3-33) repaint the enlarged image again, tile by tile.
+  const passes = Math.min(MAX_TILE_PASSES, Math.max(1, cfg.tilePasses || 1));
+  let last = '30';
+  for (let i = 1; i < passes; i++) {
+    const id = String(30 + i);
+    const { image, upscale_model: _m, upscale_by: _b, ...same } = wf[30].inputs;
+    wf[id] = { class_type: 'UltimateSDUpscaleNoUpscale', inputs: { ...same, upscaled_image: [last, 0], seed: seed + i } };
+    last = id;
+  }
+  wf[SAVE_NODE] = { class_type: 'PreviewImage', inputs: { images: [last, 0] } };
   return { workflow: wf, width, height, seed };
 }
 
@@ -318,6 +338,22 @@ async function loaderOptions(url, node, input) {
   } catch {
     return [];
   }
+}
+
+// Which of these nodes this ComfyUI lacks (P3-33), cached per address and
+// node for 10 minutes, so a removed custom node is noticed without asking
+// ComfyUI on every image.
+const nodeCache = new Map();
+async function missingNodes(url, names) {
+  const out = [];
+  for (const name of names) {
+    const key = `${url} ${name}`;
+    const hit = nodeCache.get(key);
+    const has = hit && Date.now() - hit.at < 10 * 60 * 1000 ? hit.has : await hasNode(url, name);
+    if (!hit || hit.has !== has) nodeCache.set(key, { at: Date.now(), has });
+    if (!has) out.push(name);
+  }
+  return out;
 }
 
 // Whether this ComfyUI has a node (e.g. a custom node like Ultimate SD Upscale).
@@ -377,7 +413,7 @@ async function listAll(url) {
   const spec = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name;
   const names = Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options;
   if (!Array.isArray(names)) throw fail('ENGINE', 'That address answered, but not like ComfyUI');
-  const [unets, clips, vaes, upscalers, tiledAvailable, samplers, schedulers, detectors, hasFaceDetailer] = await Promise.all([
+  const [unets, clips, vaes, upscalers, tiledAvailable, samplers, schedulers, detectors, hasFaceDetailer, tiledPassesAvailable] = await Promise.all([
     loaderOptions(url, 'UNETLoader', 'unet_name'),
     loaderOptions(url, 'CLIPLoader', 'clip_name'),
     loaderOptions(url, 'VAELoader', 'vae_name'),
@@ -388,6 +424,7 @@ async function listAll(url) {
     loaderOptions(url, 'KSampler', 'scheduler'),
     loaderOptions(url, 'UltralyticsDetectorProvider', 'model_name'),
     hasNode(url, 'FaceDetailer'),
+    hasNode(url, 'UltimateSDUpscaleNoUpscale'), // P3-33: extra tiled passes
   ]);
   const models = names.map((name) => ({ name, kind: 'checkpoint', family: guessFamily(name) }));
   for (const name of unets.filter((n) => !VIDEO.test(n))) {
@@ -400,7 +437,7 @@ async function listAll(url) {
   suggested.upscaler = suggestUpscaler(upscalers);
   suggested.detector = suggestDetector(detectors);
   const detailerAvailable = hasFaceDetailer && detectors.length > 0;
-  return { models, clips, vaes, upscalers, suggested, tiledAvailable, samplers, schedulers, detectors, detailerAvailable };
+  return { models, clips, vaes, upscalers, suggested, tiledAvailable, tiledPassesAvailable, samplers, schedulers, detectors, detailerAvailable };
 }
 // Kept for callers that only need the model list.
 async function listModels(url) {
@@ -452,6 +489,19 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
   cfg = wantsUpscaler ? { ...cfg, upscaler: await resolveUpscaler(cfg) } : cfg;
   // The face detailer (P3-31) likewise: the saved detector, or the suggested one.
   if (!request.upscale && cfg.detailer && DETAILER_QUALITIES.includes(request.quality)) cfg = { ...cfg, detector: await resolveDetector(cfg) };
+  // Missing custom nodes (P3-33): leave the feature out rather than fail.
+  const notes = [];
+  const without = async (on, need, off, what) => {
+    if (!on) return;
+    const missing = await missingNodes(cfg.url, need);
+    if (missing.length) {
+      cfg = { ...cfg, ...off };
+      notes.push(`${what}: ComfyUI is missing ${missing.join(', ')}`);
+    }
+  };
+  await without(!request.upscale && detailerFor(request, cfg), NEEDS.detailer, { detailer: false }, 'made without the face detailer');
+  await without(!!request.upscale && cfg.upscaleMode === 'tiled', NEEDS.tiled, { upscaleMode: 'model' }, 'upscaled with the upscale model only');
+  await without(!!request.upscale && cfg.upscaleMode === 'tiled' && (cfg.tilePasses || 1) > 1, NEEDS.tilePasses, { tilePasses: 1 }, 'one tiled pass only');
   let built;
   if (request.upscale) {
     if (!cfg.upscaler) throw fail('ENGINE', 'ComfyUI has no upscale models (models/upscale_models)');
@@ -490,7 +540,7 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
         const qs = new URLSearchParams({ filename: f.filename, subfolder: f.subfolder || '', type: f.type || 'temp' });
         images.push(await comfy(cfg.url, `/view?${qs}`, { raw: true, signal, timeoutMs: 60000 }));
       }
-      return { model: cfg.model, width, height, images };
+      return { model: cfg.model, width, height, images, notes };
     }
   } catch (err) {
     if (err.code === 'ABORTED' || signal?.aborted) {
@@ -594,6 +644,15 @@ function validateConfig(input, prev = {}) {
     if (!text(i.detector, 300)) return { error: 'Pick a face detector from the list' };
     cfg.detector = i.detector || null;
   }
+  // Passes (P3-33).
+  if (i.detailerPasses !== undefined) {
+    if (!Number.isInteger(i.detailerPasses) || i.detailerPasses < 1 || i.detailerPasses > MAX_DETAILER_PASSES) return { error: `Face detailer passes are 1–${MAX_DETAILER_PASSES}` };
+    cfg.detailerPasses = i.detailerPasses;
+  }
+  if (i.tilePasses !== undefined) {
+    if (!Number.isInteger(i.tilePasses) || i.tilePasses < 1 || i.tilePasses > MAX_TILE_PASSES) return { error: `Tiled passes are 1–${MAX_TILE_PASSES}` };
+    cfg.tilePasses = i.tilePasses;
+  }
   if (i.detailerDenoise !== undefined) {
     if (typeof i.detailerDenoise !== 'number' || !(i.detailerDenoise >= 0.1 && i.detailerDenoise <= 0.8)) return { error: 'The face detailer strength is 0.1–0.8' };
     cfg.detailerDenoise = Math.round(i.detailerDenoise * 100) / 100;
@@ -614,6 +673,7 @@ const publicConfig = (cfg = {}) => ({
   upscaleMode: cfg.upscaleMode || 'model', tileDenoise: cfg.tileDenoise ?? TILE.denoise, tileSize: cfg.tileSize || TILE.size,
   sampler: cfg.sampler || null, scheduler: cfg.scheduler || null, cfgScale: cfg.cfgScale ?? null, steps: cfg.steps || null, negative: cfg.negative || null,
   detailer: !!cfg.detailer, detector: cfg.detector || null, detailerDenoise: cfg.detailerDenoise ?? DETAILER_DENOISE,
+  detailerPasses: cfg.detailerPasses || 1, tilePasses: cfg.tilePasses || 1,
 });
 
 module.exports = {
@@ -636,6 +696,8 @@ module.exports = {
   resolveUpscaler,
   upscalerCache,
   detectorCache,
+  nodeCache,
+  missingNodes,
   suggestDetector,
   sizeFor,
   buildWorkflow,

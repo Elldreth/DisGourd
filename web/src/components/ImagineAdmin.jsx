@@ -84,6 +84,7 @@ export default function ImagineAdmin() {
       sampler: c.sampler || '', scheduler: c.scheduler || '', cfgScale: c.cfgScale ?? '', negative: c.negative || '',
       steps: { draft: c.steps?.draft ?? '', standard: c.steps?.standard ?? '', high: c.steps?.high ?? '' },
       detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.4,
+      detailerPasses: c.detailerPasses || 1, tilePasses: c.tilePasses || 1,
     });
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
     setKie({ enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' });
@@ -111,7 +112,7 @@ export default function ImagineAdmin() {
       const res = await api.testComfyUI(url);
       setModels(res.models);
       setParts({
-        clips: res.clips || [], vaes: res.vaes || [], upscalers: res.upscalers || [], suggested: res.suggested || {}, tiledAvailable: !!res.tiledAvailable,
+        clips: res.clips || [], vaes: res.vaes || [], upscalers: res.upscalers || [], suggested: res.suggested || {}, tiledAvailable: !!res.tiledAvailable, tiledPassesAvailable: !!res.tiledPassesAvailable,
         samplers: res.samplers || [], schedulers: res.schedulers || [], detectors: res.detectors || [], detailerAvailable: !!res.detailerAvailable,
       });
       // The upscale model and face detector: the suggested ones until the host picks.
@@ -178,7 +179,7 @@ export default function ImagineAdmin() {
             hires: comfy.hires,
             upscaler: comfy.upscaler || null,
             upscaleMode: comfy.upscaleMode,
-            ...(comfy.upscaleMode === 'tiled' ? { tileDenoise: Number(comfy.tileDenoise), tileSize: Number(comfy.tileSize) } : {}),
+            ...(comfy.upscaleMode === 'tiled' ? { tileDenoise: Number(comfy.tileDenoise), tileSize: Number(comfy.tileSize), tilePasses: Number(comfy.tilePasses) } : {}),
             // Advanced (P3-31): blanks go back to the model type's defaults.
             sampler: comfy.sampler || null,
             scheduler: comfy.scheduler || null,
@@ -187,7 +188,7 @@ export default function ImagineAdmin() {
             negative: comfy.negative.trim() || null,
             detailer: comfy.detailer,
             detector: comfy.detector || null,
-            ...(comfy.detailer ? { detailerDenoise: Number(comfy.detailerDenoise) } : {}),
+            ...(comfy.detailer ? { detailerDenoise: Number(comfy.detailerDenoise), detailerPasses: Number(comfy.detailerPasses) } : {}),
           },
           kie: {
             enabled: kie.enabled,
@@ -397,7 +398,14 @@ export default function ImagineAdmin() {
             </label>
           </div>
           {parts.tiledAvailable === false && (
-            <p className="mt-1 text-xs text-gray-500">Tiled repaint needs the Ultimate SD Upscale custom node in ComfyUI.</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Tiled repaint needs the <strong>ComfyUI_UltimateSDUpscale</strong> custom node (by ssitu), which ComfyUI Manager can install.
+            </p>
+          )}
+          {parts.tiledAvailable === false && comfy.upscaleMode === 'tiled' && (
+            <p role="alert" className="mt-1 rounded-md bg-idle/15 px-2 py-1 text-xs text-idle">
+              Tiled repaint is chosen, but this ComfyUI doesn’t have it, so the Upscale button uses the upscale model only.
+            </p>
           )}
           {comfy.upscaleMode === 'tiled' && (
             <div className="mt-2 grid grid-cols-2 gap-3">
@@ -420,8 +428,15 @@ export default function ImagineAdmin() {
                   {[512, 768, 1024, 1280, 1536, 2048].map((n) => <option key={n} value={n}>{n} px</option>)}
                 </select>
               </div>
+              <div>
+                <label htmlFor="imagine-tile-passes" className={heading}>Tiled passes</label>
+                <select id="imagine-tile-passes" value={comfy.tilePasses} disabled={parts.tiledPassesAvailable === false}
+                  onChange={(e) => setComfy((c) => ({ ...c, tilePasses: Number(e.target.value) }))} className="input">
+                  {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
               <p className="col-span-2 text-xs text-gray-500">
-                Lower strength keeps the image as it is; higher adds detail but can change faces or repeat things across tiles (0.2–0.35 is usual). Bigger tiles need more VRAM.
+                Lower strength keeps the image as it is; higher adds detail but can change faces or repeat things across tiles (0.2–0.35 is usual). Bigger tiles need more VRAM. Each extra pass repaints the enlarged image again and takes about as long as the first.
               </p>
             </div>
           )}
@@ -481,7 +496,15 @@ export default function ImagineAdmin() {
                   </label>
                   <p className="mt-1 text-xs text-gray-500">Finds faces and repaints them at a better size. Adds a few seconds to images with faces.</p>
                   {parts.detailerAvailable === false && (
-                    <p className="mt-1 text-xs text-gray-500">Needs the Impact Pack (FaceDetailer) and a face detector model in ComfyUI.</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Needs the <strong>ComfyUI-Impact-Pack</strong> and <strong>ComfyUI-Impact-Subpack</strong> custom nodes (by ltdrdata; ComfyUI Manager can install
+                      both), plus a face detector model such as face_yolov8m.pt in models/ultralytics/bbox.
+                    </p>
+                  )}
+                  {parts.detailerAvailable === false && comfy.detailer && (
+                    <p role="alert" className="mt-1 rounded-md bg-idle/15 px-2 py-1 text-xs text-idle">
+                      The face detailer is on, but this ComfyUI doesn’t have it, so images are made without it.
+                    </p>
                   )}
                   {comfy.detailer && (
                     <div className="mt-2 grid grid-cols-2 gap-3">
@@ -496,6 +519,12 @@ export default function ImagineAdmin() {
                         <label htmlFor="imagine-detailer-denoise" className={heading}>Face repaint strength</label>
                         <input id="imagine-detailer-denoise" type="number" min="0.1" max="0.8" step="0.05" value={comfy.detailerDenoise}
                           onChange={(e) => setComfy((c) => ({ ...c, detailerDenoise: e.target.value }))} className="input" />
+                      </div>
+                      <div>
+                        <label htmlFor="imagine-detailer-passes" className={heading}>Face detailer passes</label>
+                        <select id="imagine-detailer-passes" value={comfy.detailerPasses} onChange={(e) => setComfy((c) => ({ ...c, detailerPasses: Number(e.target.value) }))} className="input">
+                          {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
                       </div>
                     </div>
                   )}
