@@ -549,6 +549,29 @@ const MIGRATIONS = [
       db.exec('ALTER TABLE imagine_jobs ADD COLUMN strength REAL');
     },
   },
+  {
+    version: 20,
+    name: 'moderation log',
+    up(db) {
+      // P3-26a: who did what to whom. Names are kept as they were at the time,
+      // so entries still read right after a rename or a deleted account.
+      db.exec(`
+        CREATE TABLE mod_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+          actor_id INTEGER,
+          actor_name TEXT,
+          target_id INTEGER,
+          target_name TEXT,
+          action TEXT NOT NULL,
+          reason TEXT,
+          details TEXT,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX mod_log_space ON mod_log(space_id, id);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -20,6 +20,9 @@ const MAX_EMOJI_BYTES = 256 * 1024;
 
 const getJsonBody = readJsonBody;
 
+// Any one of these lets you read the moderation log (P3-26a).
+const MOD_LOG_VIEWERS = ['ban_members', 'timeout_members', 'kick', 'delete_others_messages', 'manage_roles'];
+
 // Tried in order; the first match handles the request.
 const routes = [
   {
@@ -119,6 +122,22 @@ const routes = [
         return sendJson(res, 200, { ...out, effectiveLimit: imagine.dailyLimitFor(space.id) });
       }
 
+      // GET /spaces/:name/mod-log?before=&action=&user= — the moderation log,
+      // 50 at a time, newest first, for anyone holding a moderation permission.
+      if (pathSegments[2] === 'mod-log' && pathSegments.length === 3 && req.method === 'GET') {
+        if (!MOD_LOG_VIEWERS.some((a) => access.actions.has(a))) return sendJson(res, 403, { error: 'You are not allowed to see the moderation log' });
+        const q = parsedUrl.query || {};
+        const before = parseInt(q.before, 10) || null;
+        const action = typeof q.action === 'string' && q.action ? q.action : null;
+        let filterUser = null;
+        if (typeof q.user === 'string' && q.user) {
+          const u = db.getUserByUsername(q.user);
+          if (!u) return sendJson(res, 200, { entries: [], more: false });
+          filterUser = u.id;
+        }
+        return sendJson(res, 200, db.getModLog(space.id, { before, action, userId: filterUser }));
+      }
+
       // GET /spaces/:name/members
       if (pathSegments[2] === 'members' && pathSegments.length === 3 && req.method === 'GET') {
         const memberRoles = db.getMemberRolesMap(space.id);
@@ -156,6 +175,7 @@ const routes = [
         const targetAccess = db.resolveAccess(space.id, target.id);
         if (!targetAccess || targetAccess.position >= access.position) return sendJson(res, 403, { error: 'You cannot remove this member' });
         db.removeMember(space.id, target.id);
+        db.logModAction(space.id, { actorId: userId, targetId: target.id, action: 'kick' });
         deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
         sendToUser(target.id, JSON.stringify({ type: 'space_left', space: spaceName }));
         return sendJson(res, 200, { ok: true });
