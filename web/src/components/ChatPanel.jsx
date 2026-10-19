@@ -6,6 +6,7 @@ import CreateThreadDialog from './CreateThreadDialog.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import TimedOutNotice from './TimedOutNotice.jsx';
+import { cooldownKey, useCooldown } from '../slowmode.js';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
 import EmptyState from './EmptyState.jsx';
@@ -23,6 +24,7 @@ export default function ChatPanel({
   status,
   canPost = true,
   timedOut = null, // P3-26c: { until, reason } while I'm timed out here
+  slowmode = 0, // P3-26d: seconds between my posts here (0: off, or I'm exempt)
   messages,
   currentUser,
   typingUsers = [],
@@ -103,6 +105,7 @@ export default function ChatPanel({
   }, [space, channel]);
   // The message being replied to ({ id, author }), shown above the composer.
   const [replyingTo, setReplyingTo] = useState(null);
+  const cooldown = useCooldown(cooldownKey(space, channel)); // slow mode (P3-26d)
   useEffect(() => setReplyingTo(null), [space, channel]);
   // Files dropped anywhere on the panel go to the composer.
   const composerRef = useRef(null);
@@ -349,6 +352,7 @@ export default function ChatPanel({
           customEmoji={emoji}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}
+          cooldown={slowmode ? cooldown : 0}
         />
       ) : timedOut ? (
         <TimedOutNotice timeout={timedOut} />

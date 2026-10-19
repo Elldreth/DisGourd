@@ -20,10 +20,14 @@ const fromCell = (c) => (c === '1' ? 1 : c === '0' ? 0 : null);
 // at once (not on Save).
 // `category` (P3-25d): { id, name } — edit a category's access instead of a
 // channel's (no topic, 18+, place or delete; adds "Apply to all channels").
+// Slow mode choices (P3-26d), in seconds.
+const SLOWMODE_CHOICES = [[0, 'Off'], [5, '5 seconds'], [30, '30 seconds'], [60, '1 minute'], [300, '5 minutes']];
+
 export default function ChannelSettingsDialog({ space, channel, meta, roles = [], isOwner = false, myPosition = 0, placement = null, category = null, onClose, onSaved }) {
   const [cells, setCells] = useState(null); // roleId -> { view, post } cells; null while loading
   const [nsfw, setNsfw] = useState(!!meta?.nsfw); // Age-restricted (18+), text channels
   const [topic, setTopic] = useState(meta?.topic || ''); // P3-20a
+  const [slowmode, setSlowmode] = useState(meta?.slowmode || 0); // P3-26d: seconds
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -72,6 +76,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
       } else {
         await api.setChannelOverrides(space, channel, overrides);
         if (!isVoice && nsfw !== !!meta?.nsfw) await api.setChannelNsfw(space, channel, nsfw);
+        if (!isVoice && slowmode !== (meta?.slowmode || 0)) await api.setChannelSlowmode(space, channel, slowmode);
         if (topic.trim() !== (meta?.topic || '')) await api.setChannelTopic(space, channel, topic.trim());
       }
       onSaved();
@@ -228,6 +233,19 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
               </span>
             </span>
           </label>
+        )}
+        {!isVoice && !category && (
+          <div className="flex items-start gap-3 border-t border-ink-500/30 pt-3 text-sm text-gray-200">
+            <div className="flex-1">
+              <label htmlFor="channel-slowmode">Slow mode</label>
+              <span className="mt-0.5 block text-xs text-gray-500">
+                How long each person waits between messages here (and in its threads). Moderators aren’t limited.
+              </span>
+            </div>
+            <select id="channel-slowmode" value={slowmode} onChange={(e) => setSlowmode(Number(e.target.value))} className="input w-auto">
+              {SLOWMODE_CHOICES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
         )}
         {error && <div role="alert" className="text-sm text-danger">{error}</div>}
       </div>

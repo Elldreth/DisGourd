@@ -25,6 +25,8 @@ const getJsonBody = readJsonBody;
 // longest reason kept.
 const BAN_DELETE_WINDOWS = { none: 0, hour: 3600e3, day: 86400e3, week: 7 * 86400e3 };
 const MAX_REASON = 200;
+// Slow mode (P3-26d): off, 5 s, 30 s, 1 min or 5 min.
+const SLOWMODE_SECONDS = [0, 5, 30, 60, 300];
 // Timeouts (P3-26c): 5 minutes, an hour, a day or a week.
 const TIMEOUT_MINUTES = [5, 60, 1440, 10080];
 
@@ -457,15 +459,19 @@ const routes = [
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
           return sendJson(res, 200, { ok: true });
         }
-        // PATCH a channel { nsfw?, topic? } — Age-restricted (18+) (P2-20d) and
-        // its topic (P3-20a: plain text, at most 300 characters; '' clears).
+        // PATCH a channel { nsfw?, topic?, slowmode? } — Age-restricted (18+)
+        // (P2-20d), its topic (P3-20a: plain text, at most 300 characters; ''
+        // clears) and slow mode (P3-26d: seconds, logged when it changes).
         // Managers only.
         if (channelName && pathSegments.length === 4 && req.method === 'PATCH') {
           if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel settings' });
           if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           if (db.isThreadChannel(channelName) || !db.channelType(spaceName, channelName)) return sendJson(res, 404, { error: 'Channel not found' });
           const body = await getJsonBody(req);
-          if (body.nsfw === undefined && body.topic === undefined) return sendJson(res, 400, { error: 'Nothing to change' });
+          if (body.nsfw === undefined && body.topic === undefined && body.slowmode === undefined) return sendJson(res, 400, { error: 'Nothing to change' });
+          if (body.slowmode !== undefined && (!SLOWMODE_SECONDS.includes(body.slowmode) || db.channelType(spaceName, channelName) !== 'text')) {
+            return sendJson(res, 400, { error: 'Slow mode is 0, 5, 30, 60 or 300 seconds, on text channels' });
+          }
           if (body.nsfw !== undefined && typeof body.nsfw !== 'boolean') return sendJson(res, 400, { error: 'nsfw must be true or false' });
           let topic;
           if (body.topic !== undefined) {
@@ -475,10 +481,15 @@ const routes = [
           }
           if (body.nsfw !== undefined) db.setChannelNsfw(spaceName, channelName, body.nsfw);
           if (topic !== undefined) db.setChannelTopic(spaceName, channelName, topic);
+          if (body.slowmode !== undefined && body.slowmode !== db.slowmodeFor(spaceName, channelName)) {
+            db.setChannelSlowmode(spaceName, channelName, body.slowmode);
+            db.logModAction(space.id, { actorId: userId, action: 'slowmode', details: { channel: channelName, seconds: body.slowmode } });
+          }
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
           const out = {};
           if (body.nsfw !== undefined) out.nsfw = body.nsfw;
           if (topic !== undefined) out.topic = topic || null;
+          if (body.slowmode !== undefined) out.slowmode = body.slowmode;
           return sendJson(res, 200, out);
         }
         // POST create channel — gated by the "create_channel" threshold

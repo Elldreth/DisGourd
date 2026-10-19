@@ -15,6 +15,7 @@ const ACTIONS = [
   ['unban', 'Unbans'],
   ['timeout', 'Timeouts'],
   ['timeout_remove', 'Timeouts removed'],
+  ['slowmode', 'Slow mode'],
   ['role_add', 'Roles given'],
   ['role_remove', 'Roles taken'],
   ['channel_access', 'Channel access'],
@@ -36,6 +37,7 @@ function accessSummary(roles = []) {
 
 const DURATIONS = { 5: '5 minutes', 60: '1 hour', 1440: '1 day', 10080: '1 week' };
 const durationWords = (minutes) => DURATIONS[minutes] || `${minutes} minutes`;
+const SLOWMODE_WORDS = { 5: '5 seconds', 30: '30 seconds', 60: '1 minute', 300: '5 minutes' };
 
 export function describeEntry(e) {
   const d = e.details || {};
@@ -60,6 +62,10 @@ export function describeEntry(e) {
       return <><B>{e.actor}</B> timed out <B>{e.target}</B> for {durationWords(d.minutes)}</>;
     case 'timeout_remove':
       return <><B>{e.actor}</B> removed <B>{e.target}</B>’s timeout</>;
+    case 'slowmode':
+      return d.seconds
+        ? <><B>{e.actor}</B> set slow mode in #{d.channel} to {SLOWMODE_WORDS[d.seconds] || `${d.seconds} seconds`}</>
+        : <><B>{e.actor}</B> turned off slow mode in #{d.channel}</>;
     case 'unban':
       return <><B>{e.actor}</B> unbanned <B>{e.target}</B></>;
     case 'role_add':

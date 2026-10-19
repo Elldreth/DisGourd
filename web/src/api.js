@@ -156,6 +156,10 @@ export function hideDmPreview(username, id) {
 export function setChannelTopic(space, channel, topic) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, { method: 'PATCH', body: { topic } });
 }
+// P3-26d: seconds between posts (0, 5, 30, 60 or 300).
+export function setChannelSlowmode(space, channel, slowmode) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, { method: 'PATCH', body: { slowmode } });
+}
 export function setChannelNsfw(space, channel, nsfw) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, { method: 'PATCH', body: { nsfw } });
 }

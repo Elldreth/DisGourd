@@ -19,6 +19,22 @@ function refuseIfTimedOut(ws, op, spaceName, userId) {
   return true;
 }
 
+// Slow mode (P3-26d): refuse a post that comes too soon after this person's
+// last one in the channel; true when refused. Moderators (delete others'
+// messages, edit server) and the owner are exempt.
+function refuseIfSlowmode(ws, spaceName, channelName, spaceId, userId) {
+  const seconds = db.slowmodeFor(spaceName, channelName);
+  if (!seconds) return false;
+  const access = db.resolveAccess(spaceId, userId);
+  if (access && (access.owner || access.actions.has('delete_others_messages') || access.actions.has('edit_server'))) return false;
+  const waitMs = db.lastPostAt(spaceName, channelName, userId) + seconds * 1000 - Date.now();
+  if (waitMs <= 0) return false;
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'error', op: 'message', code: 'SLOWMODE', space: spaceName, channel: channelName, retryAfter: Math.ceil(waitMs / 1000), error: 'Slow mode is on here' }));
+  }
+  return true;
+}
+
 // The start of a deleted message, for the moderation log.
 function excerpt(content) {
   const text = String(content || '').replace(/\s+/g, ' ').trim();
@@ -66,6 +82,7 @@ const ops = {
     // Enforce the channel's view/post gates (from the member's roles).
     if (!canViewChannel(msg.space, msg.channel, userId) || !canPostChannel(msg.space, msg.channel, userId)) return;
     if (refuseIfTimedOut(ws, 'message', msg.space, userId)) return;
+    if (refuseIfSlowmode(ws, msg.space, msg.channel, space.id, userId)) return;
     const content = typeof msg.content === 'string' ? msg.content : '';
     if (content.length > MAX_MESSAGE_LENGTH) return rejectFrame(ws, msg.op, TOO_LONG);
     const attachments = normalizeAttachments(msg);

@@ -62,6 +62,8 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const canKick = can('kick');
   const canBan = can('ban_members');
   const canTimeout = can('timeout_members');
+  // Slow mode doesn't apply to moderators (P3-26d; the server agrees).
+  const slowmodeExempt = can('delete_others_messages') || can('edit_server');
   // My timeout here (P3-26c), while it lasts.
   const myTimeout = useActiveTimeout(activeSpace?.timeout);
   const canManageRoles = can('manage_roles');
@@ -384,6 +386,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     canBan,
     canTimeout,
     myTimeout,
+    slowmodeExempt,
     canManageRoles,
     bannedFrom,
     myPosition,

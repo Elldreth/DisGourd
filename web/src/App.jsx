@@ -34,6 +34,7 @@ import { useShortcuts, stepChannel } from './shortcuts.js';
 import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
 import { registerServiceWorker, onOpenRequest } from './pwa.js';
+import { cooldownKey, startCooldown } from './slowmode.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
@@ -191,7 +192,19 @@ export default function App() {
   const [addServerRequest, setAddServerRequest] = useState(null);
   // /imagine requests (P2-20d); an accepted one refreshes "left today".
   const imagineReq = useImagine({ send, onQueued: () => sp.reloadSpaces() });
+  const toastRef = useRef(null); // the toasts, created below
+  // Slow mode (P3-26d): seconds between my posts in the open channel and in
+  // the open thread (its parent's), unless I'm exempt.
+  const slowmodeOf = (channel) => (sp.slowmodeExempt ? 0 : sp.channelMeta[channel]?.slowmode || 0);
+  const slowmodeHere = slowmodeOf(sp.currentChannel);
+  const slowmodeThread = openThread ? slowmodeOf(openThread.parentChannel) : 0;
   gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, thread.handlers, dm.handlers, imagineReq.handlers, {
+    // A post refused by slow mode: sync the countdown, and say it wasn't sent.
+    error: (f) => {
+      if (f.op !== 'message' || f.code !== 'SLOWMODE') return;
+      startCooldown(cooldownKey(f.space, f.channel), f.retryAfter * 1000);
+      toastRef.current?.show({ id: 'slowmode', message: `Slow mode is on: your message wasn’t sent. Try again in ${f.retryAfter} s.`, tone: 'error' });
+    },
     // You changed your status in another tab.
     my_presence: (f) => setProfile((p) => (p ? { ...p, presence: f.mode } : p)),
     // Your custom status changed elsewhere, or its time ran out.
@@ -204,6 +217,7 @@ export default function App() {
 
   // Deleting a message: hidden at once with an Undo toast, sent after 5s.
   const toast = useToasts();
+  toastRef.current = toast;
   // The installable shell (production builds): when a new version has been
   // installed behind this one, offer to reload into it. Shown at the top so it
   // never covers the composer or the panels that open above it.
@@ -577,7 +591,11 @@ export default function App() {
               currentUser={user}
               typingUsers={chat.typingNames}
               memberNames={sp.memberNames}
-              onSend={chat.sendMessage}
+              onSend={(...args) => {
+                chat.sendMessage(...args);
+                if (slowmodeHere) startCooldown(cooldownKey(sp.currentSpace, sp.currentChannel), slowmodeHere * 1000);
+              }}
+              slowmode={slowmodeHere}
               onEdit={chat.editMessage}
               onDelete={deleteChatMessage}
               canModerate={sp.canModerate}
@@ -618,7 +636,11 @@ export default function App() {
               currentUser={user}
               typingUsers={thread.typingNames}
               memberNames={sp.memberNames}
-              onSend={thread.sendMessage}
+              onSend={(...args) => {
+                thread.sendMessage(...args);
+                if (slowmodeThread) startCooldown(cooldownKey(openThread.space, openThread.channel), slowmodeThread * 1000);
+              }}
+              slowmode={slowmodeThread}
               onEdit={thread.editMessage}
               onDelete={deleteThreadMessage}
               canModerate={sp.canModerate}
