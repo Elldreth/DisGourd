@@ -110,7 +110,11 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-25b | Categories in the channel list (collapse, manage, keyboard moves) | 3 | COMPLETE | M | P3-25a | ChannelList.jsx, CategoryDialog |
 | P3-25c | Drag and drop channels and categories | 3 | COMPLETE | S–M | P3-25b | ChannelList.jsx, drag hook |
 | P3-25d | Category permissions, copied to channels | 3 | COMPLETE | M | P3-25a (b for UI) | migrations, roles, ChannelSettingsDialog |
-| P3-26 | Moderation tools (packet to plan with the user) | 3 | PLANNED | L | P2-21 | tbd |
+| P3-26 | Moderation tools (Container: a–d) | 3 | PLANNED | L | P2-21, P1-10 | see children |
+| P3-26a | Moderation log | 3 | READY | M | none | migrations, db, routes, ModLogDialog |
+| P3-26b | Ban (with message clean-up, Bans list, invite refusal) | 3 | PLANNED | M | P3-26a | migrations, routes, invites, member menu, BansDialog |
+| P3-26c | Timeout (posting, reacting, voice blocked; auto-lift) | 3 | PLANNED | M | P3-26a | migrations, chat / imagine / voice checks, Composer |
+| P3-26d | Slow mode per channel | 3 | PLANNED | S–M | P3-26a | migrations, chat gateway, ChannelSettingsDialog, Composer |
 | P3-27 | Message edit history (packet to plan with the user) | 3 | PLANNED | M | none | migrations, chat gateway, MessageList |
 | P3-28 | ComfyUI hires fix (High quality: upscale model + light repaint) | 3 | COMPLETE | S–M | P3-24 | engines/comfyui.js, ImagineAdmin |
 | P3-29 | Upscale button on /imagine images (model only or tiled repaint) | 3 | COMPLETE | M | P3-23, P3-24, P3-28 | migrations, imagine/index.js, runner, engines/comfyui.js, ImagineAgain, ImagineAdmin |
