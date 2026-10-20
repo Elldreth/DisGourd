@@ -267,7 +267,8 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   }
 
   return (
-    <div className="relative px-4 pb-5 pt-1">
+    // pb: clear the phone's home bar (P7-04); 1.25rem everywhere else.
+    <div className="relative px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1">
       {/* Anchored to the whole composer (not the button) so it fits on phones. */}
       {emojiOpen && (
         <div ref={emojiPopRef} className="absolute bottom-full right-4 z-50 mb-1">
