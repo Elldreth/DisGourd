@@ -82,7 +82,7 @@ export default function ServerRail({
               key={s.name}
               onClick={() => onSelect(s.name)}
               title={`${s.name} — drag to reorder`}
-              aria-label={[s.name, active ? '' : unreadLabel({ unread: count, mentions: mentionCount })].filter(Boolean).join(', ')}
+              aria-label={[s.name, active ? '' : unreadLabel({ unread: count, mentions: mentionCount }), s.openReports ? `${s.openReports} open report${s.openReports === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}
               aria-current={active ? 'page' : undefined}
               draggable
               onDragStart={() => setDragIndex(i)}
@@ -103,6 +103,13 @@ export default function ServerRail({
                 <img src={s.icon} alt={s.name} className="h-full w-full object-cover" />
               ) : (
                 initials(s.name)
+              )}
+              {s.openReports > 0 && (
+                // P9-01: open reports, for the people who handle them.
+                // Inside the corner: the button clips what hangs outside its rounded edge.
+                <span aria-hidden="true" className="absolute right-0 top-0 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-ink-900 bg-idle px-0.5 text-[10px] font-bold leading-none text-ink-900">
+                  {s.openReports > 99 ? '99+' : s.openReports}
+                </span>
               )}
               {mentionCount > 0 && !active && (
                 <span aria-hidden="true" className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">

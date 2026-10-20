@@ -657,6 +657,36 @@ const MIGRATIONS = [
       db.exec('ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    version: 26,
+    name: 'message reports',
+    up(db) {
+      // P9-01: a member flags a message for the server's moderators. The
+      // author, channel and the start of the message are copied, so a report
+      // still reads right after the message is deleted.
+      db.exec(`
+        CREATE TABLE reports (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+          message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+          channel TEXT NOT NULL,
+          author_id INTEGER,
+          author_name TEXT,
+          reporter_id INTEGER,
+          reporter_name TEXT,
+          reason TEXT NOT NULL,
+          note TEXT,
+          excerpt TEXT,
+          status TEXT NOT NULL DEFAULT 'open',
+          resolved_by TEXT,
+          resolution TEXT,
+          created_at INTEGER NOT NULL,
+          resolved_at INTEGER
+        );
+        CREATE INDEX reports_space ON reports(space_id, status, id);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

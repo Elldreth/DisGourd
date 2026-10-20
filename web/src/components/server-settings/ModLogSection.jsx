@@ -15,6 +15,8 @@ const ACTIONS = [
   ['timeout', 'Timeouts'],
   ['timeout_remove', 'Timeouts removed'],
   ['slowmode', 'Slow mode'],
+  ['report_resolve', 'Reports handled'],
+  ['report_dismiss', 'Reports dismissed'],
   ['channel_rename', 'Channel renames'],
   ['role_add', 'Roles given'],
   ['role_remove', 'Roles taken'],
@@ -68,6 +70,18 @@ export function describeEntry(e) {
         : <><B>{e.actor}</B> turned off slow mode in #{d.channel}</>;
     case 'channel_rename':
       return <><B>{e.actor}</B> renamed #{d.from} to #{d.to}</>;
+    // P9-01: a report closed from the Reports section.
+    case 'report_resolve':
+    case 'report_dismiss': {
+      const how = { deleted: ' — message deleted', timeout: ' — timed out', ban: ' — banned' }[d.resolution] || '';
+      return (
+        <>
+          <B>{e.actor}</B> {e.action === 'report_dismiss' ? 'dismissed' : 'handled'} {d.reports > 1 ? `${d.reports} reports` : 'a report'}
+          {d.reason ? ` (${d.reason})` : ''} on <B>{e.target}</B>’s message in #{d.channel}
+          {e.action === 'report_resolve' ? how : ''}
+        </>
+      );
+    }
     case 'unban':
       return <><B>{e.actor}</B> unbanned <B>{e.target}</B></>;
     case 'role_add':

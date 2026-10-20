@@ -218,6 +218,8 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       loadSpaces();
     },
     space_updated: () => loadSpaces(),
+    // P9-01: reports were filed or handled; just the count changes.
+    reports_changed: (f) => setSpaces((list) => list.map((s) => (s.name === f.space ? { ...s, openReports: f.open } : s))),
     // A channel was renamed (P6-03): rename it in the list and, if you're in
     // it, move along with it, in one update (otherwise the "channel gone" check
     // above sends you to the first channel), then reload to be sure.

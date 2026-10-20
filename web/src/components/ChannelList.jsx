@@ -57,6 +57,8 @@ export default function ChannelList({
   onInvite,
   onDeleteServer,
   onLeaveServer,
+  openReports = 0, // P9-01: open reports here, for moderators
+  onJumpToReport, // (report) — go to a reported message
   onRenameServer,
   serverIcon = null, // the icon's URL, for Server settings › Overview
   onChangeServerIcon,
@@ -111,6 +113,7 @@ export default function ChannelList({
     imagine: !!canManage && !!imagineInfo,
     modLog: canViewModLog,
     bans: canBan,
+    reports: !!isOwner || abilities.includes('delete_others_messages'), // P9-01
   };
   const anySettings = Object.entries(settingsCan).some(([k, v]) => k !== 'owner' && v);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -467,6 +470,22 @@ export default function ChannelList({
                   >
                     <Icon name="settings" size={16} /> Server settings
                   </MenuItem>
+                  {settingsCan.reports && openReports > 0 && (
+                    // Only while reports are open, so the menu stays short (P5-04).
+                    <MenuItem
+                      onClick={() => {
+                        closeMenu();
+                        setSettingsOpen('reports');
+                      }}
+                    >
+                      <Icon name="flag" size={16} /> Reports
+                      {openReports > 0 && (
+                        <span className="ml-auto rounded-full bg-idle px-1.5 text-xs font-bold text-ink-900" aria-label={`${openReports} open`}>
+                          {openReports}
+                        </span>
+                      )}
+                    </MenuItem>
+                  )}
                 </>
               )}
               {!isOwner && onLeaveServer && (
@@ -781,6 +800,19 @@ export default function ChannelList({
           roles={{ roles, members, currentUser: user, isOwner, myPosition, abilities, onChanged: onRolesChanged }}
           imagine={{ info: imagineInfo, onSaved: onPermsChanged }}
           modLog={{ members }}
+          reports={{
+            members,
+            myPosition,
+            isOwner,
+            abilities,
+            openCount: openReports,
+            onJump: onJumpToReport
+              ? (r) => {
+                  setSettingsOpen(false);
+                  onJumpToReport(r);
+                }
+              : undefined,
+          }}
         />
       )}
       {channelSettings && (

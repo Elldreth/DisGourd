@@ -83,8 +83,8 @@ test('Server settings offers the log only to people with a moderation permission
   fireEvent.click(screen.getByRole('button', { name: 'Logland' }));
   fireEvent.click(screen.getByText('Server settings'));
   const dialog = await screen.findByRole('dialog', { name: 'Server settings' });
-  // Only the log: no Overview, Roles or Bans for this permission.
-  expect(within(dialog).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Moderation log']);
+  // Reports (P9-01) and the log: no Overview, Roles or Bans for this permission.
+  expect(within(dialog).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Reports', 'Moderation log']);
   cleanup();
 
   list({ abilities: [], isOwner: true, role: 'owner' });

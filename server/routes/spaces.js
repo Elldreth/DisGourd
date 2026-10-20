@@ -25,6 +25,17 @@ const getJsonBody = readJsonBody;
 // longest reason kept.
 const BAN_DELETE_WINDOWS = { none: 0, hour: 3600e3, day: 86400e3, week: 7 * 86400e3 };
 const MAX_REASON = 200;
+// Reports (P9-01): the reasons someone can pick.
+const REPORT_REASONS = ['spam', 'harassment', 'inappropriate', 'other'];
+// Tell the server's moderators how many reports are open now.
+function tellModerators(space, spaceName) {
+  const frame = JSON.stringify({ type: 'reports_changed', space: spaceName, open: db.countOpenReports(space.id) });
+  for (const m of db.getSpaceMembers(space.id)) {
+    const a = db.resolveAccess(space.id, m.userId);
+    if (a && (a.owner || a.actions.has('delete_others_messages'))) sendToUser(m.userId, frame);
+  }
+}
+
 // Slow mode (P3-26d): off, 5 s, 30 s, 1 min or 5 min.
 const SLOWMODE_SECONDS = [0, 5, 30, 60, 300];
 // Timeouts (P3-26c): 5 minutes, an hour, a day or a week.
@@ -206,6 +217,52 @@ const routes = [
         return sendJson(res, 200, { ok: true });
       }
 
+      // ---- Reports (P9-01): moderators read and close them ----
+      // GET /spaces/:name/reports?status=open|closed&before=<id>;
+      // POST /spaces/:name/reports/:id/resolve { action: 'dismiss' | 'resolved' | 'delete', resolution? }
+      if (pathSegments[2] === 'reports') {
+        if (!(access.owner || access.actions.has('delete_others_messages'))) return sendJson(res, 403, { error: 'Only moderators can see reports' });
+        if (pathSegments.length === 3 && req.method === 'GET') {
+          const q = parsedUrl.query || {};
+          const out = db.listReports(space.id, { status: q.status === 'closed' ? 'closed' : 'open', before: parseInt(q.before, 10) || null });
+          // A report from a thread says which, so the app can open it.
+          out.reports = out.reports.map((r) => {
+            const t = db.isThreadChannel(r.channel) ? db.getThread(spaceName, r.channel) : null;
+            return t ? { ...r, thread: { name: t.name, parentChannel: t.parentChannel, channel: r.channel } } : r;
+          });
+          return sendJson(res, 200, out);
+        }
+        if (pathSegments.length === 5 && pathSegments[4] === 'resolve' && req.method === 'POST') {
+          const report = db.getReport(space.id, parseInt(pathSegments[3], 10) || 0);
+          if (!report) return sendJson(res, 404, { error: 'Report not found' });
+          if (report.status !== 'open') return sendJson(res, 409, { error: 'That report is already closed' });
+          const body = await getJsonBody(req);
+          if (!['dismiss', 'resolved', 'delete'].includes(body.action)) return sendJson(res, 400, { error: 'action is dismiss, resolved or delete' });
+          let resolution = typeof body.resolution === 'string' ? body.resolution.slice(0, 40) : null;
+          if (body.action === 'delete') {
+            // Delete the message, with the same rights as deleting it in chat.
+            const loc = report.messageId != null ? db.getMessageLocation(report.messageId) : null;
+            if (loc) {
+              if (!canModerateMessage(spaceName, loc.channel, userId, loc.authorId)) return sendJson(res, 403, { error: "You can't delete this message" });
+              db.deleteMessageById(report.messageId);
+              db.logModAction(space.id, { actorId: userId, targetId: loc.authorId, action: 'message_delete', details: { channel: loc.channel, excerpt: report.excerpt.slice(0, 100) } });
+              deliverToChannelViewers(spaceName, loc.channel, JSON.stringify({ type: 'message_delete', id: report.messageId, space: spaceName, channel: loc.channel }));
+              threadUpdated(spaceName, loc.channel);
+            }
+            resolution = 'deleted';
+          }
+          const status = body.action === 'dismiss' ? 'dismissed' : 'resolved';
+          const closed = db.closeReports(space.id, report, status, userId, resolution);
+          db.logModAction(space.id, {
+            actorId: userId, targetId: report.authorId, action: status === 'dismissed' ? 'report_dismiss' : 'report_resolve',
+            details: { channel: report.channel, excerpt: report.excerpt.slice(0, 100), reason: report.reason, resolution, reports: closed },
+          });
+          tellModerators(space, spaceName);
+          return sendJson(res, 200, { closed });
+        }
+        return sendJson(res, 405, { error: 'Method not allowed' });
+      }
+
       // ---- Timeouts (P3-26c) ----
       // PUT /spaces/:name/members/:username/timeout { minutes, reason? } — time
       // someone out (rank rules as for removing); DELETE — lift it early.
@@ -375,6 +432,28 @@ const routes = [
 
       if (pathSegments[2] === 'channels') {
         const channelName = pathSegments[3];
+        // POST …/messages/:id/report { reason, note? } — flag a message for the
+        // server's moderators (P9-01): anyone who can see it, not your own or
+        // the /imagine bot's. One open report per person per message.
+        if (channelName && pathSegments[4] === 'messages' && pathSegments[6] === 'report' && pathSegments.length === 7 && req.method === 'POST') {
+          const id = parseInt(pathSegments[5], 10);
+          const loc = id > 0 ? db.getMessageLocation(id) : null;
+          if (!loc || loc.space !== spaceName || loc.channel !== channelName || !canViewChannel(spaceName, channelName, userId)) {
+            return sendJson(res, 404, { error: 'Message not found in this channel' });
+          }
+          if (Number(loc.authorId) === Number(userId)) return sendJson(res, 400, { error: "You can't report your own message" });
+          const author = loc.authorId == null ? null : db.getUserById(loc.authorId);
+          if (author && author.is_bot) return sendJson(res, 400, { error: "Bot messages can't be reported" });
+          const body = await getJsonBody(req);
+          if (!REPORT_REASONS.includes(body.reason)) return sendJson(res, 400, { error: 'Pick a reason: spam, harassment, inappropriate or other' });
+          const note = typeof body.note === 'string' ? body.note.trim().slice(0, 300) : '';
+          const content = String(loc.content || '').replace(/\s+/g, ' ').trim();
+          const excerpt = content.length > 300 ? `${content.slice(0, 299)}…` : content;
+          const made = db.createReport(space.id, { messageId: id, channel: channelName, authorId: loc.authorId, reporterId: userId, reason: body.reason, note, excerpt });
+          if (made.already) return sendJson(res, 200, { already: true });
+          tellModerators(space, spaceName);
+          return sendJson(res, 201, { ok: true });
+        }
         // GET …/messages/:id/versions — a message's edit history (P3-27), for
         // anyone who can view the channel (or thread).
         if (channelName && pathSegments[4] === 'messages' && pathSegments[6] === 'versions' && pathSegments.length === 7 && req.method === 'GET') {
