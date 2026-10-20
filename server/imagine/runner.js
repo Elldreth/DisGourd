@@ -43,7 +43,7 @@ function lane(id) {
 // Rewrite a job's placeholder and tell the channel.
 function show(job, content, attachments = []) {
   if (!db.updateBotMessage(job.messageId, content, attachments)) return;
-  deliver(job.space, job.channel, { type: 'message_update', id: job.messageId, space: job.space, channel: job.channel, content, attachments, editedAt: null });
+  deliver(job.space, job.channel, { type: 'message_update', id: job.messageId, space: job.space, channel: job.channel, content, attachments, editedAt: null, imagineEngine: job.engine.id });
 }
 
 // Places in line: the running job counts as first.

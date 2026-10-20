@@ -1,6 +1,7 @@
 // P2-20c: the kie.ai engine against a mock kie.ai API — request bodies per
 // model, polling, downloads, errors, the key handling, prices and the monthly
 // credit cap.
+const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
@@ -17,7 +18,7 @@ const UPLOADS = path.join(os.tmpdir(), `disgourd-test-uploads-kie-${process.pid}
 const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8cfc0000003010100c9fe92ef0000000049454e44ae426082', 'hex');
 const KEY = 'test-key-abcd1234';
 
-const seen = { bodies: [], auth: [], polls: 0 };
+const seen = { bodies: [], auth: [], polls: 0, uploads: [], failUpload: false };
 const tasks = new Map(); // taskId -> { prompt, polls }
 let taskCount = 0;
 
@@ -38,6 +39,17 @@ function startMock() {
       seen.auth.push(req.headers.authorization);
       if (req.headers.authorization !== `Bearer ${KEY}`) return json(200, { code: 401, msg: 'Unauthorized' });
       if (url.pathname === '/api/v1/chat/credit') return json(200, { code: 200, msg: 'success', data: 123.5 });
+      // P9-05a: kie.ai's file storage (errors come back as HTTP 200 with a code).
+      if (url.pathname === '/api/file-base64-upload') {
+        const b = JSON.parse(raw);
+        seen.uploads.push({ kind: 'base64', ...b });
+        if (seen.failUpload) return json(200, { success: false, code: 500, msg: 'upload failed' });
+        return json(200, { success: true, code: 200, data: { downloadUrl: `https://tempfile.example/kieai/${b.uploadPath}/${b.fileName}` } });
+      }
+      if (url.pathname === '/api/file-stream-upload') {
+        seen.uploads.push({ kind: 'stream', type: req.headers['content-type'], size: raw.length });
+        return json(200, { success: true, code: 200, data: { downloadUrl: 'https://tempfile.example/kieai/disgourd/big.png' } });
+      }
       if (url.pathname === '/api/v1/jobs/createTask') {
         const body = JSON.parse(raw);
         seen.bodies.push(body);
@@ -73,6 +85,7 @@ beforeAll(async () => {
   await startMock();
   mockUrl = `http://127.0.0.1:${mock.address().port}`;
   process.env.KIE_API_BASE = mockUrl;
+  process.env.KIE_UPLOAD_BASE = mockUrl;
   serverModule = require('../server');
   db = serverModule.db;
   kie = require('../imagine/engines/kie');
@@ -111,6 +124,77 @@ describe('requests per model', () => {
   test('permissive (an 18+ channel the instance allows) turns the switches off', () => {
     expect(kie.buildInput(req(), cfg(), { permissive: true }).input.nsfw_checker).toBe(false);
     expect(kie.buildInput(req(), cfg({ model: 'qwen/text-to-image' }), { permissive: true }).input).toMatchObject({ enable_safety_checker: false, nsfw_checker: false });
+  });
+});
+
+describe('pictures (P9-05a)', () => {
+  const init = (over = {}) => ({ buffer: PNG, ext: 'png', contentType: 'image/png', width: 1, height: 1, denoise: 0.3, ...over });
+  const URL1 = 'https://tempfile.example/kieai/disgourd/p.png';
+  test('each model’s picture version: the image field, aspect or auto, quality, the switches, and Qwen’s strength', () => {
+    const pic = (model, over = {}, opts = {}) => kie.buildInput(req({ init: init(), ...over }), cfg({ model }), { imageUrl: URL1, ...opts });
+    expect(pic('flux-2/pro-text-to-image', { quality: 'high' })).toEqual({
+      model: 'flux-2/pro-image-to-image', input: { prompt: 'a gourd', aspect_ratio: 'auto', resolution: '2K', nsfw_checker: true, input_urls: [URL1] },
+    });
+    expect(pic('seedream/5-lite-text-to-image', { shape: 'wide' })).toEqual({
+      model: 'seedream/5-lite-image-to-image', input: { prompt: 'a gourd', output_format: 'png', aspect_ratio: '16:9', quality: 'basic', nsfw_checker: true, image_urls: [URL1] },
+    });
+    expect(pic('qwen/text-to-image', { quality: 'draft' }, { permissive: true })).toEqual({
+      model: 'qwen/image-to-image',
+      input: { prompt: 'a gourd', output_format: 'png', acceleration: 'none', num_inference_steps: 20, nsfw_checker: false, enable_safety_checker: false, image_url: URL1, strength: 0.3 },
+    });
+    expect(pic('grok-imagine/text-to-image', { shape: 'portrait' })).toEqual({
+      model: 'grok-imagine/image-to-image', input: { prompt: 'a gourd', nsfw_checker: true, image_urls: [URL1] },
+    });
+    expect(pic('nano-banana-2')).toEqual({
+      model: 'nano-banana-2', input: { prompt: 'a gourd', output_format: 'png', image_input: [URL1], aspect_ratio: 'auto', resolution: '1K' },
+    });
+    // No picture version: the chosen model for pictures, or none.
+    expect(() => pic('z-image')).toThrow('This kie.ai model can’t start from a picture');
+    expect(kie.buildInput(req({ init: init() }), cfg({ model: 'z-image', pictureModel: 'grok-imagine/text-to-image' }), { imageUrl: URL1 }).model).toBe('grok-imagine/image-to-image');
+    expect(kie.buildInput(req({ init: init() }), cfg({ model: 'custom', customModel: 'v/m', pictureModel: 'qwen/text-to-image' }), { imageUrl: URL1 }).input.strength).toBe(0.3);
+    // What pictures can do, per setup.
+    expect(kie.pictures(cfg({ model: 'qwen/text-to-image' }))).toEqual({ strength: true });
+    expect(kie.pictures(cfg({ model: 'flux-2/pro-text-to-image' }))).toEqual({ strength: false });
+    expect(kie.pictures(cfg({ model: 'z-image' }))).toBe(null);
+    expect(kie.pictures(cfg({ model: 'z-image', pictureModel: 'nano-banana-2' }))).toEqual({ strength: false });
+    // Settings: the model for pictures must have a picture version.
+    expect(kie.validateConfig({ pictureModel: 'z-image' }, cfg())).toEqual({ error: 'Pick a model for pictures' });
+    expect(kie.validateConfig({ pictureModel: 'qwen/text-to-image' }, cfg()).pictureModel).toBe('qwen/text-to-image');
+    expect(kie.validateConfig({ pictureModel: null }, cfg({ pictureModel: 'nano-banana-2' })).pictureModel).toBe('');
+    expect(kie.publicConfig(cfg({ model: 'z-image', pictureModel: 'qwen/text-to-image' }))).toMatchObject({ pictureModel: 'qwen/text-to-image', pictures: { strength: true } });
+    expect(kie.catalogue().find((m) => m.id === 'qwen/text-to-image').picture).toEqual({ model: 'qwen/image-to-image', strength: true });
+    expect(kie.catalogue().find((m) => m.id === 'z-image').picture).toBe(null);
+    // Prices: a picture job is priced by the picture model.
+    expect(kie.priceFor(cfg({ model: 'grok-imagine/text-to-image' }), 'standard', { picture: true })).toEqual({ credits: 4, estimate: true });
+    expect(kie.priceFor(cfg({ model: 'z-image' }), 'standard', { picture: true })).toBe(null);
+  });
+
+  test('the picture is uploaded to kie.ai first (base64, or a stream when big); the task gets its URL', async () => {
+    const before = seen.uploads.length;
+    const out = await kie.generate(req({ init: init({ denoise: 0.65 }) }), cfg({ model: 'qwen/text-to-image' }));
+    expect(out).toMatchObject({ model: 'qwen/image-to-image', cost: 0.8 });
+    const up = seen.uploads[before];
+    expect(up).toMatchObject({ kind: 'base64', uploadPath: 'disgourd' });
+    expect(up.base64Data).toBe(`data:image/png;base64,${PNG.toString('base64')}`);
+    expect(up.fileName).toMatch(/^disgourd-[0-9a-f]{16}\.png$/);
+    expect(seen.auth.at(-1)).toBe(`Bearer ${KEY}`);
+    expect(seen.bodies.at(-1).input).toMatchObject({ image_url: `https://tempfile.example/kieai/disgourd/${up.fileName}`, strength: 0.65 });
+    // Over 10 MB: a file stream (Nano Banana takes up to 30 MB).
+    const big = Buffer.concat([PNG, Buffer.alloc(10 * 1024 * 1024)]);
+    await kie.generate(req({ init: init({ buffer: big }) }), cfg({ model: 'nano-banana-2' }));
+    expect(seen.uploads.at(-1)).toMatchObject({ kind: 'stream' });
+    expect(seen.uploads.at(-1).type).toMatch(/^multipart\/form-data/);
+    expect(seen.bodies.at(-1).input.image_input).toEqual(['https://tempfile.example/kieai/disgourd/big.png']);
+    // Too big for the model: refused before uploading.
+    const count = seen.uploads.length;
+    await expect(kie.generate(req({ init: init({ buffer: big }) }), cfg({ model: 'grok-imagine/text-to-image' }))).rejects.toMatchObject({ message: 'That picture is too big for Grok Imagine (10 MB at most)' });
+    expect(seen.uploads.length).toBe(count);
+    // Upload errors in plain words.
+    seen.failUpload = true;
+    await expect(kie.generate(req({ init: init() }), cfg({ model: 'qwen/text-to-image' }))).rejects.toMatchObject({ code: 'ENGINE', message: 'kie.ai: upload failed' });
+    seen.failUpload = false;
+    await expect(kie.generate(req({ init: init() }), cfg({ model: 'qwen/text-to-image', apiKey: 'wrong' }))).rejects.toMatchObject({ message: 'kie.ai rejected the API key' });
+    await expect(kie.generate(req({ init: init() }), cfg({ model: 'z-image' }))).rejects.toMatchObject({ code: 'UNAVAILABLE' });
   });
 });
 
@@ -269,5 +353,116 @@ describe('admin routes and the chat path', () => {
     // Now 0.8 more is spent, and another 0.8 would go over the cap.
     expect(await ask('another one')).toMatchObject({ type: 'error', code: 'BUDGET' });
     ws.close();
+  });
+
+  test('P9-05a: pictures on kie.ai: start from a picture, Variations on the engine that made the image, Retry; ComfyUI when chosen', async () => {
+    const S = 'Kie Pictures';
+    const put = (kieCfg) => call('admin', 'PUT', '/admin/imagine', { engines: { kie: { enabled: true, monthlyCredits: null, ...kieCfg } }, defaultEngine: 'kie' });
+    expect((await put({ model: 'qwen/text-to-image' })).status).toBe(200);
+    db.createSpaceWithDefaults(S, users.admin.id);
+    await call('admin', 'PATCH', `/spaces/${encodeURIComponent(S)}/imagine`, { enabled: true, dailyLimit: 100 });
+    const info = async () => json(await call('admin', 'GET', '/spaces')).find((s) => s.name === S).imagine;
+    expect(await info()).toMatchObject({ canVary: true, canUpscale: false, pictures: { kie: { strength: true } } });
+    // A picture someone uploaded.
+    fs.mkdirSync(path.join(UPLOADS, 'abc123'), { recursive: true });
+    fs.writeFileSync(path.join(UPLOADS, 'abc123', 'pic.png'), PNG);
+    const frames = [];
+    const ws = new WebSocket(`ws://localhost:${port}/gateway?token=${users.admin.token}`);
+    ws.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
+    await new Promise((r) => ws.on('open', r));
+    const ask = async (fields) => {
+      const from = frames.length;
+      ws.send(JSON.stringify({ op: 'imagine', space: S, channel: 'general', ...fields }));
+      const end = Date.now() + 5000;
+      for (;;) {
+        const f = frames.slice(from).find((x) => x.type === 'imagine_queued' || (x.type === 'error' && x.op === 'imagine'));
+        if (f) return f;
+        if (Date.now() > end) throw new Error('no answer');
+        await new Promise((r) => setTimeout(r, 15));
+      }
+    };
+    const settle = async (jobId) => {
+      const end = Date.now() + 5000;
+      while (!['done', 'failed'].includes(db.getImagineJob(jobId).status) && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+      return db.getImagineJob(jobId);
+    };
+    const said = (id) => db.raw.prepare('SELECT content FROM messages WHERE id = ?').get(id).content;
+    try {
+      // Start from a picture on Qwen: uploaded, then the task with the URL and the strength.
+      const ups = seen.uploads.length;
+      const p = await ask({ prompt: 'a gourd at night', init: { url: '/uploads/abc123/pic.png', strength: 'strong' } });
+      const pJob = await settle(p.jobId);
+      expect(pJob).toMatchObject({ engine: 'kie', kind: 'img2img', model: 'qwen/image-to-image', status: 'done', strength: 0.65 });
+      expect(seen.uploads.length).toBe(ups + 1);
+      expect(seen.bodies.at(-1)).toMatchObject({ model: 'qwen/image-to-image', input: { image_url: expect.stringMatching(/^https:\/\/tempfile\.example\//), strength: 0.65 } });
+      // The message says which engine made it, in history and in the update frame.
+      expect(db.getMessages(S, 'general', 50).find((m) => Number(m.id) === p.messageId).imagineEngine).toBe('kie');
+      expect(frames.filter((f) => f.type === 'message_update' && Number(f.id) === p.messageId).at(-1).imagineEngine).toBe('kie');
+      expect(db.getMessages(S, 'general', 50).some((m) => !m.bot && 'imagineEngine' in m)).toBe(false);
+      // A Subtle variation on Qwen keeps its strength and its name.
+      const v1 = await ask({ from: p.messageId, vary: 'subtle' });
+      expect(await settle(v1.jobId)).toMatchObject({ engine: 'kie', kind: 'vary', model: 'qwen/image-to-image', strength: 0.3 });
+      expect(said(v1.messageId)).toBe('🎲 **admin** varied (subtle): a gourd at night');
+      // Grok has no strength: one kind of Variation (`once`; Subtle reads the same), named without one.
+      await put({ model: 'grok-imagine/text-to-image' });
+      expect((await info()).pictures).toEqual({ kie: { strength: false } });
+      const v2 = await ask({ from: p.messageId, vary: 'once' });
+      expect(await settle(v2.jobId)).toMatchObject({ engine: 'kie', kind: 'vary', model: 'grok-imagine/image-to-image', status: 'done' });
+      expect(said(v2.messageId)).toBe('🎲 **admin** varied: a gourd at night');
+      expect(seen.bodies.at(-1).input).toEqual({ prompt: 'a gourd at night', nsfw_checker: true, image_urls: [expect.stringMatching(/^https:/)] });
+      const v3 = await ask({ from: p.messageId, vary: 'strong' });
+      await settle(v3.jobId);
+      expect(said(v3.messageId)).toBe('🎲 **admin** varied: a gourd at night');
+      // Upscale stays ComfyUI's.
+      expect(await ask({ from: p.messageId, upscale: true })).toMatchObject({ type: 'error', code: 'NO_ENGINE' });
+      // A failed picture job is retried on kie.ai.
+      const bad = await ask({ prompt: 'a gourd [broken]', init: { url: '/uploads/abc123/pic.png', strength: 'subtle' } });
+      expect(await settle(bad.jobId)).toMatchObject({ status: 'failed', engine: 'kie' });
+      const again = await ask({ from: bad.messageId });
+      expect(db.getImagineJob(again.jobId)).toMatchObject({ engine: 'kie', kind: 'img2img' });
+      await settle(again.jobId);
+      // Z-Image has no picture version: no pictures until one is chosen.
+      await put({ model: 'z-image', pictureModel: '' });
+      expect(await info()).toMatchObject({ canVary: false, pictures: {} });
+      expect(await ask({ prompt: 'a gourd', init: { url: '/uploads/abc123/pic.png', strength: 'subtle' } })).toMatchObject({
+        type: 'error', code: 'NO_ENGINE', error: 'Starting from a picture needs ComfyUI or a kie.ai model that takes pictures (Settings → Image generation)',
+      });
+      expect(json(await put({ pictureModel: 'z-image' }))).toEqual({ error: 'Pick a model for pictures' });
+      await put({ pictureModel: 'qwen/text-to-image' });
+      expect((await info()).pictures).toEqual({ kie: { strength: true } });
+      // With ComfyUI on too: the panel's engine decides, and a ComfyUI image is varied on ComfyUI.
+      const settings = JSON.parse(db.getSetting('imagine'));
+      settings.engines.comfyui = { enabled: true, url: 'http://127.0.0.1:9', model: 'x.safetensors', family: 'sdxl' };
+      db.setSetting('imagine', JSON.stringify(settings));
+      expect((await info()).pictures).toEqual({ comfyui: { strength: true }, kie: { strength: true } });
+      const onComfy = await ask({ prompt: 'a gourd', engine: 'comfyui', init: { url: '/uploads/abc123/pic.png', strength: 'subtle' } });
+      expect(db.getImagineJob(onComfy.jobId).engine).toBe('comfyui');
+      const onKie = await ask({ prompt: 'a gourd', engine: 'kie', init: { url: '/uploads/abc123/pic.png', strength: 'subtle' } });
+      expect(db.getImagineJob(onKie.jobId)).toMatchObject({ engine: 'kie', model: null });
+      await settle(onComfy.jobId);
+      await settle(onKie.jobId);
+      expect(db.getImagineJob(onKie.jobId)).toMatchObject({ engine: 'kie', model: 'qwen/image-to-image' });
+      // Pretend the ComfyUI job finished: its Variation runs on ComfyUI; the kie.ai image's on kie.ai.
+      db.updateImagineJob(onComfy.jobId, { status: 'done' });
+      db.updateBotMessage(onComfy.messageId, '🎨 **admin** imagined: a gourd', ['/uploads/abc123/pic.png']);
+      const cv = await ask({ from: onComfy.messageId, vary: 'subtle' });
+      expect(db.getImagineJob(cv.jobId).engine).toBe('comfyui');
+      const kv = await ask({ from: p.messageId, vary: 'subtle' });
+      expect(db.getImagineJob(kv.jobId).engine).toBe('kie');
+      await settle(cv.jobId);
+      await settle(kv.jobId);
+      // kie.ai off: a kie.ai image's Variation falls back to ComfyUI.
+      const off = JSON.parse(db.getSetting('imagine'));
+      off.engines.kie.enabled = false;
+      db.setSetting('imagine', JSON.stringify(off));
+      const fb = await ask({ from: p.messageId, vary: 'subtle' });
+      expect(db.getImagineJob(fb.jobId).engine).toBe('comfyui');
+      await settle(fb.jobId);
+    } finally {
+      ws.close();
+      const s2 = JSON.parse(db.getSetting('imagine'));
+      delete s2.engines.comfyui;
+      db.setSetting('imagine', JSON.stringify(s2));
+    }
   });
 });
