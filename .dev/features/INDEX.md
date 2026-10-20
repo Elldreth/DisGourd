@@ -142,9 +142,9 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P5-04 | Server settings window and a short server menu | 5 | COMPLETE | L | P5-02 | components/server-settings/* (new), ChannelList.jsx, Roles/ModLog/Bans/Emoji/ServerImagine dialogs |
 | P5-05 | Channel settings tabs and member menu header | 5 | COMPLETE | M | P5-02, P5-01 | ChannelSettingsDialog.jsx, MemberList.jsx |
 | P5-06 | Sound set, image-generation art, shorter voice warning | 5 | COMPLETE | M | P5-03 (art only) | sounds.js, web/public/sounds/*, ChannelList.jsx |
-| P6-01 | Leave server | 6 | REVIEW | S | none | routes/spaces.js, db/index.js, useSpaces.js, ChannelList.jsx |
-| P6-02 | Change password (signs out other devices; migration v25) | 6 | READY | M | none | routes/auth.js, auth/tokens.js, gateway, ProfileDialog.jsx, ChangePasswordDialog.jsx (new) |
-| P6-03 | Rename channel | 6 | READY | M | none (after P6-01: shared files) | routes/spaces.js, db/index.js, gateway/voice.js, useSpaces.js, ChannelSettingsDialog.jsx, ModLogSection.jsx |
+| P6-01 | Leave server | 6 | COMPLETE | S | none | routes/spaces.js, db/index.js, useSpaces.js, ChannelList.jsx |
+| P6-02 | Change password (signs out other devices; migration v25) | 6 | COMPLETE | M | none | routes/auth.js, auth/tokens.js, gateway, ProfileDialog.jsx, ChangePasswordDialog.jsx (new) |
+| P6-03 | Rename channel | 6 | REVIEW | M | none (after P6-01: shared files) | routes/spaces.js, db/index.js, gateway/voice.js, useSpaces.js, ChannelSettingsDialog.jsx, ModLogSection.jsx |
 
 ## Dependency map (hard dependencies)
 

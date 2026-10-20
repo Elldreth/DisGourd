@@ -269,6 +269,27 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       threadsRef.current = tmap;
       setThreads(tmap);
     },
+    // A channel was renamed (P6-03): its counts and read position move to the
+    // new name, and its threads name the new parent.
+    channel_renamed: (f) => {
+      if (threadOnly) return;
+      const from = unreadKey(f.space, f.channel);
+      const to = unreadKey(f.space, f.newName);
+      const move = (map) => {
+        if (!(from in map)) return map;
+        const { [from]: value, ...rest } = map;
+        return { ...rest, [to]: value };
+      };
+      setUnread(move);
+      setMentions(move);
+      lastRead.current = move(lastRead.current);
+      const next = {};
+      for (const [k, t] of Object.entries(threadsRef.current)) {
+        next[k] = t.parent === f.channel && JSON.parse(k)[0] === f.space ? { ...t, parent: f.newName } : t;
+      }
+      threadsRef.current = next;
+      setThreads(next);
+    },
     // You started following a thread (or stopped). Unfollowed threads never badge.
     thread_follow: (f) => {
       if (threadOnly) return;

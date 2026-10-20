@@ -53,6 +53,16 @@ export function useVoiceCall({ send, myId }) {
       const why = f.reason === 'banned' ? 'you were banned from' : f.reason === 'left' ? 'you left' : 'you were removed from';
       v() && v().endCall(`Your call in #${f.channel} ended: ${why} ${f.space}.`);
     },
+    // A voice channel was renamed (P6-03): the server kept the room; follow it.
+    channel_renamed: (f) => {
+      v() && v().renameRoom(f.space, f.channel, f.newName);
+      setStates((prev) => {
+        const from = unreadKey(f.space, f.channel);
+        if (!(from in prev)) return prev;
+        const { [from]: people, ...rest } = prev;
+        return { ...rest, [unreadKey(f.space, f.newName)]: people };
+      });
+    },
     voice_peer_joined: (f) => v() && v().handlePeerJoined(f.peer),
     voice_peer_left: (f) => v() && v().handlePeerLeft(f.userId),
     voice_signal: (f) => v() && v().handleSignal(f.from, f.data),

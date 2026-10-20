@@ -8,7 +8,7 @@ const { validateSpaceName, normalizeChannelName, validateChannelName } = require
 const { canViewChannel, canPostChannel, canModerateMessage } = require('../permissions');
 const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence, tellFollow } = require('../gateway/delivery');
 const { threadUpdated } = require('../gateway/chat');
-const { voiceEject, voiceForceMute } = require('../gateway/voice');
+const { voiceEject, voiceForceMute, voiceRenameChannel } = require('../gateway/voice');
 const fs = require('fs');
 const path = require('path');
 const { uploadFilePath } = require('./uploads');
@@ -480,16 +480,23 @@ const routes = [
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
           return sendJson(res, 200, { ok: true });
         }
-        // PATCH a channel { nsfw?, topic?, slowmode? } — Age-restricted (18+)
-        // (P2-20d), its topic (P3-20a: plain text, at most 300 characters; ''
-        // clears) and slow mode (P3-26d: seconds, logged when it changes).
-        // Managers only.
+        // PATCH a channel { nsfw?, topic?, slowmode?, name? } — Age-restricted
+        // (18+) (P2-20d), its topic (P3-20a: plain text, at most 300 characters;
+        // '' clears), slow mode (P3-26d: seconds, logged when it changes) and its
+        // name (P6-03: as at creation, logged). Managers only.
         if (channelName && pathSegments.length === 4 && req.method === 'PATCH') {
           if (!canManage) return sendJson(res, 403, { error: 'Only the owner or admins can change channel settings' });
           if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 403, { error: 'You cannot view this channel' });
           if (db.isThreadChannel(channelName) || !db.channelType(spaceName, channelName)) return sendJson(res, 404, { error: 'Channel not found' });
           const body = await getJsonBody(req);
-          if (body.nsfw === undefined && body.topic === undefined && body.slowmode === undefined) return sendJson(res, 400, { error: 'Nothing to change' });
+          if (body.nsfw === undefined && body.topic === undefined && body.slowmode === undefined && body.name === undefined) return sendJson(res, 400, { error: 'Nothing to change' });
+          let newName;
+          if (body.name !== undefined) {
+            const invalid = typeof body.name === 'string' ? validateChannelName(body.name) : 'A channel name is required';
+            if (invalid) return sendJson(res, 400, { error: invalid });
+            newName = normalizeChannelName(body.name);
+            if (newName !== channelName && db.channelType(spaceName, newName)) return sendJson(res, 409, { error: 'A channel with that name already exists' });
+          }
           if (body.slowmode !== undefined && (!SLOWMODE_SECONDS.includes(body.slowmode) || db.channelType(spaceName, channelName) !== 'text')) {
             return sendJson(res, 400, { error: 'Slow mode is 0, 5, 30, 60 or 300 seconds, on text channels' });
           }
@@ -506,8 +513,19 @@ const routes = [
             db.setChannelSlowmode(spaceName, channelName, body.slowmode);
             db.logModAction(space.id, { actorId: userId, action: 'slowmode', details: { channel: channelName, seconds: body.slowmode } });
           }
+          // The name last: everything above used the old one.
+          if (newName !== undefined && newName !== channelName) {
+            const renamed = db.renameChannel(spaceName, channelName, newName);
+            if (renamed.error === 'taken') return sendJson(res, 409, { error: 'A channel with that name already exists' });
+            if (renamed.error) return sendJson(res, 404, { error: 'Channel not found' });
+            db.logModAction(space.id, { actorId: userId, action: 'channel_rename', details: { from: channelName, to: newName } });
+            // Before the voice room moves, so clients know the new name first.
+            deliverToChannelViewers(spaceName, newName, JSON.stringify({ type: 'channel_renamed', space: spaceName, channel: channelName, newName }));
+            voiceRenameChannel(spaceName, channelName, newName);
+          }
           deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
           const out = {};
+          if (newName !== undefined) out.name = newName;
           if (body.nsfw !== undefined) out.nsfw = body.nsfw;
           if (topic !== undefined) out.topic = topic || null;
           if (body.slowmode !== undefined) out.slowmode = body.slowmode;

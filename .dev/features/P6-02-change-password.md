@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 6
-- **State:** REVIEW (details confirmed by the owner, 2026-10-20)
+- **State:** COMPLETE (merged in #167, 2026-10-20)
 - **Effort:** M (migration v25)
 - **Depends on:** none
 - **Serialize with:** none of P6 (it touches `routes/auth.js`, `auth/tokens.js` and `ProfileDialog.jsx`, which P6-01 and P6-03 don't)

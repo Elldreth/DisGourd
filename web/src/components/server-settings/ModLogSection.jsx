@@ -15,6 +15,7 @@ const ACTIONS = [
   ['timeout', 'Timeouts'],
   ['timeout_remove', 'Timeouts removed'],
   ['slowmode', 'Slow mode'],
+  ['channel_rename', 'Channel renames'],
   ['role_add', 'Roles given'],
   ['role_remove', 'Roles taken'],
   ['channel_access', 'Channel access'],
@@ -65,6 +66,8 @@ export function describeEntry(e) {
       return d.seconds
         ? <><B>{e.actor}</B> set slow mode in #{d.channel} to {SLOWMODE_WORDS[d.seconds] || `${d.seconds} seconds`}</>
         : <><B>{e.actor}</B> turned off slow mode in #{d.channel}</>;
+    case 'channel_rename':
+      return <><B>{e.actor}</B> renamed #{d.from} to #{d.to}</>;
     case 'unban':
       return <><B>{e.actor}</B> unbanned <B>{e.target}</B></>;
     case 'role_add':

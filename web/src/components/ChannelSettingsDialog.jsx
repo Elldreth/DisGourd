@@ -4,6 +4,7 @@ import Icon from './Icon.jsx';
 import Modal from './Modal.jsx';
 import SettingRow from './settings/SettingRow.jsx';
 import Switch from './settings/Switch.jsx';
+import { MAX_CHANNEL_NAME, normalizeChannelName } from '../util.js';
 
 // An override cell: '' default, '1' allow, '0' deny.
 const CHOICES = [
@@ -29,6 +30,8 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
   const [cells, setCells] = useState(null); // roleId -> { view, post } cells; null while loading
   const [nsfw, setNsfw] = useState(!!meta?.nsfw); // Age-restricted (18+), text channels
   const [topic, setTopic] = useState(meta?.topic || ''); // P3-20a
+  const [name, setName] = useState(channel || ''); // P6-03
+  const newName = normalizeChannelName(name);
   const [slowmode, setSlowmode] = useState(meta?.slowmode || 0); // P3-26d: seconds
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -65,6 +68,7 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
   const setCell = (roleId, field, v) => setCells((c) => ({ ...c, [roleId]: { view: '', post: '', ...c?.[roleId], [field]: v } }));
 
   async function save() {
+    if (!category && !newName) return setError('A channel name is required');
     setBusy(true);
     setError('');
     try {
@@ -80,6 +84,8 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
         if (!isVoice && nsfw !== !!meta?.nsfw) await api.setChannelNsfw(space, channel, nsfw);
         if (!isVoice && slowmode !== (meta?.slowmode || 0)) await api.setChannelSlowmode(space, channel, slowmode);
         if (topic.trim() !== (meta?.topic || '')) await api.setChannelTopic(space, channel, topic.trim());
+        // The name last: the calls above use the current one.
+        if (newName !== channel) await api.renameChannel(space, channel, newName);
       }
       onSaved();
       onClose();
@@ -180,6 +186,23 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
       <div ref={bodyRef} className={`overflow-y-auto p-6 ${category ? '' : 'h-[min(28rem,65vh)]'}`}>
         {!category && (
           <section {...panelProps('overview')}>
+            <div>
+              <label htmlFor="channel-name" className={label}>Name</label>
+              <input
+                id="channel-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={MAX_CHANNEL_NAME}
+                autoComplete="off"
+                spellCheck={false}
+                className="input"
+              />
+              {newName && newName !== name.trim() && (
+                <p className="mt-1 text-xs text-gray-500" aria-live="polite">
+                  Saved as {isVoice ? newName : `#${newName}`}: lowercase, with dashes for spaces.
+                </p>
+              )}
+            </div>
             <div>
               <label htmlFor="channel-topic" className={label}>Topic</label>
               <textarea

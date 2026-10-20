@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 6
-- **State:** REVIEW (details confirmed by the owner, 2026-10-20)
+- **State:** COMPLETE (merged in #166, 2026-10-20)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P6-03 (`server/routes/spaces.js`, `web/src/state/useSpaces.js`, `web/src/api.js`)
