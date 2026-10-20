@@ -115,21 +115,25 @@ test('arrow keys, Home and End move between tabs; Enter puts focus in the panel'
   expect(document.activeElement).toBe(panelFor(tabs[0]));
 });
 
-test('site admins get a second group with Registration & access; members never see it', async () => {
+test('site admins get a second group with General and Image generation; members never see it', async () => {
   open();
-  expect(screen.queryByRole('tab', { name: 'Registration & access' })).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'General' })).toBeNull();
   expect(screen.queryByText('Site admin')).toBeNull();
   cleanup();
   await act(async () => {
     open({ profile: { ...profile, siteAdmin: true } });
   });
   expect(screen.getByText('Site admin')).toBeTruthy();
-  const tab = screen.getByRole('tab', { name: 'Registration & access' });
+  const tab = screen.getByRole('tab', { name: 'General' });
   fireEvent.click(tab);
-  expect(within(panelFor(tab)).getByRole('checkbox', { name: /Link previews/ })).toBeTruthy();
+  expect(within(panelFor(tab)).getByRole('switch', { name: /Link previews/ })).toBeTruthy();
   const imagine = screen.getByRole('tab', { name: 'Image generation' });
   fireEvent.click(imagine);
-  expect(await within(panelFor(imagine)).findByLabelText('ComfyUI address')).toBeTruthy();
+  expect(await within(panelFor(imagine)).findByLabelText('Images per person per day')).toBeTruthy();
+  // P5-03: the rest of Image generation is in short pages under it.
+  const pages = ['ComfyUI', 'Quality', 'Variations', 'kie.ai', 'Try it'].map((name) => screen.getByRole('tab', { name }));
+  fireEvent.click(pages[0]);
+  expect(within(panelFor(pages[0])).getByLabelText('ComfyUI address')).toBeTruthy();
 });
 
 test('opens at a requested section, and remembers the last one you used', () => {

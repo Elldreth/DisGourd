@@ -19,7 +19,7 @@ test('site admins can switch link previews off and back on', async () => {
   await act(async () => {
     render(<RegistrationAdmin />);
   });
-  const box = screen.getByRole('checkbox', { name: /Link previews/ });
+  const box = screen.getByRole('switch', { name: /Link previews/ });
   expect(box.checked).toBe(true);
   await act(async () => {
     fireEvent.click(box);

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import SettingRow from './settings/SettingRow.jsx';
+import Switch from './settings/Switch.jsx';
 import * as api from '../api.js';
 import Icon from './Icon.jsx';
 import { copyText } from '../util.js';
@@ -193,21 +195,13 @@ export default function RegistrationAdmin() {
         </div>
       </div>
 
-      <label className="flex items-start justify-between gap-3 rounded-lg bg-ink-900/60 p-3">
-        <span className="text-sm text-gray-200">
-          Link previews
-          <span className="block text-xs text-gray-500">
-            Show a card under links in messages. The server fetches each page safely; the card&rsquo;s image loads from
-            that site in each viewer&rsquo;s browser.
-          </span>
-        </span>
-        <input
-          type="checkbox"
-          checked={data.linkPreviews !== false}
-          onChange={(e) => changeLinkPreviews(e.target.checked)}
-          className="mt-1 h-4 w-4 accent-brand"
-        />
-      </label>
+      <SettingRow
+        className="rounded-lg bg-ink-900/60 px-3"
+        label="Link previews"
+        description="Show a card under links in messages. The server fetches each page safely; the card’s image loads from that site in each viewer’s browser."
+      >
+        <Switch label="Link previews" checked={data.linkPreviews !== false} onChange={changeLinkPreviews} />
+      </SettingRow>
 
       {error && <div className="text-sm text-danger">{error}</div>}
     </div>

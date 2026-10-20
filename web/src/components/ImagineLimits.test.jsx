@@ -13,7 +13,8 @@ vi.mock('../api.js', () => ({
 }));
 const api = await import('../api.js');
 const { imagineFor, imagineState, limitSourceText } = await import('./ImaginePanel.jsx');
-const { default: ImagineAdmin } = await import('./ImagineAdmin.jsx');
+// P5-03: the single form is now pages; this renders them all at once.
+const { default: ImagineAdmin } = await import('./admin/imagine/allPages.testutil.jsx');
 const { default: ServerImagineDialog } = await import('./ServerImagineDialog.jsx');
 
 beforeEach(() => vi.clearAllMocks());

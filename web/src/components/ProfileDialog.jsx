@@ -5,7 +5,14 @@ import AudioSettings from './AudioSettings.jsx';
 import NotificationSettings from './NotificationSettings.jsx';
 import AppearanceSettings from './AppearanceSettings.jsx';
 import RegistrationAdmin from './RegistrationAdmin.jsx';
-import ImagineAdmin from './ImagineAdmin.jsx';
+import { ImagineSettingsProvider, ImagineSaveBar } from './admin/imagine/ImagineSettings.jsx';
+import ImagineOverview from './admin/imagine/OverviewPage.jsx';
+import ImagineComfy from './admin/imagine/ComfyPage.jsx';
+import ImagineQuality from './admin/imagine/QualityPage.jsx';
+import ImagineVariations from './admin/imagine/VariationsPage.jsx';
+import ImagineKie from './admin/imagine/KiePage.jsx';
+import ImagineTry from './admin/imagine/TryPage.jsx';
+import ConfirmDialog from './ConfirmDialog.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Modal from './Modal.jsx';
 import SettingsLayout from './settings/SettingsLayout.jsx';
@@ -20,10 +27,25 @@ const SECTIONS = [
   { id: 'notifications', label: 'Notifications' },
   { id: 'appearance', label: 'Appearance' },
 ];
+// Site admin: General (sign-up, site admins, link previews), then Image
+// generation as an overview and five short pages (P5-03).
 const ADMIN_SECTIONS = [
-  { id: 'admin', label: 'Registration & access', group: 'Site admin' },
+  { id: 'admin', label: 'General', group: 'Site admin' },
   { id: 'imagine', label: 'Image generation', group: 'Site admin' },
+  { id: 'imagine-comfy', label: 'ComfyUI', group: 'Site admin', indent: true },
+  { id: 'imagine-quality', label: 'Quality', group: 'Site admin', indent: true },
+  { id: 'imagine-variations', label: 'Variations', group: 'Site admin', indent: true },
+  { id: 'imagine-kie', label: 'kie.ai', group: 'Site admin', indent: true },
+  { id: 'imagine-try', label: 'Try it', group: 'Site admin', indent: true },
 ];
+const IMAGINE_PAGES = {
+  imagine: ImagineOverview,
+  'imagine-comfy': ImagineComfy,
+  'imagine-quality': ImagineQuality,
+  'imagine-variations': ImagineVariations,
+  'imagine-kie': ImagineKie,
+  'imagine-try': ImagineTry,
+};
 const SECTION_KEY = 'dg.settingsSection';
 
 function readSection(allowed) {
@@ -173,25 +195,57 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
     if (id === 'appearance') return <AppearanceSettings />;
     if (id === 'notifications') return <NotificationSettings />;
     if (id === 'admin') return <RegistrationAdmin />;
-    if (id === 'imagine') return <ImagineAdmin />;
+    const Page = IMAGINE_PAGES[id];
+    if (Page)
+      return (
+        <>
+          <Page />
+          {id !== 'imagine-try' && <ImagineSaveBar />}
+        </>
+      );
     return null;
   }
 
+  // Unsaved site-admin changes: ask before closing (P5-03).
+  const [adminDirty, setAdminDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const requestClose = () => (adminDirty ? setConfirmClose(true) : onClose());
+
+  const layout = (
+    <SettingsLayout
+      label="Settings sections"
+      sections={sections}
+      section={section}
+      onSection={setSection}
+      startOnPage={ids.includes(initialSection)}
+      renderSection={renderSection}
+    />
+  );
+
   return (
     <Modal
-      onClose={onClose}
+      onClose={requestClose}
       backdropClassName="flex items-center justify-center bg-black/60 md:p-4"
       panelClassName="flex h-dvh w-full flex-col bg-ink-800 shadow-2xl md:h-[min(680px,85vh)] md:max-w-3xl md:rounded-xl md:ring-1 md:ring-ink-500/50"
     >
-      <Modal.Header title="Settings" onClose={onClose} />
-      <SettingsLayout
-        label="Settings sections"
-        sections={sections}
-        section={section}
-        onSection={setSection}
-        startOnPage={ids.includes(initialSection)}
-        renderSection={renderSection}
-      />
+      <Modal.Header title="Settings" onClose={requestClose} />
+      {profile?.siteAdmin ? (
+        <ImagineSettingsProvider onDirtyChange={setAdminDirty} onNavigate={setSection}>
+          {layout}
+        </ImagineSettingsProvider>
+      ) : (
+        layout
+      )}
+      {confirmClose && (
+        <ConfirmDialog
+          title="Discard changes?"
+          body="Your image generation changes aren’t saved yet."
+          confirmLabel="Discard"
+          danger
+          onConfirm={onClose}
+          onCancel={() => setConfirmClose(false)}
+        />
+      )}
 
       {crop && (
         <ImageCropper
