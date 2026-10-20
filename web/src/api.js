@@ -182,6 +182,10 @@ export function setServerImagine(space, { enabled, dailyLimit }) {
 export function hideChannelPreview(space, channel, id) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/preview`, { method: 'DELETE' });
 }
+// P9-02: hand a server to another member (confirm = the server's name).
+export function transferServer(space, user, confirm) {
+  return request(`/spaces/${encodeURIComponent(space)}/transfer`, { method: 'POST', body: { user, confirm } });
+}
 // P9-01: message reports.
 export function reportMessage(space, channel, id, { reason, note } = {}) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/report`, { method: 'POST', body: { reason, note } });

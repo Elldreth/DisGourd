@@ -275,6 +275,11 @@ export default function App() {
   };
   useEffect(() => onOpenRequest((data) => openFromPush.current(data)), []);
   const undoDelete = useUndoDelete({ toast });
+  // Short notices from the servers state (P9-02: ownership handed over).
+  useEffect(() => {
+    if (sp.notice) toast.show({ id: `notice-${sp.notice.at}`, message: sp.notice.message, duration: 8000, placement: 'top', dismissible: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sp.notice]);
   // Banned from a server (P3-26b): it has left the rail; say why, until dismissed.
   useEffect(() => {
     const b = sp.bannedFrom;
@@ -566,6 +571,7 @@ export default function App() {
             myPosition={sp.myPosition}
             abilities={sp.activeSpace?.abilities || []}
             openReports={sp.activeSpace?.openReports || 0}
+            onServerTransferred={sp.serverTransferred}
             onJumpToReport={(r) => {
               if (r.thread) return openThreadFromSearch(sp.currentSpace, r.thread);
               openChannelFromSearch(sp.currentSpace, r.channel);

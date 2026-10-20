@@ -217,6 +217,26 @@ const routes = [
         return sendJson(res, 200, { ok: true });
       }
 
+      // ---- POST /spaces/:name/transfer { user, confirm } — the owner hands the
+      // server to another member (P9-02), confirming with the server's name.
+      // It happens at once; the old owner becomes an Admin.
+      if (pathSegments[2] === 'transfer' && pathSegments.length === 3 && req.method === 'POST') {
+        if (!access.owner) return sendJson(res, 403, { error: 'Only the owner can hand the server over' });
+        const body = await getJsonBody(req);
+        if (body.confirm !== spaceName) return sendJson(res, 400, { error: "Type the server's name to confirm" });
+        const target = typeof body.user === 'string' ? db.getUserByUsername(body.user) : null;
+        if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
+        if (target.id === userId) return sendJson(res, 400, { error: 'You already own this server' });
+        if (target.is_bot) return sendJson(res, 400, { error: "A bot can't own a server" });
+        const role = db.transferOwnership(space.id, userId, target.id);
+        db.logModAction(space.id, { actorId: userId, targetId: target.id, action: 'ownership_transfer', details: { role } });
+        const me = db.getUserById(userId);
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'space_updated', space: spaceName }));
+        sendToUser(target.id, JSON.stringify({ type: 'ownership_received', space: spaceName, from: me ? me.username : null }));
+        return sendJson(res, 200, { owner: target.username, yourRole: role });
+      }
+
       // ---- Reports (P9-01): moderators read and close them ----
       // GET /spaces/:name/reports?status=open|closed&before=<id>;
       // POST /spaces/:name/reports/:id/resolve { action: 'dismiss' | 'resolved' | 'delete', resolution? }

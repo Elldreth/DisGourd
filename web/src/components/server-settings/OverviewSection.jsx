@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import SaveBar from '../settings/SaveBar.jsx';
 import { colorForName, initials } from '../../util.js';
 import GlyphPicker from '../GlyphPicker.jsx';
+import TransferDialog from './TransferDialog.jsx';
+import * as api from '../../api.js';
 
 // Server settings › Overview (P5-04): the server's name and icon, and (for
 // the owner) Delete server in a danger zone at the bottom. The name waits for
@@ -10,7 +12,11 @@ export default function OverviewSection({
   space, icon, canEdit, canReframeIcon, isOwner, onRename, onChangeIcon, onRemoveIcon, onReframeIcon, onUseGlyph, onDelete, onDirtyChange,
   saved = false, // "Saved" after a rename (kept by the window: a rename reloads the server)
   onSavedChange,
+  members = [], // P9-02: who the owner can hand the server to
+  currentUser,
+  onTransferred, // (newOwner) after a handover
 }) {
+  const [transferring, setTransferring] = useState(false);
   const [name, setName] = useState(space || '');
   const fileRef = useRef(null);
   // A rename (here or elsewhere) changes `space`: start from the new name.
@@ -88,7 +94,15 @@ export default function OverviewSection({
       {isOwner && (
         <section aria-label="Danger zone" className="rounded-xl p-4 ring-1 ring-danger/40">
           <h3 className="text-sm font-semibold text-danger">Danger zone</h3>
-          <p className="mt-1 text-sm text-gray-400">Deleting the server removes its channels and every message, for everyone. It can’t be undone.</p>
+          <p className="mt-1 text-sm text-gray-400">Hand the server to another member. You’ll become an Admin.</p>
+          <button
+            type="button"
+            onClick={() => setTransferring(true)}
+            className="tap mt-3 rounded-lg px-3 py-2 text-sm font-semibold text-danger ring-1 ring-danger/50 transition hover:bg-danger/10"
+          >
+            Transfer ownership…
+          </button>
+          <p className="mt-4 text-sm text-gray-400">Deleting the server removes its channels and every message, for everyone. It can’t be undone.</p>
           <button
             type="button"
             onClick={onDelete}
@@ -99,6 +113,19 @@ export default function OverviewSection({
         </section>
       )}
 
+      {transferring && (
+        <TransferDialog
+          space={space}
+          members={members}
+          currentUser={currentUser}
+          onTransfer={async (user, confirm) => {
+            await api.transferServer(space, user, confirm);
+            setTransferring(false);
+            onTransferred?.(user);
+          }}
+          onClose={() => setTransferring(false)}
+        />
+      )}
       {dirty ? (
         <SaveBar dirty onSave={save} onReset={() => setName(space || '')} />
       ) : saved ? (
