@@ -28,3 +28,13 @@ test('no pending invite: no dialog', () => {
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(onInviteOpened).not.toHaveBeenCalled();
 });
+
+test('the mention badge sits on top of the icon, outside its rounded mask; none on the open server', () => {
+  renderRail({ spaces: [{ name: 'Tx' }, { name: 'Calm' }], currentSpace: 'Calm', mentions: { Tx: 4, Calm: 2 } });
+  const icon = screen.getByRole('button', { name: /^Tx,/ });
+  const badge = screen.getByTestId('mentions-badge-Tx');
+  expect(badge.textContent).toBe('4');
+  expect(icon.contains(badge)).toBe(false);
+  expect(badge.parentElement).toBe(icon.parentElement);
+  expect(screen.queryByTestId('mentions-badge-Calm')).toBeNull();
+});

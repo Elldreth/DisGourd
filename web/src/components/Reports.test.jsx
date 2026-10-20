@@ -131,8 +131,15 @@ test('Closed shows how each report ended; an empty queue says so', async () => {
 
 test('the rail shows open reports on a server, for moderators', () => {
   render(<ServerRail spaces={[{ name: 'Tx', openReports: 3 }, { name: 'Calm' }]} currentSpace="" onSelect={() => {}} onCreate={() => {}} onJoin={() => {}} onSelectDms={() => {}} />);
-  expect(screen.getByRole('button', { name: 'Tx, 3 open reports' })).toBeTruthy();
+  const icon = screen.getByRole('button', { name: 'Tx, 3 open reports' });
   expect(screen.getByRole('button', { name: 'Calm' })).toBeTruthy();
+  // The badge sits on top of the icon, outside the button (whose rounded mask
+  // clips anything inside it), selected or not.
+  const badge = screen.getByTestId('reports-badge-Tx');
+  expect(badge.textContent).toBe('3');
+  expect(icon.contains(badge)).toBe(false);
+  expect(badge.parentElement).toBe(icon.parentElement);
+  expect(screen.queryByTestId('reports-badge-Calm')).toBeNull();
 });
 
 test('the server menu shows Reports only while some are open; it opens Server settings › Reports', async () => {
