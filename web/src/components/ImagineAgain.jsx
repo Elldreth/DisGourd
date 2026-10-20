@@ -7,9 +7,10 @@ import { useState } from 'react';
 export function imagineResultKind(m) {
   if (!m?.bot || typeof m.content !== 'string') return null;
   const hasImage = !!(m.attachments?.length || m.attachment);
-  if (/^🎨 \*\*.+?\*\* imagined: /.test(m.content) && hasImage) return 'done';
-  if (/^🔍 \*\*.+?\*\* upscaled: /.test(m.content) && hasImage) return 'upscaled'; // P3-29
-  if (/^🎲 \*\*.+?\*\* varied \((subtle|strong)\): /.test(m.content) && hasImage) return 'varied'; // P3-36a
+  // P9-04c: the style may follow, "imagined (Anime): …", "varied (subtle, Anime): …".
+  if (/^🎨 \*\*.+?\*\* imagined(?: \(.+?\))?: /.test(m.content) && hasImage) return 'done';
+  if (/^🔍 \*\*.+?\*\* upscaled(?: \(.+?\))?: /.test(m.content) && hasImage) return 'upscaled'; // P3-29
+  if (/^🎲 \*\*.+?\*\* varied \((subtle|strong)(?:, .+?)?\): /.test(m.content) && hasImage) return 'varied'; // P3-36a
   if (/^⚠️ Couldn't imagine that for \*\*/.test(m.content)) return 'failed';
   return null;
 }

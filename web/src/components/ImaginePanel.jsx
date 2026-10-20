@@ -45,7 +45,7 @@ export const STRENGTHS = [
 // `picture` (P3-36b): { url, name, fromReply? } to start from, or null;
 // `onPickPicture(file)` attaches one; `onClearPicture` stops using it.
 export default function ImaginePanel({
-  imagine, shape, quality, engine, onShape, onQuality, onEngine, busy, error,
+  imagine, shape, quality, engine, onShape, onQuality, onEngine, busy, error, style = null, onStyle,
   picture = null, strength = 'medium', onStrength, onPickPicture, onClearPicture, uploadingPicture = false,
 }) {
   // Paid engines (kie.ai) carry a price per quality: the last real one, or an estimate.
@@ -68,6 +68,9 @@ export default function ImaginePanel({
           <Chips label="Quality" options={QUALITIES} value={quality} onChange={onQuality} disabled={busy} />
           {imagine.engines.length > 1 && (
             <Chips label="Engine" options={imagine.engines.map((e) => ({ v: e.id, label: e.name }))} value={engine} onChange={onEngine} disabled={busy} />
+          )}
+          {showStyles(imagine, engine) && (
+            <Chips label="Style" options={imagine.styles.map((s) => ({ v: s.id, label: s.name }))} value={style} onChange={onStyle} disabled={busy} />
           )}
         </div>
       ) : (
@@ -118,6 +121,30 @@ export default function ImaginePanel({
   );
 }
 
+// ComfyUI styles (P9-04c): offered when ComfyUI is the engine and there's a choice.
+export function showStyles(imagine, engine) {
+  return engine === 'comfyui' && imagine.styles.length > 1;
+}
+
+// The style to preselect: the one this device last used, if it's still there, else the default.
+const STYLE_KEY = 'disgourd.imagineStyle';
+export function startingStyle(imagine) {
+  let last = '';
+  try {
+    last = localStorage.getItem(STYLE_KEY) || '';
+  } catch {
+    // storage blocked: just use the default
+  }
+  return imagine.styles.some((s) => s.id === last) ? last : imagine.defaultStyle || imagine.styles[0]?.id || null;
+}
+export function rememberStyle(id) {
+  try {
+    localStorage.setItem(STYLE_KEY, id);
+  } catch {
+    // storage blocked: not remembered
+  }
+}
+
 // The Composer's /imagine for one channel (or thread) of a server: its state
 // from the server list, with a `run` that sends the request there.
 export function imagineFor(spaces, space, channel, request) {
@@ -135,7 +162,10 @@ export function imagineState(info, run, spaceName = 'This server') {
   else if (!info.engines?.length) reason = 'No image engine is set up on this instance yet.';
   else if (!info.canUse) reason = 'You don’t have the Generate images permission in this server.';
   else if (remaining <= 0) reason = `You’ve used all ${info.dailyLimit} images for today. ${limitSourceText(info, spaceName)}`;
-  return { available: !reason, reason, remaining, engines: info.engines || [], run, canUpscale: !!info.canUpscale, canVary: !!info.canVary };
+  return {
+    available: !reason, reason, remaining, engines: info.engines || [], run, canUpscale: !!info.canUpscale, canVary: !!info.canVary,
+    styles: info.styles || [], defaultStyle: info.defaultStyle || null, // P9-04c
+  };
 }
 
 // Where the daily limit comes from, in words (P3-21; matches the server's refusal).

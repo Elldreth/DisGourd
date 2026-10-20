@@ -184,3 +184,43 @@ test('no picture option without ComfyUI (canVary false)', () => {
   expect(screen.queryByRole('group', { name: 'Start from a picture' })).toBeNull();
 });
 
+
+test('P9-04c: the Style row: ComfyUI with 2+ styles; the default first, then the last one used here; sent as `preset`', async () => {
+  localStorage.removeItem('disgourd.imagineStyle');
+  const styles = [{ id: 'default', name: 'Default' }, { id: 'photo', name: 'Photoreal' }, { id: 'anime', name: 'Anime' }];
+  const engines = [{ id: 'comfyui', name: 'ComfyUI' }, { id: 'kie', name: 'kie.ai' }];
+  const run = vi.fn(async () => ({}));
+  const first = setup({ imagine: imagineState(info({ engines, styles, defaultStyle: 'photo' }), run) });
+  first.type('/imagine a boat');
+  const row = screen.getByRole('group', { name: 'Style' });
+  expect(within(row).getAllByRole('button').map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['Default', 'false'], ['Photoreal', 'true'], ['Anime', 'false']]);
+  fireEvent.keyDown(first.box, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenLastCalledWith({ prompt: 'a boat', shape: 'square', quality: 'standard', preset: 'photo' }));
+  // Pick Anime: sent, and remembered on this device.
+  first.type('/imagine a cat');
+  fireEvent.click(within(screen.getByRole('group', { name: 'Style' })).getByRole('button', { name: 'Anime' }));
+  fireEvent.keyDown(first.box, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenLastCalledWith({ prompt: 'a cat', shape: 'square', quality: 'standard', preset: 'anime' }));
+  // kie.ai has no styles: no row, nothing sent.
+  first.type('/imagine a dog');
+  fireEvent.click(within(screen.getByRole('group', { name: 'Engine' })).getByRole('button', { name: 'kie.ai' }));
+  expect(screen.queryByRole('group', { name: 'Style' })).toBeNull();
+  fireEvent.keyDown(first.box, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenLastCalledWith({ prompt: 'a dog', shape: 'square', quality: 'standard', engine: 'kie' }));
+  cleanup();
+  // A new box starts on Anime (remembered); a remembered style that's gone falls back to the default.
+  const second = setup({ imagine: imagineState(info({ styles, defaultStyle: 'photo' }), run) });
+  second.type('/imagine a fish');
+  expect(within(screen.getByRole('group', { name: 'Style' })).getByRole('button', { name: 'Anime' }).getAttribute('aria-pressed')).toBe('true');
+  cleanup();
+  setup({ imagine: imagineState(info({ styles: styles.slice(0, 2), defaultStyle: 'photo' }), run) }).type('/imagine a fish');
+  expect(within(screen.getByRole('group', { name: 'Style' })).getByRole('button', { name: 'Photoreal' }).getAttribute('aria-pressed')).toBe('true');
+  cleanup();
+  // One style: no row, and no `preset` (the server uses its only style).
+  const single = setup({ imagine: imagineState(info({ styles: [{ id: 'default', name: 'Default' }], defaultStyle: 'default' }), run) });
+  single.type('/imagine a frog');
+  expect(screen.queryByRole('group', { name: 'Style' })).toBeNull();
+  fireEvent.keyDown(single.box, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenLastCalledWith({ prompt: 'a frog', shape: 'square', quality: 'standard' }));
+  localStorage.removeItem('disgourd.imagineStyle');
+});

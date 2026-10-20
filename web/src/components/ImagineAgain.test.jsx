@@ -21,6 +21,11 @@ test('which bot messages are finished or failed requests', () => {
   expect(imagineResultKind(waiting)).toBe(null);
   expect(imagineResultKind(person)).toBe(null); // only the bot's own messages
   expect(imagineResultKind({ ...done, attachments: [] })).toBe(null);
+  // P9-04c: with several styles, the message names the style.
+  expect(imagineResultKind({ ...done, content: '🎨 **sandy** imagined (Anime): a gourd' })).toBe('done');
+  expect(imagineResultKind({ ...done, content: '🎲 **sandy** varied (subtle, Photo (raw)): a gourd' })).toBe('varied');
+  expect(imagineResultKind({ ...done, content: '🔍 **sandy** upscaled (Anime): a gourd' })).toBe('upscaled');
+  expect(imagineResultKind({ ...done, content: '🎨 **sandy** imagined (Anime) a gourd' })).toBe(null);
 });
 
 test('Variations on an image, Retry on a failure; a press repeats it, and a refusal shows', async () => {

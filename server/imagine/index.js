@@ -356,6 +356,7 @@ function imagineOp({ ws, msg, userId }) {
   // Variations and Upscale use the source image's (the default if it's gone).
   let config = engineConfig(settings, engine.id);
   let preset = null;
+  let styleName = null; // named in the message when there's more than one (P9-04c)
   const notes = [];
   if (engine.styleConfig) {
     const wanted = source ? source.preset || null : msg.preset != null ? String(msg.preset) : null;
@@ -364,6 +365,7 @@ function imagineOp({ ws, msg, userId }) {
     if (style.fellBack) notes.push(`the style "${wanted}" is gone; used "${style.preset.name}"`);
     config = style.config;
     preset = style.preset.id;
+    if (engine.styleList(engineConfig(settings, engine.id)).styles.length > 1) styleName = style.preset.name;
   }
   const request = { prompt, shape, quality, ...(upscale ? { upscale: upscale.request } : {}), ...(vary ? { init: vary.request } : {}), ...(picture ? { init: picture.request } : {}) };
   const permissive = !!settings.permissive && db.isChannelNsfw(msg.space, msg.channel);
@@ -375,7 +377,7 @@ function imagineOp({ ws, msg, userId }) {
     engine, config, request, permissive, cost,
     space: msg.space, channel: msg.channel, username: user.username, kind: upscale ? 'upscale' : vary ? 'vary' : picture ? 'img2img' : 'generate',
     vary: vary ? vary.name : null,
-    preset, notes,
+    preset, styleName, notes,
   };
   job.id = db.createImagineJob({
     userId, spaceId: space.id, channelId: ref.channelId, engine: engine.id, prompt, shape, quality, permissive, cost: job.cost,
