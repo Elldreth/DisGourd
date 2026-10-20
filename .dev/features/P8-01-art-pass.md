@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 8 (brand art)
-- **State:** REVIEW (PR open, 2026-10-20)
+- **State:** COMPLETE (merged #175)
 - **Effort:** M
 - **Depends on:** nothing (main after #173)
 - **Serialize with:** anything editing `AuthShell.jsx`, `EmptyState.jsx`, `CreateServerDialog.jsx`, `server-settings/OverviewSection.jsx`, `server/static.js`

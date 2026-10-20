@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 7
-- **State:** REVIEW
+- **State:** COMPLETE (merged #174)
 - **Starting baseline:** main at ef006a8 (#173 merged)
 - **Effort:** S
 - **Depends on:** none
