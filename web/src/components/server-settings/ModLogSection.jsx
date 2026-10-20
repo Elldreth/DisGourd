@@ -17,6 +17,7 @@ const ACTIONS = [
   ['slowmode', 'Slow mode'],
   ['report_resolve', 'Reports handled'],
   ['report_dismiss', 'Reports dismissed'],
+  ['ownership_transfer', 'Ownership'],
   ['channel_rename', 'Channel renames'],
   ['role_add', 'Roles given'],
   ['role_remove', 'Roles taken'],
@@ -70,6 +71,8 @@ export function describeEntry(e) {
         : <><B>{e.actor}</B> turned off slow mode in #{d.channel}</>;
     case 'channel_rename':
       return <><B>{e.actor}</B> renamed #{d.from} to #{d.to}</>;
+    case 'ownership_transfer':
+      return <><B>{e.actor}</B> handed the server to <B>{e.target}</B></>;
     // P9-01: a report closed from the Reports section.
     case 'report_resolve':
     case 'report_dismiss': {

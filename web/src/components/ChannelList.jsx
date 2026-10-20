@@ -59,6 +59,7 @@ export default function ChannelList({
   onLeaveServer,
   openReports = 0, // P9-01: open reports here, for moderators
   onJumpToReport, // (report) — go to a reported message
+  onServerTransferred, // P9-02: (space, newOwner) after I handed it over
   onRenameServer,
   serverIcon = null, // the icon's URL, for Server settings › Overview
   onChangeServerIcon,
@@ -795,6 +796,12 @@ export default function ChannelList({
             onUseGlyph: onUseServerGlyph,
             onReframeIcon: onReframeServerIcon,
             onDeleteServer,
+            members,
+            currentUser: user,
+            onTransferred: (newOwner) => {
+              setSettingsOpen(false); // what I may see in it changes
+              onServerTransferred?.(space, newOwner);
+            },
           }}
           emoji={{ emoji, onChanged: onPermsChanged }}
           roles={{ roles, members, currentUser: user, isOwner, myPosition, abilities, onChanged: onRolesChanged }}

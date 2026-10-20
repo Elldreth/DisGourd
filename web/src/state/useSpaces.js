@@ -28,6 +28,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const [error, setError] = useState('');
   const [inviteCode, setInviteCode] = useState(null);
   const [bannedFrom, setBannedFrom] = useState(null); // P3-26b: { space, reason, at } after a ban
+  const [notice, setNotice] = useState(null); // P9-02: { message, at } for App to show as a toast
   const [iconCrop, setIconCrop] = useState(null); // { src: File|url, initialCrop } while framing a server icon
 
   // Handlers run outside render, so they read the latest selection from refs.
@@ -205,6 +206,11 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       if (f.space === spaceRef.current) refreshMembers(f.space);
     },
     // You were banned: the server leaves the rail, and App shows the notice.
+    // P9-02: someone made me the owner of a server.
+    ownership_received: (f) => {
+      setNotice({ message: `${f.from || 'The owner'} made you the owner of ${f.space}.`, at: Date.now() });
+      loadSpaces();
+    },
     banned: (f) => {
       setBannedFrom({ space: f.space, reason: f.reason || null, at: Date.now() });
       loadSpaces().then((next) => {
@@ -417,6 +423,13 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     slowmodeExempt,
     canManageRoles,
     bannedFrom,
+    notice,
+    // P9-02: I handed a server over; reload what I may do there, and say so.
+    serverTransferred: (space, newOwner) => {
+      setNotice({ message: `You handed ${space} to ${newOwner}.`, at: Date.now() });
+      loadSpaces();
+      refreshMembers(space);
+    },
     myPosition,
     members,
     roles,

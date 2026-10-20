@@ -717,6 +717,20 @@ function setMemberRole(spaceId, userId, role) {
   return changed;
 }
 
+// Hand a server to another member (P9-02). The old owner becomes an Admin:
+// the seeded Admin role, or (if that was renamed or deleted) the highest role
+// there is. Returns the name of the role they got, or null if there's none.
+const transferOwnership = db.transaction((spaceId, fromId, toId) => {
+  db.prepare('UPDATE spaces SET owner_id = ? WHERE id = ?').run(toId, spaceId);
+  // The legacy tier column follows (the roles tables are what count).
+  db.prepare("UPDATE space_members SET role = 'owner' WHERE space_id = ? AND user_id = ?").run(spaceId, toId);
+  db.prepare("UPDATE space_members SET role = 'admin' WHERE space_id = ? AND user_id = ?").run(spaceId, fromId);
+  const roles = getRoles(spaceId).filter((r) => !r.isDefault);
+  const admin = roles.find((r) => r.id === seededAdminId(spaceId)) || roles[roles.length - 1] || null;
+  if (admin) addMemberRole(spaceId, fromId, admin.id);
+  return admin ? admin.name : null;
+});
+
 function isMember(spaceId, userId) {
   return !!db.prepare('SELECT 1 FROM space_members WHERE space_id = ? AND user_id = ?').get(spaceId, userId);
 }
@@ -2308,6 +2322,7 @@ module.exports = {
   getDmVersions,
   logModAction,
   getModLog,
+  transferOwnership,
   createReport,
   listReports,
   getReport,
