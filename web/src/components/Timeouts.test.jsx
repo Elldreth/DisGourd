@@ -4,7 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import MemberList from './MemberList.jsx';
 import TimedOutNotice, { timeoutEnd, useActiveTimeout } from './TimedOutNotice.jsx';
-import { describeEntry } from './ModLogDialog.jsx';
+import { describeEntry } from './server-settings/ModLogSection.jsx';
 
 afterEach(() => {
   cleanup();

@@ -15,7 +15,7 @@ const api = await import('../api.js');
 const { imagineFor, imagineState, limitSourceText } = await import('./ImaginePanel.jsx');
 // P5-03: the single form is now pages; this renders them all at once.
 const { default: ImagineAdmin } = await import('./admin/imagine/allPages.testutil.jsx');
-const { default: ServerImagineDialog } = await import('./ServerImagineDialog.jsx');
+const { default: ServerImagineDialog } = await import('./server-settings/ImagineSection.jsx');
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
@@ -24,7 +24,7 @@ const info = (over = {}) => ({ serverEnabled: true, canUse: true, dailyLimit: 10
 
 test('the used-up reason names where the limit is set', () => {
   expect(imagineFor([{ name: 'Tx Check', imagine: info() }], 'Tx Check', 'general', vi.fn()).reason).toBe(
-    'You’ve used all 10 images for today. Tx Check sets its own limit of 10 a day (server menu → Image generation).'
+    'You’ve used all 10 images for today. Tx Check sets its own limit of 10 a day (Server settings → Image generation).'
   );
   expect(imagineState(info({ dailyLimit: 30, usedToday: 30, limitSource: 'instance' }), vi.fn(), 'Tx Check').reason).toBe(
     'You’ve used all 30 images for today. This instance allows 30 a day (Settings → Image generation).'

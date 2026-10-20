@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import * as api from '../api.js';
-import Modal from './Modal.jsx';
-import Icon from './Icon.jsx';
+import * as api from '../../api.js';
+import Icon from '../Icon.jsx';
 
 const MAX_BYTES = 256 * 1024;
 const TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
@@ -20,7 +19,8 @@ export function suggestEmojiName(filename) {
 // Delete per row, and an Add form (an image under 256 KB plus a name).
 // `emoji` is the list from the servers' data (it changes live); the dialog
 // fetches the fuller list (with who added each) and reloads after changes.
-export default function ServerEmojiDialog({ space, emoji, onClose, onChanged }) {
+// A section of Server settings since P5-04.
+export default function EmojiSection({ space, emoji, onChanged }) {
   const [list, setList] = useState(null); // null while loading
   const [file, setFile] = useState(null);
   const [name, setName] = useState('');
@@ -92,20 +92,8 @@ export default function ServerEmojiDialog({ space, emoji, onClose, onChanged }) 
   }
 
   return (
-    <Modal
-      onClose={onClose}
-      panelClassName="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
-    >
-      <div className="flex items-center justify-between border-b border-ink-500/40 px-5 py-3">
-        <Modal.Title className="font-semibold">
-          Server emoji <span className="font-normal text-gray-500">· {space}</span>
-        </Modal.Title>
-        <button type="button" onClick={onClose} className="rounded-sm px-2 text-sm text-gray-400 hover:text-fg">
-          Close
-        </button>
-      </div>
-
-      <form onSubmit={add} className="border-b border-ink-500/40 px-5 py-3">
+    <div className="space-y-4">
+      <form onSubmit={add} aria-label="Add an emoji" className="rounded-xl bg-ink-900/60 p-4">
         <div className="flex flex-wrap items-end gap-2">
           <input ref={fileRef} type="file" accept={TYPES.join(',')} hidden aria-label="Emoji image" onChange={chooseFile} />
           <button
@@ -146,7 +134,7 @@ export default function ServerEmojiDialog({ space, emoji, onClose, onChanged }) 
         )}
       </form>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div>
         {list === null && !error && <p className="p-4 text-center text-sm text-gray-500">Loading…</p>}
         {list?.length === 0 && <p className="p-6 text-center text-sm text-gray-500">No custom emoji yet. Add one above.</p>}
         {list?.length > 0 && (
@@ -171,6 +159,6 @@ export default function ServerEmojiDialog({ space, emoji, onClose, onChanged }) 
           </ul>
         )}
       </div>
-    </Modal>
+    </div>
   );
 }

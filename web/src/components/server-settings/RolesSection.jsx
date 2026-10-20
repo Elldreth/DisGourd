@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import * as api from '../api.js';
-import { PERMISSION_ACTIONS } from '../util.js';
-import Icon from './Icon.jsx';
-import Modal from './Modal.jsx';
+import { useEffect, useState } from 'react';
+import * as api from '../../api.js';
+import { PERMISSION_GROUPS } from '../../util.js';
+import Icon from '../Icon.jsx';
 
 // Preset role colours (any other comes from the colour picker).
 export const ROLE_COLORS = ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#12a594', '#0090ff', '#6e56cf', '#d6409f', '#8d8d8d'];
@@ -25,8 +24,8 @@ function freshName(roles) {
 // one its name, colour, permissions and members. You can change only roles
 // below your own highest (the owner: all) and only grant permissions you hold;
 // the server checks the same. `roles` and `members` come live from useSpaces.
-export default function RolesDialog({ space, roles, members, currentUser, isOwner, myPosition, abilities, onClose, onChanged }) {
-  const bodyRef = useRef(null);
+// A section of Server settings since P5-04; permissions are grouped.
+export default function RolesSection({ space, roles, members, currentUser, isOwner, myPosition, abilities, onChanged }) {
   const [selectedId, setSelectedId] = useState(() => roles.find((r) => !r.isDefault)?.id ?? roles[0]?.id ?? null);
   const selected = roles.find((r) => r.id === selectedId) || null;
   const [draft, setDraft] = useState(() => draftOf(selected));
@@ -112,19 +111,9 @@ export default function RolesDialog({ space, roles, members, currentUser, isOwne
   const addable = members.filter((m) => !holders.includes(m.username) && changeable(m));
 
   return (
-    <Modal
-      onClose={onClose}
-      initialFocusRef={bodyRef}
-      panelClassName="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
-    >
-      <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
-        <Modal.Title>Roles — {space}</Modal.Title>
-        <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">Close</button>
-      </div>
-
-      <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto sm:flex-row sm:overflow-hidden">
+    <div className="flex flex-col overflow-hidden rounded-xl ring-1 ring-ink-500/40 sm:flex-row">
         {/* The roles, highest first. */}
-        <div className="shrink-0 border-b border-ink-500/40 p-3 sm:w-60 sm:overflow-y-auto sm:border-b-0 sm:border-r">
+        <div className="shrink-0 border-b border-ink-500/40 bg-ink-900/40 p-3 sm:w-56 sm:border-b-0 sm:border-r">
           <button
             onClick={create}
             disabled={busy}
@@ -179,7 +168,7 @@ export default function RolesDialog({ space, roles, members, currentUser, isOwne
 
         {/* The selected role. */}
         {selected && draft && (
-          <div className="min-w-0 flex-1 space-y-5 p-6 sm:overflow-y-auto">
+          <div className="min-w-0 flex-1 space-y-5 p-5">
             {!canEdit && (
               <p className="rounded-lg bg-ink-700/60 px-3 py-2 text-sm text-gray-300">
                 You can only change roles below your own.
@@ -221,22 +210,29 @@ export default function RolesDialog({ space, roles, members, currentUser, isOwne
 
             <fieldset>
               <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Permissions</legend>
-              <div className="divide-y divide-ink-500/30 rounded-lg ring-1 ring-ink-500/40">
-                {PERMISSION_ACTIONS.map((a) => {
-                  const mine = holds(a.key);
-                  return (
-                    <label key={a.key} className="flex items-center justify-between gap-3 px-3 py-2" title={canEdit && !mine ? "You don't have this permission yourself" : undefined}>
-                      <span className={`text-sm ${canEdit && mine ? 'text-gray-200' : 'text-gray-500'}`}>{a.label}</span>
-                      <input
-                        type="checkbox"
-                        checked={draft.permissions.includes(a.key)}
-                        disabled={!canEdit || !mine}
-                        onChange={() => togglePermission(a.key)}
-                        className="h-4 w-4 accent-brand"
-                      />
-                    </label>
-                  );
-                })}
+              <div className="space-y-3">
+                {PERMISSION_GROUPS.map((g) => (
+                  <div key={g.label} role="group" aria-label={g.label}>
+                    <div className="mb-1 text-xs text-gray-500">{g.label}</div>
+                    <div className="divide-y divide-ink-500/30 rounded-lg ring-1 ring-ink-500/40">
+                      {g.actions.map((a) => {
+                        const mine = holds(a.key);
+                        return (
+                          <label key={a.key} className="flex items-center justify-between gap-3 px-3 py-2" title={canEdit && !mine ? "You don't have this permission yourself" : undefined}>
+                            <span className={`text-sm ${canEdit && mine ? 'text-gray-200' : 'text-gray-500'}`}>{a.label}</span>
+                            <input
+                              type="checkbox"
+                              checked={draft.permissions.includes(a.key)}
+                              disabled={!canEdit || !mine}
+                              onChange={() => togglePermission(a.key)}
+                              className="h-4 w-4 accent-brand"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </fieldset>
 
@@ -313,8 +309,7 @@ export default function RolesDialog({ space, roles, members, currentUser, isOwne
             )}
           </div>
         )}
-      </div>
-    </Modal>
+    </div>
   );
 }
 

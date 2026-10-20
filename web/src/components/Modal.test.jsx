@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import Modal from './Modal.jsx';
 import InviteDialog from './InviteDialog.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
-import RolesDialog from './RolesDialog.jsx';
+import ServerSettingsDialog from './server-settings/ServerSettingsDialog.jsx';
 
 afterEach(cleanup);
 
@@ -105,7 +105,7 @@ test('focus goes back to the opener, and page scroll is locked while open', asyn
 test.each([
   ['Invite', () => <InviteDialog space="Tx Check" code="abc123" onClose={() => {}} />, 'Invite people to Tx Check'],
   ['Channel settings', () => <ChannelSettingsDialog space="S" channel="general" meta={{ type: 'text', view: 0, post: 1 }} onClose={() => {}} onSaved={() => {}} />, '#general settings'],
-  ['Roles', () => <RolesDialog space="S" roles={[]} members={[]} currentUser="me" isOwner myPosition={1e9} abilities={[]} onClose={() => {}} />, 'Roles — S'],
+  ['Server settings', () => <ServerSettingsDialog space="S" can={{ roles: true }} roles={{ roles: [], members: [], currentUser: 'me', isOwner: true, myPosition: 1e9, abilities: [] }} onClose={() => {}} />, 'Server settings'],
 ])('%s dialog is a modal dialog with its title as the name', (_, make, name) => {
   render(make());
   expect(screen.getByRole('dialog', { name }).getAttribute('aria-modal')).toBe('true');

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** REVIEW (PR open, 2026-10-19)
+- **State:** COMPLETE (merged in #161, 2026-10-19)
 - **Effort:** L (may split into a: General + Overview/ComfyUI, b: Quality/Variations/kie.ai/Try it, if the working set gets too big)
 - **Depends on:** P5-02 (kit)
 - **Serialize with:** anything editing `ImagineAdmin.jsx` or `RegistrationAdmin.jsx`

@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import * as api from '../api.js';
-import Modal from './Modal.jsx';
-import { formatDay, formatTime } from '../util.js';
+import { useEffect, useState } from 'react';
+import * as api from '../../api.js';
+import { formatDay, formatTime } from '../../util.js';
 
-// Server menu → Moderation log (P3-26a): who deleted, removed, or changed roles
+// Server settings › Moderation log (P3-26a; a section since P5-04): who deleted, removed, or changed roles
 // and access, newest first, 50 at a time. Filter by action or by person.
 export const MOD_LOG_ABILITIES = ['ban_members', 'timeout_members', 'kick', 'delete_others_messages', 'manage_roles'];
 
@@ -81,8 +80,7 @@ export function describeEntry(e) {
   }
 }
 
-export default function ModLogDialog({ space, members = [], onClose }) {
-  const bodyRef = useRef(null);
+export default function ModLogSection({ space, members = [] }) {
   const [action, setAction] = useState('');
   const [person, setPerson] = useState('');
   const [entries, setEntries] = useState([]);
@@ -110,12 +108,8 @@ export default function ModLogDialog({ space, members = [], onClose }) {
   }, [space, action, person]);
 
   return (
-    <Modal onClose={onClose} initialFocusRef={bodyRef} panelClassName="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50">
-      <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
-        <Modal.Title>Moderation log — {space}</Modal.Title>
-        <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">Close</button>
-      </div>
-      <div className="flex flex-wrap gap-2 border-b border-ink-500/40 px-6 py-3">
+    <div>
+      <div className="mb-3 flex flex-wrap gap-2">
         <select aria-label="Action" value={action} onChange={(e) => setAction(e.target.value)} className="input w-auto">
           {ACTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
@@ -124,7 +118,7 @@ export default function ModLogDialog({ space, members = [], onClose }) {
           {members.map((m) => <option key={m.username} value={m.username}>{m.username}</option>)}
         </select>
       </div>
-      <div ref={bodyRef} tabIndex={-1} className="min-h-[12rem] flex-1 overflow-y-auto px-6 py-3 outline-none">
+      <div className="min-h-[12rem] rounded-xl bg-ink-900/60 px-4 py-2">
         {error && <div role="alert" className="text-sm text-danger">{error}</div>}
         {!error && !loading && entries.length === 0 && (
           <p className="py-8 text-center text-sm text-gray-400">Nothing logged yet{action || person ? ' for this filter' : ''}.</p>
@@ -153,6 +147,6 @@ export default function ModLogDialog({ space, members = [], onClose }) {
         )}
         {loading && !entries.length && <p className="py-8 text-center text-sm text-gray-400">Loading…</p>}
       </div>
-    </Modal>
+    </div>
   );
 }

@@ -20,6 +20,14 @@ export const PERMISSION_ACTIONS = [
   { key: 'manage_roles', label: 'Manage roles' },
   { key: 'generate_images', label: 'Generate images (/imagine)' },
 ];
+// The same permissions grouped for the Roles screen (P5-04), in display order.
+export const PERMISSION_GROUPS = [
+  { label: 'Channels', keys: ['create_channel', 'delete_channel'] },
+  { label: 'Members', keys: ['invite', 'kick', 'ban_members', 'timeout_members'] },
+  { label: 'Messages', keys: ['delete_others_messages', 'pin_messages'] },
+  { label: 'Server', keys: ['edit_server', 'manage_emoji', 'manage_roles'] },
+  { label: 'Images', keys: ['generate_images'] },
+].map((g) => ({ label: g.label, actions: g.keys.map((k) => PERMISSION_ACTIONS.find((a) => a.key === k)) }));
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif'];
 const VIDEO_EXT = ['mp4', 'webm', 'mov', 'm4v', 'ogv'];

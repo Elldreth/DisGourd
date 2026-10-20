@@ -87,6 +87,7 @@ test('deleting a server needs its name typed first', async () => {
   const onDeleteServer = vi.fn();
   render(<ChannelList space="Tx Check" channels={[]} isOwner canManage onDeleteServer={onDeleteServer} onSelect={() => {}} />);
   fireEvent.click(screen.getByRole('heading', { name: 'Tx Check' }));
+  fireEvent.click(screen.getByRole('button', { name: /Server settings/ })); // P5-04: Delete is in Overview's danger zone
   fireEvent.click(screen.getByRole('button', { name: /delete server/i }));
   const dialog = screen.getByRole('dialog', { name: 'Delete Tx Check?' });
   const confirm = screen.getAllByRole('button', { name: 'Delete server' }).find((b) => dialog.contains(b));
@@ -100,8 +101,9 @@ test('cancelling the delete keeps the server', () => {
   const onDeleteServer = vi.fn();
   render(<ChannelList space="Tx Check" channels={[]} isOwner canManage onDeleteServer={onDeleteServer} onSelect={() => {}} />);
   fireEvent.click(screen.getByRole('heading', { name: 'Tx Check' }));
+  fireEvent.click(screen.getByRole('button', { name: /Server settings/ })); // P5-04: Delete is in Overview's danger zone
   fireEvent.click(screen.getByRole('button', { name: /delete server/i }));
   fireEvent.keyDown(screen.getByRole('button', { name: 'Cancel' }), { key: 'Escape' });
-  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByRole('dialog', { name: 'Delete Tx Check?' })).toBeNull(); // Server settings stays open under it
   expect(onDeleteServer).not.toHaveBeenCalled();
 });

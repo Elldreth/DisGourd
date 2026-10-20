@@ -1,6 +1,6 @@
 // P3-26a: the moderation log dialog and its server-menu item.
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const at = new Date(2026, 9, 19, 15, 42).getTime();
 const page1 = {
@@ -18,7 +18,7 @@ const page2 = { entries: [{ id: 3, action: 'category_access', actor: 'sandy', ta
 vi.mock('../api.js', () => ({ getModLog: vi.fn() }));
 vi.mock('../audio.js', async (orig) => ({ ...(await orig()), displayCaptureSupported: () => true }));
 const api = await import('../api.js');
-const { default: ModLogDialog } = await import('./ModLogDialog.jsx');
+const { default: ModLogDialog } = await import('./server-settings/ModLogSection.jsx');
 const { default: ChannelList } = await import('./ChannelList.jsx');
 
 beforeEach(() => {
@@ -29,7 +29,6 @@ afterEach(cleanup);
 
 test('lists entries readably, newest first, and loads older ones', async () => {
   render(<ModLogDialog space="Tx" members={[{ username: 'bob' }, { username: 'cara' }]} onClose={() => {}} />);
-  expect(screen.getByRole('dialog', { name: 'Moderation log — Tx' })).toBeTruthy();
   await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(5));
   const items = screen.getAllByRole('listitem').map((li) => li.textContent);
   expect(items[0]).toContain('sandy deleted a message by bob in #general: “buy cheap gourds”');
@@ -74,19 +73,22 @@ function list(props) {
   );
 }
 
-test('the server menu offers the log only to people with a moderation permission', async () => {
+test('Server settings offers the log only to people with a moderation permission', async () => {
   list({ abilities: ['invite'], role: 'member' });
   fireEvent.click(screen.getByRole('button', { name: 'Logland' }));
-  expect(screen.queryByText('Moderation log')).toBeNull();
+  expect(screen.queryByText('Server settings')).toBeNull(); // nothing to manage at all
   cleanup();
 
   list({ abilities: ['delete_others_messages'], role: 'admin' });
   fireEvent.click(screen.getByRole('button', { name: 'Logland' }));
-  fireEvent.click(screen.getByText('Moderation log'));
-  expect(await screen.findByRole('dialog', { name: 'Moderation log — Logland' })).toBeTruthy();
+  fireEvent.click(screen.getByText('Server settings'));
+  const dialog = await screen.findByRole('dialog', { name: 'Server settings' });
+  // Only the log: no Overview, Roles or Bans for this permission.
+  expect(within(dialog).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Moderation log']);
   cleanup();
 
   list({ abilities: [], isOwner: true, role: 'owner' });
   fireEvent.click(screen.getByRole('button', { name: 'Logland' }));
-  expect(screen.getByText('Moderation log')).toBeTruthy();
+  fireEvent.click(screen.getByText('Server settings'));
+  expect(within(screen.getByRole('dialog', { name: 'Server settings' })).getByRole('tab', { name: 'Moderation log' })).toBeTruthy();
 });

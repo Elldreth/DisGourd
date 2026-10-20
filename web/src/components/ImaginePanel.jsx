@@ -141,7 +141,7 @@ export function imagineState(info, run, spaceName = 'This server') {
 // Where the daily limit comes from, in words (P3-21; matches the server's refusal).
 export function limitSourceText(info, spaceName = 'This server') {
   const n = info.dailyLimit;
-  if (info.limitSource === 'server') return `${spaceName} sets its own limit of ${n} a day (server menu → Image generation).`;
+  if (info.limitSource === 'server') return `${spaceName} sets its own limit of ${n} a day (Server settings → Image generation).`;
   if (info.limitSource === 'ceiling') return `That's this instance's maximum of ${n} a day.`;
   return `This instance allows ${n} a day (Settings → Image generation).`;
 }

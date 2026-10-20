@@ -12,7 +12,7 @@ vi.mock('../api.js', () => ({
   uploadFile: vi.fn(async () => ({ url: '/uploads/c/new.png' })),
 }));
 const api = await import('../api.js');
-const { default: ServerEmojiDialog, suggestEmojiName } = await import('./ServerEmojiDialog.jsx');
+const { default: ServerEmojiDialog, suggestEmojiName } = await import('./server-settings/EmojiSection.jsx');
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
@@ -28,7 +28,6 @@ test('a file name suggests the emoji name', () => {
 test('lists the emoji with who added them, and Delete removes one', async () => {
   const onChanged = vi.fn();
   render(<ServerEmojiDialog space="S" emoji={[]} onClose={() => {}} onChanged={onChanged} />);
-  expect(screen.getByRole('dialog', { name: /Server emoji/ })).toBeTruthy();
   await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2));
   expect(screen.getAllByRole('listitem')[0].textContent).toContain(':party_gourd:');
   expect(screen.getAllByRole('listitem')[0].textContent).toContain('added by sandy');

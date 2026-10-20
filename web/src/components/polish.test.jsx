@@ -54,14 +54,16 @@ test('channel list and DM list are navigation landmarks', () => {
   expect(screen.getByRole('navigation', { name: 'Direct messages' })).toBeTruthy();
 });
 
-// F6: a separator keeps Delete server away from the item above it.
-test('server menu: a separator sits right before Delete server', () => {
+// F6, then P5-04: the menu is short; a separator sets Server settings apart,
+// and Delete server lives in Server settings › Overview's danger zone.
+test('server menu: a separator before Server settings, and no Delete server in the menu', () => {
   render(
     <ChannelList space="S" channels={['general']} currentChannel="general" voiceChannels={[]} voiceParticipants={{}} activeVoiceParticipants={[]} user="sandy" status="open" selfId={1} onSelect={() => {}} canManage isOwner role="owner" onInvite={() => {}} />
   );
   fireEvent.click(screen.getByRole('button', { name: /^S$|S$/ }));
-  const del = screen.getByRole('button', { name: /Delete server/ });
-  expect(del.previousElementSibling.getAttribute('role')).toBe('separator');
+  expect(screen.queryByRole('button', { name: /Delete server/ })).toBeNull();
+  const settings = screen.getByRole('button', { name: /Server settings/ });
+  expect(settings.previousElementSibling.getAttribute('role')).toBe('separator');
 });
 
 // V5: grouped-message timestamps are readable, and always shown on touch.

@@ -11,7 +11,7 @@ vi.mock('../api.js', () => ({
   setChannelOverrides: vi.fn(async () => ({ overrides: [] })),
 }));
 const api = await import('../api.js');
-const { default: RolesDialog } = await import('./RolesDialog.jsx');
+const { default: RolesDialog } = await import('./server-settings/RolesSection.jsx');
 const { default: ChannelSettingsDialog } = await import('./ChannelSettingsDialog.jsx');
 const { default: MemberList } = await import('./MemberList.jsx');
 

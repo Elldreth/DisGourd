@@ -117,7 +117,7 @@ function limitInfo(spaceId, settings = getSettings()) {
 // The refusal when someone's used them all, saying where the number is set.
 function limitMessage(spaceName, { limit, source }) {
   const where = {
-    server: `${spaceName} sets its own limit of ${limit} a day (server menu → Image generation).`,
+    server: `${spaceName} sets its own limit of ${limit} a day (Server settings → Image generation).`,
     instance: `This instance allows ${limit} a day (Settings → Image generation).`,
     ceiling: `That's this instance's maximum of ${limit} a day.`,
   }[source];
