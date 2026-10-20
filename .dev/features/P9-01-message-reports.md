@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 9
-- **State:** REVIEW
+- **State:** COMPLETE (merged #177, badge follow-ups #178)
 - **Starting baseline:** main at 1ab6766 (#176 merged)
 - **Effort:** M (migration v26)
 - **Depends on:** P3-26 (moderation: log, ban, timeout), P1-10 (deleting others' messages)
