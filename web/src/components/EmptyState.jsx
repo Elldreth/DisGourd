@@ -58,6 +58,20 @@ export const ART = {
       <path d="M128 54 a12 12 0 0 1 10 -8" fill="none" stroke={lime} strokeWidth="4" strokeLinecap="round" />
     </>
   ),
+  // Image generation not set up (P5-06): a gourd beside an easel with a blank
+  // canvas and a lime-tipped brush, waiting to paint.
+  imagine: (
+    <>
+      <Ground x={22} w={160} />
+      <Mark x={22} y={14} size={90} />
+      <rect x="130" y="16" width="10" height="9" rx="2" fill={violet} />
+      <rect x="112" y="24" width="46" height="54" rx="3" fill={violet} opacity="0.55" />
+      <rect x="106" y="78" width="58" height="6" rx="2" fill={violet} />
+      <path d="M118 84 L112 117 M152 84 L158 117 M135 84 V117" stroke={violet} strokeWidth="5" strokeLinecap="round" />
+      <path d="M178 66 L170 104" stroke={violet} strokeWidth="4" strokeLinecap="round" />
+      <path d="M170 104 q-3 8 -1 12 q5 -2 6 -11 Z" fill={lime} />
+    </>
+  ),
 };
 
 export default function EmptyState({ art, icon, title, body, action, as, compact = false, className = '' }) {

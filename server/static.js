@@ -24,6 +24,7 @@ const STATIC_TYPES = {
   '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.ogg': 'audio/ogg', // UI sounds (P5-06)
   '.map': 'application/json; charset=utf-8',
 };
 
