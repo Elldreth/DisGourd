@@ -231,4 +231,8 @@ Kept as its own table so it doesn't collide with other sessions' rows.
 | P8-01 | Art pass: mascot poses, sign-in art, ready-made server icons, share image | 8 | COMPLETE | M | none | mascotParts.js, Mascot.jsx, LoginArt.jsx, serverGlyphs.js, GlyphPicker.jsx, AuthShell.jsx, server/static.js, web/public/og-image.png |
 | P9-01 | Message reports (moderators' Reports queue; servers only) | 9 | COMPLETE | M | P3-26, P1-10 | migrations v26, routes, gateway, MessageList menu, ReportsDialog |
 | P9-02 | Hand a server to a new owner (immediate; old owner becomes Admin) | 9 | COMPLETE | S–M | P2-21, P5-04 | routes/spaces.js, db, OverviewSection, TransferDialog |
-| P9-03 | Signed-in devices (list, sign out one or all others; no IPs) | 9 | REVIEW | M | P6-02 | migrations v27, auth/tokens.js, routes/auth.js, gateway, My account |
+| P9-03 | Signed-in devices (list, sign out one or all others; no IPs) | 9 | COMPLETE | M | P6-02 | migrations v27, auth/tokens.js, routes/auth.js, gateway, My account |
+| P9-04 | ComfyUI style presets (Container: a–c) | 9 | PLANNED | L | P2-20b, P3-24–P3-36 | see children |
+| P9-04a | Style presets: engine and server (migration v28) | 9 | READY | M | P9-04 design | engines/comfyui.js, imagine/index.js, runner, admin routes |
+| P9-04b | Style presets: Settings (Styles list and editor) | 9 | PLANNED | M | P9-04a | ComfyPage.jsx, ImagineSettings.jsx, StylesEditor |
+| P9-04c | Style presets: /imagine panel Style row and message text | 9 | PLANNED | S–M | P9-04a, P9-04b | ImaginePanel.jsx, Composer, runner text |

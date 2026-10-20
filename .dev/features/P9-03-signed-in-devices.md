@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 9
-- **State:** REVIEW
+- **State:** COMPLETE (merged #182)
 - **Starting baseline:** main at d9bb846 (#181 merged)
 - **Effort:** M (migration v27)
 - **Depends on:** P6-02 (change password; token versions)
