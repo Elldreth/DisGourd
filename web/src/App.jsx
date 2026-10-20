@@ -34,7 +34,7 @@ import { useShortcuts, stepChannel } from './shortcuts.js';
 import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
 import { registerServiceWorker, onOpenRequest } from './pwa.js';
-import { cooldownKey, startCooldown } from './slowmode.js';
+import { cooldownKey, startCooldown, renameCooldowns } from './slowmode.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
@@ -225,8 +225,15 @@ export default function App() {
     my_status: (f) =>
       setProfile((p) => (p ? { ...p, statusText: f.statusText, statusEmoji: f.statusEmoji, statusExpiresAt: f.statusExpiresAt } : p)),
     // The open thread's channel was renamed (P6-03).
-    channel_renamed: (f) =>
-      setOpenThread((t) => (t && t.space === f.space && t.parentChannel === f.channel ? { ...t, parentChannel: f.newName } : t)),
+    channel_renamed: (f) => {
+      setOpenThread((t) => (t && t.space === f.space && t.parentChannel === f.channel ? { ...t, parentChannel: f.newName } : t));
+      renameCooldowns(f.space, f.channel, f.space, f.newName); // P6-04
+    },
+    // A server was renamed: its slow-mode countdowns and an open thread follow (P6-04).
+    space_renamed: (f) => {
+      renameCooldowns(f.space, null, f.newName);
+      setOpenThread((t) => (t && t.space === f.space ? { ...t, space: f.newName } : t));
+    },
     // The open thread was archived or reopened (by the sweep, a reply, or a moderator).
     thread_updated: (f) =>
       setOpenThread((t) => (t && t.space === f.space && t.channel === f.thread?.channel ? { ...t, archived: !!f.thread.archived, name: f.thread.name } : t)),

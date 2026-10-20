@@ -12,6 +12,20 @@ export function startCooldown(key, ms) {
   listeners.forEach((fn) => fn());
 }
 
+// A channel or server was renamed (P6-04): keep running countdowns under the
+// new name. `channel` null moves every channel of `space`.
+export function renameCooldowns(space, channel, newSpace, newChannel) {
+  let moved = false;
+  for (const [key, end] of [...ends]) {
+    const [s, c] = key.split('\u0000');
+    if (s !== space || (channel !== null && c !== channel)) continue;
+    ends.delete(key);
+    ends.set(cooldownKey(newSpace, channel === null ? c : newChannel), end);
+    moved = true;
+  }
+  if (moved) listeners.forEach((fn) => fn());
+}
+
 // Whole seconds left before I may post at `key` (0 = now). Ticks each second.
 export function cooldownLeft(key, now = Date.now()) {
   const end = ends.get(key) || 0;

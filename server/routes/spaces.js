@@ -8,7 +8,7 @@ const { validateSpaceName, normalizeChannelName, validateChannelName } = require
 const { canViewChannel, canPostChannel, canModerateMessage } = require('../permissions');
 const { sendToUser, deliverToSpaceMembers, deliverToChannelViewers, publicPresence, tellFollow } = require('../gateway/delivery');
 const { threadUpdated } = require('../gateway/chat');
-const { voiceEject, voiceForceMute, voiceRenameChannel } = require('../gateway/voice');
+const { voiceEject, voiceForceMute, voiceRenameChannel, voiceRenameSpace } = require('../gateway/voice');
 const fs = require('fs');
 const path = require('path');
 const { uploadFilePath } = require('./uploads');
@@ -98,6 +98,8 @@ const routes = [
           if (result.oldName !== newName) {
             // Broadcast under the new name — the old one no longer resolves.
             deliverToSpaceMembers(newName, JSON.stringify({ type: 'space_renamed', space: result.oldName, newName }));
+            // After it, so clients know the new name first (P6-04).
+            voiceRenameSpace(result.oldName, newName);
           }
           return sendJson(res, 200, { ok: true, name: newName });
         }

@@ -144,7 +144,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P5-06 | Sound set, image-generation art, shorter voice warning | 5 | COMPLETE | M | P5-03 (art only) | sounds.js, web/public/sounds/*, ChannelList.jsx |
 | P6-01 | Leave server | 6 | COMPLETE | S | none | routes/spaces.js, db/index.js, useSpaces.js, ChannelList.jsx |
 | P6-02 | Change password (signs out other devices; migration v25) | 6 | COMPLETE | M | none | routes/auth.js, auth/tokens.js, gateway, ProfileDialog.jsx, ChangePasswordDialog.jsx (new) |
-| P6-03 | Rename channel | 6 | REVIEW | M | none (after P6-01: shared files) | routes/spaces.js, db/index.js, gateway/voice.js, useSpaces.js, ChannelSettingsDialog.jsx, ModLogSection.jsx |
+| P6-03 | Rename channel | 6 | COMPLETE | M | none (after P6-01: shared files) | routes/spaces.js, db/index.js, gateway/voice.js, useSpaces.js, ChannelSettingsDialog.jsx, ModLogSection.jsx |
+| P6-04 | Leftovers: server rename keeps calls, countdowns follow renames, duplicate CSS | 6 | REVIEW | S | P6-03 | gateway/voice.js, routes/spaces.js, voice.js, useVoiceCall.js, slowmode.js, App.jsx, index.css |
 
 ## Dependency map (hard dependencies)
 

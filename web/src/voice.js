@@ -727,6 +727,12 @@ export function createVoiceController({ send, myId, onChange }) {
     room = { space, channel: to };
     emit();
   }
+  // The call's server was renamed (P6-04).
+  function renameSpace(from, to) {
+    if (!room || room.space !== from) return;
+    room = { space: to, channel: room.channel };
+    emit();
+  }
 
   function clearNotice() {
     notice = '';
@@ -864,6 +870,7 @@ export function createVoiceController({ send, myId, onChange }) {
     leave,
     rejoin,
     renameRoom,
+    renameSpace,
     clearNotice,
     setForcedMute,
     endCall,
