@@ -40,7 +40,7 @@ Revision: `5c93472` (main after #162). Web suite before: 86 files / 711 tests.
   - Every tab stays mounted, and one Save sends what changed on all of them.
   - The header uses `Modal.Header`.
 - **Deviation:** the packet said the SaveBar; I kept the footer Save/Cancel. This is a small dialog that closes when you save, and the footer is the clearer commit for it. The SaveBar is for the large settings windows, where you keep working after saving. The save behaviour is unchanged.
-- **Found in the sandbox and fixed:** with tabs, the dialog changed height per tab and re-centred, so the tab row moved (the same problem P5-02 fixed in Settings). The body now has a fixed height (`min(28rem, 65vh)`), and the tabs stay at the same y on all three. `shots/p5-05-channel-permissions.jpg` and `p5-05-channel-moderation.jpg` were taken before this fix; Overview is after.
+- **Found in the sandbox and fixed:** with tabs, the dialog changed height per tab and re-centred, so the tab row moved (the same problem P5-02 fixed in Settings). The body now has a fixed height (`min(28rem, 65vh)`), and the tabs stay at the same y on all three. The three `shots/p5-05-channel-*.jpg` were taken before this fix (the dialog's height still differs between them); the content of each tab is unchanged by it.
 - The move buttons are labelled "Move channel up/down" and sit under the category picker, with "Moves happen right away. You can also drag channels in the list."
 - Member menu:
   - A `group` named "Actions for bob". Its header shows the avatar with the status dot, the name in role colour, then "top role · status".
