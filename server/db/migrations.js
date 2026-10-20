@@ -715,6 +715,14 @@ const MIGRATIONS = [
       db.exec('ALTER TABLE imagine_jobs ADD COLUMN preset TEXT');
     },
   },
+  {
+    version: 29,
+    name: 'imagine jobs by message',
+    up(db) {
+      // P9-05a: the bot's messages say which engine made them (a lookup per message).
+      db.exec('CREATE INDEX IF NOT EXISTS idx_imagine_jobs_message ON imagine_jobs(message_id)');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -149,6 +149,9 @@ function decorateSpaces(list, userId) {
   const used = usedToday(userId);
   const comfy = engines.some((e) => e.id === 'comfyui') ? ENGINES.get('comfyui') : null;
   const comfyStyles = comfy ? comfy.styleList(engineConfig(settings, 'comfyui')) : {};
+  const pictures = Object.fromEntries(enabledEngines(settings)
+    .map((e) => [e.id, e.pictures?.(engineConfig(settings, e.id)) || null])
+    .filter(([, p]) => p));
   return list.map((s) => {
     const space = db.getSpaceByName(s.name);
     const own = space ? db.getSpaceImagine(space.id) : null;
@@ -163,7 +166,8 @@ function decorateSpaces(list, userId) {
         limitSource: space ? limitInfo(space.id, settings).source : 'instance', // P3-21
         instanceLimit: Math.min(settings.dailyLimit, settings.dailyCeiling), // what a blank server limit falls back to
         canUpscale: engines.some((e) => e.id === 'comfyui'), // P3-29: the Upscale button runs on ComfyUI
-        canVary: engines.some((e) => e.id === 'comfyui'), // P3-36a: img2img Variations too
+        canVary: Object.keys(pictures).length > 0, // P3-36a; P9-05a: any engine that takes a picture
+        pictures, // P9-05a: { comfyui: { strength: true }, kie: { strength } } for the engines that take pictures
         ...comfyStyles, // P9-04a: { styles: [{ id, name }], defaultStyle } when ComfyUI is on
         usedToday: used,
         engines,
@@ -250,9 +254,10 @@ function varySource(ws, msg, source) {
     return null;
   }
   const strengths = varyStrengths();
-  const strength = retry ? source.strength : strengths[msg.vary];
+  const asked = msg.vary === 'once' ? 'subtle' : msg.vary; // `once` (P9-05a) is Subtle where there's a strength
+  const strength = retry ? source.strength : strengths[asked];
   // A retry's name: whichever setting its strength is nearer.
-  const name = retry ? (strength >= (strengths.subtle + strengths.strong) / 2 ? 'strong' : 'subtle') : msg.vary;
+  const name = retry ? (strength >= (strengths.subtle + strengths.strong) / 2 ? 'strong' : 'subtle') : asked;
   return { url, strength, name, request: { ...image, denoise: strength } };
 }
 
@@ -317,7 +322,8 @@ function imagineOp({ ws, msg, userId }) {
     if (!picture) return;
   }
   // Variations (P3-36a): Subtle / Strong on a finished image, or Retry of a failed one.
-  const varying = !fromPicture && !!source && (Object.hasOwn(VARY, msg.vary) || (source.kind === 'vary' && source.status === 'failed'));
+  // `once` (P9-05a): the one Variation of a kie.ai model without a strength setting.
+  const varying = !fromPicture && !!source && (Object.hasOwn(VARY, msg.vary) || msg.vary === 'once' || (source.kind === 'vary' && source.status === 'failed'));
   let vary = null;
   if (varying) {
     vary = varySource(ws, msg, source);
@@ -337,10 +343,25 @@ function imagineOp({ ws, msg, userId }) {
   if (!SHAPES.includes(shape) || !QUALITIES.includes(quality)) return refuse(ws, 'BAD_OPTION', 'Unknown shape or quality');
   const fallback = () => engines.find((e) => e.id === settings.defaultEngine) || engines[0];
   if (upscaling && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Upscaling needs ComfyUI with an upscale model (Settings → Image generation)');
-  if (varying && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Variations from an image need ComfyUI (Settings → Image generation)');
-  if (fromPicture && !engines.some((e) => e.id === 'comfyui')) return refuse(ws, 'NO_ENGINE', 'Starting from a picture needs ComfyUI (Settings → Image generation)');
-  const engine = upscaling || varying || fromPicture
+  // Pictures (P9-05a): Variations on the engine that made the image, "Start
+  // from a picture" on the panel's engine (a Retry on its first one), when it
+  // can take a picture; else ComfyUI.
+  const canPicture = (e) => !!e && !!e.pictures?.(engineConfig(settings, e.id));
+  const comfyOn = engines.find((e) => e.id === 'comfyui');
+  let pictureEngine = null;
+  if (varying || fromPicture) {
+    const wanted = source ? engines.find((e) => e.id === source.engine) : msg.engine ? engines.find((e) => e.id === msg.engine) : fallback();
+    pictureEngine = canPicture(wanted) ? wanted : comfyOn;
+    if (!pictureEngine) {
+      return refuse(ws, 'NO_ENGINE', `${varying ? 'Variations from an image need' : 'Starting from a picture needs'} ComfyUI or a kie.ai model that takes pictures (Settings → Image generation)`);
+    }
+    // Without a strength setting there's one kind of Variation; its message names none.
+    if (vary && !pictureEngine.pictures(engineConfig(settings, pictureEngine.id)).strength) vary.name = null;
+  }
+  const engine = upscaling
     ? engines.find((e) => e.id === 'comfyui')
+    : pictureEngine
+    ? pictureEngine
     : source
     ? engines.find((e) => e.id === source.engine) || fallback() // the same engine while it's still on
     : msg.engine

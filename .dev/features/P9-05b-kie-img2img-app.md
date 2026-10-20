@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P9-05)
 - **Phase:** 9
-- **State:** PLANNED (READY once P9-05a merges)
+- **State:** READY (once P9-05a merges)
 - **Effort:** S–M
 - **Depends on:** P9-05a
 

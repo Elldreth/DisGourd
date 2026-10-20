@@ -878,7 +878,8 @@ const MESSAGE_SELECT = `
          th.last_activity_at AS threadLastActivityAt,
          th.archived_at AS threadArchivedAt,
          CASE WHEN th.id IS NULL THEN NULL
-              ELSE (SELECT COUNT(*) FROM messages tm WHERE tm.channel_id = th.id) END AS threadCount
+              ELSE (SELECT COUNT(*) FROM messages tm WHERE tm.channel_id = th.id) END AS threadCount,
+         CASE WHEN u.is_bot = 1 THEN (SELECT ij.engine FROM imagine_jobs ij WHERE ij.message_id = m.id ORDER BY ij.id DESC LIMIT 1) END AS imagineEngine
   FROM messages m
   JOIN channels c ON m.channel_id = c.id
   JOIN spaces s ON c.space_id = s.id
@@ -939,12 +940,14 @@ function hydrateThread(row) {
   };
   return row;
 }
-// `bot: true` on the /imagine bot's messages only (others carry no field).
+// `bot: true` on the /imagine bot's messages only (others carry no field),
+// with `imagineEngine` (P9-05a) when the message is an image job's.
 function hydrateBot(row) {
   if (row && 'bot' in row) {
     if (row.bot) row.bot = true;
     else delete row.bot;
   }
+  if (row && 'imagineEngine' in row && row.imagineEngine == null) delete row.imagineEngine;
   return row;
 }
 const hydrateMessage = (row) => hydrateBot(hydrateThread(hydratePinned(hydrateReply(hydrateAttachments(row)))));

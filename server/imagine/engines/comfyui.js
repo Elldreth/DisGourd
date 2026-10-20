@@ -976,6 +976,7 @@ module.exports = {
   styleList,
   STYLE_KEYS,
   costOf: () => 0,
+  pictures: () => ({ strength: true }), // P9-05a: img2img with a denoise strength
   generate,
   listModels,
   listAll,
