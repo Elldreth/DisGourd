@@ -4,7 +4,7 @@ These are the Phase 4 assets from `design/IMPROVEMENT-PLAN.md`, drawn flat in th
 
 | Asset | Where it lives | Size |
 |---|---|---|
-| Mascot, 7 poses (waving, sleeping, headphones, magnifier, confused, party, shushing) | `web/src/mascotParts.js` (data) → `components/Mascot.jsx`; static copy in `web/public/offline.html` | inline SVG, under 5 KB per pose |
+| Mascot, 7 poses (waving with its leaf, sleeping, headphones, magnifier, confused, party, shushing) | `web/src/mascotParts.js` (data) → `components/Mascot.jsx`; static copy in `web/public/offline.html` | inline SVG, under 5 KB per pose |
 | Sign-in art (a garland on wide screens, a ground vine on phones) | `components/LoginArt.jsx` | inline SVG |
 | 12 ready-made server icons | `web/src/serverGlyphs.js` → `components/GlyphPicker.jsx` | inline SVG; 256 px PNG when picked |
 | Share image, 1200×630 | `web/public/og-image.png` | 13.2 KB |

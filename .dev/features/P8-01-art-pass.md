@@ -47,6 +47,11 @@ Revision: `ef006a8` (main after #173). Web suite before: 98 files / 761 tests; s
   - At 1024 px, two garland gourds touched the card's edges. I moved them to the outer thirds; there are now 0 overlaps by bounding box.
   - On phones, a corner vine ran under the card and looked cramped. I replaced it with a vine along the bottom, which starts 27 px below the card.
 
+## Owner feedback (2026-10-20)
+- **Sleeping:** drawn upright now; the Zs in the belly say "asleep" on their own.
+- **Waving:** the arm on the left is gone (it didn't read as an arm). The leaf now does the waving, tipped up with two motion marks beside it.
+- The sign-in card, offline page, share image and pose sheet were re-rendered with both changes, and a test checks the wave has no arm.
+
 ## Verification Evidence
 | Acceptance Criterion | Status | Verification Type | Evidence |
 |---|---|---|---|

@@ -49,21 +49,20 @@ const leaf = [['path', { d: `${LEAF} ${LEAF_VEIN}`, fill: 'L', fillRule: 'evenod
 // Each pose: what's drawn behind the body, the body (with or without its
 // leaf), and what's drawn on top. `tilt` leans the whole gourd.
 export const POSES = {
-  // Hello: one leaf-hand raised, a wave in the bubble.
+  // Hello: the leaf waves (tipped up, with motion marks), a wave in the bubble.
   wave: {
     label: 'waving',
+    noLeaf: true,
     front: [
-      line('M30 66 C21 62 16 55 14 47', 'V', 5),
-      dot(13, 43.5, 4.6),
-      line('M5 37 L1.5 33.5', 'L', 2.2),
-      line('M3.5 45 L-1.5 45', 'L', 2.2),
+      ['g', { transform: 'rotate(-28 51.6 20.2)' }, leaf],
+      line('M71 2 q4.5 4.5 0.5 10', 'L', 2.2),
+      line('M77 -1.5 q6.5 7 0.5 16', 'L', 2.2),
       line('M42 72 q2 -4 4 0 t4 0 t4 0 t4 0'),
     ],
   },
-  // Asleep: leaning over, a z in the bubble and more drifting up.
+  // Asleep: a z in the bubble and more drifting up.
   sleep: {
     label: 'sleeping',
-    tilt: -14,
     front: [line('M45.5 66 h9 l-9 11 h9'), line('M73 36 h6 l-6 7 h6', 'L', 2.2), line('M83 22 h8 l-8 9 h8', 'L', 2.4)],
   },
   // Listening: headphones on, a note in the bubble.

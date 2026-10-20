@@ -16,6 +16,12 @@ const { SERVER_GLYPHS, glyphTileSvg } = await import('../serverGlyphs.js');
 
 afterEach(cleanup);
 
+test('the wave is the leaf tipped up with motion marks, not an arm (owner, 2026-10-20)', () => {
+  const svg = mascotSvg('wave');
+  expect(svg).toContain('rotate(-28 51.6 20.2)');
+  expect(svg).not.toContain('M30 66 C21 62 16 55 14 47'); // the old arm
+});
+
 test('seven poses, each drawn only with the theme colours, no face, and small', () => {
   expect(POSE_NAMES).toEqual(['wave', 'sleep', 'music', 'search', 'confused', 'party', 'shush']);
   for (const pose of POSE_NAMES) {
@@ -42,7 +48,8 @@ test('the static copy (offline page) matches the shapes, with plain colours', ()
   const svg = mascotSvg('sleep', { size: 96 });
   expect(svg).toMatch(/^<svg [^>]*viewBox="-12 -4 120 108"/);
   expect(svg).toContain('#9466FF');
-  expect(svg).toContain('rotate(-14 50 92)');
+  expect(svg).not.toContain('rotate('); // upright: the Zs say asleep (owner, 2026-10-20)
+  expect(svg).toContain('M45.5 66 h9 l-9 11 h9'); // the z in the bubble
 });
 
 test('the sign-in art draws a garland for wide screens and a ground vine for phones, from the theme', () => {
