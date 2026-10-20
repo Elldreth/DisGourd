@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** PLANNED (owner decisions 1, 3 and 4 in the review)
+- **State:** READY after P5-01 (owner decisions agreed 2026-10-19)
 - **Effort:** M
 - **Depends on:** none in code; the owner's answers
 - **Serialize with:** anything editing `ProfileDialog.jsx`, `UserFooter.jsx`, `Modal.jsx`
