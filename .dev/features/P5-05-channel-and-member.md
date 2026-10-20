@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** REVIEW (PR open, 2026-10-19)
+- **State:** COMPLETE (merged in #163, 2026-10-20)
 - **Effort:** M
 - **Depends on:** P5-02 (kit), P5-01 (menu dismissal)
 - **Serialize with:** anything editing `ChannelSettingsDialog.jsx`, `MemberList.jsx`

@@ -3,6 +3,7 @@ import { heading, card } from './constants.js';
 import SettingRow from '../../settings/SettingRow.jsx';
 import Switch from '../../settings/Switch.jsx';
 import Icon from '../../Icon.jsx';
+import EmptyState from '../../EmptyState.jsx';
 
 // Image generation › Overview: is each engine set up (a card that opens its
 // page), which one is the default, and the rules for everyone: the daily
@@ -16,6 +17,8 @@ export default function OverviewPage() {
   const savedKie = kieEngine?.config || {};
   const kieModelName = savedKie.model === 'custom' ? savedKie.customModel : kieEngine?.models?.find((m) => m.id === savedKie.model)?.name;
   const bothOn = comfy.enabled && kie.enabled;
+  // Neither engine is on yet (as saved): say so with the art (P5-06).
+  const nothingOn = !savedComfy.enabled && !savedKie.enabled;
 
   const engines = [
     {
@@ -41,6 +44,15 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-5">
+      {nothingOn && (
+        <EmptyState
+          art="imagine"
+          className="rounded-xl bg-ink-900/60"
+          title="Image generation isn’t set up yet"
+          body="Turn on ComfyUI (free, on your own computer) or kie.ai (paid, no graphics card needed) to let people use /imagine."
+          action={{ label: 'Set up ComfyUI', onClick: () => onNavigate?.('imagine-comfy') }}
+        />
+      )}
       <p className="text-sm text-gray-400">
         Let people make images with <code className="text-brand-hi">/imagine</code>. Each server’s owner still turns it on for their server and chooses
         which roles may use it.

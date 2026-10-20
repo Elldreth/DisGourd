@@ -1,0 +1,86 @@
+{
+  "join-1": {
+    "start": 0.0,
+    "length": 1.0,
+    "event_peak_db": -9.1,
+    "natural_end_s": 1.72,
+    "bytes": 4504
+  },
+  "join-2": {
+    "start": 0.0,
+    "length": 1.0,
+    "event_peak_db": -10.6,
+    "natural_end_s": 2.54,
+    "bytes": 5075
+  },
+  "leave-1": {
+    "start": 0.0,
+    "length": 1.0,
+    "event_peak_db": -11.0,
+    "natural_end_s": 1.52,
+    "bytes": 4648
+  },
+  "leave-2": {
+    "start": 0.01,
+    "length": 1.0,
+    "event_peak_db": -10.7,
+    "natural_end_s": 2.02,
+    "bytes": 4349
+  },
+  "mention-1": {
+    "start": 0.0,
+    "length": 1.0,
+    "event_peak_db": -13.9,
+    "natural_end_s": 1.71,
+    "bytes": 5263
+  },
+  "mention-2": {
+    "start": 0.0,
+    "length": 1.0,
+    "event_peak_db": -13.3,
+    "natural_end_s": 1.44,
+    "bytes": 5039
+  },
+  "message-1": {
+    "start": 0.0,
+    "length": 0.34,
+    "event_peak_db": -9.1,
+    "natural_end_s": 0.33,
+    "bytes": 1639
+  },
+  "message-2": {
+    "start": 0.01,
+    "length": 0.4,
+    "event_peak_db": -14.0,
+    "natural_end_s": 0.42,
+    "bytes": 1926
+  },
+  "peer-join-1": {
+    "start": 0.0,
+    "length": 0.12,
+    "event_peak_db": -25.1,
+    "natural_end_s": 0.11,
+    "bytes": 689
+  },
+  "peer-join-2": {
+    "start": 0.1,
+    "length": 0.45,
+    "event_peak_db": -10.7,
+    "natural_end_s": 0.58,
+    "bytes": 2205
+  },
+  "peer-leave-1": {
+    "start": 0.0,
+    "length": 0.2,
+    "event_peak_db": -11.6,
+    "natural_end_s": 0.19,
+    "bytes": 1025
+  },
+  "peer-leave-2": {
+    "start": 0.0,
+    "length": 0.19,
+    "event_peak_db": -8.6,
+    "natural_end_s": 0.18,
+    "bytes": 968
+  }
+}

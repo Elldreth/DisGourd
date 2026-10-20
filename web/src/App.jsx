@@ -55,6 +55,12 @@ export default function App() {
   const [view, setView] = useState('server'); // 'server' | 'dm'
   const [profile, setProfile] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileSection, setProfileSection] = useState(undefined); // open Settings at a section (P5-06)
+  // Footer clicks pass an event; the voice panel's "Why?" passes 'audio'.
+  const openProfile = (section) => {
+    setProfileSection(typeof section === 'string' ? section : undefined);
+    setProfileOpen(true);
+  };
   // Your chosen status (online | idle | dnd | invisible), kept on your profile.
   const presence = profile?.presence || 'online';
   // Your custom status ({ statusText, statusEmoji }), edited in a dialog.
@@ -471,7 +477,7 @@ export default function App() {
             statusText={profile?.statusText}
             statusEmoji={profile?.statusEmoji}
             onEditStatus={() => setStatusOpen(true)}
-            onOpenProfile={() => setProfileOpen(true)}
+            onOpenProfile={openProfile}
             onLogout={logout}
           />
         ) : (
@@ -544,7 +550,7 @@ export default function App() {
             statusText={profile?.statusText}
             statusEmoji={profile?.statusEmoji}
             onEditStatus={() => setStatusOpen(true)}
-            onOpenProfile={() => setProfileOpen(true)}
+            onOpenProfile={openProfile}
             status={status}
             onLogout={logout}
           />
@@ -699,6 +705,7 @@ export default function App() {
       {profileOpen && profile && (
         <ProfileDialog
           profile={profile}
+          initialSection={profileSection}
           onClose={() => setProfileOpen(false)}
           onUpdated={setProfile}
           presence={presence}

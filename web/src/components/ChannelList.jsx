@@ -710,10 +710,19 @@ export default function ChannelList({
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-400"><Icon name="mic" size={12} className="shrink-0" /> Push-to-talk on — hold your key to speak.</div>
           )}
           {voiceMicError && (
-            <div className="mt-1 flex items-start gap-1.5 text-[11px] text-idle">
-              <Icon name="micOff" size={12} className="mt-0.5 shrink-0" />
-              <span>No microphone — you can hear others but not speak. This usually means the site
-              isn’t served over HTTPS, or mic access was blocked.</span>
+            // One line (P5-06); "Why?" opens Settings › Voice & audio, which explains
+            // and asks for microphone access.
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-idle">
+              <Icon name="micOff" size={12} className="shrink-0" />
+              <span className="min-w-0 truncate">No microphone: listening only.</span>
+              <button
+                type="button"
+                onClick={() => onOpenProfile?.('audio')}
+                title="Usually the site isn’t served over HTTPS, or microphone access was blocked"
+                className="shrink-0 underline underline-offset-2 hover:text-fg"
+              >
+                Why?
+              </button>
             </div>
           )}
         </div>

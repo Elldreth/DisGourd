@@ -18,8 +18,8 @@ test('renders the art, a heading, a line of body text and an optional action', (
   expect(onClick).toHaveBeenCalled();
 });
 
-test('the four illustrations exist, draw with theme colours only, and stay small', () => {
-  expect(Object.keys(ART).sort()).toEqual(['channel', 'dms', 'search', 'server']);
+test('the five illustrations exist, draw with theme colours only, and stay small', () => {
+  expect(Object.keys(ART).sort()).toEqual(['channel', 'dms', 'imagine', 'search', 'server']); // imagine: P5-06
   for (const name of Object.keys(ART)) {
     cleanup();
     const { container } = render(<EmptyState art={name} title="t" />);

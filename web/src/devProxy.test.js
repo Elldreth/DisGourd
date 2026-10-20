@@ -8,6 +8,8 @@ import { apiPaths, proxyKey } from '../devProxy.js';
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
 const serverRoutes = join(webSrc, '..', '..', 'server', 'routes');
+// Folders in web/public (the UI sounds, P5-06) are files Vite serves itself, not API paths.
+const publicPaths = readdirSync(join(webSrc, '..', 'public'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `/${e.name}`);
 
 function sourceFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -25,7 +27,7 @@ function clientPaths() {
   for (const file of sourceFiles(webSrc)) {
     for (const match of readFileSync(file, 'utf8').matchAll(call)) found.add(`/${match[1]}`);
   }
-  return [...found].sort();
+  return [...found].filter((p) => !publicPaths.includes(p)).sort();
 }
 
 // Top-level segments the server's route modules dispatch on.
