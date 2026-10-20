@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 9
-- **State:** REVIEW
+- **State:** COMPLETE (merged #180)
 - **Starting baseline:** main at c145331 (#179 merged)
 - **Effort:** S–M (no migration)
 - **Depends on:** P2-21 (roles), P5-04 (Server settings › Overview)
