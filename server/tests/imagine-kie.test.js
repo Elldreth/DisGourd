@@ -218,6 +218,24 @@ describe('admin routes and the chat path', () => {
     expect(k.models.at(-1).id).toBe('custom');
   });
 
+  test("the admin view says what kie.ai has cost this month (P7-05); failed and last month's jobs don't count", async () => {
+    const before = json(await call('admin', 'GET', '/admin/imagine')).engines.find((e) => e.id === 'kie').spentThisMonth;
+    const job = (cost, at, status = 'done') => {
+      const id = db.createImagineJob({ userId: null, spaceId: null, channelId: null, engine: 'kie', prompt: 'p', shape: 'square', quality: 'standard', cost });
+      db.raw.prepare('UPDATE imagine_jobs SET status = ?, created_at = ? WHERE id = ?').run(status, at, id);
+    };
+    const now = Date.now();
+    const lastMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() - 1000;
+    job(0.8, now);
+    job(1.25, now);
+    job(5, now, 'failed');
+    job(9, lastMonth);
+    const after = json(await call('admin', 'GET', '/admin/imagine'));
+    expect(after.engines.find((e) => e.id === 'kie').spentThisMonth).toBeCloseTo(before + 2.05, 5);
+    // ComfyUI is free, so it has no figure.
+    expect(after.engines.find((e) => e.id === 'comfyui')?.spentThisMonth).toBeUndefined();
+  });
+
   test('a chat request on kie.ai: the image, its real cost, the price in GET /spaces, and the monthly cap', async () => {
     // A cap with room for exactly one more 0.8-credit image this month.
     const spent = db.imagineCreditsSince('kie', new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime());

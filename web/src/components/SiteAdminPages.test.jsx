@@ -128,3 +128,22 @@ test('Try it waits for unsaved changes to be saved', async () => {
   expect(within(tryPanel).getByRole('button', { name: 'Generate' }).disabled).toBe(true);
   expect(within(tryPanel).getByText(/save them first/)).toBeTruthy();
 });
+
+test("the overview's kie.ai card says what it has cost this month, against the cap if there is one (P7-05)", async () => {
+  const kie = (config, spentThisMonth) => ({ id: 'kie', name: 'kie.ai', config: { enabled: true, model: 'z-image', keySaved: true, ...config }, models: [{ id: 'z-image', name: 'Z-Image' }], spentThisMonth });
+  api.getImagineSettings.mockResolvedValue(view({}, { engines: [view().engines[0], kie({ monthlyCredits: 200 }, 12.4)] }));
+  await open();
+  const engines = await screen.findByRole('list', { name: 'Engines' });
+  expect(within(engines).getByText('12.4 of 200 credits used this month')).toBeTruthy();
+  cleanup();
+  api.getImagineSettings.mockResolvedValue(view({}, { engines: [view().engines[0], kie({ monthlyCredits: null }, 1)] }));
+  await open();
+  expect(within(await screen.findByRole('list', { name: 'Engines' })).getByText('1 credit used this month · no cap')).toBeTruthy();
+  cleanup();
+  // No key yet: it says that instead.
+  api.getImagineSettings.mockResolvedValue(view({}, { engines: [view().engines[0], kie({ keySaved: false }, 0)] }));
+  await open();
+  const noKey = await screen.findByRole('list', { name: 'Engines' });
+  expect(within(noKey).getByText('No API key yet')).toBeTruthy();
+  expect(within(noKey).queryByText(/used this month/)).toBeNull();
+});

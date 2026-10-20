@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 6
-- **State:** REVIEW
+- **State:** COMPLETE (merged #169)
 - **Effort:** S
 - **Depends on:** P6-03 (merged in #168)
 - **Serialize with:** none open

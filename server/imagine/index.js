@@ -65,6 +65,8 @@ function adminView(settings = getSettings()) {
       name: e.name,
       config: e.publicConfig(engineConfig(settings, e.id)),
       ...(e.catalogue ? { models: e.catalogue(engineConfig(settings, e.id)) } : {}),
+      // Credits used since the 1st, for engines that charge (P7-05).
+      ...(e.monthlyCap ? { spentThisMonth: Math.round(db.imagineCreditsSince(e.id, monthStart()) * 100) / 100 } : {}),
     })),
   };
 }
