@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 3
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #157, 2026-10-19)
 - **Starting baseline:** main at 24cc47a (#156 merged)
 - **Effort:** M
 - **Depends on:** none
