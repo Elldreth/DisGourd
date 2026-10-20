@@ -14,6 +14,7 @@ import ImagineKie from './admin/imagine/KiePage.jsx';
 import ImagineTry from './admin/imagine/TryPage.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import ChangePasswordDialog from './ChangePasswordDialog.jsx';
+import DevicesSection from './settings/DevicesSection.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Modal from './Modal.jsx';
 import SettingsLayout from './settings/SettingsLayout.jsx';
@@ -202,6 +203,7 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
               </div>
             </div>
           )}
+          {onPasswordChanged && <DevicesSection onToken={onPasswordChanged} />}
           {passwordOpen && (
             <ChangePasswordDialog
               onClose={() => setPasswordOpen(false)}

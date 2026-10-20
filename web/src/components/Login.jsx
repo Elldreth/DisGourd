@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import * as api from '../api.js';
 import AuthShell, { Field } from './AuthShell.jsx';
 
-export default function Login({ onAuthed }) {
+export default function Login({ onAuthed, notice = '' }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -41,6 +41,10 @@ export default function Login({ onAuthed }) {
       subtitle={isRegister ? 'Create an account to get started' : 'Sign in to continue'}
     >
       <form onSubmit={submit} className="space-y-4">
+          {notice && (
+            // P9-03: signed out from another device (or a password change).
+            <div role="status" className="rounded-lg bg-ink-700 px-3 py-2 text-sm text-gray-200">{notice}</div>
+          )}
           <Field label="Username">
             <input
               autoFocus

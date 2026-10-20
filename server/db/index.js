@@ -1852,6 +1852,40 @@ function getUserById(id) {
 }
 
 // The user's current token version (P6-02), or null when there's no such user.
+// ---- Signed-in devices (P9-03) ----
+const SESSION_TOUCH_MS = 5 * 60 * 1000; // last-seen updates at most this often
+function createSession(userId, device) {
+  const id = require('crypto').randomBytes(16).toString('base64url');
+  const now = Date.now();
+  db.prepare('INSERT INTO sessions(id, user_id, device, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)').run(id, userId, device, now, now);
+  return id;
+}
+function getSession(id) {
+  return db.prepare('SELECT id, user_id AS userId, device, created_at AS createdAt, last_seen_at AS lastSeenAt FROM sessions WHERE id = ?').get(id) || null;
+}
+// Note activity, at most once every few minutes.
+function touchSession(session, now = Date.now()) {
+  if (now - session.lastSeenAt < SESSION_TOUCH_MS) return;
+  db.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?').run(now, session.id);
+}
+// A user's devices, most recently active first; sessions older than a
+// token's life (which can't be in use any more) are cleared first.
+function listSessions(userId, maxAgeMs) {
+  db.prepare('DELETE FROM sessions WHERE user_id = ? AND created_at < ?').run(userId, Date.now() - maxAgeMs);
+  return db.prepare('SELECT id, device, created_at AS createdAt, last_seen_at AS lastSeenAt FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC, created_at DESC').all(userId);
+}
+function deleteSession(userId, id) {
+  return db.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?').run(id, userId).changes > 0;
+}
+// Sign out every other device: their sessions go, and the token version moves
+// on (which also ends tokens from before sessions existed). Returns it. A
+// password change has already moved the version on, so it passes bump=false.
+const endOtherSessions = db.transaction((userId, keepId, bump = true) => {
+  db.prepare('DELETE FROM sessions WHERE user_id = ? AND id IS NOT ?').run(userId, keepId || null);
+  if (bump) db.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').run(userId);
+  return getTokenVersion(userId);
+});
+
 function getTokenVersion(userId) {
   const row = db.prepare('SELECT token_version FROM users WHERE id = ?').get(userId);
   return row ? row.token_version : null;
@@ -2412,6 +2446,12 @@ module.exports = {
   setUserPassword,
   getTokenVersion,
   changePassword,
+  createSession,
+  getSession,
+  touchSession,
+  listSessions,
+  deleteSession,
+  endOtherSessions,
   setUserAvatar,
   createFriendRequest,
   getIncomingFriendRequests,

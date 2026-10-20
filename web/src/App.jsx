@@ -41,6 +41,12 @@ import { cooldownKey, startCooldown, renameCooldowns } from './slowmode.js';
 // owns one area's state, actions and gateway handlers.
 // Names stay uncoloured outside the open server.
 const NO_COLORS = new Map();
+// P9-03: what the sign-in page says after another device signed this one out.
+const SIGNED_OUT_NOTES = {
+  device: 'You were signed out of this device from another one.',
+  signed_out_elsewhere: 'You were signed out: all other devices were signed out from another one.',
+  password_changed: 'Your password was changed on another device, so you were signed out here.',
+};
 
 export default function App() {
   const [token, setToken] = useState(api.getToken());
@@ -127,6 +133,8 @@ export default function App() {
   // The open thread (a side panel next to the channel): { space, parentChannel,
   // channel: '~tN', name, rootMessageId, root? } or null.
   const [openThread, setOpenThread] = useState(null);
+  // P9-03: why the sign-in page is showing, when another device signed us out.
+  const [signedOutNote, setSignedOutNote] = useState('');
   // P9-01: a message to show once its channel is open (from Reports).
   const [jumpRequest, setJumpRequest] = useState(null);
   const chat = useChannelMessages({
@@ -218,9 +226,13 @@ export default function App() {
     // Your password was changed (P6-02): every older sign-in was ended. On the
     // device that changed it the new token is already stored, so carry on with
     // it; anywhere else the check fails and you're back at sign-in.
-    signed_out: () => {
+    // P9-03: a device signed in or out; an open devices list reloads.
+    sessions_changed: () => window.dispatchEvent(new Event('disgourd:sessions-changed')),
+    signed_out: (f) => {
       api.stillSignedIn().then((ok) => {
         if (ok) setToken(api.getToken());
+        // Signed out from elsewhere: say why on the sign-in page (P9-03).
+        else setSignedOutNote(SIGNED_OUT_NOTES[f.reason] || SIGNED_OUT_NOTES.device);
       });
     },
     // You changed your status in another tab.
@@ -313,6 +325,7 @@ export default function App() {
   // ---- Navigation and session ----
   function logout() {
     voice.reset();
+    api.logout().catch(() => {}); // ends this device's session (P9-03); reads the token now
     api.clearToken();
     setToken('');
     sp.reset();
@@ -460,7 +473,17 @@ export default function App() {
         </div>
       );
     }
-    return authInfo.setup ? <SetupWizard onAuthed={setToken} /> : <Login onAuthed={setToken} />;
+    return authInfo.setup ? (
+      <SetupWizard onAuthed={setToken} />
+    ) : (
+      <Login
+        notice={signedOutNote}
+        onAuthed={(t) => {
+          setSignedOutNote('');
+          setToken(t);
+        }}
+      />
+    );
   }
 
   return (

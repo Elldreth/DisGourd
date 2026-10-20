@@ -2,7 +2,8 @@
 const db = require('../db');
 const { config, registrationMode } = require('../config');
 const { generateSalt, hashPassword, verifyPassword } = require('../auth/passwords');
-const { createToken, authUserId } = require('../auth/tokens');
+const { createToken, authUserId, authPayload, TOKEN_TTL_SECONDS } = require('../auth/tokens');
+const { deviceLabel } = require('../auth/device');
 const { rateLimitOk, safeEqual, clientIp } = require('../auth/rateLimit');
 const { sendJson, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateRegistration, parseReactionEmoji } = require('../validate');
@@ -18,7 +19,15 @@ function endOfToday(now, tzOffset) {
   const midnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + 1);
   return midnight + offset * 60e3;
 }
-const { broadcastPresence, sendToUser, endStaleSessions } = require('../gateway/delivery');
+const { broadcastPresence, sendToUser, endStaleSessions, endSession } = require('../gateway/delivery');
+// Your devices list changed (P9-03): open windows reload it.
+const sessionsChanged = (userId) => sendToUser(userId, JSON.stringify({ type: 'sessions_changed' }));
+// A new signed-in device (P9-03) and its token.
+const signIn = (req, userId, username) => {
+  const token = createToken(userId, username, db.createSession(userId, deviceLabel(req.headers['user-agent'])));
+  sessionsChanged(userId);
+  return token;
+};
 
 // Password rules, as at sign-up (validateRegistration).
 const MIN_PASSWORD = 8;
@@ -95,7 +104,7 @@ const routes = [
         if (created.error === 'code') return sendJson(res, 403, { error: 'A valid registration code is required to create an account.' });
         if (created.error === 'exists') return sendJson(res, 409, { error: 'User already exists' });
         const userId = created.userId;
-        const token = createToken(userId, username);
+        const token = signIn(req, userId, username);
         res.writeHead(201);
         return res.end(JSON.stringify({ token }));
       } catch (e) {
@@ -127,7 +136,7 @@ const routes = [
           const newSalt = generateSalt();
           db.setUserPassword(user.id, await hashPassword(password, newSalt), newSalt);
         }
-        const token = createToken(user.id, user.username);
+        const token = signIn(req, user.id, user.username);
         res.writeHead(200);
         return res.end(JSON.stringify({ token }));
       } catch (e) {
@@ -141,7 +150,8 @@ const routes = [
     // (P6-02). Every other device is signed out; this one gets a fresh token.
     match: ({ req, parsedUrl }) => parsedUrl.pathname === '/me/password' && req.method === 'POST',
     run: async ({ req, res, parsedUrl }) => {
-      const userId = authUserId(req, parsedUrl);
+      const me = authPayload(req, parsedUrl);
+      const userId = me ? me.sub : null;
       if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
       // Per account, so a stolen token can't be used to guess the password.
       if (!rateLimitOk('password:' + userId, 10, 15 * 60 * 1000)) {
@@ -158,9 +168,52 @@ const routes = [
       if (!user || !check.ok) return sendJson(res, 403, { error: 'Your current password is incorrect' });
       if (newPassword === currentPassword) return sendJson(res, 400, { error: 'Your new password must be different from the current one' });
       const salt = generateSalt();
-      const version = db.changePassword(userId, await hashPassword(newPassword, salt), salt);
+      db.changePassword(userId, await hashPassword(newPassword, salt), salt);
+      // Every other device's session goes too (P9-03); this one stays.
+      const sid = me.sid && db.getSession(me.sid) ? me.sid : db.createSession(userId, deviceLabel(req.headers['user-agent']));
+      const version = db.endOtherSessions(userId, sid, false);
       endStaleSessions(userId, version);
-      return sendJson(res, 200, { token: createToken(userId, user.username) });
+      return sendJson(res, 200, { token: createToken(userId, user.username, sid) });
+    },
+  },
+  {
+    // Signed-in devices (P9-03): GET /me/sessions; DELETE /me/sessions/:id;
+    // POST /me/sessions/sign-out-others (a fresh token for this device).
+    match: ({ parsedUrl }) => parsedUrl.pathname === '/me/sessions' || parsedUrl.pathname.startsWith('/me/sessions/'),
+    run: async ({ req, res, parsedUrl }) => {
+      const me = authPayload(req, parsedUrl);
+      if (!me) return sendJson(res, 401, { error: 'Unauthorized' });
+      const rest = parsedUrl.pathname.slice('/me/sessions'.length).replace(/^\//, '');
+      if (!rest && req.method === 'GET') {
+        const list = db.listSessions(me.sub, TOKEN_TTL_SECONDS * 1000).map((s) => ({ ...s, current: s.id === me.sid }));
+        return sendJson(res, 200, { sessions: list, olderSignIns: !me.sid });
+      }
+      if (rest === 'sign-out-others' && req.method === 'POST') {
+        const user = db.getUserById(me.sub);
+        const sid = me.sid && db.getSession(me.sid) ? me.sid : db.createSession(me.sub, deviceLabel(req.headers['user-agent']));
+        const version = db.endOtherSessions(me.sub, sid);
+        endStaleSessions(me.sub, version, 'signed_out_elsewhere');
+        sessionsChanged(me.sub);
+        return sendJson(res, 200, { token: createToken(me.sub, user.username, sid) });
+      }
+      if (rest && req.method === 'DELETE') {
+        if (rest === me.sid) return sendJson(res, 400, { error: 'Use Log out to sign out of this device' });
+        if (!db.deleteSession(me.sub, rest)) return sendJson(res, 404, { error: 'No such device' });
+        endSession(me.sub, rest);
+        sessionsChanged(me.sub);
+        return sendJson(res, 200, { ok: true });
+      }
+      return sendJson(res, 405, { error: 'Method not allowed' });
+    },
+  },
+  {
+    // POST /logout — end this device's session (P9-03); the app also forgets
+    // the token. Without a session (an older token) it's a no-op.
+    match: ({ req, parsedUrl }) => parsedUrl.pathname === '/logout' && req.method === 'POST',
+    run: async ({ req, res, parsedUrl }) => {
+      const me = authPayload(req, parsedUrl);
+      if (me && me.sid && db.deleteSession(me.sub, me.sid)) sessionsChanged(me.sub);
+      return sendJson(res, 200, { ok: true });
     },
   },
   {

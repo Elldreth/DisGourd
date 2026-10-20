@@ -687,6 +687,25 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 27,
+    name: 'sessions',
+    up(db) {
+      // P9-03: one row per signed-in device, so they can be listed and signed
+      // out. Tokens carry the id; `device` is a label like "Chrome on Windows"
+      // (the User-Agent itself isn't kept, nor any IP address).
+      db.exec(`
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          device TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          last_seen_at INTEGER NOT NULL
+        );
+        CREATE INDEX sessions_user ON sessions(user_id, last_seen_at);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
