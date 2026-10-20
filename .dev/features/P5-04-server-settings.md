@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** REVIEW (PR open, 2026-10-19)
+- **State:** COMPLETE (merged in #162, 2026-10-19)
 - **Effort:** L
 - **Depends on:** P5-02 (kit)
 - **Serialize with:** anything editing `ChannelList.jsx` (server menu), `RolesDialog.jsx`, `ModLogDialog.jsx`, `BansDialog.jsx`, `ServerEmojiDialog.jsx`, `ServerImagineDialog.jsx`

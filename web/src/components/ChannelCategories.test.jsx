@@ -123,7 +123,7 @@ test('managers: the server menu creates a category (then names it), and a channe
   // Channel settings: Move up / down and the category.
   fireEvent.click(screen.getByRole('button', { name: 'Channel settings for news' }));
   const place = await screen.findByRole('group', { name: 'Place in the channel list' });
-  fireEvent.click(within(place).getByRole('button', { name: 'Move up' }));
+  fireEvent.click(within(place).getByRole('button', { name: 'Move channel up' }));
   await waitFor(() => expect(api.setLayout).toHaveBeenLastCalledWith('S', expect.objectContaining({
     channels: expect.arrayContaining([{ name: 'news', category: 1 }]),
   })));
@@ -131,7 +131,7 @@ test('managers: the server menu creates a category (then names it), and a channe
   expect(sent).toEqual(['news', 'general', 'memes']);
   fireEvent.change(within(place).getByLabelText('Category'), { target: { value: '' } });
   await waitFor(() => expect(api.setLayout.mock.calls.at(-1)[1].channels.filter((c) => c.category === null).map((c) => c.name)).toEqual(['rules', 'news']));
-  expect(within(place).getByRole('button', { name: 'Move up' }).disabled).toBe(false);
+  expect(within(place).getByRole('button', { name: 'Move channel up' }).disabled).toBe(false);
 });
 
 // P3-25c: drag and drop. Each drop target gets a fake 20 px box, in page order.

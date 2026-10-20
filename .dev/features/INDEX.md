@@ -139,8 +139,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P5-01 | Quick fixes: image overflow, member menu dismissal | 5 | COMPLETE | S | none | MessageList/Attachment, MemberList.jsx |
 | P5-02 | Settings kit and your settings | 5 | COMPLETE | M | P5-01 (order) | components/settings/* (new), ProfileDialog.jsx, UserFooter.jsx, Modal.jsx |
 | P5-03 | Site admin: General and Image generation pages | 5 | COMPLETE | L | P5-02 | components/admin/imagine/* (new), ImagineAdmin.jsx, RegistrationAdmin.jsx |
-| P5-04 | Server settings window and a short server menu | 5 | REVIEW | L | P5-02 | components/server-settings/* (new), ChannelList.jsx, Roles/ModLog/Bans/Emoji/ServerImagine dialogs |
-| P5-05 | Channel settings tabs and member menu header | 5 | PLANNED | M | P5-02, P5-01 | ChannelSettingsDialog.jsx, MemberList.jsx |
+| P5-04 | Server settings window and a short server menu | 5 | COMPLETE | L | P5-02 | components/server-settings/* (new), ChannelList.jsx, Roles/ModLog/Bans/Emoji/ServerImagine dialogs |
+| P5-05 | Channel settings tabs and member menu header | 5 | REVIEW | M | P5-02, P5-01 | ChannelSettingsDialog.jsx, MemberList.jsx |
 | P5-06 | Sound set, image-generation art, shorter voice warning | 5 | PLANNED | M | P5-03 (art only) | sounds.js, web/public/sounds/*, ChannelList.jsx |
 
 ## Dependency map (hard dependencies)

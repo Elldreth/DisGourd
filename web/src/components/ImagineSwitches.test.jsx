@@ -60,13 +60,13 @@ test('channel settings: the 18+ switch is saved only when it changed, and not of
   cleanup();
   render(<ChannelSettingsDialog space="Tx" channel="lounge" meta={{ type: 'text', nsfw: false }} roles={roles} isOwner onClose={() => {}} onSaved={() => {}} />);
   await screen.findByLabelText('@everyone: view');
-  fireEvent.click(screen.getByRole('checkbox', { name: /Age-restricted \(18\+\)/ }));
+  fireEvent.click(screen.getByRole('switch', { name: /Age-restricted \(18\+\)/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(api.setChannelNsfw).toHaveBeenCalledWith('Tx', 'lounge', true));
   cleanup();
   render(<ChannelSettingsDialog space="Tx" channel="Voice" meta={{ type: 'voice' }} roles={roles} isOwner onClose={() => {}} onSaved={() => {}} />);
   await screen.findByLabelText('@everyone: see and join');
-  expect(screen.queryByRole('checkbox', { name: /Age-restricted/ })).toBeNull();
+  expect(screen.queryByRole('switch', { name: /Age-restricted/ })).toBeNull();
 });
 
 test('channel list: an 18+ tag on marked channels; Image generation in Server settings for managers', () => {
