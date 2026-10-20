@@ -31,6 +31,7 @@ import { useToasts } from './components/Toasts.jsx';
 import { useUndoDelete } from './state/useUndoDelete.js';
 import QuickSwitcher, { itemKey, loadRecent, recordVisit, peopleItems } from './components/QuickSwitcher.jsx';
 import { useShortcuts, stepChannel } from './shortcuts.js';
+import ShortcutsSheet from './components/ShortcutsSheet.jsx';
 import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
 import { registerServiceWorker, onOpenRequest } from './pwa.js';
@@ -80,6 +81,7 @@ export default function App() {
   }
   const [searchOpen, setSearchOpen] = useState(false);
   const [switcher, setSwitcher] = useState(null); // { recent } while the Ctrl+K switcher is open
+  const [shortcutsOpen, setShortcutsOpen] = useState(false); // the Ctrl+/ sheet (P7-02)
   const [navOpen, setNavOpen] = useState(false); // mobile nav drawer (rail + sidebar)
   const [membersOpen, setMembersOpen] = useState(false); // member list drawer (below lg)
   const [authInfo, setAuthInfo] = useState(null); // { registration, setup } for the logged-out screen
@@ -405,6 +407,10 @@ export default function App() {
       openPeoplePicker();
       return;
     }
+    if (action === 'help') {
+      setShortcutsOpen(true);
+      return;
+    }
     if (view !== 'server') return;
     const dir = action.startsWith('prev') ? -1 : 1;
     const want = action.endsWith('-unread') ? (c) => !!(channelUnread[c] || channelMentions[c]) : undefined;
@@ -495,6 +501,7 @@ export default function App() {
             statusText={profile?.statusText}
             statusEmoji={profile?.statusEmoji}
             onEditStatus={() => setStatusOpen(true)}
+            onOpenShortcuts={() => setShortcutsOpen(true)}
             onOpenProfile={openProfile}
             onLogout={logout}
           />
@@ -569,6 +576,7 @@ export default function App() {
             statusText={profile?.statusText}
             statusEmoji={profile?.statusEmoji}
             onEditStatus={() => setStatusOpen(true)}
+            onOpenShortcuts={() => setShortcutsOpen(true)}
             onOpenProfile={openProfile}
             status={status}
             onLogout={logout}
@@ -740,6 +748,7 @@ export default function App() {
           inCall={!!call.room}
         />
       )}
+      {shortcutsOpen && <ShortcutsSheet onClose={() => setShortcutsOpen(false)} />}
       {searchOpen && (
         <SearchOverlay
           onClose={() => setSearchOpen(false)}

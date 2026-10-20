@@ -18,6 +18,7 @@ export default function DmSidebar({
   statusText,
   statusEmoji,
   onEditStatus,
+  onOpenShortcuts,
   onOpenProfile,
   onLogout,
   onNewMessage,
@@ -87,6 +88,7 @@ export default function DmSidebar({
         statusText={statusText}
         statusEmoji={statusEmoji}
         onEditStatus={onEditStatus}
+        onOpenShortcuts={onOpenShortcuts}
         onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />

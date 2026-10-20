@@ -80,3 +80,26 @@ test('while a dialog is open only Ctrl+K is blocked, nothing navigates', () => {
   fire(document.body, { key: 'ArrowDown', altKey: true });
   expect(onAction).not.toHaveBeenCalled();
 });
+
+// P7-02: Ctrl/⌘+/ opens the shortcuts sheet, from inside the message box too.
+test('Ctrl+/ and ⌘+/ open the shortcuts sheet; not with Shift or Alt, and not over a dialog', () => {
+  expect(matchShortcut(key('/', { ctrlKey: true }))).toBe('help');
+  expect(matchShortcut(key('/', { metaKey: true }))).toBe('help');
+  expect(matchShortcut(key('/', { ctrlKey: true, shiftKey: true }))).toBeNull();
+  expect(matchShortcut(key('/', { ctrlKey: true, altKey: true }))).toBeNull();
+  expect(matchShortcut(key('/'))).toBeNull();
+
+  const onAction = vi.fn();
+  renderHook(() => useShortcuts(onAction));
+  const box = document.createElement('textarea');
+  document.body.append(box);
+  box.focus();
+  fire(box, { key: '/', ctrlKey: true });
+  expect(onAction).toHaveBeenLastCalledWith('help');
+  const dialog = document.createElement('div');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  document.body.append(dialog);
+  fire(document.body, { key: '/', ctrlKey: true });
+  expect(onAction).toHaveBeenCalledTimes(1);
+});
