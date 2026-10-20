@@ -83,7 +83,7 @@ async function run(job) {
     const result = await job.engine.generate(job.request, job.config, { permissive: job.permissive, signal: ac.signal });
     if (!result || !Array.isArray(result.images) || !result.images.length) throw Object.assign(new Error('No image came back'), { code: 'ENGINE' });
     // Features the engine had to leave out (a missing custom node, P3-33).
-    for (const note of result.notes || []) console.warn(`[imagine] job ${job.id}: ${note}`);
+    for (const note of [...(job.notes || []), ...(result.notes || [])]) console.warn(`[imagine] job ${job.id}: ${note}`);
     const urls = saveImages(result.images, { kind: job.kind });
     db.updateImagineJob(job.id, { status: 'done', finishedAt: Date.now(), model: result.model || null, cost: result.cost ?? job.cost });
     show(job, text.done(job), urls);

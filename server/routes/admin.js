@@ -23,20 +23,28 @@ const routes = [
       const body = await getJsonBody(req);
       // P3-34: a custom workflow is only saved once every node in it exists
       // on that ComfyUI (asked now, by name).
+      // P9-04a: each style's workflows (or the flat fields, for the default style).
       const c = body && body.engines && body.engines.comfyui;
-      if (c && (c.workflow || c.upscaleWorkflow || c.img2imgWorkflow)) {
+      if (c) {
         const comfy = imagine.ENGINES.get('comfyui');
-        const url = c.url || (imagine.getSettings().engines.comfyui || {}).url;
-        for (const [key, kind, label] of [['workflow', 'generate', 'Workflow'], ['upscaleWorkflow', 'upscale', 'Upscale workflow'], ['img2imgWorkflow', 'img2img', 'Image-to-image workflow']]) {
-          if (!c[key] || (typeof c[key] === 'string' && !c[key].trim())) continue;
-          const checked = comfy.checkWorkflow(c[key], kind);
-          if (checked.error) return sendJson(res, 400, { error: `${label}: ${checked.error}` });
-          // Unchanged since the last save: no need to ask ComfyUI again.
-          const before = (imagine.getSettings().engines.comfyui || {})[key];
-          if (before && JSON.stringify(before) === JSON.stringify(checked.workflow)) continue;
-          if (!url) return sendJson(res, 400, { error: 'Set the ComfyUI address first, so the workflow can be checked' });
-          const missing = await comfy.workflowMissingNodes(comfy.validateConfig({ url }).url || url, checked.classTypes);
-          if (missing.length) return sendJson(res, 400, { error: `${label}: your ComfyUI doesn’t have ${missing.length > 1 ? 'these nodes' : 'this node'}: ${missing.join(', ')}` });
+        const saved = comfy.normalizeConfig(imagine.getSettings().engines.comfyui || {});
+        const url = c.url || saved.url;
+        const styles = Array.isArray(c.presets)
+          ? c.presets.map((p) => ({ name: p && p.name, input: p || {}, before: saved.presets.find((s) => s.id === (p && p.id)) || {} }))
+          : [{ name: null, input: c, before: saved.presets.find((s) => s.id === saved.defaultPreset) || {} }];
+        for (const s of styles) {
+          for (const [key, kind, label] of [['workflow', 'generate', 'Workflow'], ['upscaleWorkflow', 'upscale', 'Upscale workflow'], ['img2imgWorkflow', 'img2img', 'Image-to-image workflow']]) {
+            const v = s.input[key];
+            if (!v || (typeof v === 'string' && !v.trim())) continue;
+            const where = s.name && styles.length > 1 ? `${s.name}: ${label}` : label;
+            const checked = comfy.checkWorkflow(v, kind);
+            if (checked.error) return sendJson(res, 400, { error: `${where}: ${checked.error}` });
+            // Unchanged since the last save: no need to ask ComfyUI again.
+            if (s.before[key] && JSON.stringify(s.before[key]) === JSON.stringify(checked.workflow)) continue;
+            if (!url) return sendJson(res, 400, { error: 'Set the ComfyUI address first, so the workflow can be checked' });
+            const missing = await comfy.workflowMissingNodes(comfy.validateConfig({ url }).url || url, checked.classTypes);
+            if (missing.length) return sendJson(res, 400, { error: `${where}: your ComfyUI doesn’t have ${missing.length > 1 ? 'these nodes' : 'this node'}: ${missing.join(', ')}` });
+          }
         }
       }
       const out = imagine.updateSettings(body);
