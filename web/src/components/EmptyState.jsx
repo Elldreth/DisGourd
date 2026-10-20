@@ -1,5 +1,7 @@
 import Gourd from './Gourd.jsx';
 import Icon from './Icon.jsx';
+import { MascotParts } from './Mascot.jsx';
+import { MASCOT_VIEWBOX } from '../mascotParts.js';
 
 // One look for every empty state (P4-03): a flat spot illustration (or, in
 // small panels, an icon), a heading, one line and an optional action. The
@@ -48,14 +50,13 @@ export const ART = {
       <Mark x={62} y={6} size={76} />
     </>
   ),
-  // Nothing found: a gourd with a magnifier leaning on it.
+  // Nothing found: the mascot looking, magnifier in hand (P8).
   search: (
     <>
-      <Ground x={30} w={110} />
-      <Mark x={36} y={14} size={90} />
-      <circle cx="140" cy="62" r="24" fill="none" stroke={violet} strokeWidth="7" />
-      <path d="M151 85 L170 110" stroke={violet} strokeWidth="9" strokeLinecap="round" />
-      <path d="M128 54 a12 12 0 0 1 10 -8" fill="none" stroke={lime} strokeWidth="4" strokeLinecap="round" />
+      <Ground x={40} w={120} />
+      <svg x="43" y="4" width="118" height="118" viewBox={MASCOT_VIEWBOX}>
+        <MascotParts pose="search" />
+      </svg>
     </>
   ),
   // Image generation not set up (P5-06): a gourd beside an easel with a blank

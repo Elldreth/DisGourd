@@ -1,0 +1,5 @@
+{
+  "model": "google/nano-banana",
+  "ratio": "1:1",
+  "prompt": "A character sheet of seven small poses of the same mascot, arranged in a tidy grid. A stylised bottle gourd whose lower bulb is an open speech-bubble shape with a small tail, a short stem and one small lime leaf. The mood is shown by a symbol inside the speech-bubble belly and by small props, never by a face: 1 waving with a little leaf-hand raised, 2 sleeping tilted with \"z\" shapes in the bubble, 3 wearing round headphones with a music note in the bubble, 4 holding a magnifier, 5 confused with a question mark in the bubble, 6 party hat with confetti dots, 7 shushing with three dots in the bubble and a small line across. Exactly two colours on a solid very dark violet background (#1D1838): violet #9466FF and lime #B8F34A. No gradients, no shading, no outlines, no text, no faces, large simple geometric shapes, flat vector, minimal and friendly, like a logo-system icon set."
+}

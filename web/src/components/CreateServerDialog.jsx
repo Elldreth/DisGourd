@@ -3,6 +3,7 @@ import * as api from '../api.js';
 import Modal from './Modal.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import TemplatePicker from './TemplatePicker.jsx';
+import GlyphPicker from './GlyphPicker.jsx';
 
 const MAX_NAME = 60;
 
@@ -200,6 +201,15 @@ function CreatePanel({ fieldRef, onCreate, onDone, onCancel }) {
         </div>
       )}
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={pick} />
+      {!icon && (
+        <div className="mt-3">
+          <GlyphPicker
+            size={32}
+            label="No picture? Pick an icon"
+            onPick={(file) => setIcon({ original: file, blob: file, crop: null, preview: URL.createObjectURL(file) })}
+          />
+        </div>
+      )}
 
       <div className="mt-4">
         <TemplatePicker value={template} onChange={setTemplate} />

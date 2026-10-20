@@ -56,7 +56,7 @@ export default function SetupWizard({ onAuthed }) {
   };
 
   return (
-    <AuthShell title={titles[step]} subtitle={subtitles[step]}>
+    <AuthShell title={titles[step]} subtitle={subtitles[step]} pose={step === 4 ? 'party' : 'wave'}>
       <p className="mb-4 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
         Step {step} of {STEPS}
       </p>

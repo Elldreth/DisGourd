@@ -554,6 +554,7 @@ export default function App() {
             serverIcon={sp.activeSpace?.icon || null}
             onChangeServerIcon={sp.changeServerIcon}
             onRemoveServerIcon={sp.removeServerIcon}
+            onUseServerGlyph={sp.setServerGlyphIcon}
             onReframeServerIcon={sp.reframeServerIcon}
             canReframeIcon={!!(sp.activeSpace && sp.activeSpace.iconOriginal)}
             role={sp.role}

@@ -1,0 +1,5 @@
+{
+  "model": "google/nano-banana",
+  "ratio": "1:1",
+  "prompt": "A set of twelve simple app icon glyphs for chat-server avatars in a 4 by 3 grid, each a single bold white shape centred on a rounded square tile, tiles alternating violet #9466FF and a darker violet: a gourd, a game controller, a music note, an open book, a paw print, a leaf, code brackets, a paint palette, a rocket, a coffee cup, a film clapper, a star. Flat vector, no gradients, no shading, no text, background solid very dark violet #1D1838, lime #B8F34A only as a tiny accent."
+}

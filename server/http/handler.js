@@ -23,7 +23,7 @@ async function handleHttp(req, res) {
   // Anything else: unmatched GETs serve the web client (with SPA fallback);
   // other methods get a JSON 404.
   if (req.method === 'GET') {
-    return serveWebApp(parsedUrl.pathname, res);
+    return serveWebApp(parsedUrl.pathname, res, req);
   }
   if (!res.writableEnded) {
     res.writeHead(404, { 'Content-Type': 'application/json' });

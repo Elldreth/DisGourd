@@ -354,6 +354,13 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       await loadSpaces();
       setIconCrop(null);
     }),
+    // A ready-made icon (P8): already square, so no framing; it is its own original.
+    setServerGlyphIcon: attempt('Could not set the server icon', async (file) => {
+      if (!currentSpace || !file) return;
+      const up = await api.uploadFile(file);
+      await api.setSpaceIcon(currentSpace, up.url, up.url, null);
+      await loadSpaces();
+    }),
     removeServerIcon: attempt('Could not remove the server icon', async () => {
       if (!currentSpace) return;
       await api.setSpaceIcon(currentSpace, '');

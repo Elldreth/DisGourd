@@ -28,7 +28,21 @@ const STATIC_TYPES = {
   '.map': 'application/json; charset=utf-8',
 };
 
-function serveWebApp(pathname, res) {
+// This server's own address for absolute links in index.html (the share
+// image must be absolute for other apps to fetch it). From the Host header,
+// or a proxy's X-Forwarded-Host / -Proto; anything odd falls back to a
+// relative link rather than echoing it into the page.
+function originFor(req) {
+  if (!req) return '';
+  const first = (v) => String(v || '').split(',')[0].trim();
+  const host = first(req.headers['x-forwarded-host']) || first(req.headers.host);
+  if (!/^[A-Za-z0-9.-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?$/.test(host)) return '';
+  const fwd = first(req.headers['x-forwarded-proto']).toLowerCase();
+  const proto = fwd === 'https' || fwd === 'http' ? fwd : req.socket?.encrypted ? 'https' : 'http';
+  return `${proto}://${host}`;
+}
+
+function serveWebApp(pathname, res, req) {
   const rel = !pathname || pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
   const safe = path.normalize(rel).replace(/^(\.\.[\/\\])+/, '');
   let filePath = path.join(WEB_DIST, safe);
@@ -48,7 +62,7 @@ function serveWebApp(pathname, res) {
           );
         }
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
-        res.end(html);
+        res.end(withOrigin(html, req));
       });
       return;
     }
@@ -63,8 +77,13 @@ function serveWebApp(pathname, res) {
       headers['Cache-Control'] = 'no-cache';
     }
     res.writeHead(200, headers);
-    res.end(content);
+    res.end(ext === '.html' ? withOrigin(content, req) : content);
   });
 }
 
-module.exports = { serveWebApp, WEB_DIST };
+// index.html with __DG_ORIGIN__ replaced by this server's address.
+function withOrigin(html, req) {
+  return Buffer.from(String(html).split('__DG_ORIGIN__').join(originFor(req)));
+}
+
+module.exports = { serveWebApp, WEB_DIST, originFor };

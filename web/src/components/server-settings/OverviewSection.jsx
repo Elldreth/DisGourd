@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import SaveBar from '../settings/SaveBar.jsx';
 import { colorForName, initials } from '../../util.js';
+import GlyphPicker from '../GlyphPicker.jsx';
 
 // Server settings › Overview (P5-04): the server's name and icon, and (for
 // the owner) Delete server in a danger zone at the bottom. The name waits for
 // the save bar; icon changes happen at once, as they did from the menu.
 export default function OverviewSection({
-  space, icon, canEdit, canReframeIcon, isOwner, onRename, onChangeIcon, onRemoveIcon, onReframeIcon, onDelete, onDirtyChange,
+  space, icon, canEdit, canReframeIcon, isOwner, onRename, onChangeIcon, onRemoveIcon, onReframeIcon, onUseGlyph, onDelete, onDirtyChange,
   saved = false, // "Saved" after a rename (kept by the window: a rename reloads the server)
   onSavedChange,
 }) {
@@ -66,6 +67,11 @@ export default function OverviewSection({
               if (file) onChangeIcon(file);
             }}
           />
+          {onUseGlyph && (
+            <div className="w-full">
+              <GlyphPicker onPick={(file) => onUseGlyph(file)} label={icon ? 'Or switch to a ready-made icon' : 'Or pick a ready-made icon'} />
+            </div>
+          )}
         </div>
       )}
 
