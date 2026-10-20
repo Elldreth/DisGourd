@@ -48,6 +48,9 @@ export default function ImaginePanel({
   imagine, shape, quality, engine, onShape, onQuality, onEngine, busy, error, style = null, onStyle,
   picture = null, strength = 'medium', onStrength, onPickPicture, onClearPicture, uploadingPicture = false,
 }) {
+  // Pictures (P9-05b): the chosen engine if it takes pictures, else ComfyUI.
+  const pictureEngine = pictureEngineFor(imagine, engine);
+  const pic = pictureEngine ? imagine.pictures[pictureEngine] : null;
   // Paid engines (kie.ai) carry a price per quality: the last real one, or an estimate.
   const price = imagine.engines.find((e) => e.id === engine)?.price?.[quality];
   const priceText = price ? `${price.estimate ? '≈ ' : ''}${price.credits} credits` : null;
@@ -76,7 +79,7 @@ export default function ImaginePanel({
       ) : (
         <p className="text-sm text-gray-400">{imagine.reason}</p>
       )}
-      {imagine.available && imagine.canVary && onPickPicture && (
+      {imagine.available && pic && onPickPicture && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-ink-600/60 pt-2" role="group" aria-label="Start from a picture">
           {picture ? (
             <>
@@ -94,8 +97,15 @@ export default function ImaginePanel({
               >
                 ✕
               </button>
-              <Chips label="Strength" options={STRENGTHS} value={strength} onChange={onStrength} disabled={busy} />
-              <span className="text-xs text-gray-500">The shape follows the picture.</span>
+              {pic.strength ? (
+                <>
+                  <Chips label="Strength" options={STRENGTHS} value={strength} onChange={onStrength} disabled={busy} />
+                  <span className="text-xs text-gray-500">The shape follows the picture.</span>
+                </>
+              ) : (
+                <span className="text-xs text-gray-500">The picture guides the image; your prompt says what to change.</span>
+              )}
+              {pictureEngine !== engine && <span className="text-xs text-gray-500">Pictures use {engineName(imagine, pictureEngine)}.</span>}
             </>
           ) : (
             <label className="cursor-pointer rounded-full bg-ink-600 px-2.5 py-0.5 text-xs font-medium text-gray-300 hover:bg-ink-500">
@@ -120,6 +130,14 @@ export default function ImaginePanel({
     </div>
   );
 }
+
+// Which engine a picture request runs on (P9-05b, as the server decides):
+// the chosen one if it takes pictures, else ComfyUI if it does, else none.
+export function pictureEngineFor(imagine, engine) {
+  if (imagine.pictures[engine]) return engine;
+  return imagine.pictures.comfyui ? 'comfyui' : null;
+}
+const engineName = (imagine, id) => imagine.engines.find((e) => e.id === id)?.name || id;
 
 // ComfyUI styles (P9-04c): offered when ComfyUI is the engine and there's a choice.
 export function showStyles(imagine, engine) {
@@ -165,6 +183,9 @@ export function imagineState(info, run, spaceName = 'This server') {
   return {
     available: !reason, reason, remaining, engines: info.engines || [], run, canUpscale: !!info.canUpscale, canVary: !!info.canVary,
     styles: info.styles || [], defaultStyle: info.defaultStyle || null, // P9-04c
+    // P9-05b: the engines that take pictures, and whether each has a strength
+    // (a server from before P9-05a: ComfyUI's, when it can vary).
+    pictures: info.pictures || (info.canVary ? { comfyui: { strength: true } } : {}),
   };
 }
 

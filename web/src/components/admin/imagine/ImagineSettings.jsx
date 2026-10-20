@@ -99,6 +99,7 @@ export function saveBody({ comfy, kie, kieKey, defaultEngine, general, savedDefa
         enabled: kie.enabled,
         model: kie.model || undefined,
         customModel: kie.customModel,
+        pictureModel: kie.pictureModel || null, // P9-05b
         monthlyCredits: kie.monthlyCredits === '' ? null : Number(kie.monthlyCredits),
         ...(kieKey.trim() ? { apiKey: kieKey.trim() } : {}),
       },
@@ -138,7 +139,7 @@ export function ImagineSettingsProvider({ children, onDirtyChange, onNavigate })
     const k = view.engines.find((e) => e.id === 'kie')?.config || {};
     const drafts = {
       comfy: comfyDraft(c),
-      kie: { enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', monthlyCredits: k.monthlyCredits ?? '' },
+      kie: { enabled: !!k.enabled, model: k.model || '', customModel: k.customModel || '', pictureModel: k.pictureModel || '', monthlyCredits: k.monthlyCredits ?? '' },
       kieKey: '',
       defaultEngine: view.defaultEngine,
       general: { dailyLimit: view.dailyLimit, permissive: !!view.permissive },

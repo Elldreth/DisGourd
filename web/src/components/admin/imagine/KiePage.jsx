@@ -12,6 +12,10 @@ export default function KiePage() {
   const savedKie = kieEngine?.config || {};
   const kieModels = kieEngine?.models || [];
   const kieModel = kieModels.find((m) => m.id === kie.model);
+  // Pictures (P9-05b): the model's own picture version, else the one picked here.
+  const pictureModels = kieModels.filter((m) => m.picture);
+  const needsPictureModel = !!kie.model && !kieModel?.picture;
+  const picturesBy = kieModel?.picture ? kieModel : needsPictureModel ? pictureModels.find((m) => m.id === kie.pictureModel) : null;
 
   return (
     <div className="space-y-5">
@@ -74,6 +78,23 @@ export default function KiePage() {
             />
           )}
         </div>
+        {needsPictureModel && (
+          <div>
+            <label htmlFor="imagine-kie-picture-model" className={heading}>Model for pictures</label>
+            <select id="imagine-kie-picture-model" value={kie.pictureModel} onChange={(e) => setKie((k) => ({ ...k, pictureModel: e.target.value }))} className="input">
+              <option value="">None (pictures use ComfyUI, if it’s on)</option>
+              {pictureModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">{kieModel?.id === 'custom' ? 'A custom model' : kieModel?.name} can’t start from a picture, so “Start from a picture” and Variations use this one.</p>
+          </div>
+        )}
+        {kie.model && (
+          <p className="text-xs text-gray-500" role="note" aria-label="Pictures on kie.ai">
+            {picturesBy
+              ? `Pictures (“Start from a picture” and Variations) use ${picturesBy.name} image-to-image${picturesBy.picture.strength ? ', with Subtle, Medium and Strong' : '; it has no strength setting, so Variations are one button'}. For each one, DisGourd uploads that one picture to kie.ai’s file storage; kie.ai deletes it after 24 hours.`
+              : 'kie.ai won’t take pictures with this model.'}
+          </p>
+        )}
         <div>
           <label htmlFor="imagine-kie-cap" className={heading}>Monthly credit cap</label>
           <input
