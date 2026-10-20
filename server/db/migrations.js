@@ -706,6 +706,15 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 28,
+    name: 'imagine style',
+    up(db) {
+      // P9-04a: which ComfyUI style made an image, so Variations, Upscale and
+      // Retry use it again.
+      db.exec('ALTER TABLE imagine_jobs ADD COLUMN preset TEXT');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -619,6 +619,8 @@ function buildCustomWorkflow(wf, request, cfg, { permissive = false, image = nul
 }
 
 async function generate(request, cfg, { permissive = false, signal } = {}) {
+  // A style's prompt prefix (P9-04a), e.g. "anime screencap, ", goes first.
+  if (cfg.promptPrefix) request = { ...request, prompt: `${cfg.promptPrefix}${request.prompt}` };
   // P3-34: the host's own workflow, when chosen (an upscale without its own
   // upscale workflow keeps the built-in one). Nothing built-in is added to it.
   // Starting from a picture (P3-36b) uses the host's image-to-image workflow;
@@ -715,7 +717,8 @@ async function run(built, cfg, signal, notes) {
 }
 
 // ---- Settings ----
-function validateConfig(input, prev = {}) {
+// One flat setup (shared settings plus one style's), as before P9-04a.
+function validateFlat(input, prev = {}) {
   const i = input && typeof input === 'object' ? input : {};
   const cfg = { ...prev };
   if (i.enabled !== undefined) cfg.enabled = !!i.enabled;
@@ -802,6 +805,11 @@ function validateConfig(input, prev = {}) {
     if (!text(i.negative, 1000)) return { error: 'The negative prompt is up to 1000 characters' };
     cfg.negative = i.negative && i.negative.trim() ? i.negative.trim() : null;
   }
+  // A style's prompt prefix (P9-04a): put before every prompt in that style.
+  if (i.promptPrefix !== undefined) {
+    if (!text(i.promptPrefix, 300)) return { error: 'The prompt prefix is up to 300 characters' };
+    cfg.promptPrefix = i.promptPrefix && i.promptPrefix.trim() ? `${i.promptPrefix.trim()} ` : null;
+  }
   if (i.detailer !== undefined) cfg.detailer = !!i.detailer;
   if (i.detector !== undefined) {
     if (!text(i.detector, 300)) return { error: 'Pick a face detector from the list' };
@@ -855,7 +863,82 @@ function validateConfig(input, prev = {}) {
   if (cfg.enabled && (!cfg.url || (!cfg.model && cfg.workflowMode !== 'custom'))) return { error: 'Set the ComfyUI address and pick a model before turning it on' };
   return cfg;
 }
-const publicConfig = (cfg = {}) => ({
+// ---- Styles (P9-04a) ----
+// What belongs to one style; everything else is shared by every style.
+const STYLE_KEYS = ['kind', 'model', 'family', 'clip1', 'clip2', 'vae', 'sampler', 'scheduler', 'steps', 'cfgScale', 'negative', 'promptPrefix', 'workflowMode', 'workflow', 'upscaleWorkflow', 'img2imgWorkflow'];
+const MAX_STYLES = 20;
+const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
+const omit = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+// A saved config in the styles shape. One from before styles has its single
+// setup turned into the first style, "Default", so nothing is lost.
+function normalizeConfig(cfg = {}) {
+  if (Array.isArray(cfg.presets) && cfg.presets.length) {
+    const ids = cfg.presets.map((p) => p.id);
+    return { ...omit(cfg, STYLE_KEYS), defaultPreset: ids.includes(cfg.defaultPreset) ? cfg.defaultPreset : ids[0] };
+  }
+  return { ...omit(cfg, STYLE_KEYS), presets: [{ id: 'default', name: 'Default', ...pick(cfg, STYLE_KEYS) }], defaultPreset: 'default' };
+}
+// The flat setup one style runs with: the shared settings plus the style's
+// own. An unknown or deleted style falls back to the default (`fellBack`).
+function styleConfig(cfg = {}, presetId = null) {
+  const n = normalizeConfig(cfg);
+  const found = presetId ? n.presets.find((p) => p.id === presetId) : null;
+  const preset = found || n.presets.find((p) => p.id === n.defaultPreset) || n.presets[0];
+  return { config: { ...omit(n, ['presets', 'defaultPreset']), ...omit(preset, ['id', 'name']) }, preset, fellBack: !!presetId && !found };
+}
+// The styles people can pick: [{ id, name }], and the default's id.
+function styleList(cfg = {}) {
+  const n = normalizeConfig(cfg);
+  return { styles: n.presets.map((p) => ({ id: p.id, name: p.name })), defaultStyle: n.defaultPreset };
+}
+const slug = (name) => String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'style';
+
+// Settings come in two shapes. `presets: [{ id?, name, …style }]` (with
+// `defaultPreset`) replaces the list; or the older flat fields, which change
+// the default style (what the settings screen sends until it learns styles).
+// Each style is checked as a whole setup would be.
+function validateConfig(input, prev = {}) {
+  const i = input && typeof input === 'object' ? input : {};
+  const base = normalizeConfig(prev);
+  const shared = omit(base, ['presets', 'defaultPreset']);
+  const sharedIn = omit(i, [...STYLE_KEYS, 'presets', 'defaultPreset']);
+  let entries;
+  if (i.presets !== undefined) {
+    if (!Array.isArray(i.presets) || !i.presets.length) return { error: 'Keep at least one style' };
+    if (i.presets.length > MAX_STYLES) return { error: `At most ${MAX_STYLES} styles` };
+    const names = new Set();
+    const ids = new Set();
+    entries = [];
+    for (const raw of i.presets) {
+      if (!raw || typeof raw !== 'object') return { error: 'Each style needs a name' };
+      const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+      if (!name || name.length > 30) return { error: 'Style names are 1–30 characters' };
+      if (names.has(name.toLowerCase())) return { error: `There are two styles called "${name}"` };
+      names.add(name.toLowerCase());
+      let id = typeof raw.id === 'string' && /^[a-z0-9-]{1,40}$/.test(raw.id) ? raw.id : slug(name);
+      for (let n = 2; ids.has(id); n++) id = `${slug(name)}-${n}`;
+      ids.add(id);
+      entries.push({ id, name, input: pick(raw, STYLE_KEYS), prev: base.presets.find((p) => p.id === raw.id) || {} });
+    }
+  } else {
+    const legacy = pick(i, STYLE_KEYS);
+    entries = base.presets.map((p) => ({ id: p.id, name: p.name, input: p.id === base.defaultPreset ? legacy : {}, prev: p }));
+  }
+  let newShared = null;
+  const presets = [];
+  for (const e of entries) {
+    const flat = validateFlat({ ...sharedIn, ...e.input }, { ...shared, ...pick(e.prev, STYLE_KEYS) });
+    if (flat.error) return { error: entries.length > 1 ? `${e.name}: ${flat.error}` : flat.error };
+    newShared = newShared || omit(flat, STYLE_KEYS);
+    presets.push({ id: e.id, name: e.name, ...pick(flat, STYLE_KEYS) });
+  }
+  const wanted = i.defaultPreset !== undefined ? i.defaultPreset : base.defaultPreset;
+  const defaultPreset = presets.some((p) => p.id === wanted) ? wanted : i.defaultPreset !== undefined ? null : presets[0].id;
+  if (!defaultPreset) return { error: 'Pick which style is the default' };
+  return { ...newShared, presets, defaultPreset };
+}
+
+const publicFlat = (cfg = {}) => ({
   enabled: !!cfg.enabled, url: cfg.url || '', model: cfg.model || null, family: cfg.family || null, tier: cfg.tier || 'medium',
   kind: cfg.kind || 'checkpoint', clip1: cfg.clip1 || null, clip2: cfg.clip2 || null, vae: cfg.vae || null,
   hires: cfg.hires !== false, upscaler: cfg.upscaler || null,
@@ -868,7 +951,19 @@ const publicConfig = (cfg = {}) => ({
   workflow: cfg.workflow ? JSON.stringify(cfg.workflow, null, 2) : '',
   upscaleWorkflow: cfg.upscaleWorkflow ? JSON.stringify(cfg.upscaleWorkflow, null, 2) : '',
   img2imgWorkflow: cfg.img2imgWorkflow ? JSON.stringify(cfg.img2imgWorkflow, null, 2) : '',
+  promptPrefix: cfg.promptPrefix ? cfg.promptPrefix.trimEnd() : '',
 });
+// What the settings screen sees: the shared settings and the default style's
+// as flat fields (as before), plus every style (P9-04a).
+function publicConfig(cfg = {}) {
+  const n = normalizeConfig(cfg);
+  const { config } = styleConfig(n);
+  const stylePublic = (p) => {
+    const flat = publicFlat({ ...omit(n, ['presets', 'defaultPreset']), ...omit(p, ['id', 'name']) });
+    return { id: p.id, name: p.name, ...pick(flat, STYLE_KEYS) };
+  };
+  return { ...publicFlat(config), presets: n.presets.map(stylePublic), defaultPreset: n.defaultPreset };
+}
 
 module.exports = {
   id: 'comfyui',
@@ -876,6 +971,10 @@ module.exports = {
   available: () => true,
   validateConfig,
   publicConfig,
+  normalizeConfig,
+  styleConfig,
+  styleList,
+  STYLE_KEYS,
   costOf: () => 0,
   generate,
   listModels,

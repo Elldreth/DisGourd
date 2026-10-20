@@ -9,6 +9,12 @@ const WebSocket = require('ws');
 let serverModule;
 let db;
 let comfy;
+// Since P9-04a a saved config keeps per-style settings in `presets`; this is
+// the flat setup the default style runs with (or the error).
+const flatCfg = (input, prev) => {
+  const out = comfy.validateConfig(input, prev);
+  return out.error ? out : comfy.styleConfig(out).config;
+};
 let port;
 let mock;
 let mockUrl;
@@ -390,9 +396,9 @@ describe('the engine', () => {
     expect(comfy.validateConfig({ negative: 'x'.repeat(1001) }).error).toMatch(/1000/);
     expect(comfy.validateConfig({ sampler: 5 }).error).toMatch(/sampler/);
     expect(comfy.validateConfig({ detailerDenoise: 0.9 }).error).toMatch(/0.1–0.8/);
-    expect(comfy.validateConfig({ sampler: ' euler ', scheduler: '', cfgScale: 4.25, steps: { draft: 8, standard: '', high: null }, negative: '  ', detailer: true, detector: 'd.pt', detailerDenoise: 0.3 }))
+    expect(flatCfg({ sampler: ' euler ', scheduler: '', cfgScale: 4.25, steps: { draft: 8, standard: '', high: null }, negative: '  ', detailer: true, detector: 'd.pt', detailerDenoise: 0.3 }))
       .toMatchObject({ sampler: 'euler', scheduler: null, cfgScale: 4.3, steps: { draft: 8 }, negative: null, detailer: true, detector: 'd.pt', detailerDenoise: 0.3 });
-    expect(comfy.validateConfig({ steps: {} }).steps).toBeNull();
+    expect(flatCfg({ steps: {} }).steps).toBeNull();
   });
 
   test('P3-33: passes: the face detailer’s cycle, and extra tiled passes chained with No Upscale', () => {
@@ -489,9 +495,9 @@ describe('the engine', () => {
     expect(comfy.validateConfig({ workflow: '{"nodes": []}' }).error).toMatch(/^Workflow: That’s the regular workflow file/);
     expect(comfy.validateConfig({ upscaleWorkflow: JSON.stringify(CUSTOM) }).error).toMatch(/^Upscale workflow: Unknown placeholders: \{\{steps\}\}, \{\{width\}\}, \{\{height\}\}/); // generate-only ones
     const ok = comfy.validateConfig({ enabled: true, url: mockUrl, workflowMode: 'custom', workflow: JSON.stringify(CUSTOM) });
-    expect(ok).toMatchObject({ enabled: true, workflowMode: 'custom', workflow: CUSTOM });
+    expect(comfy.styleConfig(ok).config).toMatchObject({ enabled: true, workflowMode: 'custom', workflow: CUSTOM });
     expect(comfy.publicConfig(ok).workflow).toBe(JSON.stringify(CUSTOM, null, 2));
-    expect(comfy.validateConfig({ ...ok, workflow: '' }, ok).error).toMatch(/Add your workflow/); // clearing it while My own is on
+    expect(comfy.validateConfig({ workflow: '' }, ok).error).toMatch(/Add your workflow/); // clearing it while My own is on
   });
 
   test('P3-36a: a variation is an img2img loopback at the final size: each loop repaints the whole image, details faces, feeds the next', () => {
@@ -587,7 +593,7 @@ describe('the engine', () => {
     expect(comfy.buildWorkflow(request(), anima, { permissive: true }).workflow['7'].inputs.text).toBe('worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia');
     expect(comfy.buildWorkflow(request(), { ...anima, negative: 'bad hands' }).workflow['7'].inputs.text).toBe('bad hands, nsfw, nude, nudity');
     expect(comfy.validateConfig({ kind: 'checkpoint', model: 'x.safetensors', family: 'anima' }).error).toMatch(/separate parts, not a checkpoint/);
-    expect(comfy.validateConfig({ kind: 'unet', model: 'anima-preview3-base.safetensors', family: 'anima' })).toMatchObject({ family: 'anima' });
+    expect(flatCfg({ kind: 'unet', model: 'anima-preview3-base.safetensors', family: 'anima' })).toMatchObject({ family: 'anima' });
   });
 
   test('P3-24: config for a split model needs its type and parts; Z-Image is split only', () => {
@@ -598,7 +604,7 @@ describe('the engine', () => {
     expect(comfy.validateConfig({ enabled: true, url: mockUrl, kind: 'unet', model: UNETS[0], clip1: CLIPS[0], vae: VAES[0] }).error).toMatch(/both text encoders and the VAE/);
     expect(comfy.validateConfig({ enabled: true, url: mockUrl, kind: 'unet', model: UNETS[1], vae: VAES[1] }).error).toMatch(/the text encoder and the VAE/);
     expect(comfy.validateConfig({ clip1: 42 }).error).toMatch(/from the lists/);
-    expect(comfy.validateConfig({ enabled: true, url: mockUrl, kind: 'unet', model: UNETS[1], clip1: CLIPS[2], vae: VAES[1] })).toEqual({
+    expect(flatCfg({ enabled: true, url: mockUrl, kind: 'unet', model: UNETS[1], clip1: CLIPS[2], vae: VAES[1] })).toEqual({
       enabled: true, url: mockUrl, kind: 'unet', model: UNETS[1], family: 'zimage', clip1: CLIPS[2], vae: VAES[1], tier: 'medium',
     });
   });
@@ -674,7 +680,7 @@ describe('the engine', () => {
     expect(comfy.validateConfig({ family: 'sd3' }).error).toMatch(/SD 1.5, SDXL, Flux or Z-Image Turbo/);
     expect(comfy.validateConfig({ tier: 'huge' }).error).toMatch(/low, medium or high/);
     expect(comfy.validateConfig({ enabled: true }).error).toMatch(/pick a model/);
-    expect(comfy.validateConfig({ enabled: true, url: 'http://192.168.1.20:8188/', model: MODELS[0] })).toEqual({
+    expect(flatCfg({ enabled: true, url: 'http://192.168.1.20:8188/', model: MODELS[0] })).toEqual({
       enabled: true, url: 'http://192.168.1.20:8188', model: MODELS[0], family: 'flux', tier: 'medium', kind: 'checkpoint',
     });
   });
@@ -710,9 +716,12 @@ describe('the admin routes and the chat path', () => {
   test('saving the ComfyUI settings, a test image, and the always-refused check', async () => {
     expect((await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true } } })).body.error).toMatch(/pick a model/);
     const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, model: MODELS[0], tier: 'high' } }, defaultEngine: 'comfyui' });
-    expect(saved.body.engines.find((e) => e.id === 'comfyui').config).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024,
+    const { presets, defaultPreset, ...flatPublic } = saved.body.engines.find((e) => e.id === 'comfyui').config;
+    expect(presets).toEqual([expect.objectContaining({ id: 'default', name: 'Default', model: MODELS[0] })]);
+    expect(defaultPreset).toBe('default');
+    expect(flatPublic).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024,
       sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65,
-      workflowMode: 'builtin', workflow: '', upscaleWorkflow: '', img2imgWorkflow: '' });
+      workflowMode: 'builtin', workflow: '', upscaleWorkflow: '', img2imgWorkflow: '', promptPrefix: '' });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);
     const tried = await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'a gourd', shape: 'wide', quality: 'draft' });
@@ -989,5 +998,120 @@ describe('the admin routes and the chat path', () => {
     expect(seen.prompts.at(-1)['6'].inputs.text).toBe('masterpiece, a gourd');
     await put({ workflowMode: 'builtin' }); // back to the built-in one for the rest
     expect(seen.prompts.length).toBeGreaterThan(0);
+  });
+  test('P9-04a: style presets: an old config reads as one "Default" style; the list is checked; each style runs its own model, sampler and prefix', () => {
+    // An old single setup becomes the "Default" style; nothing is lost.
+    const old = { enabled: true, url: mockUrl, tier: 'high', model: MODELS[1], family: 'sdxl', sampler: 'euler', negative: 'blurry' };
+    const n = comfy.normalizeConfig(old);
+    expect(n.presets).toEqual([{ id: 'default', name: 'Default', model: MODELS[1], family: 'sdxl', sampler: 'euler', negative: 'blurry' }]);
+    expect(n).toMatchObject({ defaultPreset: 'default', tier: 'high', url: mockUrl });
+    expect(n.model).toBeUndefined();
+    // The older flat fields still edit the default style (the settings screen until P9-04b).
+    const flatSaved = comfy.validateConfig({ sampler: 'dpmpp_2m' }, old);
+    expect(flatSaved.presets[0]).toMatchObject({ id: 'default', sampler: 'dpmpp_2m', model: MODELS[1] });
+    // A list of styles: names checked, ids made, the default kept or picked.
+    const two = comfy.validateConfig({ presets: [
+      { id: 'default', name: 'Photoreal', model: MODELS[1], family: 'sdxl' },
+      { name: 'Anime Art', model: MODELS[2], family: 'sd15', sampler: 'euler_ancestral', promptPrefix: ' anime screencap, ' },
+    ], defaultPreset: 'default' }, old);
+    expect(two.error).toBeUndefined();
+    expect(two.presets.map((p) => [p.id, p.name])).toEqual([['default', 'Photoreal'], ['anime-art', 'Anime Art']]);
+    expect(two.presets[1].promptPrefix).toBe('anime screencap, ');
+    expect(two.defaultPreset).toBe('default');
+    expect(comfy.validateConfig({ presets: [] }, old).error).toMatch(/at least one style/);
+    expect(comfy.validateConfig({ presets: [{ name: '' }] }, old).error).toMatch(/1–30/);
+    expect(comfy.validateConfig({ presets: [{ name: 'A', model: MODELS[1] }, { name: 'a', model: MODELS[1] }] }, old).error).toMatch(/two styles called/);
+    expect(comfy.validateConfig({ presets: [{ name: 'A', model: MODELS[1] }], defaultPreset: 'nope' }, old).error).toMatch(/default/);
+    expect(comfy.validateConfig({ presets: [{ name: 'Mine', workflowMode: 'custom' }, { name: 'B', model: MODELS[1] }] }, old).error).toBe('Mine: Add your workflow (Export (API) in ComfyUI) before choosing My own');
+    expect(comfy.validateConfig({ presets: [{ name: 'Long', model: MODELS[1], promptPrefix: 'x'.repeat(301) }] }, old).error).toMatch(/300/);
+    // Each style runs with the shared settings plus its own.
+    const anime = comfy.styleConfig(two, 'anime-art');
+    expect(anime.config).toMatchObject({ tier: 'high', url: mockUrl, model: MODELS[2], family: 'sd15', sampler: 'euler_ancestral' });
+    expect(anime.fellBack).toBe(false);
+    expect(comfy.styleConfig(two, 'gone')).toMatchObject({ fellBack: true, preset: { id: 'default' } });
+    expect(comfy.styleConfig(two).preset.id).toBe('default');
+    expect(comfy.styleList(two)).toEqual({ styles: [{ id: 'default', name: 'Photoreal' }, { id: 'anime-art', name: 'Anime Art' }], defaultStyle: 'default' });
+    // The public view: the default's fields flat (as before) plus every style.
+    const pub = comfy.publicConfig(two);
+    expect(pub).toMatchObject({ model: MODELS[1], defaultPreset: 'default' });
+    expect(pub.presets[1]).toMatchObject({ id: 'anime-art', name: 'Anime Art', model: MODELS[2], promptPrefix: 'anime screencap,' });
+  });
+
+  test('P9-04a: in chat, a style is chosen, defaulted or refused; the job keeps it; Variations reuse it; a deleted style falls back', async () => {
+    const S = 'Style Club';
+    db.createSpaceWithDefaults(S, users.admin.id);
+    await call('admin', 'PATCH', `/spaces/${encodeURIComponent(S)}/imagine`, { enabled: true, dailyLimit: 100 });
+    const saved = await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { enabled: true, url: mockUrl, upscaler: '4x-UltraSharp.pth', presets: [
+      { id: 'photo', name: 'Photoreal', model: MODELS[1], family: 'sdxl', sampler: 'euler' },
+      { id: 'anime', name: 'Anime', model: MODELS[2], family: 'sd15', sampler: 'euler_ancestral', promptPrefix: 'anime screencap,' },
+    ], defaultPreset: 'photo' } }, defaultEngine: 'comfyui' });
+    expect(saved.status).toBe(200);
+    const info = (await call('admin', 'GET', '/spaces')).body.find((s) => s.name === S).imagine;
+    expect(info.styles).toEqual([{ id: 'photo', name: 'Photoreal' }, { id: 'anime', name: 'Anime' }]);
+    expect(info.defaultStyle).toBe('photo');
+    const frames = [];
+    const ws = new WebSocket(`ws://localhost:${port}/gateway?token=${users.admin.token}`);
+    ws.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
+    await new Promise((r) => ws.on('open', r));
+    const ask = async (fields) => {
+      const from = frames.length;
+      ws.send(JSON.stringify({ op: 'imagine', space: S, channel: 'general', ...fields }));
+      const end = Date.now() + 3000;
+      for (;;) {
+        const f = frames.slice(from).find((x) => x.type === 'imagine_queued' || (x.type === 'error' && x.op === 'imagine'));
+        if (f) return f.type === 'error' ? f.code : f;
+        if (Date.now() > end) throw new Error('no answer');
+        await new Promise((r) => setTimeout(r, 15));
+      }
+    };
+    const settle = async (jobId) => {
+      const end = Date.now() + 5000;
+      while (!['done', 'failed'].includes(db.getImagineJob(jobId).status) && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+      return db.getImagineJob(jobId);
+    };
+    const graph = () => seen.prompts.at(-1);
+    try {
+      expect(await ask({ prompt: 'a gourd', preset: 'nope' })).toBe('BAD_OPTION');
+      // Anime: its model, sampler and prefix; the job remembers the style.
+      const a = await ask({ prompt: 'a gourd at dusk', preset: 'anime' });
+      const aJob = await settle(a.jobId);
+      expect(aJob).toMatchObject({ status: 'done', preset: 'anime', model: MODELS[2], prompt: 'a gourd at dusk' });
+      expect(graph()['4'].inputs.ckpt_name).toBe(MODELS[2]);
+      expect(graph()['3'].inputs.sampler_name).toBe('euler_ancestral');
+      expect(graph()['6'].inputs.text).toBe('anime screencap, a gourd at dusk');
+      // No style asked: the default.
+      const p = await ask({ prompt: 'a gourd at noon' });
+      expect(await settle(p.jobId)).toMatchObject({ preset: 'photo', model: MODELS[1] });
+      expect(graph()['6'].inputs.text).toBe('a gourd at noon');
+      // A Variation of the Anime image keeps Anime, whatever the default.
+      const v = await ask({ from: aJob.message_id, vary: 'subtle' });
+      expect(await settle(v.jobId)).toMatchObject({ kind: 'vary', preset: 'anime', model: MODELS[2] });
+      expect(graph()['6'].inputs.text).toBe('anime screencap, a gourd at dusk');
+      // Anime is deleted: a Variation of its image falls back to the default.
+      await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { presets: [{ id: 'photo', name: 'Photoreal', model: MODELS[1], family: 'sdxl', sampler: 'euler' }], defaultPreset: 'photo' } } });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const v2 = await ask({ from: aJob.message_id, vary: 'strong' });
+      expect(await settle(v2.jobId)).toMatchObject({ preset: 'photo', model: MODELS[1] });
+      expect(warn.mock.calls.flat().join(' ')).toMatch(/the style "anime" is gone; used "Photoreal"/);
+      warn.mockRestore();
+    } finally {
+      ws.close();
+    }
+  });
+
+  test('P9-04a: each style’s own workflows are checked for nodes on save, named by style', async () => {
+    const put = (comfyui) => call('admin', 'PUT', '/admin/imagine', { engines: { comfyui } });
+    const unknown = { ...CUSTOM, 70: { class_type: 'MyCustomSampler', inputs: {} } };
+    const res = await put({ url: mockUrl, presets: [
+      { id: 'photo', name: 'Photoreal', model: MODELS[1], family: 'sdxl' },
+      { name: 'Mine', workflowMode: 'custom', workflow: JSON.stringify(unknown) },
+    ], defaultPreset: 'photo' });
+    expect(res.body).toEqual({ error: 'Mine: Workflow: your ComfyUI doesn’t have this node: MyCustomSampler' });
+    const ok = await put({ url: mockUrl, presets: [
+      { id: 'photo', name: 'Photoreal', model: MODELS[1], family: 'sdxl' },
+      { name: 'Mine', workflowMode: 'custom', workflow: JSON.stringify(CUSTOM) },
+    ], defaultPreset: 'photo' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.engines.find((e) => e.id === 'comfyui').config.presets.map((p) => [p.id, p.workflowMode])).toEqual([['photo', 'builtin'], ['mine', 'custom']]);
   });
 });

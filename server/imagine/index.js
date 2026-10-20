@@ -147,6 +147,8 @@ function decorateSpaces(list, userId) {
   const settings = getSettings();
   const engines = enabledEngines(settings).map((e) => ({ id: e.id, name: e.name, price: enginePrices(e, engineConfig(settings, e.id)) }));
   const used = usedToday(userId);
+  const comfy = engines.some((e) => e.id === 'comfyui') ? ENGINES.get('comfyui') : null;
+  const comfyStyles = comfy ? comfy.styleList(engineConfig(settings, 'comfyui')) : {};
   return list.map((s) => {
     const space = db.getSpaceByName(s.name);
     const own = space ? db.getSpaceImagine(space.id) : null;
@@ -162,6 +164,7 @@ function decorateSpaces(list, userId) {
         instanceLimit: Math.min(settings.dailyLimit, settings.dailyCeiling), // what a blank server limit falls back to
         canUpscale: engines.some((e) => e.id === 'comfyui'), // P3-29: the Upscale button runs on ComfyUI
         canVary: engines.some((e) => e.id === 'comfyui'), // P3-36a: img2img Variations too
+        ...comfyStyles, // P9-04a: { styles: [{ id, name }], defaultStyle } when ComfyUI is on
         usedToday: used,
         engines,
       },
@@ -349,7 +352,19 @@ function imagineOp({ ws, msg, userId }) {
   const refused = upscaling ? null : refusedReason(prompt); // an upscale makes nothing new
   if (refused) return refuse(ws, 'REFUSED', refused);
 
-  const config = engineConfig(settings, engine.id);
+  // ComfyUI styles (P9-04a): the one asked for, or the default; Retry,
+  // Variations and Upscale use the source image's (the default if it's gone).
+  let config = engineConfig(settings, engine.id);
+  let preset = null;
+  const notes = [];
+  if (engine.styleConfig) {
+    const wanted = source ? source.preset || null : msg.preset != null ? String(msg.preset) : null;
+    const style = engine.styleConfig(config, wanted);
+    if (!source && wanted && style.fellBack) return refuse(ws, 'BAD_OPTION', 'That style isn’t available');
+    if (style.fellBack) notes.push(`the style "${wanted}" is gone; used "${style.preset.name}"`);
+    config = style.config;
+    preset = style.preset.id;
+  }
   const request = { prompt, shape, quality, ...(upscale ? { upscale: upscale.request } : {}), ...(vary ? { init: vary.request } : {}), ...(picture ? { init: picture.request } : {}) };
   const permissive = !!settings.permissive && db.isChannelNsfw(msg.space, msg.channel);
   const ref = db.channelRef(msg.space, msg.channel);
@@ -360,11 +375,13 @@ function imagineOp({ ws, msg, userId }) {
     engine, config, request, permissive, cost,
     space: msg.space, channel: msg.channel, username: user.username, kind: upscale ? 'upscale' : vary ? 'vary' : picture ? 'img2img' : 'generate',
     vary: vary ? vary.name : null,
+    preset, notes,
   };
   job.id = db.createImagineJob({
     userId, spaceId: space.id, channelId: ref.channelId, engine: engine.id, prompt, shape, quality, permissive, cost: job.cost,
     kind: job.kind, sourceUrl: upscale ? upscale.url : vary ? vary.url : picture ? picture.url : null,
     strength: vary ? vary.strength : picture ? picture.strength : null,
+    preset,
   });
   const content = runner.text.queued(job, runner.placeFor(engine.id));
   const stored = db.postAsBot(msg.space, msg.channel, content);
@@ -394,7 +411,7 @@ async function tryEngine({ engine: id, prompt, shape = 'square', quality = 'stan
   if (!SHAPES.includes(shape) || !QUALITIES.includes(quality)) return { error: 'Unknown shape or quality' };
   const refused = refusedReason(text);
   if (refused) return { error: refused };
-  const config = engineConfig(settings, id);
+  const config = engine.styleConfig ? engine.styleConfig(engineConfig(settings, id)).config : engineConfig(settings, id); // the default style (P9-04a)
   const cost = engine.costOf({ prompt: text, shape, quality }, config);
   if (overBudget(engine, config, cost)) return { error: `This instance's ${engine.name} budget for the month is used up` };
   // Recorded like a chat request (without a server), so the price and the
