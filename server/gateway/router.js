@@ -33,6 +33,13 @@ const OPS = new Map([
   ['dm_focus', dm.ops.dm_focus],
   ['dm_read', dm.ops.dm_read],
   ['dm_typing', dm.ops.dm_typing],
+  // P9-06c: group DMs
+  ['dm_group_create', dm.ops.dm_group_create],
+  ['dm_group_add', dm.ops.dm_group_add],
+  ['dm_group_remove', dm.ops.dm_group_remove],
+  ['dm_group_leave', dm.ops.dm_group_leave],
+  ['dm_group_rename', dm.ops.dm_group_rename],
+  ['dm_mute', dm.ops.dm_mute],
   // voice
   ['voice_join', voice.ops.voice_join],
   ['voice_leave', voice.ops.voice_leave],

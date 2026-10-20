@@ -1472,7 +1472,8 @@ const DM_SELECT = `
          p.attachment_url AS replyAttachment,
          p.attachments AS replyAttachments,
          p.author_id AS replyAuthorId,
-         pu.username AS replyAuthor
+         pu.username AS replyAuthor,
+         m.kind AS kind
   FROM dm_messages m
   JOIN users u ON m.author_id = u.id
   LEFT JOIN dm_messages p ON p.id = m.reply_to
@@ -1480,8 +1481,9 @@ const DM_SELECT = `
 `;
 
 // A new DM in a conversation. user_a / user_b (NOT NULL, from before
-// conversations) hold the pair, or the author twice in a group.
-function storeConversationDm(conversationId, authorId, content, attachments = [], spoiler = false, replyTo = null) {
+// conversations) hold the pair, or the author twice in a group. `kind`
+// 'system' (P9-06c) is a notice like "sandy added bob".
+function storeConversationDm(conversationId, authorId, content, attachments = [], spoiler = false, replyTo = null, kind = null) {
   const conv = getConversation(conversationId);
   const [a, b] = conv && conv.kind === 'pair' ? dmPair(...participantIds(conversationId)) : [authorId, authorId];
   const list = Array.isArray(attachments) ? attachments : (attachments ? [attachments] : []);
@@ -1489,23 +1491,30 @@ function storeConversationDm(conversationId, authorId, content, attachments = []
   const json = list.length ? JSON.stringify(list) : null;
   const createdAt = Date.now();
   const info = db.prepare(
-    'INSERT INTO dm_messages(conversation_id, user_a, user_b, author_id, content, attachment_url, attachments, attachment_spoiler, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(conversationId, a, b ?? a, authorId, content, first, json, spoiler ? 1 : 0, createdAt, replyTo || null);
+    'INSERT INTO dm_messages(conversation_id, user_a, user_b, author_id, content, attachment_url, attachments, attachment_spoiler, created_at, reply_to, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(conversationId, a, b ?? a, authorId, content, first, json, spoiler ? 1 : 0, createdAt, replyTo || null, kind);
   return { id: info.lastInsertRowid, timestamp: createdAt };
 }
 function storeDm(fromId, toId, content, attachments = [], spoiler = false, replyTo = null) {
   return storeConversationDm(getOrCreatePair(fromId, toId), fromId, content, attachments, spoiler, replyTo);
 }
 
+// A DM row as the app gets it; `kind` only on notices (P9-06c).
+function hydrateDm(row) {
+  const m = hydrateMessage(row);
+  if (m.kind == null) delete m.kind;
+  return m;
+}
+
 // ---- Reading a conversation (by id) ----
 function getConversationMessages(conversationId, limit = 50, offset = 0) {
   return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.conversation_id = ? ORDER BY m.id DESC LIMIT ? OFFSET ?`)
-    .all(conversationId, limit, offset).reverse().map(hydrateMessage));
+    .all(conversationId, limit, offset).reverse().map(hydrateDm));
 }
 // The quote for a new DM reply, if `messageId` is in this same conversation
 // (so a reply can never reveal someone else's messages).
 function getConversationReplyTarget(conversationId, messageId) {
-  const row = db.prepare(`${DM_SELECT} WHERE m.conversation_id = ? AND m.id = ?`).get(conversationId, messageId);
+  const row = db.prepare(`${DM_SELECT} WHERE m.conversation_id = ? AND m.id = ? AND m.kind IS NULL`).get(conversationId, messageId); // not a notice
   if (!row) return null;
   return {
     id: row.id,
@@ -1520,16 +1529,16 @@ function getConversationMessagesAround(conversationId, messageId, half = 25) {
   if (!db.prepare(`${DM_SELECT} ${where} AND m.id = ?`).get(conversationId, messageId)) return null;
   const before = db.prepare(`${DM_SELECT} ${where} AND m.id < ? ORDER BY m.id DESC LIMIT ?`).all(conversationId, messageId, half).reverse();
   const from = db.prepare(`${DM_SELECT} ${where} AND m.id >= ? ORDER BY m.id ASC LIMIT ?`).all(conversationId, messageId, half + 1);
-  return attachEmbeds('dm', [...before, ...from].map(hydrateMessage));
+  return attachEmbeds('dm', [...before, ...from].map(hydrateDm));
 }
 // The page just older than `beforeId`, oldest-first.
 function getConversationMessagesBefore(conversationId, beforeId, limit = 50) {
   return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.conversation_id = ? AND m.id < ? ORDER BY m.id DESC LIMIT ?`)
-    .all(conversationId, beforeId, limit).reverse().map(hydrateMessage));
+    .all(conversationId, beforeId, limit).reverse().map(hydrateDm));
 }
 function getConversationMessagesAfter(conversationId, afterId, limit = 200) {
   return attachEmbeds('dm', db.prepare(`${DM_SELECT} WHERE m.conversation_id = ? AND m.id > ? ORDER BY m.id ASC LIMIT ?`)
-    .all(conversationId, afterId, limit).map(hydrateMessage));
+    .all(conversationId, afterId, limit).map(hydrateDm));
 }
 
 // ---- The same, by the two people (the username-keyed paths) ----
@@ -1583,7 +1592,7 @@ function deleteDm(messageId, authorId) {
 // message }. A pair also gives the other person's `username` and `avatar`
 // (what the app keyed DMs by before P9-06b). Pairs show once they have a
 // message; groups (P9-06c) from the start.
-function getDmConversations(userId) {
+function getDmConversations(userId, { only = null } = {}) {
   const rows = db.prepare(`
     SELECT c.id, c.kind, c.name, c.owner_id AS ownerId, me.muted,
            last.content AS lastContent, last.attachment_url AS lastAttachment, last.created_at AS lastTimestamp,
@@ -1591,9 +1600,9 @@ function getDmConversations(userId) {
     FROM dm_participants me
     JOIN dm_conversations c ON c.id = me.conversation_id
     LEFT JOIN dm_messages last ON last.id = (SELECT MAX(id) FROM dm_messages WHERE conversation_id = c.id)
-    WHERE me.user_id = ? AND (last.id IS NOT NULL OR c.kind != 'pair')
+    WHERE me.user_id = ? AND (last.id IS NOT NULL OR c.kind != 'pair' OR c.id = ?) AND (? IS NULL OR c.id = ?)
     ORDER BY COALESCE(last.id, 0) DESC, c.created_at DESC
-  `).all(userId);
+  `).all(userId, only, only, only);
   const members = db.prepare(`
     SELECT u.id, u.username, u.avatar_url AS avatar FROM dm_participants p JOIN users u ON u.id = p.user_id
     WHERE p.conversation_id = ? ORDER BY p.joined_at, p.user_id
@@ -1607,6 +1616,56 @@ function getDmConversations(userId) {
       lastContent: r.lastContent, lastAttachment: r.lastAttachment, lastTimestamp: r.lastTimestamp, unread: r.unread,
     };
   }).filter((c) => c.kind !== 'pair' || c.username); // a pair whose other person is gone
+}
+
+// ---- Group DMs (P9-06c) ----
+// Who may be added: someone you share a server with, or a friend.
+function canAddToGroup(adderId, userId) {
+  return !!db.prepare(`
+    SELECT 1 FROM space_members a JOIN space_members b ON a.space_id = b.space_id WHERE a.user_id = ? AND b.user_id = ?
+    UNION SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?
+  `).get(adderId, userId, adderId, userId);
+}
+// A new group: the owner first (earliest joined), then the others.
+const createGroup = db.transaction((ownerId, memberIds, name = null) => {
+  const now = Date.now();
+  const id = Number(db.prepare("INSERT INTO dm_conversations(kind, name, owner_id, created_at) VALUES ('group', ?, ?, ?)").run(name || null, ownerId, now).lastInsertRowid);
+  const add = db.prepare('INSERT OR IGNORE INTO dm_participants(conversation_id, user_id, joined_at) VALUES (?, ?, ?)');
+  add.run(id, ownerId, now);
+  memberIds.forEach((m, i) => add.run(id, m, now + 1 + i));
+  return id;
+});
+function addParticipants(conversationId, userIds) {
+  const now = Date.now();
+  const add = db.prepare('INSERT OR IGNORE INTO dm_participants(conversation_id, user_id, joined_at) VALUES (?, ?, ?)');
+  db.transaction(() => userIds.forEach((u, i) => add.run(conversationId, u, now + i)))();
+}
+// Someone leaves (or is removed). Returns what's left: { gone } when nobody
+// is, else { newOwner } when the owner left (the earliest-joined takes over).
+const leaveConversation = db.transaction((conversationId, userId) => {
+  db.prepare('DELETE FROM dm_participants WHERE conversation_id = ? AND user_id = ?').run(conversationId, userId);
+  const left = participantsOf(conversationId);
+  if (!left.length) {
+    db.prepare('DELETE FROM dm_messages WHERE conversation_id = ?').run(conversationId);
+    db.prepare('DELETE FROM dm_conversations WHERE id = ?').run(conversationId);
+    return { gone: true };
+  }
+  const conv = getConversation(conversationId);
+  if (conv.ownerId === userId) {
+    db.prepare('UPDATE dm_conversations SET owner_id = ? WHERE id = ?').run(left[0].userId, conversationId);
+    return { newOwner: left[0].userId };
+  }
+  return {};
+});
+function renameConversation(conversationId, name) {
+  db.prepare('UPDATE dm_conversations SET name = ? WHERE id = ?').run(name || null, conversationId);
+}
+function setConversationMuted(conversationId, userId, muted) {
+  db.prepare('UPDATE dm_participants SET muted = ? WHERE conversation_id = ? AND user_id = ?').run(muted ? 1 : 0, conversationId, userId);
+}
+// One conversation as GET /dms lists it, for one of its people (or null).
+function getConversationSummary(conversationId, userId) {
+  return getDmConversations(userId, { only: conversationId })[0] || null;
 }
 
 function markConversationRead(userId, conversationId, lastReadId) {
@@ -2482,6 +2541,14 @@ module.exports = {
   getConversationMessagesBefore,
   getConversationMessagesAfter,
   markConversationRead,
+  // P9-06c: groups
+  canAddToGroup,
+  createGroup,
+  addParticipants,
+  leaveConversation,
+  renameConversation,
+  setConversationMuted,
+  getConversationSummary,
   getDmMessages,
   getDmMessagesAfter,
   getDmMessagesBefore,
