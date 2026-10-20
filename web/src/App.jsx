@@ -701,6 +701,12 @@ export default function App() {
           profile={profile}
           onClose={() => setProfileOpen(false)}
           onUpdated={setProfile}
+          presence={presence}
+          onEditStatus={() => setStatusOpen(true)}
+          onLogout={() => {
+            setProfileOpen(false);
+            logout();
+          }}
           onOutputChange={voice.applyOutput}
           onPttChange={voice.refreshPtt}
           onMicChange={voice.switchMic}

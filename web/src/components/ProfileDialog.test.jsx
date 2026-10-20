@@ -2,8 +2,9 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 // P4-02: Settings is one dialog with sections you can navigate instead of one
-// long scroll. Desktop: a section list on the left; phones: a horizontal
-// segmented control. Sections stay mounted while hidden, so edits survive.
+// long scroll. Sections stay mounted while hidden, so edits survive.
+// P5-02: a fixed-size window on the settings kit (a list then a page on
+// phones), My account with status and Sign out, switches for on/off settings.
 
 vi.mock('../api.js', () => ({
   getAdminRegistration: vi.fn(async () => ({ mode: 'open', maxAccounts: 0, envCodeActive: false, codes: [], admins: ['sandy'], linkPreviews: true })),
@@ -40,30 +41,56 @@ test('the sections are tabs; only the chosen one is shown and the rest stay moun
   open();
   const list = screen.getByRole('tablist', { name: 'Settings sections' });
   const tabs = within(list).getAllByRole('tab');
-  expect(tabs.map((t) => t.textContent.trim())).toEqual(['Profile', 'Voice & audio', 'Appearance', 'Notifications']);
+  expect(tabs.map((t) => t.textContent.trim())).toEqual(['My account', 'Voice & audio', 'Notifications', 'Appearance']);
   expect(tabs[0].getAttribute('aria-selected')).toBe('true');
   // Panels: one visible, the others hidden but still in the DOM.
   const panels = tabs.map(panelFor);
   expect(panels.every(Boolean)).toBe(true);
   expect(panels[0].hidden).toBe(false);
   expect(panels.slice(1).every((p) => p.hidden)).toBe(true);
-  expect(within(panels[2]).getByRole('radio', { name: 'Dark', hidden: true })).toBeTruthy(); // mounted while hidden
+  expect(within(panels[3]).getByRole('radio', { name: 'Dark', hidden: true })).toBeTruthy(); // mounted while hidden
 
-  fireEvent.click(tabs[2]);
-  expect(tabs[2].getAttribute('aria-selected')).toBe('true');
+  fireEvent.click(tabs[3]);
+  expect(tabs[3].getAttribute('aria-selected')).toBe('true');
   expect(tabs[0].getAttribute('aria-selected')).toBe('false');
-  expect(panels[2].hidden).toBe(false);
+  expect(panels[3].hidden).toBe(false);
   expect(panels[0].hidden).toBe(true);
   expect(screen.getByRole('button', { name: 'Upload avatar', hidden: true })).toBeTruthy(); // Profile still mounted
 });
 
-test('the section list is a left column on desktop and a horizontal strip on phones, with tap-sized tabs', () => {
+test('a fixed-size window on desktop, full screen on phones, with tap-sized tabs', () => {
   open();
+  const dialog = screen.getByRole('dialog', { name: 'Settings' });
+  // The height doesn't follow the section, so the list never moves (P5-02 AC-1).
+  expect(dialog.className).toMatch(/md:h-\[min\(680px,85vh\)\]/);
+  expect(dialog.className).toMatch(/\bh-dvh\b/);
   const list = screen.getByRole('tablist', { name: 'Settings sections' });
-  expect(list.className).toMatch(/\boverflow-x-auto\b/);
-  expect(list.className).toMatch(/\bmd:flex-col\b/);
   for (const tab of within(list).getAllByRole('tab')) {
     expect(tab.className).toMatch(/\btap-row\b/);
+  }
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+});
+
+test('My account: who you are, your status, Edit status and Sign out', () => {
+  const onLogout = vi.fn();
+  const onEditStatus = vi.fn();
+  open({ profile: { ...profile, statusEmoji: '🎧', statusText: 'Deep work' }, presence: 'dnd', onLogout, onEditStatus });
+  const panel = panelFor(screen.getByRole('tab', { name: 'My account' }));
+  expect(within(panel).getByText('s@example.test')).toBeTruthy();
+  expect(within(panel).getByText('🎧 Deep work')).toBeTruthy();
+  expect(within(panel).getByText('Do Not Disturb')).toBeTruthy();
+  fireEvent.click(within(panel).getByRole('button', { name: 'Edit status' }));
+  expect(onEditStatus).toHaveBeenCalledTimes(1);
+  fireEvent.click(within(panel).getByRole('button', { name: 'Sign out' }));
+  expect(onLogout).toHaveBeenCalledTimes(1);
+});
+
+test('on/off settings are switches', async () => {
+  await act(async () => {
+    open();
+  });
+  for (const name of ['Join/leave sounds', 'Push-to-talk', 'Message sounds']) {
+    expect(screen.getByRole('switch', { name, hidden: true })).toBeTruthy();
   }
 });
 
@@ -114,8 +141,8 @@ test('opens at a requested section, and remembers the last one you used', () => 
   expect(screen.getByRole('tab', { name: 'Appearance' }).getAttribute('aria-selected')).toBe('true');
 });
 
-test('a member whose saved section is the admin one lands on Profile', () => {
+test('a member whose saved section is the admin one lands on My account', () => {
   localStorage.setItem('dg.settingsSection', 'admin');
   open();
-  expect(screen.getByRole('tab', { name: 'Profile' }).getAttribute('aria-selected')).toBe('true');
+  expect(screen.getByRole('tab', { name: 'My account' }).getAttribute('aria-selected')).toBe('true');
 });

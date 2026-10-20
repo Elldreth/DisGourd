@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import SettingRow from './settings/SettingRow.jsx';
+import Switch from './settings/Switch.jsx';
 import {
   listAudioDevices,
   unlockDeviceLabels,
@@ -228,29 +230,14 @@ export default function AudioSettings({ onOutputChange, onPttChange, onMicChange
         )}
       </div>
 
-      <label className="flex items-center justify-between gap-3 pt-1">
-        <span className="text-sm text-gray-200">
-          Join/leave sounds
-          <span className="block text-xs text-gray-500">A chime when people enter or leave the call.</span>
-        </span>
-        <input
-          type="checkbox"
-          checked={sounds}
-          onChange={toggleSounds}
-          className="h-4 w-4 accent-brand"
-        />
-      </label>
+      <SettingRow label="Join/leave sounds" description="A chime when people enter or leave the call.">
+        <Switch label="Join/leave sounds" checked={sounds} onChange={toggleSounds} />
+      </SettingRow>
 
       <div className="rounded-lg bg-ink-900/60 p-3">
-        <label className="flex items-center justify-between gap-3">
-          <span className="text-sm text-gray-200">
-            Push-to-talk
-            <span className="block text-xs text-gray-500">
-              Transmit only while holding a key (otherwise your mic is always live).
-            </span>
-          </span>
-          <input type="checkbox" checked={pttOn} onChange={togglePtt} className="h-4 w-4 accent-brand" />
-        </label>
+        <SettingRow className="py-0" label="Push-to-talk" description="Transmit only while holding a key (otherwise your mic is always live).">
+          <Switch label="Push-to-talk" checked={pttOn} onChange={togglePtt} />
+        </SettingRow>
         {pttOn && (
           <div className="mt-3 flex items-center gap-2">
             <button

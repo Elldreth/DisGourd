@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import IconButton from './IconButton.jsx';
 
 // An accessible modal dialog. It draws the dimmed backdrop and an empty
 // panel (styled by `panelClassName`); the dialog lays out its own content and
@@ -136,5 +137,20 @@ Modal.Title = function ModalTitle({ className = 'text-lg font-bold', children })
     <h3 id={useContext(TitleId)} className={className}>
       {children}
     </h3>
+  );
+};
+
+// The standard dialog header (P5-02): the title (the dialog's name), an
+// optional subtitle (a server's name, say) and an × button named Close.
+Modal.Header = function ModalHeader({ title, subtitle, onClose, children }) {
+  return (
+    <div className="flex shrink-0 items-center gap-3 border-b border-ink-500/40 py-3 pl-5 pr-3">
+      <div className="min-w-0 flex-1">
+        <Modal.Title className="truncate text-lg font-bold">{title}</Modal.Title>
+        {subtitle && <p className="truncate text-xs text-gray-400">{subtitle}</p>}
+      </div>
+      {children}
+      <IconButton icon="x" label="Close" onClick={onClose} className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-700 hover:text-fg" />
+    </div>
   );
 };

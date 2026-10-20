@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import SettingRow from './settings/SettingRow.jsx';
+import Switch from './settings/Switch.jsx';
 import { getNotifyLevel, setNotifyLevel, getMessageSounds, setMessageSounds } from '../audio.js';
 import { playMention } from '../sounds.js';
 import { getPushSubscription, pushSupport, subscribeToPush, unsubscribeFromPush } from '../pwa.js';
@@ -40,8 +42,7 @@ export default function NotificationSettings() {
     };
   }, [support.supported]);
 
-  async function togglePush(e) {
-    const on = e.target.checked;
+  async function togglePush(on) {
     setPushError('');
     setPushBusy(true);
     try {
@@ -61,8 +62,7 @@ export default function NotificationSettings() {
     }
   }
 
-  async function togglePushPreviews(e) {
-    const on = e.target.checked;
+  async function togglePushPreviews(on) {
     localStorage.setItem(PREVIEWS_KEY, on ? '1' : '0');
     setPushPreviews(on);
     if (!pushOn) return;
@@ -101,10 +101,10 @@ export default function NotificationSettings() {
     }
   }
 
-  function toggleSounds(e) {
-    setMessageSounds(e.target.checked);
-    setSounds(e.target.checked);
-    if (e.target.checked) playMention(); // a preview of what you'll hear
+  function toggleSounds(on) {
+    setMessageSounds(on);
+    setSounds(on);
+    if (on) playMention(); // a preview of what you'll hear
   }
 
   return (
@@ -173,35 +173,15 @@ export default function NotificationSettings() {
         <legend className="mb-2 text-sm text-gray-200">When DisGourd is closed</legend>
         {support.supported ? (
           <div className="space-y-2">
-            <label className="flex items-center justify-between gap-3">
-              <span className="text-sm text-gray-200">
-                Push notifications for mentions and DMs
-                <span className="block text-xs text-gray-500">
-                  Sent to this device when you have no DisGourd tab open and aren’t in Do Not Disturb.
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                checked={!!pushOn}
-                disabled={pushOn === null || pushBusy}
-                onChange={togglePush}
-                className="h-4 w-4 accent-brand"
-                aria-label="Push notifications for mentions and DMs"
-              />
-            </label>
-            <label className="flex items-center justify-between gap-3">
-              <span className="text-sm text-gray-200">
-                Include message text
-                <span className="block text-xs text-gray-500">Off: the notification only says who wrote and where.</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={pushPreviews}
-                onChange={togglePushPreviews}
-                className="h-4 w-4 accent-brand"
-                aria-label="Include message text in push notifications"
-              />
-            </label>
+            <SettingRow
+              label="Push notifications for mentions and DMs"
+              description="Sent to this device when you have no DisGourd tab open and aren’t in Do Not Disturb."
+            >
+              <Switch label="Push notifications for mentions and DMs" checked={!!pushOn} disabled={pushOn === null || pushBusy} onChange={togglePush} />
+            </SettingRow>
+            <SettingRow label="Include message text" description="Off: the notification only says who wrote and where.">
+              <Switch label="Include message text in push notifications" checked={pushPreviews} onChange={togglePushPreviews} />
+            </SettingRow>
             {pushError && (
               <p role="alert" className="text-xs text-pink">
                 {pushError}
@@ -220,21 +200,9 @@ export default function NotificationSettings() {
         )}
       </fieldset>
 
-      <label className="flex items-center justify-between gap-3">
-        <span className="text-sm text-gray-200">
-          Message sounds
-          <span className="block text-xs text-gray-500">
-            A chime for mentions and DMs (and a soft blip for other messages at “All messages”).
-          </span>
-        </span>
-        <input
-          type="checkbox"
-          checked={sounds}
-          onChange={toggleSounds}
-          className="h-4 w-4 accent-brand"
-          aria-label="Message sounds"
-        />
-      </label>
+      <SettingRow label="Message sounds" description="A chime for mentions and DMs (and a soft blip for other messages at “All messages”).">
+        <Switch label="Message sounds" checked={sounds} onChange={toggleSounds} />
+      </SettingRow>
     </div>
   );
 }

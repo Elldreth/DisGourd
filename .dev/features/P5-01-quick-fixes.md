@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** REVIEW (PR open, 2026-10-19)
+- **State:** COMPLETE (merged in #159, 2026-10-19)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P5-05 (`MemberList.jsx`)

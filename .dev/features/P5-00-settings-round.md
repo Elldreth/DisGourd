@@ -13,8 +13,8 @@ Every setting lives where its effect lives: your Settings for you, Server settin
 ## Children
 | ID | Title | Size | Review items | State |
 |---|---|---|---|---|
-| P5-01 | Quick fixes: image overflow, member menu dismissal | S | B1, M1 | REVIEW |
-| P5-02 | Settings kit and your settings | M | S1, S4, S5, S6, F1, A1 | PLANNED (after P5-01) |
+| P5-01 | Quick fixes: image overflow, member menu dismissal | S | B1, M1 | COMPLETE (#159) |
+| P5-02 | Settings kit and your settings | M | S1, S4, S5, S6, F1, A1 | REVIEW |
 | P5-03 | Site admin: General and Image generation pages | L | S2, S3, V2 | PLANNED (P5-02) |
 | P5-04 | Server settings window and a short server menu | L | V1, V2, V3, V4 | PLANNED (P5-02) |
 | P5-05 | Channel settings tabs and member menu header | M | C1, M2 | PLANNED (P5-02; P5-01 for the menu) |

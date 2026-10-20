@@ -89,7 +89,7 @@ test('channel, voice and DM rows are tap-sized rows', () => {
   expect(screen.getByRole('button', { name: 'Lounge' }).className).toMatch(/\btap-row\b/);
   expect(screen.getByRole('button', { name: 'Create channel in Text channels' }).className).toMatch(/\btap\b/); // P3-25b: per category
   expect(screen.getByRole('button', { name: 'Text channels' }).className).toMatch(/\btap-row\b/); // the category heading
-  expect(screen.getByRole('button', { name: 'Sign out' }).className).toMatch(/\btap\b/);
+  expect(screen.getByRole('button', { name: 'Settings' }).className).toMatch(/\btap\b/);
   expect(screen.getByRole('button', { name: /Set status/ }).className).toMatch(/\btap\b/);
   cleanup();
   render(<DmSidebar conversations={[{ username: 'bob' }]} user="sandy" status="open" onSelect={() => {}} />);
