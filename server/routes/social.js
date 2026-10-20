@@ -16,54 +16,64 @@ const routes = [
       const userId = authUserId(req, parsedUrl);
       if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
 
-      // GET /dms — conversation list with last message + unread
+      // GET /dms — my conversations with their last message and unread (P9-06a:
+      // id, kind, members; pairs also the other person's username and avatar)
       if (pathSegments.length === 1 && req.method === 'GET') {
-        const unread = {};
-        for (const u of db.getDmUnreadCounts(userId)) unread[u.other] = u.count;
-        const convos = db.getDmConversations(userId).map((c) => ({ ...c, unread: unread[c.username] || 0 }));
-        return sendJson(res, 200, convos);
+        return sendJson(res, 200, db.getDmConversations(userId));
       }
-      // GET /dms/:username/messages/:id/versions — a DM's edit history (P3-27),
-      // for either person in the conversation.
-      if (pathSegments[2] === 'messages' && pathSegments[4] === 'versions' && pathSegments.length === 5 && req.method === 'GET') {
-        const other = db.getUserByUsername(pathSegments[1]);
-        const dm = other ? db.getDmById(parseInt(pathSegments[3], 10) || 0) : null;
-        const between = dm && [dm.user_a, dm.user_b].includes(userId) && [dm.user_a, dm.user_b].includes(other.id);
-        if (!between) return sendJson(res, 404, { error: 'Message not found in this conversation' });
+      // The conversation a path means (P9-06a): /dms/c/:id/… (if I'm in it),
+      // or /dms/:username/… (our pair; null `id` if we've never talked).
+      // `rest` is the path after it.
+      let conv;
+      if (pathSegments[1] === 'c' && /^\d+$/.test(pathSegments[2] || '')) {
+        const id = parseInt(pathSegments[2], 10);
+        if (!db.isParticipant(id, userId)) return sendJson(res, 404, { error: 'Conversation not found' });
+        conv = { id, rest: pathSegments.slice(3) };
+      } else {
+        const other = db.getUserByUsername(pathSegments[1] || '');
+        if (!other) return sendJson(res, 404, { error: 'User not found' });
+        conv = { id: other.id === userId ? null : db.findPair(userId, other.id), rest: pathSegments.slice(2) };
+      }
+      const { rest } = conv;
+      // A message of this conversation, or null.
+      const messageHere = (mid) => {
+        const dm = conv.id ? db.getDmById(parseInt(mid, 10) || 0) : null;
+        return dm && dm.conversationId === conv.id ? dm : null;
+      };
+      // GET …/messages/:id/versions — a DM's edit history (P3-27), for anyone in the conversation.
+      if (rest[0] === 'messages' && rest[2] === 'versions' && rest.length === 3 && req.method === 'GET') {
+        const dm = messageHere(rest[1]);
+        if (!dm) return sendJson(res, 404, { error: 'Message not found in this conversation' });
         return sendJson(res, 200, db.getDmVersions(dm.id));
       }
-      // DELETE /dms/:username/messages/:id/preview — the author removes a DM's
-      // link cards (P3-20c); both people's copies drop them live.
-      if (pathSegments[2] === 'messages' && pathSegments[4] === 'preview' && pathSegments.length === 5 && req.method === 'DELETE') {
-        const other = db.getUserByUsername(pathSegments[1]);
-        const dm = other ? db.getDmById(parseInt(pathSegments[3], 10) || 0) : null;
-        const between = dm && [dm.user_a, dm.user_b].includes(userId) && [dm.user_a, dm.user_b].includes(other.id);
-        if (!between) return sendJson(res, 404, { error: 'Message not found in this conversation' });
+      // DELETE …/messages/:id/preview — the author removes a DM's link cards
+      // (P3-20c); everyone's copies drop them live.
+      if (rest[0] === 'messages' && rest[2] === 'preview' && rest.length === 3 && req.method === 'DELETE') {
+        const dm = messageHere(rest[1]);
+        if (!dm) return sendJson(res, 404, { error: 'Message not found in this conversation' });
         if (dm.author_id !== userId) return sendJson(res, 403, { error: 'Only the author can remove a preview' });
         db.hideEmbeds('dm', dm.id);
-        const frame = JSON.stringify({ type: 'dm_embeds', id: dm.id, embeds: [] });
-        sendToUser(dm.user_a, frame);
-        sendToUser(dm.user_b, frame);
+        const frame = JSON.stringify({ type: 'dm_embeds', id: dm.id, conversation: dm.conversationId, embeds: [] });
+        for (const id of db.participantIds(dm.conversationId)) sendToUser(id, frame);
         return sendJson(res, 200, { ok: true });
       }
-      // GET /dms/:username/messages — latest history; ?before=<id> pages back, ?after=<id> backfills
-      if (pathSegments[2] === 'messages' && req.method === 'GET') {
-        const other = db.getUserByUsername(pathSegments[1]);
-        if (!other) return sendJson(res, 404, { error: 'User not found' });
+      // GET …/messages — latest history; ?before=<id> pages back, ?after=<id> backfills, ?around=<id> jumps
+      if (rest[0] === 'messages' && rest.length === 1 && req.method === 'GET') {
         const around = intParam(parsedUrl.query.around, 0, 0, Number.MAX_SAFE_INTEGER);
         if (around > 0) {
-          const rows = db.getDmMessagesAround(userId, other.id, around);
+          const rows = conv.id ? db.getConversationMessagesAround(conv.id, around) : null;
           return rows ? sendJson(res, 200, withPublicEmbeds(rows)) : sendJson(res, 404, { error: 'Message not found in this conversation' });
         }
+        if (!conv.id) return sendJson(res, 200, []); // never talked yet
         const after = intParam(parsedUrl.query.after, 0, 0, Number.MAX_SAFE_INTEGER);
         if (after > 0) {
           const afterLimit = intParam(parsedUrl.query.limit, 200, 1, 200);
-          return sendJson(res, 200, withPublicEmbeds(db.getDmMessagesAfter(userId, other.id, after, afterLimit)));
+          return sendJson(res, 200, withPublicEmbeds(db.getConversationMessagesAfter(conv.id, after, afterLimit)));
         }
         const limit = intParam(parsedUrl.query.limit, 50, 1, 200);
         const before = intParam(parsedUrl.query.before, 0, 0, Number.MAX_SAFE_INTEGER);
-        if (before > 0) return sendJson(res, 200, withPublicEmbeds(db.getDmMessagesBefore(userId, other.id, before, limit)));
-        return sendJson(res, 200, withPublicEmbeds(db.getDmMessages(userId, other.id, limit, 0)));
+        if (before > 0) return sendJson(res, 200, withPublicEmbeds(db.getConversationMessagesBefore(conv.id, before, limit)));
+        return sendJson(res, 200, withPublicEmbeds(db.getConversationMessages(conv.id, limit, 0)));
       }
       return sendJson(res, 404, { error: 'Not found' });
     },

@@ -31,7 +31,7 @@ test('a fresh database ends at the latest version with the hot-path indexes', ()
   const db = bootDb(':memory:');
   expect(LATEST_VERSION).toBe(MIGRATIONS[MIGRATIONS.length - 1].version);
   expect(db.raw.pragma('user_version', { simple: true })).toBe(LATEST_VERSION);
-  expect(indexNames(db.raw).sort()).toEqual(['idx_categories_space', 'idx_dm_pair', 'idx_imagine_jobs_message', 'idx_imagine_jobs_user', 'idx_member_roles_member', 'idx_mentions_user', 'idx_messages_channel', 'idx_pins_channel', 'idx_push_user', 'idx_roles_space', 'idx_thread_follows_channel', 'idx_threads_parent', 'idx_threads_root']);
+  expect(indexNames(db.raw).sort()).toEqual(['idx_categories_space', 'idx_dm_conversation', 'idx_dm_pair', 'idx_dm_participants_user', 'idx_imagine_jobs_message', 'idx_imagine_jobs_user', 'idx_member_roles_member', 'idx_mentions_user', 'idx_messages_channel', 'idx_pins_channel', 'idx_push_user', 'idx_roles_space', 'idx_thread_follows_channel', 'idx_threads_parent', 'idx_threads_root']);
 });
 
 test('connection pragmas: busy_timeout 5000, synchronous NORMAL, foreign keys on', () => {
@@ -151,4 +151,51 @@ test('v22 adds timeout columns and gives existing seeded Admin roles "Time out m
   expect(perms('Helpers')).toEqual(['pin_messages']);
   const cols = raw.prepare('PRAGMA table_info(space_members)').all().map((c) => c.name);
   expect(cols).toEqual(expect.arrayContaining(['timeout_until', 'timeout_reason']));
+});
+
+test('P9-06a (v30): each DM pair becomes one conversation with its two people, read positions and messages; unread is unchanged', () => {
+  const raw = new Database(path.join(tmp, 'dms.db'));
+  runMigrations(raw, MIGRATIONS.filter((m) => m.version <= 29));
+  const user = raw.prepare('INSERT INTO users(username, email, password_hash, salt) VALUES (?, ?, ?, ?)');
+  const [a, b, c] = ['ann', 'ben', 'cy'].map((n) => Number(user.run(n, `${n}@x.test`, 'h', 's').lastInsertRowid));
+  const dm = raw.prepare('INSERT INTO dm_messages(user_a, user_b, author_id, content, created_at) VALUES (?, ?, ?, ?, ?)');
+  const ids = [
+    dm.run(a, b, a, 'ann to ben', 100), dm.run(a, b, b, 'ben to ann', 200), dm.run(a, b, b, 'ben again', 300),
+    dm.run(a, c, c, 'cy to ann', 150), dm.run(b, c, b, 'ben to cy', 400),
+  ].map((r) => Number(r.lastInsertRowid));
+  raw.prepare('INSERT INTO dm_read_state(user_id, other_id, last_read_id) VALUES (?, ?, ?)').run(a, b, ids[1]); // ann read up to "ben to ann"
+  raw.prepare('INSERT INTO dm_message_versions(message_id, content, written_at) VALUES (?, ?, ?)').run(ids[0], 'old text', 90);
+  // Unread the old way, per person and partner.
+  const oldUnread = (u) => raw.prepare(`
+    SELECT CASE WHEN m.user_a = ? THEN m.user_b ELSE m.user_a END AS other, COUNT(*) AS n FROM dm_messages m
+    LEFT JOIN dm_read_state rs ON rs.user_id = ? AND rs.other_id = (CASE WHEN m.user_a = ? THEN m.user_b ELSE m.user_a END)
+    WHERE (m.user_a = ? OR m.user_b = ?) AND m.author_id != ? AND m.id > COALESCE(rs.last_read_id, 0) GROUP BY other ORDER BY other
+  `).all(u, u, u, u, u, u);
+  const before = [a, b, c].map(oldUnread);
+
+  runMigrations(raw);
+  expect(raw.pragma('user_version', { simple: true })).toBe(30);
+  const convs = raw.prepare('SELECT id, kind, pair_key AS pairKey, created_at AS createdAt FROM dm_conversations ORDER BY id').all();
+  expect(convs.map((x) => [x.kind, x.pairKey, x.createdAt])).toEqual([['pair', `${a}:${b}`, 100], ['pair', `${a}:${c}`, 150], ['pair', `${b}:${c}`, 400]]);
+  expect(raw.prepare('SELECT COUNT(*) AS n FROM dm_messages WHERE conversation_id IS NULL').get().n).toBe(0);
+  expect(raw.prepare('SELECT conversation_id AS c, COUNT(*) AS n FROM dm_messages GROUP BY conversation_id ORDER BY c').all().map((r) => r.n)).toEqual([3, 1, 1]);
+  const parts = raw.prepare('SELECT conversation_id AS c, user_id AS u, last_read_id AS r FROM dm_participants ORDER BY c, u').all();
+  expect(parts).toEqual([
+    { c: convs[0].id, u: a, r: ids[1] }, { c: convs[0].id, u: b, r: 0 },
+    { c: convs[1].id, u: a, r: 0 }, { c: convs[1].id, u: c, r: 0 },
+    { c: convs[2].id, u: b, r: 0 }, { c: convs[2].id, u: c, r: 0 },
+  ]);
+  // Unread the new way matches, person by person.
+  const newUnread = (u) => raw.prepare(`
+    SELECT o.user_id AS other, COUNT(*) AS n FROM dm_participants me
+    JOIN dm_participants o ON o.conversation_id = me.conversation_id AND o.user_id != me.user_id
+    JOIN dm_messages m ON m.conversation_id = me.conversation_id AND m.author_id != me.user_id AND m.id > me.last_read_id
+    WHERE me.user_id = ? GROUP BY other ORDER BY other
+  `).all(u);
+  expect([a, b, c].map(newUnread)).toEqual(before);
+  expect(before[0]).toEqual([{ other: b, n: 1 }, { other: c, n: 1 }]); // sanity: the seed has some unread
+  // Edit history and the new columns.
+  expect(raw.prepare('SELECT content FROM dm_message_versions WHERE message_id = ?').get(ids[0]).content).toBe('old text');
+  expect(raw.prepare('SELECT kind FROM dm_messages WHERE id = ?').get(ids[0]).kind).toBe(null);
+  raw.close();
 });

@@ -108,8 +108,9 @@ function attachGateway(httpServer, wss) {
         mentions: db.getMentionCounts(ws.userId),
         threads: db.getThreadFollows(ws.userId), // the threads you follow
       }));
-      // Keyed by `with`, like the other DM ops (getDmUnreadCounts names it `other`).
-      const dmCounts = db.getDmUnreadCounts(ws.userId).map((c) => ({ with: c.other, count: c.count }));
+      // Per conversation (P9-06a), with `with` (the other person) for pairs,
+      // as the username-keyed app expects.
+      const dmCounts = db.getDmUnreadCounts(ws.userId).map((c) => ({ conversation: c.conversation, with: c.other || null, count: c.count }));
       ws.send(JSON.stringify({ type: 'dm_unread', counts: dmCounts }));
       for (const frame of voiceStatesFor(ws.userId)) ws.send(JSON.stringify(frame));
 

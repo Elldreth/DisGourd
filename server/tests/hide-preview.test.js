@@ -105,7 +105,7 @@ test('DMs: the author removes the cards and both people are told; the partner an
   expect((await call('outsider', 'DELETE', `/dms/author/messages/${id}/preview`)).status).toBe(404);
   expect((await call('author', 'DELETE', `/dms/other/messages/${id}/preview`)).body).toEqual({ ok: true });
   await new Promise((r) => setTimeout(r, 60));
-  expect(framesOf('other', 'dm_embeds').at(-1)).toEqual({ type: 'dm_embeds', id, embeds: [] });
-  expect(framesOf('author', 'dm_embeds').at(-1)).toEqual({ type: 'dm_embeds', id, embeds: [] });
+  expect(framesOf('other', 'dm_embeds').at(-1)).toEqual({ type: 'dm_embeds', id, conversation: expect.any(Number), embeds: [] });
+  expect(framesOf('author', 'dm_embeds').at(-1)).toEqual({ type: 'dm_embeds', id, conversation: expect.any(Number), embeds: [] });
   expect(db.getEmbedUrls('dm', id)).toEqual([]);
 });
