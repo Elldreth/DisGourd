@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** REVIEW (PR open, 2026-10-19)
+- **State:** COMPLETE (merged in #160, 2026-10-19)
 - **Effort:** M
 - **Depends on:** none in code; the owner's answers
 - **Serialize with:** anything editing `ProfileDialog.jsx`, `UserFooter.jsx`, `Modal.jsx`

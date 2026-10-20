@@ -23,7 +23,8 @@ vi.mock('../api.js', () => ({
   tryImagine: vi.fn(),
 }));
 const api = await import('../api.js');
-const { default: ImagineAdmin } = await import('./ImagineAdmin.jsx');
+// P5-03: the single form is now pages; this renders them all at once.
+const { default: ImagineAdmin } = await import('./admin/imagine/allPages.testutil.jsx');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -49,7 +50,7 @@ test('Test connection lists the models; picking one guesses its type; Save sends
   fireEvent.click(screen.getByLabelText('Use my ComfyUI (local, free)'));
   fireEvent.click(screen.getByRole('radio', { name: /High/ }));
   fireEvent.change(screen.getByLabelText('Images per person per day'), { target: { value: '8' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -74,7 +75,8 @@ test('a saved address is tested on open, and errors are shown', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
   expect(await screen.findByText("ComfyUI isn't reachable at http://pc:8188")).toBeTruthy();
   api.saveImagineSettings.mockRejectedValueOnce(new Error('Set the ComfyUI address and pick a model before turning it on'));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByLabelText('Use my ComfyUI (local, free)')); // an edit to save (P5-03)
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   expect((await screen.findByRole('alert')).textContent).toMatch(/pick a model/);
 });
 
@@ -133,7 +135,7 @@ test('kie.ai card: a saved key is never shown; Test key reports the balance; pri
   fireEvent.click(screen.getByLabelText('Use kie.ai (paid, with your API key)'));
   fireEvent.change(key, { target: { value: 'new-key-9999' } });
   fireEvent.change(screen.getByLabelText('Monthly credit cap'), { target: { value: '500' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -155,7 +157,7 @@ test('kie.ai: a custom model id; a key from the environment; the default engine 
   fireEvent.change(screen.getByLabelText('kie.ai model'), { target: { value: 'custom' } });
   fireEvent.change(screen.getByLabelText('Custom model ID'), { target: { value: 'vendor/new-model' } });
   fireEvent.click(screen.getByRole('radio', { name: 'kie.ai' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({ engines: expect.objectContaining({ kie: expect.objectContaining({ model: 'custom', customModel: 'vendor/new-model' }) }), defaultEngine: 'kie' })
@@ -211,7 +213,7 @@ test('split models: grouped in the list; picking one fills its text encoders and
   expect(screen.getByLabelText('Text encoder (T5-XXL)').value).toBe(SPLIT.clips[1]);
   fireEvent.change(screen.getByLabelText('VAE'), { target: { value: SPLIT.vaes[1] } }); // the host's own choice
   fireEvent.click(screen.getByLabelText('Use my ComfyUI (local, free)'));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -243,11 +245,11 @@ test('P3-28: the hires fix switch and its upscale model (suggested after a test)
   expect(screen.getByLabelText('Upscale model').value).toBe('4x-UltraSharp.pth');
   fireEvent.change(screen.getByLabelText('Upscale model'), { target: { value: '4x-AnimeSharp.pth' } });
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ hires: true, upscaler: '4x-AnimeSharp.pth' }));
   fireEvent.click(hires);
   expect(screen.getByLabelText('Upscale model').value).toBe('4x-AnimeSharp.pth'); // still used by the Upscale button
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ hires: false }));
 });
 
@@ -272,7 +274,7 @@ test('P3-29: the Upscale button mode; tiled needs the node, and saves its streng
   fireEvent.change(screen.getByLabelText('Tile size'), { target: { value: '768' } });
   fireEvent.change(screen.getByLabelText('Tiled passes'), { target: { value: '2' } }); // P3-33
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ upscaleMode: 'tiled', tileDenoise: 0.25, tileSize: 768, tilePasses: 2, upscaler: null })); // blank upscaler = automatic
 });
 
@@ -297,7 +299,7 @@ test('P3-31: Advanced starts closed; its lists come from the test; defaults are 
   expect(screen.getByLabelText('Face detector').value).toBe('bbox/face_yolov8m.pt');
   fireEvent.change(screen.getByLabelText('Face repaint strength'), { target: { value: '0.35' } });
   fireEvent.change(screen.getByLabelText('Face detailer passes'), { target: { value: '3' } }); // P3-33
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
     expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({
       sampler: 'dpmpp_2m_sde', scheduler: null, cfgScale: 4.5, steps: { draft: null, standard: null, high: 40 }, negative: 'extra fingers',
@@ -344,7 +346,7 @@ test('P3-34: My own: paste or load a workflow, see the placeholders, and save it
   expect(screen.getAllByText('{{prompt}}').length).toBeGreaterThan(0);
   expect(screen.getByLabelText('Hires fix for High quality').disabled).toBe(true);
   expect(screen.getByText('Your upscale workflow is used instead of these.')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
     expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({
       workflowMode: 'custom', workflow: WF, upscaleWorkflow: expect.stringContaining('LoadImage'),
@@ -356,8 +358,10 @@ test('P3-34: a refused workflow shows the server’s reason; a saved one comes b
   api.getImagineSettings.mockResolvedValue(view({ workflowMode: 'custom', workflow: SAVED_WF, upscaleWorkflow: '' }));
   api.saveImagineSettings.mockRejectedValue(new Error('Workflow: your ComfyUI doesn’t have this node: MyCustomSampler'));
   render(<ImagineAdmin />);
-  expect((await screen.findByLabelText('Workflow (API format)')).value).toBe(SAVED_WF);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const box = await screen.findByLabelText('Workflow (API format)');
+  expect(box.value).toBe(SAVED_WF);
+  fireEvent.change(box, { target: { value: WF } }); // an edit, so there is something to save (P5-03)
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   expect(await screen.findByText('Workflow: your ComfyUI doesn’t have this node: MyCustomSampler')).toBeTruthy();
 });
 
@@ -370,7 +374,7 @@ test('P3-36a: Variation loops in Advanced (a loopback, explained) are saved', as
   fireEvent.change(loops, { target: { value: '3' } });
   expect(screen.getByLabelText('Strong strength').value).toBe('0.65');
   fireEvent.change(screen.getByLabelText('Strong strength'), { target: { value: '0.75' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ varyLoops: 3, varySubtle: 0.3, varyStrong: 0.75 }));
 });
 
@@ -383,6 +387,6 @@ test('P3-36b: My own has an optional image-to-image workflow box, saved with the
   const box = screen.getByLabelText('Image-to-image workflow (optional)');
   fireEvent.change(box, { target: { value: '{"1":{"class_type":"LoadImage","inputs":{"image":"{{image}}"}}}' } });
   expect(screen.getAllByText('{{denoise}}').length).toBeGreaterThan(0);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ img2imgWorkflow: expect.stringContaining('{{image}}') }));
 });
