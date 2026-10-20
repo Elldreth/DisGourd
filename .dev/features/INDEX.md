@@ -200,6 +200,7 @@ Units inside a lane run **sequentially**, because they share hot files. Differen
 | **G. Shine (Phase 4 polish, one at a time: shared files)** | P4-01 → P4-02 → P4-03 → P4-04 → P4-05 → P4-06 → P4-07 (order is the review's priority; the user picks the first) |
 | **H. Settings round 2 (one at a time: shared files)** | P5-01 → P5-02 → P5-03 → P5-04 → P5-05 → P5-06 (the owner agreed the map and all five recommendations on 2026-10-19) |
 | **I. Missing actions (Phase 6)** | P6-01 → P6-03 (shared files); P6-02 alongside either. Details agreed with the owner on 2026-10-20: leaving isn't logged; a password change signs out other devices; a voice channel rename keeps people connected; renames are logged. |
+| **J. UX review follow-ups (Phase 7, one PR each)** | P7-01 wizard invite link → P7-04 phone height and home-bar gap → P7-02 shortcuts sheet → P7-03 Pins/Threads side panel (the owner agreed the order and chose the side panel on 2026-10-20). Rows join the Units table once #169 is merged, to avoid a conflict there. |
 
 Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at the same time as another lane-C unit.
 

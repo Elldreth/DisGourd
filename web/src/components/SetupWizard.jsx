@@ -255,12 +255,14 @@ function ServerStep({ onDone }) {
 
 function FinishStep({ mode, server, invite, onOpen }) {
   const [regCode, setRegCode] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(''); // 'link' | 'message' — the one just copied
   const { busy, error, run } = useStepAction();
   const address = window.location.origin;
+  const link = invite ? inviteLink(invite, address) : '';
+  const linkId = useId();
 
   // With an invite, the link itself opens the Join dialog once they're signed in.
-  const lines = [`Join me on DisGourd: ${invite ? inviteLink(invite, address) : address}`];
+  const lines = [`Join me on DisGourd: ${link || address}`];
   if (mode === 'code') lines.push(regCode ? `1. Create an account with this registration code: ${regCode}` : '1. Create an account (ask me for a registration code)');
   else if (mode === 'open') lines.push('1. Create an account');
   if (invite) lines.push(`${mode === 'closed' ? 'Sign in, then' : '2. Then'} press Enter to join (invite code, if you need it: ${invite})`);
@@ -290,19 +292,38 @@ function FinishStep({ mode, server, invite, onOpen }) {
           )}
           <ErrorNote error={error} />
           {invite && (
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Message for your friends
-                <textarea readOnly value={message} rows={6} className="input mt-1 resize-none font-mono text-xs normal-case tracking-normal" />
-              </label>
-              <button
-                type="button"
-                onClick={async () => setCopied(await copyText(message))}
-                className="mt-2 rounded-lg bg-ink-600 px-3 py-1.5 text-sm font-semibold text-gray-100 transition hover:bg-ink-500"
-              >
-                {copied ? 'Copied' : 'Copy message'}
-              </button>
-            </div>
+            <>
+              {/* P7-01: the link first; most people paste a link, not a paragraph. */}
+              <div>
+                <label htmlFor={linkId} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Invite link
+                </label>
+                <div className="flex gap-2">
+                  <input id={linkId} readOnly value={link} onFocus={(e) => e.target.select()} className="input min-w-0 flex-1 font-mono text-xs" />
+                  <button
+                    type="button"
+                    onClick={async () => setCopied((await copyText(link)) ? 'link' : '')}
+                    className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-hover"
+                  >
+                    {copied === 'link' ? 'Copied' : 'Copy link'}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Invites never expire; make more from the server menu.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Or send a message with the steps
+                  <textarea readOnly value={message} rows={5} className="input mt-1 resize-none font-mono text-xs normal-case tracking-normal" />
+                </label>
+                <button
+                  type="button"
+                  onClick={async () => setCopied((await copyText(message)) ? 'message' : '')}
+                  className="mt-2 rounded-lg bg-ink-600 px-3 py-1.5 text-sm font-semibold text-gray-100 transition hover:bg-ink-500"
+                >
+                  {copied === 'message' ? 'Copied' : 'Copy message'}
+                </button>
+              </div>
+            </>
           )}
         </>
       )}

@@ -62,7 +62,7 @@ test('the whole way: account, who can join, first server, then a message to send
   expect(screen.getByText(/Step 4 of 4/)).toBeTruthy();
   await submit('Create a registration code');
   expect(api.createRegCode).toHaveBeenCalled();
-  const message = screen.getByLabelText('Message for your friends').value;
+  const message = screen.getByLabelText('Or send a message with the steps').value;
   expect(message).toContain(location.origin);
   expect(message).toContain('REG456');
   expect(message).toContain('INV123');
@@ -143,4 +143,48 @@ test('the first server can start from a template, the same cards as Add a server
   type('Server name', 'Raid Night');
   await submit('Create server');
   expect(api.createSpace).toHaveBeenCalledWith('Raid Night', 'gaming');
+});
+
+// P7-01: the last step leads with the invite link and "Copy link"; the message
+// with the steps is the second option.
+async function toFinish({ invite = true } = {}) {
+  if (!invite) api.createInvite.mockRejectedValueOnce(new Error('no invite'));
+  await throughAccount();
+  await submit('Continue');
+  type('Server name', 'Book Club');
+  await submit('Create server');
+  expect(screen.getByText(/Step 4 of 4/)).toBeTruthy();
+}
+
+test('the invite link comes first, with Copy link and a note that invites never expire', async () => {
+  const writeText = vi.fn(async () => {});
+  vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+  vi.stubGlobal('isSecureContext', true);
+  try {
+    await toFinish();
+    const link = screen.getByLabelText('Invite link');
+    const message = screen.getByLabelText('Or send a message with the steps');
+    expect(link.value).toBe(`${location.origin}/invite/INV123`);
+    expect(link.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Invites never expire; make more from the server menu.')).toBeTruthy();
+
+    await submit('Copy link');
+    expect(writeText).toHaveBeenLastCalledWith(`${location.origin}/invite/INV123`);
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy message' })).toBeTruthy();
+
+    await submit('Copy message');
+    expect(writeText).toHaveBeenLastCalledWith(message.value);
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test('without an invite there is no link, message or note', async () => {
+  await toFinish({ invite: false });
+  expect(screen.queryByLabelText('Invite link')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull();
+  expect(screen.queryByText(/never expire/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Open DisGourd' })).toBeTruthy();
 });
