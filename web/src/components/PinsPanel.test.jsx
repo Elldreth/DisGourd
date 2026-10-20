@@ -12,18 +12,20 @@ const { default: PinsPanel } = await import('./PinsPanel.jsx');
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
-test('lists the channel pins; clicking one jumps to it and closes', async () => {
+test('lists the channel pins in a side column; clicking one jumps to it and the list stays open (P7-03)', async () => {
   const onJump = vi.fn();
   const onClose = vi.fn();
   render(<PinsPanel space="S" channel="general" version={0} onJump={onJump} onClose={onClose} />);
-  expect(screen.getByRole('dialog', { name: 'Pinned messages' })).toBeTruthy();
+  expect(screen.getByRole('complementary', { name: 'Pinned messages' })).toBeTruthy();
   await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2));
   expect(api.getPins).toHaveBeenCalledWith('S', 'general');
   expect(screen.getAllByRole('listitem')[0].textContent).toMatch(/ann.*Rules: be kind/s);
   expect(screen.getAllByRole('listitem')[1].textContent).toMatch(/Attachment/);
   fireEvent.click(screen.getByRole('button', { name: /Jump to ann's message/ }));
-  expect(onClose).toHaveBeenCalled();
   expect(onJump).toHaveBeenCalledWith(9);
+  expect(onClose).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /Jump to ben's message/ }));
+  expect(onJump).toHaveBeenLastCalledWith(4);
 });
 
 test('people allowed to pin can unpin from here', async () => {

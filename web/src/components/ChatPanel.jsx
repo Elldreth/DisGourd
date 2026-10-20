@@ -12,6 +12,7 @@ import IconButton from './IconButton.jsx';
 import EmptyState from './EmptyState.jsx';
 import DropOverlay from './DropOverlay.jsx';
 import { useFileDrop } from '../useFileDrop.js';
+import { useOverlayHistory } from '../overlayHistory.js';
 import { renderMarkdown } from '../markdown.jsx';
 import * as api from '../api.js';
 
@@ -57,6 +58,11 @@ export default function ChatPanel({
   topic = null, // the channel's topic (P3-20a), or null
   onAddServer = null, // (tab: 'create' | 'join') — offered when you have no servers (P3-20b)
   imagine = null, // /imagine for this server (imagineState), or null
+  // P7-03: Pins and Threads open beside the chat, where the thread panel
+  // goes, so only one of them is open at a time: opening a list closes the
+  // thread panel (onCloseThread), and an open thread closes the lists.
+  threadOpen = false,
+  onCloseThread,
 }) {
   const [pinsOpen, setPinsOpen] = useState(false);
   // The whole topic, shown under the header; closes on Esc or a channel switch.
@@ -103,6 +109,31 @@ export default function ChatPanel({
     setThreadFrom(null);
     setMoreOpen(false);
   }, [space, channel]);
+  // Pins and Threads (P7-03): one side column at a time, focus back to what
+  // opened it, and the phone back button closes it.
+  const sideOpener = useRef(null);
+  function openSide(which) {
+    if ((which === 'pins' && pinsOpen) || (which === 'threads' && threadsOpen)) return closeSide();
+    sideOpener.current = document.activeElement;
+    onCloseThread?.();
+    setPinsOpen(which === 'pins');
+    setThreadsOpen(which === 'threads');
+  }
+  function closeSide({ refocus = true } = {}) {
+    setPinsOpen(false);
+    setThreadsOpen(false);
+    const el = sideOpener.current;
+    sideOpener.current = null;
+    if (refocus && el && document.contains(el)) el.focus(); // a hidden button (phones) just stays unfocused
+  }
+  useEffect(() => {
+    if (threadOpen) {
+      setPinsOpen(false);
+      setThreadsOpen(false);
+    }
+  }, [threadOpen]);
+  useOverlayHistory('pins', pinsOpen, () => closeSide());
+  useOverlayHistory('threads', threadsOpen, () => closeSide());
   // The message being replied to ({ id, author }), shown above the composer.
   const [replyingTo, setReplyingTo] = useState(null);
   const cooldown = useCooldown(cooldownKey(space, channel)); // slow mode (P3-26d)
@@ -156,6 +187,7 @@ export default function ChatPanel({
   const degraded = status === 'reconnecting' || status === 'closed' || status === 'connecting';
 
   return (
+    <div className="flex min-h-0 min-w-0 flex-1">
     <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700" {...drop.dropProps}>
       {drop.dragging && <DropOverlay target={`#${channel}`} />}
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-xs shadow-black/20 md:px-4">
@@ -228,7 +260,7 @@ export default function ChatPanel({
                     aria-label={threadsUnread ? `Threads (${threadsUnread} unread)` : undefined}
                     onClick={() => {
                       closeMore(false);
-                      setThreadsOpen(true);
+                      openSide('threads');
                     }}
                     className="tap-row flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-ink-600 focus-visible:bg-ink-600"
                   >
@@ -248,7 +280,7 @@ export default function ChatPanel({
                   ref={onOpenThread ? undefined : firstMoreItem}
                   onClick={() => {
                     closeMore(false);
-                    setPinsOpen(true);
+                    openSide('pins');
                   }}
                   className="tap-row flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-ink-600 focus-visible:bg-ink-600"
                 >
@@ -265,9 +297,8 @@ export default function ChatPanel({
               icon="thread"
               size={18}
               label={threadsUnread ? `Threads (${threadsUnread} unread)` : 'Threads'}
-              aria-haspopup="dialog"
               aria-expanded={threadsOpen}
-              onClick={() => setThreadsOpen(true)}
+              onClick={() => openSide('threads')}
               className="tap hidden items-center justify-center rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg md:inline-flex"
             />
             {threadsUnread > 0 && (
@@ -281,9 +312,8 @@ export default function ChatPanel({
           icon="pin"
           size={18}
           label="Pinned messages"
-          aria-haspopup="dialog"
           aria-expanded={pinsOpen}
-          onClick={() => setPinsOpen(true)}
+          onClick={() => openSide('pins')}
           className="tap hidden items-center justify-center rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg md:inline-flex"
         />
         <IconButton
@@ -362,16 +392,6 @@ export default function ChatPanel({
           <Icon name="shield" size={15} className="shrink-0" /> You don’t have permission to post in this channel.
         </div>
       )}
-      {threadsOpen && (
-        <ThreadsList
-          space={space}
-          channel={channel}
-          version={threadsVersion}
-          badge={threadBadge}
-          onOpen={(t) => onOpenThread(t, {})}
-          onClose={() => setThreadsOpen(false)}
-        />
-      )}
       {threadFrom && (
         <CreateThreadDialog
           space={space}
@@ -385,6 +405,17 @@ export default function ChatPanel({
           onClose={() => setThreadFrom(null)}
         />
       )}
+    </main>
+      {threadsOpen && (
+        <ThreadsList
+          space={space}
+          channel={channel}
+          version={threadsVersion}
+          badge={threadBadge}
+          onOpen={(t) => onOpenThread(t, { opener: sideOpener.current })}
+          onClose={() => closeSide({ refocus: false })}
+        />
+      )}
       {pinsOpen && (
         <PinsPanel
           space={space}
@@ -392,11 +423,15 @@ export default function ChatPanel({
           version={pinsVersion}
           canPin={canPin}
           onUnpin={(id) => onSetPinned?.(id, false)}
-          onJump={(id) => listRef.current?.jumpTo(id)}
-          onClose={() => setPinsOpen(false)}
+          onJump={(id) => {
+            listRef.current?.jumpTo(id);
+            // On a phone the list covers the chat: close it to show the message.
+            if (window.matchMedia?.('(max-width: 1023px)').matches) closeSide({ refocus: false });
+          }}
+          onClose={() => closeSide()}
         />
       )}
-    </main>
+    </div>
   );
 }
 

@@ -632,6 +632,12 @@ export default function App() {
               onOpenMembers={() => setMembersOpen(true)}
               membersOpen={membersOpen}
               onOpenThread={openThreadPanel}
+              threadOpen={!!openThread}
+              onCloseThread={() => {
+                // Opening Pins or Threads replaces the thread panel (P7-03); focus stays put.
+                setOpenThread(null);
+                threadOpener.current = null;
+              }}
               threadsVersion={chat.threadsVersion}
               threadBadge={threadBadge}
               threadsUnread={channelThreads[sp.currentChannel] || 0}
