@@ -20,6 +20,7 @@ export const dmKeyOf = (frame) => (frame.conversation != null ? `c:${frame.conve
 export function attentionKind(frame, ctx) {
   if (frame.kind === 'dm') {
     if (frame.from === ctx.me) return null;
+    if (ctx.dmMuted?.(dmKeyOf(frame))) return null; // P9-06d: a muted conversation
     // P9-06b: ctx.dm is the open conversation's key (`c:<id>`, or `@name`).
     if (ctx.focused && ctx.view === 'dm' && ctx.dm === dmKeyOf(frame)) return null;
     return 'dm';
@@ -114,7 +115,8 @@ export function useNotifications() {
     const isDm = frame.kind === 'dm';
     const author = isDm ? frame.from : frame.author;
     try {
-      const n = new Notification(isDm ? `${author}` : `${author} in ${notificationPlace(frame)}`, {
+      const group = isDm ? w.dmTitle?.(dmKeyOf(frame)) : null; // P9-06d: a group's name
+      const n = new Notification(isDm ? (group ? `${author} in ${group}` : `${author}`) : `${author} in ${notificationPlace(frame)}`, {
         body: notificationText(frame.content, frame.attachments || []),
         icon: '/icon-192.png',
         // One notification per conversation: a newer one replaces the older.

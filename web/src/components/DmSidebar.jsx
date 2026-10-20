@@ -1,4 +1,5 @@
 import Avatar from './Avatar.jsx';
+import GroupAvatar from './GroupAvatar.jsx';
 import EmptyState from './EmptyState.jsx';
 import IconButton from './IconButton.jsx';
 import UserFooter from './UserFooter.jsx';
@@ -9,6 +10,8 @@ import { unreadLabel } from '../util.js';
 export default function DmSidebar({
   conversations,
   currentDm,
+  titleOf = (c) => c.username, // P9-06d: a group's name or members
+  myId = null,
   unread = {},
   onSelect,
   user,
@@ -54,21 +57,32 @@ export default function DmSidebar({
           const count = unread[c.key] || 0;
           const hasUnread = count > 0 && !active;
           const preview = c.lastContent || (c.lastAttachment ? '📎 Attachment' : '');
+          const group = c.kind === 'group';
+          const name = titleOf(c);
           return (
             <button
               key={c.key}
               onClick={() => onSelect(c.key)}
               className={`tap-row mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition ${
                 active ? 'bg-ink-600' : 'hover:bg-ink-700/60'
-              }`}
+              } ${c.muted && !active ? 'opacity-60' : ''}`}
             >
-              <Avatar name={c.username} size={32} src={c.avatar} />
+              {group ? (
+                <GroupAvatar members={(c.members || []).filter((m) => m.id !== myId)} size={32} />
+              ) : (
+                <Avatar name={c.username} size={32} src={c.avatar} />
+              )}
               <div className="min-w-0 flex-1">
                 <div className={`truncate text-sm ${hasUnread ? 'font-semibold text-fg' : 'text-gray-200'}`}>
-                  {c.username}
+                  {name}
                 </div>
-                {preview && <div className="truncate text-xs text-gray-500">{preview}</div>}
+                {group ? (
+                  <div className="truncate text-xs text-gray-500">{preview || `${c.members?.length || 0} members`}</div>
+                ) : (
+                  preview && <div className="truncate text-xs text-gray-500">{preview}</div>
+                )}
               </div>
+              {c.muted && <span className="sr-only">, muted</span>}
               {hasUnread && <span className="sr-only">, {unreadLabel({ unread: count })}</span>}
               {hasUnread && (
                 <span aria-hidden="true" className="shrink-0 rounded-full bg-danger px-1.5 text-xs font-bold text-ink-900">

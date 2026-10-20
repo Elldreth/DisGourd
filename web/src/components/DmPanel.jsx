@@ -1,6 +1,7 @@
 import * as api from '../api.js';
 import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
+import GroupAvatar from './GroupAvatar.jsx';
 import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
@@ -10,17 +11,22 @@ import DropOverlay from './DropOverlay.jsx';
 import EmptyState from './EmptyState.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 
-// The conversation view in Direct Messages mode.
-export default function DmPanel({ conversationKey = '', username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
+// The conversation view in Direct Messages mode. `conversation` (P9-06d) is
+// the open one ({ kind, members, … }); `title` what it's called (a group's
+// name or members, else the other person). A pair's header offers Add people
+// (`onAddPeople`, a new group); a group's, Members (`onShowMembers`).
+export default function DmPanel({ conversationKey = '', conversation = null, title = '', myId = null, onAddPeople, onShowMembers, username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
   // The message being replied to ({ id, author }), cleared on send, Esc or switching conversation.
   const [replyingTo, setReplyingTo] = useState(null);
   useEffect(() => setReplyingTo(null), [conversationKey]);
   // Files dropped anywhere on the conversation go to the composer.
   const composerRef = useRef(null);
   const listRef = useRef(null);
-  const drop = useFileDrop({ enabled: !!username, onFiles: (files) => composerRef.current?.addFiles(files) });
+  const group = conversation?.kind === 'group';
+  const name = group ? title : username;
+  const drop = useFileDrop({ enabled: !!name, onFiles: (files) => composerRef.current?.addFiles(files) });
 
-  if (!username) {
+  if (!name) {
     return (
       <main className="relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
         {onOpenNav && (
@@ -45,7 +51,7 @@ export default function DmPanel({ conversationKey = '', username, messages, curr
 
   return (
     <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700" {...drop.dropProps}>
-      {drop.dragging && <DropOverlay target={`@${username}`} />}
+      {drop.dragging && <DropOverlay target={group ? name : `@${username}`} />}
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-xs shadow-black/20 md:px-4">
         <IconButton
           icon="menu"
@@ -54,9 +60,34 @@ export default function DmPanel({ conversationKey = '', username, messages, curr
           onClick={onOpenNav}
           className="-ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         />
-        <Avatar name={username} size={24} />
-        <h2 className="font-bold">{username}</h2>
+        {group ? (
+          <GroupAvatar members={(conversation.members || []).filter((m) => m.id !== myId)} size={24} />
+        ) : (
+          <Avatar name={username} size={24} />
+        )}
+        <h2 className="min-w-0 truncate font-bold">{name}</h2>
+        {group && <span className="shrink-0 text-xs text-gray-500">{conversation.members?.length || 0} members</span>}
         <div className="flex-1" />
+        {group && onShowMembers && (
+          <IconButton
+            icon="users"
+            size={18}
+            label="Members"
+            title="Members and group settings"
+            onClick={onShowMembers}
+            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+          />
+        )}
+        {!group && onAddPeople && (
+          <IconButton
+            icon="plus"
+            size={18}
+            label="Add people"
+            title={`Start a group with ${username}`}
+            onClick={onAddPeople}
+            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+          />
+        )}
         <IconButton
           icon="search"
           size={18}
@@ -81,7 +112,7 @@ export default function DmPanel({ conversationKey = '', username, messages, curr
         loadVersions={(m) => api.getDmVersions(conversationKey, m.id)}
         onReply={(m) => setReplyingTo({ id: m.id, author: m.author })}
         simple
-        emptyHeading={`This is the beginning of your conversation with ${username}`}
+        emptyHeading={group ? `This is the beginning of ${name}` : `This is the beginning of your conversation with ${username}`}
         emptyBody="Say hi! 👋"
         onEditDone={() => composerRef.current?.focus()}
       />
@@ -98,7 +129,7 @@ export default function DmPanel({ conversationKey = '', username, messages, curr
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
         onTyping={onTyping}
-        placeholder={`Message @${username}`}
+        placeholder={group ? `Message ${name}` : `Message @${username}`}
       />
     </main>
   );
