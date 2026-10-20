@@ -289,3 +289,21 @@ test('the server ending the call leaves it and says why; a new call starts unfor
   voice.setForcedMute(true);
   expect(state.forcedMute).toBe(false);
 });
+
+// P6-03 / P6-04: a rename of the call's channel or server moves the call; a
+// rejoin after it uses the new names, and the new name's roster is accepted.
+test('renaming the channel or the server moves the call along', async () => {
+  await inCallWithBob();
+  voice.renameRoom('S', 'other', 'x'); // not our channel: nothing changes
+  expect(state.room).toEqual({ space: 'S', channel: 'lounge' });
+  voice.renameRoom('S', 'lounge', 'hangout');
+  expect(state.room).toEqual({ space: 'S', channel: 'hangout' });
+  voice.renameSpace('T', 'U'); // not our server
+  expect(state.room).toEqual({ space: 'S', channel: 'hangout' });
+  voice.renameSpace('S', 'Studio');
+  expect(state.room).toEqual({ space: 'Studio', channel: 'hangout' });
+  voice.handleState({ space: 'Studio', channel: 'hangout', participants: [{ userId: 1 }, { userId: 2 }, { userId: 3 }] });
+  expect(state.participants).toHaveLength(3);
+  voice.rejoin();
+  expect(sent.find((f) => f.op === 'voice_join')).toMatchObject({ space: 'Studio', channel: 'hangout' });
+});

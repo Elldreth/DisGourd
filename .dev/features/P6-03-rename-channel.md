@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 6
-- **State:** REVIEW (details confirmed by the owner, 2026-10-20)
+- **State:** COMPLETE (merged in #168, 2026-10-20)
 - **Effort:** M
 - **Depends on:** none (merge after P6-01; they share files)
 - **Serialize with:** P6-01 (`server/routes/spaces.js`, `web/src/state/useSpaces.js`, `web/src/api.js`)

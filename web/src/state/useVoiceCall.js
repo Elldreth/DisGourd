@@ -63,6 +63,18 @@ export function useVoiceCall({ send, myId }) {
         return { ...rest, [unreadKey(f.space, f.newName)]: people };
       });
     },
+    // A server was renamed (P6-04): the server moved its rooms; follow them.
+    space_renamed: (f) => {
+      v() && v().renameSpace(f.space, f.newName);
+      setStates((prev) => {
+        const next = {};
+        for (const [k, people] of Object.entries(prev)) {
+          const [space, channel] = JSON.parse(k);
+          next[space === f.space ? unreadKey(f.newName, channel) : k] = people;
+        }
+        return next;
+      });
+    },
     voice_peer_joined: (f) => v() && v().handlePeerJoined(f.peer),
     voice_peer_left: (f) => v() && v().handlePeerLeft(f.userId),
     voice_signal: (f) => v() && v().handleSignal(f.from, f.data),
