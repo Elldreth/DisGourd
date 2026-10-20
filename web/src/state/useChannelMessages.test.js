@@ -18,6 +18,12 @@ describe('messagesReducer', () => {
     expect(next[2].content).toBe('two!');
   });
 
+  test('P9-05b: the bot’s update carries which engine made the image', () => {
+    const next = messagesReducer(base, { type: 'updated', id: 1, content: 'done', editedAt: null, attachments: ['/uploads/a/x.png'], imagineEngine: 'kie' });
+    expect(next.find((m) => m.id === 1)).toMatchObject({ imagineEngine: 'kie', attachments: ['/uploads/a/x.png'] });
+    expect(messagesReducer(next, { type: 'updated', id: 1, content: 'edited', editedAt: 9 }).find((m) => m.id === 1).imagineEngine).toBe('kie');
+  });
+
   test('updated edits one message', () => {
     const next = messagesReducer(base, { type: 'updated', id: 1, content: 'uno', editedAt: 5 });
     expect(next[0]).toMatchObject({ id: 1, content: 'uno', editedAt: 5 });

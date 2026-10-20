@@ -68,9 +68,12 @@ const varied = { id: 6, author: 'Imagine', bot: true, content: '🎲 **cara** va
 
 test('with ComfyUI: Subtle and Strong variation on generated, varied and upscaled images; Upscale not on upscaled ones', async () => {
   expect(imagineResultKind(varied)).toBe('varied');
-  expect(imagineResultKind({ ...varied, content: '🎲 **cara** varied (wild): x' })).toBe(null);
+  // Since P9-04c the brackets may hold a style ("wild"), and P9-05b allows none.
+  expect(imagineResultKind({ ...varied, content: '🎲 **cara** varied (wild): x' })).toBe('varied');
+  expect(imagineResultKind({ ...varied, content: '🎲 **cara** varied: x' })).toBe('varied');
+  expect(imagineResultKind({ ...varied, content: '🎲 **cara** varied x' })).toBe(null);
   const run = vi.fn().mockResolvedValue({ jobId: 1 });
-  render(<MessageList messages={[done, failed, upscaled, varied]} channel="general" currentUser="sandy" imagineAgain={run} imagineUpscale imagineVary />);
+  render(<MessageList messages={[done, failed, upscaled, varied]} channel="general" currentUser="sandy" imagineAgain={run} imagineUpscale imaginePictures={{ comfyui: { strength: true } }} />);
   expect(screen.getAllByRole('button', { name: /Subtle variation/ })).toHaveLength(3);
   expect(screen.getAllByRole('button', { name: /Strong variation/ })).toHaveLength(3);
   expect(screen.queryByRole('button', { name: /^🎲 Variations/ })).toBeNull(); // replaced
@@ -81,6 +84,31 @@ test('with ComfyUI: Subtle and Strong variation on generated, varied and upscale
   await screen.findAllByRole('button', { name: /Subtle variation/ });
   fireEvent.click(screen.getAllByRole('button', { name: /Strong variation/ })[2]);
   expect(run).toHaveBeenLastCalledWith({ from: 6, vary: 'strong' });
+});
+
+test('P9-05b: a Variation runs where the image was made: one button for kie.ai without a strength, Subtle and Strong otherwise', async () => {
+  const kieImage = { ...done, id: 11, imagineEngine: 'kie' };
+  const kieVaried = { ...varied, id: 12, content: '🎲 **cara** varied: a gourd', imagineEngine: 'kie' };
+  const comfyImage = { ...done, id: 13, imagineEngine: 'comfyui' };
+  const run = vi.fn().mockResolvedValue({ jobId: 1 });
+  render(<MessageList messages={[kieImage, kieVaried, comfyImage]} channel="general" currentUser="sandy" imagineAgain={run} imaginePictures={{ comfyui: { strength: true }, kie: { strength: false } }} />);
+  expect(screen.getAllByRole('button', { name: '🎲 Variation' })).toHaveLength(2); // both kie.ai images, including "varied: …"
+  expect(screen.getAllByRole('button', { name: /Subtle variation/ })).toHaveLength(1); // the ComfyUI one
+  fireEvent.click(screen.getAllByRole('button', { name: '🎲 Variation' })[1]);
+  expect(run).toHaveBeenCalledWith({ from: 12, vary: 'once' });
+  await screen.findAllByRole('button', { name: '🎲 Variation' });
+  cleanup();
+  // kie.ai with a strength (Qwen): Subtle and Strong on its images too.
+  render(<MessageList messages={[kieImage]} channel="general" currentUser="sandy" imagineAgain={run} imaginePictures={{ kie: { strength: true } }} />);
+  expect(screen.getByRole('button', { name: /Subtle variation/ })).toBeTruthy();
+  cleanup();
+  // kie.ai can’t vary but ComfyUI can: the server uses ComfyUI, so Subtle and Strong.
+  render(<MessageList messages={[kieImage]} channel="general" currentUser="sandy" imagineAgain={run} imaginePictures={{ comfyui: { strength: true } }} />);
+  expect(screen.getByRole('button', { name: /Strong variation/ })).toBeTruthy();
+  cleanup();
+  // Nothing can vary: the new take of the prompt, as before.
+  render(<MessageList messages={[kieImage]} channel="general" currentUser="sandy" imagineAgain={run} imaginePictures={{}} />);
+  expect(screen.getByRole('button', { name: /🎲 Variations/ })).toBeTruthy();
 });
 
 test('without ComfyUI: the single Variations (a new take) stays', () => {

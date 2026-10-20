@@ -10,7 +10,8 @@ export function imagineResultKind(m) {
   // P9-04c: the style may follow, "imagined (Anime): …", "varied (subtle, Anime): …".
   if (/^🎨 \*\*.+?\*\* imagined(?: \(.+?\))?: /.test(m.content) && hasImage) return 'done';
   if (/^🔍 \*\*.+?\*\* upscaled(?: \(.+?\))?: /.test(m.content) && hasImage) return 'upscaled'; // P3-29
-  if (/^🎲 \*\*.+?\*\* varied \((subtle|strong)(?:, .+?)?\): /.test(m.content) && hasImage) return 'varied'; // P3-36a
+  // P9-05b: "varied: …" too, from a kie.ai model without a strength setting.
+  if (/^🎲 \*\*.+?\*\* varied(?: \(.+?\))?: /.test(m.content) && hasImage) return 'varied'; // P3-36a
   if (/^⚠️ Couldn't imagine that for \*\*/.test(m.content)) return 'failed';
   return null;
 }
@@ -19,8 +20,12 @@ export function imagineResultKind(m) {
 // the server to repeat that request (as the person pressing), and with
 // `upscale: true` (P3-29) to make it 2× bigger, or with `vary: 'subtle' |
 // 'strong'` (P3-36a) to make an img2img variation of this very image.
-// `canUpscale` / `canVary`: ComfyUI is on.
-export default function ImagineAgain({ m, kind, run, canUpscale = false, canVary = false }) {
+// `canUpscale`: ComfyUI is on. `pictures` (P9-05b): the engines that can vary
+// an image, { comfyui: { strength: true }, kie: { strength } }. A Variation
+// runs on the engine that made the image (`m.imagineEngine`), else ComfyUI;
+// without a strength setting there's one Variation (`vary: 'once'`).
+export default function ImagineAgain({ m, kind, run, canUpscale = false, pictures = {} }) {
+  const varyOn = pictures[m.imagineEngine] || pictures.comfyui || null;
   const [busy, setBusy] = useState(null); // which button is sending
   const [error, setError] = useState(null);
   const send = async (which, fields) => {
@@ -45,13 +50,15 @@ export default function ImagineAgain({ m, kind, run, canUpscale = false, canVary
     <div className="mt-1 flex flex-wrap items-center gap-2">
       {kind === 'failed'
         ? button('again', '↻ Retry', 'Try this again', {})
-        : canVary
+        : varyOn?.strength
           ? (
             <>
               {button('subtle', '🎲 Subtle variation', 'A close variation of this image', { vary: 'subtle' })}
               {button('strong', '🎲 Strong variation', 'A looser variation of this image', { vary: 'strong' })}
             </>
           )
+          : varyOn
+          ? button('once', '🎲 Variation', 'A new take on this image', { vary: 'once' })
           : button('again', '🎲 Variations', 'Make another take of this prompt', {})}
       {(kind === 'done' || kind === 'varied') && canUpscale && (
         <button type="button" onClick={() => send('upscale', { upscale: true })} aria-busy={busy === 'upscale'} title="Make this image twice as big" className={chip}>

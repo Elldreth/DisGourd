@@ -16,7 +16,7 @@ export const threadRootId = (channel) => (isThreadChannel(channel) ? parseInt(ch
 // Actions:
 //   { type: 'reset', messages }                       replace the transcript
 //   { type: 'merged', messages }                      add/replace by id, keep order
-//   { type: 'updated', id, content, editedAt }        an edit
+//   { type: 'updated', id, content, editedAt, attachments?, imagineEngine? }  an edit, or the bot's progress
 //   { type: 'deleted', id }
 //   { type: 'reaction', id, emoji, count, users }     one emoji's new total
 //   { type: 'embeds', id, embeds }                    a message's link-preview cards
@@ -43,7 +43,11 @@ export function messagesReducer(state, action) {
       // The /imagine bot's updates also carry attachments (P2-20a).
       return state.map((m) =>
         m.id === action.id
-          ? { ...m, content: action.content, editedAt: action.editedAt, ...(action.attachments ? { attachments: action.attachments, attachment: action.attachments[0] || null } : {}) }
+          ? {
+            ...m, content: action.content, editedAt: action.editedAt,
+            ...(action.attachments ? { attachments: action.attachments, attachment: action.attachments[0] || null } : {}),
+            ...(action.imagineEngine ? { imagineEngine: action.imagineEngine } : {}), // P9-05b: which engine made it
+          }
           : m
       );
     case 'deleted':
@@ -298,7 +302,7 @@ export function useChannelMessages({ space, channel, active, user, send, status,
       if (!f.followed) setUnread(withoutKey(k));
     },
     message_update: (u) => {
-      if (isOpen(u.space, u.channel)) dispatch({ type: 'updated', id: u.id, content: u.content, editedAt: u.editedAt, attachments: u.attachments });
+      if (isOpen(u.space, u.channel)) dispatch({ type: 'updated', id: u.id, content: u.content, editedAt: u.editedAt, attachments: u.attachments, imagineEngine: u.imagineEngine });
     },
     message_delete: (d) => {
       if (isOpen(d.space, d.channel)) dispatch({ type: 'deleted', id: d.id });

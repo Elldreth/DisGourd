@@ -171,7 +171,7 @@ export default function ThreadPanel({
         onReport={(m) => setReportFor(m)}
         imagineAgain={imagine?.available ? imagine.run : null}
         imagineUpscale={!!imagine?.canUpscale}
-        imagineVary={!!imagine?.canVary}
+        imaginePictures={imagine?.pictures}
         label={`Replies in thread ${thread.name}`}
         emoji={emoji}
         channel={thread.channel}

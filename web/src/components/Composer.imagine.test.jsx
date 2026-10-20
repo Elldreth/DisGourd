@@ -224,3 +224,42 @@ test('P9-04c: the Style row: ComfyUI with 2+ styles; the default first, then the
   await waitFor(() => expect(run).toHaveBeenLastCalledWith({ prompt: 'a frog', shape: 'square', quality: 'standard' }));
   localStorage.removeItem('disgourd.imagineStyle');
 });
+
+test('P9-05b: pictures per engine: Strength where the engine has one, a note where it doesn’t, and ComfyUI when the chosen engine can’t', async () => {
+  const engines = [{ id: 'comfyui', name: 'ComfyUI' }, { id: 'kie', name: 'kie.ai' }];
+  const run = vi.fn(async () => ({ jobId: 1 }));
+  const pick = () => {
+    const group = screen.getByRole('group', { name: 'Start from a picture' });
+    fireEvent.change(within(group).getByLabelText('Start from a picture'), { target: { files: [new File(['x'], 'p.png', { type: 'image/png' })] } });
+    return group;
+  };
+  // kie.ai without a strength (e.g. Grok): no Strength chips, the note instead; still sent with one.
+  const a = setup({ imagine: imagineState(info({ engines: [engines[1]], canVary: true, pictures: { kie: { strength: false } } }), run) });
+  a.type('/imagine make it night');
+  const group = pick();
+  await within(group).findByText('p.png');
+  expect(within(group).queryByRole('group', { name: 'Strength' })).toBeNull();
+  expect(within(group).getByText('The picture guides the image; your prompt says what to change.')).toBeTruthy();
+  fireEvent.keyDown(a.box, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenLastCalledWith({ prompt: 'make it night', quality: 'standard', init: { url: '/uploads/abc/p.png', strength: 'medium' } }));
+  cleanup();
+  // Both on: kie.ai with a strength (Qwen) shows Strength; switching to ComfyUI keeps it.
+  const b = setup({ imagine: imagineState(info({ engines, canVary: true, pictures: { comfyui: { strength: true }, kie: { strength: true } } }), run) });
+  b.type('/imagine a boat');
+  fireEvent.click(within(screen.getByRole('group', { name: 'Engine' })).getByRole('button', { name: 'kie.ai' }));
+  const kieGroup = pick();
+  expect(await within(kieGroup).findByRole('group', { name: 'Strength' })).toBeTruthy();
+  expect(within(kieGroup).queryByText(/Pictures use/)).toBeNull(); // kie.ai does it itself
+  cleanup();
+  // kie.ai can’t take pictures (Z-Image, none chosen): ComfyUI does it, and the panel says so.
+  const c = setup({ imagine: imagineState(info({ engines, canVary: true, pictures: { comfyui: { strength: true } } }), run) });
+  c.type('/imagine a boat');
+  fireEvent.click(within(screen.getByRole('group', { name: 'Engine' })).getByRole('button', { name: 'kie.ai' }));
+  const g = pick();
+  expect(await within(g).findByText('Pictures use ComfyUI.')).toBeTruthy();
+  expect(within(g).getByRole('group', { name: 'Strength' })).toBeTruthy();
+  cleanup();
+  // No engine takes pictures: no picture option.
+  setup({ imagine: imagineState(info({ engines: [engines[1]], canVary: false, pictures: {} }), run) }).type('/imagine a boat');
+  expect(screen.queryByRole('group', { name: 'Start from a picture' })).toBeNull();
+});

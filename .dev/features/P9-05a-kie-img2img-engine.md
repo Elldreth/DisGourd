@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P9-05)
 - **Phase:** 9
-- **State:** REVIEW
+- **State:** COMPLETE (#188)
 - **Starting baseline:** main at dcb58db (#187 merged)
 - **Effort:** M (migration v29: one index)
 - **Depends on:** the P9-05 design

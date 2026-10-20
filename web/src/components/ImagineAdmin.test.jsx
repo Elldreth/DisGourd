@@ -118,7 +118,7 @@ test('a test image: needs a saved model; shows the picture with its size and tim
 // ---- kie.ai (P2-20c) ----
 const KIE_MODELS = [
   { id: 'z-image', name: 'Z-Image', note: 'Fast and inexpensive.', filterable: true, price: { credits: 0.8, estimate: true } },
-  { id: 'flux-2/pro-text-to-image', name: 'Flux-2 Pro', note: 'High quality.', filterable: true, price: { credits: 5.5, estimate: false } },
+  { id: 'flux-2/pro-text-to-image', name: 'Flux-2 Pro', note: 'High quality.', filterable: true, price: { credits: 5.5, estimate: false }, picture: { model: 'flux-2/pro-image-to-image', strength: false } },
   { id: 'nano-banana-2', name: 'Nano Banana 2', note: 'Always filtered by Google.', filterable: false, price: null },
   { id: 'custom', name: 'Custom model', note: 'Sent with prompt, aspect_ratio and nsfw_checker.', filterable: true, price: null },
 ];
@@ -153,7 +153,7 @@ test('kie.ai card: a saved key is never shown; Test key reports the balance; pri
   await waitFor(() =>
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
-        engines: expect.objectContaining({ kie: { enabled: true, model: 'flux-2/pro-text-to-image', customModel: '', monthlyCredits: 500, apiKey: 'new-key-9999' } }),
+        engines: expect.objectContaining({ kie: { enabled: true, model: 'flux-2/pro-text-to-image', customModel: '', pictureModel: null, monthlyCredits: 500, apiKey: 'new-key-9999' } }),
         defaultEngine: 'kie',
       })
     )
@@ -467,4 +467,26 @@ test('P9-04b: a save error that names a style shows that style; Advanced picks t
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   expect(await screen.findByText(/Mine: Workflow: your ComfyUI/)).toBeTruthy();
   expect(screen.getByText('Editing style: Mine')).toBeTruthy();
+});
+
+test('P9-05b: kie.ai pictures: which model they use and the upload note; Z-Image asks for a model for pictures', async () => {
+  api.getImagineSettings.mockResolvedValue(withKie({ envKey: true, enabled: true, model: 'z-image' }));
+  api.saveImagineSettings.mockImplementation(async (body) => withKie({ envKey: true, ...body.engines.kie }));
+  render(<ImagineAdmin />);
+  const picker = await screen.findByLabelText('Model for pictures');
+  expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['None (pictures use ComfyUI, if it’s on)', 'Flux-2 Pro']);
+  expect(screen.getByRole('note', { name: 'Pictures on kie.ai' }).textContent).toBe('kie.ai won’t take pictures with this model.');
+  fireEvent.change(picker, { target: { value: 'flux-2/pro-text-to-image' } });
+  expect(screen.getByRole('note', { name: 'Pictures on kie.ai' }).textContent).toBe(
+    'Pictures (“Start from a picture” and Variations) use Flux-2 Pro image-to-image; it has no strength setting, so Variations are one button. For each one, DisGourd uploads that one picture to kie.ai’s file storage; kie.ai deletes it after 24 hours.'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.kie).toMatchObject({ model: 'z-image', pictureModel: 'flux-2/pro-text-to-image' }));
+  // A model with its own picture version: no picker, and the note names it.
+  fireEvent.change(screen.getByLabelText('kie.ai model'), { target: { value: 'flux-2/pro-text-to-image' } });
+  expect(screen.queryByLabelText('Model for pictures')).toBeNull();
+  expect(screen.getByRole('note', { name: 'Pictures on kie.ai' }).textContent).toMatch(/use Flux-2 Pro image-to-image; it has no strength/);
+  // Nano Banana here has no picture info: it can't take pictures, so the picker shows.
+  fireEvent.change(screen.getByLabelText('kie.ai model'), { target: { value: 'nano-banana-2' } });
+  expect(screen.getByLabelText('Model for pictures').value).toBe('flux-2/pro-text-to-image');
 });

@@ -356,7 +356,7 @@ export default function ChatPanel({
         onReport={(m) => setReportFor(m)}
         imagineAgain={imagine?.available ? imagine.run : null}
         imagineUpscale={!!imagine?.canUpscale}
-        imagineVary={!!imagine?.canVary}
+        imaginePictures={imagine?.pictures}
         onPin={canPin && onSetPinned ? onSetPinned : undefined}
         messages={messages}
         channel={channel}
