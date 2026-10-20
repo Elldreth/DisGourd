@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (not implemented directly)
 - **Phase:** 9
-- **State:** PLANNED
+- **State:** COMPLETE (#183–#186)
 - **Effort:** L in total: a M, b M, c S–M
 - **Depends on:** P2-20b, P3-24 – P3-36 (the ComfyUI engine, advanced settings, custom workflows, img2img, Anima)
 - **Requirement Source:** "one workflow first, presets later" (P3-34, 2026-10-19), picked up from the follow-up list. Design agreed with the owner on 2026-10-20:

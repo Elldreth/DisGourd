@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P9-04)
 - **Phase:** 9
-- **State:** REVIEW
+- **State:** COMPLETE (#186)
 - **Starting baseline:** main at f4485e7 (#185 merged)
 - **Effort:** S–M
 - **Depends on:** P9-04a, P9-04b
