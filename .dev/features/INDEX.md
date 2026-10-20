@@ -236,6 +236,11 @@ Kept as its own table so it doesn't collide with other sessions' rows.
 | P9-04a | Style presets: engine and server (migration v28) | 9 | COMPLETE | M | P9-04 design | engines/comfyui.js, imagine/index.js, runner, admin routes |
 | P9-04b | Style presets: Settings (Styles list and editor) | 9 | COMPLETE | M | P9-04a | ComfyPage.jsx, ImagineSettings.jsx, StylesSection.jsx, QualityPage.jsx |
 | P9-04c | Style presets: /imagine panel Style row and message text | 9 | COMPLETE | S–M | P9-04a, P9-04b | ImaginePanel.jsx, Composer, runner text |
-| P9-05 | kie.ai image-to-image (Container: a–b) | 9 | REVIEW | M–L | P2-20c, P3-36a, P3-36b | see children |
+| P9-05 | kie.ai image-to-image (Container: a–b) | 9 | COMPLETE | M–L | P2-20c, P3-36a, P3-36b | see children |
 | P9-05a | kie.ai pictures: engine, upload, routing, Variations (migration v29: an index) | 9 | COMPLETE | M | P9-05 design | engines/kie.js, imagine/index.js, runner, db MESSAGE_SELECT, migrations |
-| P9-05b | kie.ai pictures: panel Strength, Variation button, settings | 9 | REVIEW | S–M | P9-05a | ImaginePanel.jsx, ImagineAgain.jsx, MessageList, useChannelMessages, KiePage.jsx |
+| P9-05b | kie.ai pictures: panel Strength, Variation button, settings | 9 | COMPLETE | S–M | P9-05a | ImaginePanel.jsx, ImagineAgain.jsx, MessageList, useChannelMessages, KiePage.jsx |
+| P9-06 | Group DMs (Container: a–d) | 9 | PLANNED | L | DMs, P3-27, P6 | see children |
+| P9-06a | Conversations on the server (migration v30; no visible change) | 9 | READY | M–L | P9-06 design | migrations, db/index.js, routes/social.js, gateway/dm.js, push |
+| P9-06b | Conversations in the app (no visible change) | 9 | PLANNED | M | P9-06a | useDms.js, App.jsx, DmSidebar, DmPanel, notify.js, sw.js, QuickSwitcher, Search |
+| P9-06c | Group DMs on the server (create, add, remove, leave, rename, mute) | 9 | PLANNED | M | P9-06b | gateway/dm.js, db, push |
+| P9-06d | Group DMs in the app (picker, members dialog, rows, notices) | 9 | PLANNED | M | P9-06c | DmSidebar, DmPanel, people picker, GroupMembersDialog |
