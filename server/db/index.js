@@ -1449,13 +1449,17 @@ function getDmById(messageId) {
 }
 
 // Edit/delete a DM, but only if the requester is its author.
-function editDm(messageId, authorId, content) {
+const editDm = db.transaction((messageId, authorId, content) => {
+  const old = db.prepare('SELECT content, COALESCE(edited_at, created_at) AS writtenAt FROM dm_messages WHERE id = ? AND author_id = ?').get(messageId, authorId);
+  if (!old) return null;
   const editedAt = Date.now();
-  const changed = db.prepare(
-    'UPDATE dm_messages SET content = ?, edited_at = ? WHERE id = ? AND author_id = ?'
-  ).run(content, editedAt, messageId, authorId).changes;
-  return changed > 0 ? editedAt : null;
-}
+  // P3-27: keep the old text as a version, unless nothing changed.
+  if (old.content !== content) {
+    db.prepare('INSERT INTO dm_message_versions(message_id, content, written_at) VALUES (?, ?, ?)').run(messageId, old.content ?? '', old.writtenAt);
+  }
+  db.prepare('UPDATE dm_messages SET content = ?, edited_at = ? WHERE id = ?').run(content, editedAt, messageId);
+  return editedAt;
+});
 
 function deleteDm(messageId, authorId) {
   return db.prepare('DELETE FROM dm_messages WHERE id = ? AND author_id = ?')
@@ -1552,12 +1556,33 @@ function getCoMemberIds(userId) {
 
 // Edit a message, but only if the requester is its author. Returns the new
 // edited_at timestamp on success, or null if not found / not the author.
-function editMessage(messageId, authorId, content) {
+// The old text is kept as a version (P3-27), unless nothing changed.
+const editMessage = db.transaction((messageId, authorId, content) => {
+  const old = db.prepare(`
+    SELECT content, COALESCE(edited_at, created_at, CAST(strftime('%s', timestamp) AS INTEGER) * 1000) AS writtenAt
+    FROM messages WHERE id = ? AND author_id = ?
+  `).get(messageId, authorId);
+  if (!old) return null;
   const editedAt = Date.now();
-  const changed = db.prepare(
-    'UPDATE messages SET content = ?, edited_at = ? WHERE id = ? AND author_id = ?'
-  ).run(content, editedAt, messageId, authorId).changes;
-  return changed > 0 ? editedAt : null;
+  if (old.content !== content) {
+    db.prepare('INSERT INTO message_versions(message_id, content, written_at) VALUES (?, ?, ?)').run(messageId, old.content ?? '', old.writtenAt);
+  }
+  db.prepare('UPDATE messages SET content = ?, edited_at = ? WHERE id = ?').run(content, editedAt, messageId);
+  return editedAt;
+});
+
+// A message's earlier texts, oldest first, and its current one (P3-27).
+function getMessageVersions(messageId) {
+  const current = db.prepare('SELECT content, edited_at AS editedAt FROM messages WHERE id = ?').get(messageId);
+  if (!current) return null;
+  const versions = db.prepare('SELECT content, written_at AS writtenAt FROM message_versions WHERE message_id = ? ORDER BY id').all(messageId);
+  return { versions, current };
+}
+function getDmVersions(messageId) {
+  const current = db.prepare('SELECT content, edited_at AS editedAt FROM dm_messages WHERE id = ?').get(messageId);
+  if (!current) return null;
+  const versions = db.prepare('SELECT content, written_at AS writtenAt FROM dm_message_versions WHERE message_id = ? ORDER BY id').all(messageId);
+  return { versions, current };
 }
 
 // Delete a message, but only if the requester is its author.
@@ -2186,6 +2211,8 @@ module.exports = {
   deletePushEndpoint,
   getReplyTarget,
   deleteMessageById,
+  getMessageVersions,
+  getDmVersions,
   logModAction,
   getModLog,
   setMemberTimeout,

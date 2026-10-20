@@ -149,6 +149,13 @@ export function setServerImagine(space, { enabled, dailyLimit }) {
 export function hideChannelPreview(space, channel, id) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/preview`, { method: 'DELETE' });
 }
+// P3-27: a message's edit history.
+export function getMessageVersions(space, channel, id) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/versions`);
+}
+export function getDmVersions(username, id) {
+  return request(`/dms/${encodeURIComponent(username)}/messages/${id}/versions`);
+}
 export function hideDmPreview(username, id) {
   return request(`/dms/${encodeURIComponent(username)}/messages/${id}/preview`, { method: 'DELETE' });
 }

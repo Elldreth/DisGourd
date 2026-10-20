@@ -8,6 +8,7 @@ import Icon from './Icon.jsx';
 import EmptyState from './EmptyState.jsx';
 import { MessageToolbar, ActionMenu, ReactionPicker } from './MessageActions.jsx';
 import { formatTime, formatDay, formatAgo } from '../util.js';
+import EditHistoryDialog from './EditHistoryDialog.jsx';
 import { renderMarkdown } from '../markdown.jsx';
 import { newDivider } from '../newMessages.js';
 import { emojiLookup, parseEmojiToken } from '../emoji.js';
@@ -82,7 +83,7 @@ function mentionsUser(content, me) {
 // `history` (optional, see state/historyWindow.js) lets a reply's quote jump to
 // an original that isn't loaded, and, while that older window is showing
 // (`history.hasNewer`), offers newer pages and "Jump to present".
-const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, onHidePreview, imagineAgain = null, imagineUpscale = false, imagineVary = false, simple = false, emptyHeading, emptyBody, emptyIcon = null, emptyArt = null, topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label, emoji = [] }, ref) {
+const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, onHidePreview, imagineAgain = null, imagineUpscale = false, imagineVary = false, simple = false, emptyHeading, emptyBody, emptyIcon = null, emptyArt = null, topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label, emoji = [], loadVersions }, ref) {
   const bottomRef = useRef(null);
   const emojiMap = useMemo(() => emojiLookup(emoji), [emoji]);
   const emojiById = useMemo(() => new Map(emoji.map((e) => [e.id, e])), [emoji]);
@@ -91,6 +92,9 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
   // to its row, or to the composer when the composer's up arrow started it.
   const [editingId, setEditingId] = useState(null);
   const editReturn = useRef('row');
+  // The message whose edit history is open (P3-27).
+  const [historyId, setHistoryId] = useState(null);
+  const historyOf = historyId != null ? messages.find((x) => x.id === historyId) : null;
 
   // Edit your newest loaded message that has text (the composer's up arrow;
   // attachment-only messages are skipped). Returns whether there was one.
@@ -489,6 +493,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
                 setEditingId(row.m.id);
               }}
               onEndEdit={endEdit}
+              onShowHistory={loadVersions ? () => setHistoryId(row.m.id) : undefined}
             />
           )
         )}
@@ -507,13 +512,22 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
         )}
         <div ref={bottomRef} />
       </div>
+      {historyOf && (
+        <EditHistoryDialog
+          author={historyOf.author}
+          version={historyOf.editedAt}
+          load={() => loadVersions(historyOf)}
+          render={(text) => renderMarkdown(text, { me: currentUser, mentions: !simple, emoji: emojiMap })}
+          onClose={() => setHistoryId(null)}
+        />
+      )}
     </div>
   );
 });
 
 export default MessageList;
 
-function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onHidePreview, imagineAgain, imagineUpscale, imagineVary, onReact, onReply, onPin, onCreateThread, onOpenThread, threadBadge, emoji, emojiMap, emojiById, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit }) {
+function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onHidePreview, imagineAgain, imagineUpscale, imagineVary, onReact, onReply, onPin, onCreateThread, onOpenThread, threadBadge, emoji, emojiMap, emojiById, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit, onShowHistory }) {
   const [draft, setDraft] = useState(m.content || '');
   const editRef = useRef(null);
   // Entering edit mode (from this row or the composer's up arrow): start from
@@ -846,7 +860,20 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
             {m.content && (
               <div className="whitespace-pre-wrap wrap-break-word text-gray-200">
                 {renderMarkdown(m.content, { me: currentUser, mentions: !simple, emoji: emojiMap })}
-                {m.editedAt && <span className="ml-1 text-[10px] text-gray-500">(edited)</span>}
+                {m.editedAt &&
+                  (onShowHistory ? (
+                    // P3-27: opens the earlier versions.
+                    <button
+                      type="button"
+                      onClick={onShowHistory}
+                      title={`Edited ${formatDay(m.editedAt)} at ${formatTime(m.editedAt)} · show edit history`}
+                      className="ml-1 text-[10px] text-gray-500 hover:text-gray-300 hover:underline"
+                    >
+                      (edited)
+                    </button>
+                  ) : (
+                    <span className="ml-1 text-[10px] text-gray-500">(edited)</span>
+                  ))}
               </div>
             )}
             {hasAttachment && (
