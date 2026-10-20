@@ -78,45 +78,53 @@ export default function ServerRail({
           const count = unread[s.name] || 0;
           const mentionCount = mentions[s.name] || 0;
           return (
-            <button
-              key={s.name}
-              onClick={() => onSelect(s.name)}
-              title={`${s.name} — drag to reorder`}
-              aria-label={[s.name, active ? '' : unreadLabel({ unread: count, mentions: mentionCount }), s.openReports ? `${s.openReports} open report${s.openReports === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}
-              aria-current={active ? 'page' : undefined}
-              draggable
-              onDragStart={() => setDragIndex(i)}
-              onDragOver={(e) => { e.preventDefault(); if (dropIndex !== i) setDropIndex(i); }}
-              onDrop={() => handleDrop(i)}
-              onDragEnd={() => { setDragIndex(null); setDropIndex(null); }}
-              className={`group relative flex h-12 w-12 items-center justify-center overflow-hidden font-semibold text-white transition-all duration-150 hover:rounded-2xl active:scale-90 ${
-                active ? 'rounded-2xl' : 'rounded-[26px]'
-              } ${!s.icon && active ? 'bg-brand' : ''} ${dragIndex === i ? 'opacity-40' : ''} ${dropIndex === i && dragIndex !== i ? 'ring-2 ring-fg/70' : ''}`}
-              style={{ backgroundColor: s.icon || active ? undefined : colorForName(s.name) }}
-            >
-              <span
-                className={`absolute -left-3 z-10 w-1 rounded-r bg-fg transition-all ${
-                  active ? 'h-8' : count > 0 ? 'h-3' : 'h-0 group-hover:h-5'
-                }`}
-              />
-              {s.icon ? (
-                <img src={s.icon} alt={s.name} className="h-full w-full object-cover" />
-              ) : (
-                initials(s.name)
-              )}
+            // A wrapper, so the reports badge can sit on top of the icon
+            // instead of inside its rounded mask (P9-01).
+            <div key={s.name} className="relative shrink-0">
+              <button
+                onClick={() => onSelect(s.name)}
+                title={`${s.name} — drag to reorder`}
+                aria-label={[s.name, active ? '' : unreadLabel({ unread: count, mentions: mentionCount }), s.openReports ? `${s.openReports} open report${s.openReports === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}
+                aria-current={active ? 'page' : undefined}
+                draggable
+                onDragStart={() => setDragIndex(i)}
+                onDragOver={(e) => { e.preventDefault(); if (dropIndex !== i) setDropIndex(i); }}
+                onDrop={() => handleDrop(i)}
+                onDragEnd={() => { setDragIndex(null); setDropIndex(null); }}
+                className={`group relative flex h-12 w-12 items-center justify-center overflow-hidden font-semibold text-white transition-all duration-150 hover:rounded-2xl active:scale-90 ${
+                  active ? 'rounded-2xl' : 'rounded-[26px]'
+                } ${!s.icon && active ? 'bg-brand' : ''} ${dragIndex === i ? 'opacity-40' : ''} ${dropIndex === i && dragIndex !== i ? 'ring-2 ring-fg/70' : ''}`}
+                style={{ backgroundColor: s.icon || active ? undefined : colorForName(s.name) }}
+              >
+                <span
+                  className={`absolute -left-3 z-10 w-1 rounded-r bg-fg transition-all ${
+                    active ? 'h-8' : count > 0 ? 'h-3' : 'h-0 group-hover:h-5'
+                  }`}
+                />
+                {s.icon ? (
+                  <img src={s.icon} alt={s.name} className="h-full w-full object-cover" />
+                ) : (
+                  initials(s.name)
+                )}
+                {mentionCount > 0 && !active && (
+                  <span aria-hidden="true" className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
+                    {mentionCount > 99 ? '99+' : mentionCount}
+                  </span>
+                )}
+              </button>
               {s.openReports > 0 && (
-                // P9-01: open reports, for the people who handle them.
-                // Inside the corner: the button clips what hangs outside its rounded edge.
-                <span aria-hidden="true" className="absolute right-0 top-0 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-ink-900 bg-idle px-0.5 text-[10px] font-bold leading-none text-ink-900">
+                // P9-01: open reports, for the people who handle them, on top of
+                // the icon's top-right corner (outside the button, so its mask
+                // never clips it, selected or not).
+                <span
+                  aria-hidden="true"
+                  data-testid={`reports-badge-${s.name}`}
+                  className="pointer-events-none absolute -right-1.5 -top-1.5 z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-idle px-1 text-xs font-bold leading-none text-ink-900"
+                >
                   {s.openReports > 99 ? '99+' : s.openReports}
                 </span>
               )}
-              {mentionCount > 0 && !active && (
-                <span aria-hidden="true" className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
-                  {mentionCount > 99 ? '99+' : mentionCount}
-                </span>
-              )}
-            </button>
+            </div>
           );
         })}
 
