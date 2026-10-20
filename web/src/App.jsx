@@ -519,7 +519,7 @@ export default function App() {
             onInvite={sp.makeInvite}
             onDeleteServer={sp.deleteServer}
             onRenameServer={sp.renameServer}
-            hasIcon={!!(sp.activeSpace && sp.activeSpace.icon)}
+            serverIcon={sp.activeSpace?.icon || null}
             onChangeServerIcon={sp.changeServerIcon}
             onRemoveServerIcon={sp.removeServerIcon}
             onReframeServerIcon={sp.reframeServerIcon}

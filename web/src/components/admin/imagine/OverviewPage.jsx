@@ -105,7 +105,7 @@ export default function OverviewPage() {
                 </li>
               ))}
             </ul>
-            <p className="mt-1 text-gray-500">Change one in that server’s menu → Image generation (blank uses this default).</p>
+            <p className="mt-1 text-gray-500">Change one in that server’s Server settings → Image generation (blank uses this default).</p>
           </div>
         )}
       </div>

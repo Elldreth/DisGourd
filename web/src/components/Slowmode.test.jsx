@@ -14,7 +14,7 @@ const api = await import('../api.js');
 const { cooldownKey, cooldownLeft, startCooldown, useCooldown, clearCooldowns } = await import('../slowmode.js');
 const { default: Composer } = await import('./Composer.jsx');
 const { default: ChannelSettingsDialog } = await import('./ChannelSettingsDialog.jsx');
-const { describeEntry } = await import('./ModLogDialog.jsx');
+const { describeEntry } = await import('./server-settings/ModLogSection.jsx');
 
 beforeEach(() => {
   vi.clearAllMocks();

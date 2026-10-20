@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen, cleanup, within } from '@testing-library/react';
 import { SURFACES, contrast, readableColor, memberColor, nameColors } from './roleColor.js';
-import { ROLE_COLORS } from './components/RolesDialog.jsx';
+import { ROLE_COLORS } from './components/server-settings/RolesSection.jsx';
 import RoleName, { RoleColorsContext } from './components/RoleName.jsx';
 import MemberList from './components/MemberList.jsx';
 

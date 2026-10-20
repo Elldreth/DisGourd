@@ -241,7 +241,7 @@ test('the limit refusal says where the number is set (server, instance or ceilin
   const before0 = (await call('owner', 'GET', '/admin/imagine')).body;
   // The server's own limit.
   await call('owner', 'PATCH', `${S}/imagine`, { dailyLimit: used });
-  expect((await refusal()).error).toBe(`You’ve used all ${used} images for today. ${SPACE} sets its own limit of ${used} a day (server menu → Image generation).`);
+  expect((await refusal()).error).toBe(`You’ve used all ${used} images for today. ${SPACE} sets its own limit of ${used} a day (Server settings → Image generation).`);
   expect(await space()).toMatchObject({ dailyLimit: used, limitSource: 'server', instanceLimit: before0.dailyLimit });
   expect((await call('owner', 'GET', '/admin/imagine')).body.serverLimits).toEqual([{ space: SPACE, limit: used }]);
   // The instance default.

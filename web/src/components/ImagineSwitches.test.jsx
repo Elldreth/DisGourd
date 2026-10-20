@@ -1,7 +1,7 @@
 // P2-20d: the server's /imagine switch, the 18+ channel switch and tag, and
 // bot messages in the list.
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 vi.mock('../api.js', () => ({
   setServerImagine: vi.fn(async () => ({})),
@@ -12,7 +12,7 @@ vi.mock('../api.js', () => ({
 }));
 vi.mock('../audio.js', async (orig) => ({ ...(await orig()), displayCaptureSupported: () => true }));
 const api = await import('../api.js');
-const { default: ServerImagineDialog } = await import('./ServerImagineDialog.jsx');
+const { default: ServerImagineDialog } = await import('./server-settings/ImagineSection.jsx');
 const { default: ChannelSettingsDialog } = await import('./ChannelSettingsDialog.jsx');
 const { default: ChannelList } = await import('./ChannelList.jsx');
 const { default: MessageList } = await import('./MessageList.jsx');
@@ -28,17 +28,16 @@ const info = (over = {}) => ({ serverEnabled: false, enabled: false, canUse: tru
 test('server dialog: turning /imagine on with a limit, and blank meaning the instance default', async () => {
   const onSaved = vi.fn();
   render(<ServerImagineDialog space="Tx" info={info()} onClose={() => {}} onSaved={onSaved} />);
-  expect(screen.getByRole('dialog', { name: 'Image generation — Tx' })).toBeTruthy();
   expect(screen.getByLabelText('Images per person per day').getAttribute('placeholder')).toBe('Instance default (20)');
-  fireEvent.click(screen.getByRole('checkbox', { name: /Allow \/imagine/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('switch', { name: /Allow \/imagine/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.setServerImagine).toHaveBeenCalledWith('Tx', { enabled: true, dailyLimit: null }));
   expect(onSaved).toHaveBeenCalled();
   cleanup();
   render(<ServerImagineDialog space="Tx" info={info({ serverEnabled: true, ownLimit: 5 })} onClose={() => {}} />);
   expect(screen.getByLabelText('Images per person per day').value).toBe('5');
   fireEvent.change(screen.getByLabelText('Images per person per day'), { target: { value: '8' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.setServerImagine).toHaveBeenLastCalledWith('Tx', { enabled: true, dailyLimit: 8 }));
 });
 
@@ -46,7 +45,8 @@ test('server dialog: says so when the instance has no engine, and shows a save e
   api.setServerImagine.mockRejectedValueOnce(new Error('The daily limit is 1–100'));
   render(<ServerImagineDialog space="Tx" info={info({ engines: [] })} onClose={() => {}} />);
   expect(screen.getByText(/No image engine is set up on this instance yet/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.click(screen.getByRole('switch', { name: /Allow \/imagine/ })); // a change to save (P5-04)
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   expect((await screen.findByRole('alert')).textContent).toBe('The daily limit is 1–100');
 });
 
@@ -69,7 +69,7 @@ test('channel settings: the 18+ switch is saved only when it changed, and not of
   expect(screen.queryByRole('checkbox', { name: /Age-restricted/ })).toBeNull();
 });
 
-test('channel list: an 18+ tag on marked channels; Image generation in the server menu for managers', () => {
+test('channel list: an 18+ tag on marked channels; Image generation in Server settings for managers', () => {
   render(
     <ChannelList
       space="S" channels={['general', 'after-dark']} currentChannel="general" voiceChannels={[]} voiceParticipants={{}} activeVoiceParticipants={[]}
@@ -85,8 +85,10 @@ test('channel list: an 18+ tag on marked channels; Image generation in the serve
   expect(screen.getByRole('button', { name: /^after-dark/ }).className).toMatch(/(^| )pr-8( |$)/);
   fireEvent.keyDown(document.activeElement, { key: 'Escape' });
   fireEvent.click(screen.getByRole('button', { name: /^S$|S$/ }));
-  fireEvent.click(screen.getByRole('button', { name: /Image generation/ }));
-  expect(screen.getByRole('dialog', { name: 'Image generation — S' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: /Server settings/ }));
+  const settings = screen.getByRole('dialog', { name: 'Server settings' });
+  fireEvent.click(within(settings).getByRole('tab', { name: 'Image generation' }));
+  expect(within(settings).getByRole('switch', { name: /Allow \/imagine/ })).toBeTruthy();
 });
 
 const msg = (id, extra = {}) => ({ id, author: 'sandy', content: `m${id}`, timestamp: 1700000000000 + id * 1000, reactions: [], ...extra });

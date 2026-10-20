@@ -9,8 +9,8 @@ vi.mock('../api.js', () => ({
 }));
 const api = await import('../api.js');
 const { default: MemberList } = await import('./MemberList.jsx');
-const { default: BansDialog } = await import('./BansDialog.jsx');
-const { describeEntry } = await import('./ModLogDialog.jsx');
+const { default: BansSection } = await import('./server-settings/BansSection.jsx');
+const { describeEntry } = await import('./server-settings/ModLogSection.jsx');
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
@@ -71,8 +71,7 @@ test('the Bans list shows who, by whom and why; Unban removes the row', async ()
     { username: 'bob', by: 'ada', reason: 'spam links', createdAt: Date.now() },
     { username: 'eve', by: null, reason: null, createdAt: Date.now() },
   ] });
-  render(<BansDialog space="Tx" onClose={() => {}} />);
-  expect(screen.getByRole('dialog', { name: 'Bans — Tx' })).toBeTruthy();
+  render(<BansSection space="Tx" />);
   await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2));
   expect(screen.getAllByRole('listitem')[0].textContent).toContain('by ada');
   expect(screen.getAllByRole('listitem')[0].textContent).toContain('spam links');
@@ -83,7 +82,7 @@ test('the Bans list shows who, by whom and why; Unban removes the row', async ()
 
 test('an empty Bans list says so', async () => {
   api.getBans.mockResolvedValue({ bans: [] });
-  render(<BansDialog space="Tx" onClose={() => {}} />);
+  render(<BansSection space="Tx" />);
   expect(await screen.findByText('Nobody is banned.')).toBeTruthy();
 });
 

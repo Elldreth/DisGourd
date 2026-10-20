@@ -6,12 +6,9 @@ import IconButton from './IconButton.jsx';
 import { unreadLabel } from '../util.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import UserFooter from './UserFooter.jsx';
-import RolesDialog from './RolesDialog.jsx';
-import ModLogDialog, { MOD_LOG_ABILITIES } from './ModLogDialog.jsx';
-import BansDialog from './BansDialog.jsx';
-import ServerImagineDialog from './ServerImagineDialog.jsx';
+import ServerSettingsDialog from './server-settings/ServerSettingsDialog.jsx';
+import { MOD_LOG_ABILITIES } from './server-settings/ModLogSection.jsx';
 import ChannelSettingsDialog from './ChannelSettingsDialog.jsx';
-import ServerEmojiDialog from './ServerEmojiDialog.jsx';
 import { displayCaptureSupported } from '../audio.js';
 import * as api from '../api.js';
 import {
@@ -60,7 +57,7 @@ export default function ChannelList({
   onInvite,
   onDeleteServer,
   onRenameServer,
-  hasIcon,
+  serverIcon = null, // the icon's URL, for Server settings › Overview
   onChangeServerIcon,
   onRemoveServerIcon,
   onReframeServerIcon,
@@ -93,37 +90,29 @@ export default function ChannelList({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef(null);
-  const [confirmDeleteServer, setConfirmDeleteServer] = useState(false);
   // Closing the server menu by picking an item puts focus back on its button,
   // so a dialog the item opens has somewhere to return focus to.
   const closeMenu = () => {
     setMenuOpen(false);
     menuButtonRef.current?.focus();
   };
-  const [permsOpen, setPermsOpen] = useState(false);
-  const [modLogOpen, setModLogOpen] = useState(false);
-  const [bansOpen, setBansOpen] = useState(false);
   const canBan = !!isOwner || abilities.includes('ban_members');
   const canViewModLog = !!isOwner || MOD_LOG_ABILITIES.some((a) => abilities.includes(a));
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [imagineOpen, setImagineOpen] = useState(false);
+  // Server settings (P5-04): which sections I may see; the menu offers the
+  // window when there's at least one.
+  const settingsCan = {
+    owner: !!isOwner,
+    overview: !!canManage || !!isOwner,
+    emoji: !!canManageEmoji,
+    roles: !!canManageRoles,
+    imagine: !!canManage && !!imagineInfo,
+    modLog: canViewModLog,
+    bans: canBan,
+  };
+  const anySettings = Object.entries(settingsCan).some(([k, v]) => k !== 'owner' && v);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [channelSettings, setChannelSettings] = useState(null); // channel name or null
   const gearRefs = useRef({}); // channel -> its settings gear, to return focus to
-  const [renaming, setRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState('');
-  const iconInputRef = useRef(null);
-
-  function startRename() {
-    setRenameValue(space);
-    setRenaming(true);
-    setMenuOpen(false);
-  }
-  function submitRename(e) {
-    e.preventDefault();
-    const next = renameValue.trim();
-    if (next && next !== space) onRenameServer(next);
-    setRenaming(false);
-  }
 
   // ---- Categories (P3-25b) ----
   const groups = buildGroups(categories, channelMeta, channels, voiceChannels);
@@ -421,29 +410,15 @@ export default function ChannelList({
     <nav ref={navRef} aria-label="Channels" className="flex w-60 flex-col border-r border-ink-900/50 bg-ink-800">
       <header className="relative flex h-12 items-center gap-2 border-b border-ink-900/60 px-2 shadow-xs shadow-black/20">
         {/* Server identity + the active highlight live in the left rail; the header
-            just needs the name and its menu (which holds change/reposition icon). */}
-        {renaming ? (
-          <form onSubmit={submitRename} className="flex-1">
-            <input
-              autoFocus
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={() => setRenaming(false)}
-              onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
-              maxLength={60}
-              className="w-full rounded-sm bg-ink-900 px-2 py-1 text-sm font-bold outline-hidden ring-1 ring-brand-hi"
-            />
-          </form>
-        ) : (
-          <button
-            ref={menuButtonRef}
-            onClick={() => space && setMenuOpen((v) => !v)}
-            className="flex h-full flex-1 items-center justify-between rounded-sm px-2 hover:bg-ink-700/40"
-          >
-            <h2 className="truncate font-bold">{space || 'No server'}</h2>
-            {space && <Icon name={menuOpen ? 'x' : 'chevronDown'} size={16} className="text-gray-400" />}
-          </button>
-        )}
+            just needs the name and its menu (the rest is in Server settings, P5-04). */}
+        <button
+          ref={menuButtonRef}
+          onClick={() => space && setMenuOpen((v) => !v)}
+          className="flex h-full flex-1 items-center justify-between rounded-sm px-2 hover:bg-ink-700/40"
+        >
+          <h2 className="truncate font-bold">{space || 'No server'}</h2>
+          {space && <Icon name={menuOpen ? 'x' : 'chevronDown'} size={16} className="text-gray-400" />}
+        </button>
 
         {menuOpen && space && (
           <>
@@ -477,119 +452,22 @@ export default function ChannelList({
                   <Icon name="plus" size={16} /> Create category
                 </MenuItem>
               )}
-              {canManage && (
-                <MenuItem onClick={startRename}>
-                  <Icon name="edit" size={16} /> Rename server
-                </MenuItem>
-              )}
-              {canManage && (
-                <MenuItem
-                  onClick={() => {
-                    closeMenu();
-                    iconInputRef.current?.click();
-                  }}
-                >
-                  <Icon name="image" size={16} /> {hasIcon ? 'Change icon' : 'Upload icon'}
-                </MenuItem>
-              )}
-              {canManage && canReframeIcon && (
-                <MenuItem
-                  onClick={() => {
-                    closeMenu();
-                    onReframeServerIcon();
-                  }}
-                >
-                  <Icon name="image" size={16} /> Reposition icon
-                </MenuItem>
-              )}
-              {canManage && hasIcon && (
-                <MenuItem
-                  onClick={() => {
-                    closeMenu();
-                    onRemoveServerIcon();
-                  }}
-                >
-                  <Icon name="ban" size={16} /> Remove icon
-                </MenuItem>
-              )}
-              {canManageEmoji && (
-                <MenuItem
-                  onClick={() => {
-                    closeMenu();
-                    setEmojiOpen(true);
-                  }}
-                >
-                  <Icon name="smile" size={16} /> Server emoji
-                </MenuItem>
-              )}
-              {canManage && imagineInfo && (
-                <MenuItem
-                  onClick={() => {
-                    closeMenu();
-                    setImagineOpen(true);
-                  }}
-                >
-                  <Icon name="image" size={16} /> Image generation
-                </MenuItem>
-              )}
-              {canManageRoles && (
-                <MenuItem
-                  onClick={() => {
-                    closeMenu();
-                    setPermsOpen(true);
-                  }}
-                >
-                  <Icon name="shield" size={16} /> Roles
-                </MenuItem>
-              )}
-              {canViewModLog && (
-                <MenuItem
-                  onClick={() => {
-                    closeMenu();
-                    setModLogOpen(true);
-                  }}
-                >
-                  <Icon name="log" size={16} /> Moderation log
-                </MenuItem>
-              )}
-              {canBan && (
-                <MenuItem
-                  onClick={() => {
-                    closeMenu();
-                    setBansOpen(true);
-                  }}
-                >
-                  <Icon name="ban" size={16} /> Bans
-                </MenuItem>
-              )}
-              {isOwner && (
+              {anySettings && (
                 <>
                   <div role="separator" aria-orientation="horizontal" className="my-1 h-px bg-ink-500/60" />
                   <MenuItem
-                    danger
                     onClick={() => {
                       closeMenu();
-                      setConfirmDeleteServer(true);
+                      setSettingsOpen(true);
                     }}
                   >
-                    <Icon name="trash" size={16} /> Delete server
+                    <Icon name="settings" size={16} /> Server settings
                   </MenuItem>
                 </>
               )}
             </div>
           </>
         )}
-        <input
-          ref={iconInputRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (file) onChangeServerIcon(file);
-          }}
-        />
       </header>
 
       <div
@@ -854,39 +732,26 @@ export default function ChannelList({
         onLogout={onLogout}
       />
 
-      {imagineOpen && (
-        <ServerImagineDialog space={space} info={imagineInfo} onClose={() => setImagineOpen(false)} onSaved={onPermsChanged} />
-      )}
-      {emojiOpen && (
-        <ServerEmojiDialog space={space} emoji={emoji} onClose={() => setEmojiOpen(false)} onChanged={onPermsChanged} />
-      )}
-      {bansOpen && <BansDialog space={space} onClose={() => setBansOpen(false)} />}
-      {modLogOpen && <ModLogDialog space={space} members={members} onClose={() => setModLogOpen(false)} />}
-      {permsOpen && (
-        <RolesDialog
+      {settingsOpen && space && (
+        <ServerSettingsDialog
           space={space}
-          roles={roles}
-          members={members}
-          currentUser={user}
-          isOwner={isOwner}
-          myPosition={myPosition}
-          abilities={abilities}
-          onClose={() => setPermsOpen(false)}
-          onChanged={onRolesChanged}
-        />
-      )}
-      {confirmDeleteServer && (
-        <ConfirmDialog
-          title={`Delete ${space}?`}
-          body="This deletes the server, its channels and all messages for everyone. It can't be undone."
-          confirmLabel="Delete server"
-          danger
-          requireText={space}
-          onCancel={() => setConfirmDeleteServer(false)}
-          onConfirm={() => {
-            setConfirmDeleteServer(false);
-            onDeleteServer();
+          can={settingsCan}
+          initialSection={typeof settingsOpen === 'string' ? settingsOpen : undefined}
+          onClose={() => setSettingsOpen(false)}
+          overview={{
+            icon: serverIcon,
+            canEdit: !!canManage,
+            canReframeIcon,
+            onRename: onRenameServer,
+            onChangeIcon: onChangeServerIcon,
+            onRemoveIcon: onRemoveServerIcon,
+            onReframeIcon: onReframeServerIcon,
+            onDeleteServer,
           }}
+          emoji={{ emoji, onChanged: onPermsChanged }}
+          roles={{ roles, members, currentUser: user, isOwner, myPosition, abilities, onChanged: onRolesChanged }}
+          imagine={{ info: imagineInfo, onSaved: onPermsChanged }}
+          modLog={{ members }}
         />
       )}
       {channelSettings && (
