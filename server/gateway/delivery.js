@@ -18,12 +18,24 @@ function sendToUser(userId, frameStr) {
 
 // Close the user's sockets that signed in with an older token version (a
 // password change, P6-02), telling them why first.
-function endStaleSessions(userId, version) {
+function endStaleSessions(userId, version, reason = 'password_changed') {
   const set = userClients[userId];
   if (!set) return;
-  const frame = JSON.stringify({ type: 'signed_out', reason: 'password_changed' });
+  const frame = JSON.stringify({ type: 'signed_out', reason });
   for (const ws of [...set]) {
     if (ws.tokenVersion === version) continue;
+    if (ws.readyState === WebSocket.OPEN) ws.send(frame);
+    ws.close(4001, 'Signed out');
+  }
+}
+
+// One device was signed out from the devices list (P9-03): close its sockets.
+function endSession(userId, sid) {
+  const set = userClients[userId];
+  if (!set) return;
+  const frame = JSON.stringify({ type: 'signed_out', reason: 'device' });
+  for (const ws of [...set]) {
+    if (ws.sid !== sid) continue;
     if (ws.readyState === WebSocket.OPEN) ws.send(frame);
     ws.close(4001, 'Signed out');
   }
@@ -79,4 +91,4 @@ function tellFollow(userId, space, thread, followed) {
   }));
 }
 
-module.exports = { userClients, sendToUser, endStaleSessions, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus, publicPresence, tellFollow };
+module.exports = { userClients, sendToUser, endStaleSessions, endSession, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus, publicPresence, tellFollow };

@@ -14,11 +14,12 @@ const db = () => require('../db');
 
 // Tokens carry the user's token version (P6-02); a password change bumps it,
 // so older tokens stop verifying. Tokens from before v25 have none: 0.
-function createToken(userId, username) {
+// Tokens also carry the signed-in device's session id (`sid`, P9-03).
+function createToken(userId, username, sid) {
   const now = Math.floor(Date.now() / 1000);
   const header = base64urlJson({ alg: 'HS256', typ: 'JWT' });
   const ver = db().getTokenVersion(userId) || 0;
-  const payload = base64urlJson({ sub: userId, name: username, ver, iat: now, exp: now + TOKEN_TTL_SECONDS });
+  const payload = base64urlJson({ sub: userId, name: username, ver, ...(sid ? { sid } : {}), iat: now, exp: now + TOKEN_TTL_SECONDS });
   const data = `${header}.${payload}`;
   const signature = crypto.createHmac('sha256', config.jwtSecret).update(data).digest('base64url');
   return `${data}.${signature}`;
@@ -38,20 +39,32 @@ function verifyToken(token) {
     // Signed out by a password change, or the account is gone.
     const current = db().getTokenVersion(payload.sub);
     if (current === null || (payload.ver || 0) !== current) return null;
+    // Signed out on the devices list (P9-03): its session is gone. Tokens
+    // from before sessions existed have no sid and run until they expire.
+    if (payload.sid) {
+      const session = db().getSession(payload.sid);
+      if (!session || Number(session.userId) !== Number(payload.sub)) return null;
+      db().touchSession(session);
+    }
     return payload;
   } catch {
     return null;
   }
 }
 
-function authUserId(req, parsedUrl) {
+// The verified token's payload for a request ({ sub, sid?, … }), or null.
+function authPayload(req, parsedUrl) {
   const auth = req.headers['authorization'];
   const token = auth && auth.startsWith('Bearer ')
     ? auth.slice(7)
     : (parsedUrl.query && parsedUrl.query.token);
   if (!token) return null;
-  const payload = verifyToken(token);
+  return verifyToken(token);
+}
+
+function authUserId(req, parsedUrl) {
+  const payload = authPayload(req, parsedUrl);
   return payload ? payload.sub : null;
 }
 
-module.exports = { TOKEN_TTL_SECONDS, createToken, verifyToken, authUserId };
+module.exports = { TOKEN_TTL_SECONDS, createToken, verifyToken, authUserId, authPayload };

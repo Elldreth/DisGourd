@@ -50,3 +50,38 @@ test('on another device the check fails: the token is dropped and the app signs 
   expect(api.getToken()).toBe('');
   expect(onUnauthorized).toHaveBeenCalled();
 });
+
+// P9-03: signing out the other devices swaps this device's token the same way.
+// A request that went out with the old token during the swap (the open devices
+// list reloading on "sessions_changed") waits and retries, instead of signing
+// this device out.
+test('a request refused with the old token during a swap retries with the new one', async () => {
+  let finish;
+  const seen = [];
+  vi.stubGlobal('fetch', vi.fn((url, init) => {
+    seen.push([url, init.headers.Authorization]);
+    if (url === '/me/sessions/sign-out-others') return new Promise((r) => { finish = () => r(reply(200, { token: 'new.token' })); });
+    return Promise.resolve(init.headers.Authorization === 'Bearer new.token' ? reply(200, { sessions: [] }) : reply(401, { error: 'Unauthorized' }));
+  }));
+  const onUnauthorized = vi.fn();
+  api.setUnauthorizedHandler(onUnauthorized);
+  const swap = api.signOutOtherSessions();
+  const list = api.getSessions(); // goes out with old.token and is refused
+  await new Promise((r) => setTimeout(r, 0));
+  finish();
+  await swap;
+  expect(await list).toEqual({ sessions: [] });
+  expect(seen.filter(([u]) => u === '/me/sessions').map(([, a]) => a)).toEqual(['Bearer old.token', 'Bearer new.token']);
+  expect(onUnauthorized).not.toHaveBeenCalled();
+  expect(api.getToken()).toBe('new.token');
+});
+
+test('a refusal with no swap in flight still signs out, and only once', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => reply(401, { error: 'Unauthorized' })));
+  const onUnauthorized = vi.fn();
+  api.setUnauthorizedHandler(onUnauthorized);
+  await expect(api.getSessions()).rejects.toThrow('Unauthorized');
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  expect(api.getToken()).toBe('');
+});

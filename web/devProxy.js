@@ -7,6 +7,7 @@
 export const apiPaths = [
   '/register',
   '/login',
+  '/logout',
   '/auth-info',
   '/me',
   '/uploads',

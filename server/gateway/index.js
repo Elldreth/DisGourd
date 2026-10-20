@@ -90,6 +90,7 @@ function attachGateway(httpServer, wss) {
     wss.handleUpgrade(request, socket, head, (ws) => {
       ws.userId = payload.sub;
       ws.tokenVersion = payload.ver || 0;
+      ws.sid = payload.sid || null; // P9-03: which signed-in device
       ws.focus = null;
       ws.threadFocus = null;
       ws.isAlive = true;

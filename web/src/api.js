@@ -42,6 +42,32 @@ export function changePassword(currentPassword, newPassword) {
   return pending;
 }
 
+// Signed-in devices (P9-03).
+export function getSessions() {
+  return request('/me/sessions');
+}
+export function signOutSession(id) {
+  return request(`/me/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+// Like a password change: this device's own socket gets "signed_out" too, so
+// the fresh token is stored first and stillSignedIn waits for it.
+export function signOutOtherSessions() {
+  const pending = request('/me/sessions/sign-out-others', { method: 'POST' }).then((res) => {
+    if (res?.token) setToken(res.token);
+    return res;
+  });
+  passwordChange = pending;
+  pending.catch(() => {}).finally(() => {
+    if (passwordChange === pending) passwordChange = null;
+  });
+  return pending;
+}
+// End this device's session on the server (the token is read now, before
+// the app forgets it).
+export function logout() {
+  return request('/logout', { method: 'POST' });
+}
+
 // After a "signed_out" frame: is the stored token still accepted? A 401 here
 // clears it and runs the unauthorized handler (back to the sign-in screen).
 export async function stillSignedIn() {
@@ -62,13 +88,11 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }
 
-async function request(path, { method = 'GET', body, auth = true, headers = {} } = {}) {
+async function request(path, { method = 'GET', body, auth = true, headers = {}, retried = false } = {}) {
   const finalHeaders = { ...headers };
   if (body !== undefined) finalHeaders['Content-Type'] = 'application/json';
-  if (auth) {
-    const token = getToken();
-    if (token) finalHeaders['Authorization'] = `Bearer ${token}`;
-  }
+  const sent = auth ? getToken() : '';
+  if (sent) finalHeaders['Authorization'] = `Bearer ${sent}`;
   const res = await fetch(path, {
     method,
     headers: finalHeaders,
@@ -77,9 +101,16 @@ async function request(path, { method = 'GET', body, auth = true, headers = {} }
   const text = await res.text();
   const data = text ? safeJson(text) : null;
   if (res.status === 401 && auth && getToken()) {
+    // This device's token was just swapped (a password change, or signing out
+    // the other devices, P9-03): a request that went out with the old one is
+    // refused, so wait for the new one and try once more instead of signing out.
+    if (passwordChange) await passwordChange.catch(() => {});
+    if (!retried && getToken() && getToken() !== sent) return request(path, { method, body, auth, headers, retried: true });
     // Our token is no longer accepted — drop it and let the app return to login.
-    clearToken();
-    if (onUnauthorized) onUnauthorized();
+    if (getToken() === sent) {
+      clearToken();
+      if (onUnauthorized) onUnauthorized();
+    }
   }
   if (!res.ok) {
     const message = (data && data.error) || res.statusText || 'Request failed';
