@@ -675,6 +675,18 @@ function removeMember(spaceId, userId) {
     .run(spaceId, userId).changes > 0;
 }
 
+// Leave a server (P6-01): the membership (roles go with it by cascade), plus
+// this user's read markers and thread follows there, in one transaction.
+function leaveSpace(spaceId, userId) {
+  return db.transaction(() => {
+    const space = db.prepare('SELECT name FROM spaces WHERE id = ?').get(spaceId);
+    if (space) db.prepare('DELETE FROM read_state WHERE user_id = ? AND space = ?').run(userId, space.name);
+    db.prepare(`DELETE FROM thread_follows WHERE user_id = ?
+      AND channel_id IN (SELECT id FROM channels WHERE space_id = ?)`).run(userId, spaceId);
+    return removeMember(spaceId, userId);
+  })();
+}
+
 function getMemberRole(spaceId, userId) {
   const row = db.prepare('SELECT role FROM space_members WHERE space_id = ? AND user_id = ?').get(spaceId, userId);
   return row ? row.role : null;
@@ -2134,6 +2146,7 @@ module.exports = {
   createSpaceOwned,
   addMember,
   removeMember,
+  leaveSpace,
   getMemberRole,
   setMemberRole,
   isMember,

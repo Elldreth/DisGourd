@@ -313,6 +313,16 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       // The gateway also broadcasts space_deleted; refresh proactively.
       goToFirst(await loadSpaces());
     }),
+    // Leave (P6-01): then open the server at the top of the rail, or none.
+    leaveServer: attempt('Could not leave the server', async () => {
+      if (!currentSpace) return;
+      const left = currentSpace;
+      await api.leaveSpace(left);
+      const order = loadServerOrder(myId).filter((n) => n !== left);
+      saveServerOrder(myId, order);
+      setServerOrder(order);
+      goToFirst(applyServerOrder(await loadSpaces(), order));
+    }),
     changeServerIcon: (file) => {
       if (!currentSpace || !file) return;
       if (!file.type.startsWith('image/')) {

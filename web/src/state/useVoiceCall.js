@@ -50,7 +50,7 @@ export function useVoiceCall({ send, myId }) {
     },
     // Removed or banned from the call's server: the server already dropped us.
     voice_ended: (f) => {
-      const why = f.reason === 'banned' ? 'you were banned from' : 'you were removed from';
+      const why = f.reason === 'banned' ? 'you were banned from' : f.reason === 'left' ? 'you left' : 'you were removed from';
       v() && v().endCall(`Your call in #${f.channel} ended: ${why} ${f.space}.`);
     },
     voice_peer_joined: (f) => v() && v().handlePeerJoined(f.peer),

@@ -175,6 +175,17 @@ const routes = [
         return sendJson(res, 200, { ok: true });
       }
 
+      // DELETE /spaces/:name/members/me — leave the server (P6-01). Usernames are
+      // at least 3 characters, so "me" never names a member. The owner can't leave.
+      if (pathSegments[2] === 'members' && pathSegments[3] === 'me' && pathSegments.length === 4 && req.method === 'DELETE') {
+        if (access.owner) return sendJson(res, 400, { error: "The owner can't leave the server. Delete it or hand it over first." });
+        voiceEject(userId, spaceName, 'left');
+        db.leaveSpace(space.id, userId);
+        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
+        sendToUser(userId, JSON.stringify({ type: 'space_left', space: spaceName }));
+        return sendJson(res, 200, { ok: true });
+      }
+
       // DELETE /spaces/:name/members/:username — remove a member (owner: anyone but
       // the owner; admin: members only)
       if (pathSegments[2] === 'members' && pathSegments[3] && pathSegments.length === 4 && req.method === 'DELETE') {

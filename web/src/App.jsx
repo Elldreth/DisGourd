@@ -524,6 +524,7 @@ export default function App() {
             isOwner={sp.role === 'owner'}
             onInvite={sp.makeInvite}
             onDeleteServer={sp.deleteServer}
+            onLeaveServer={sp.leaveServer}
             onRenameServer={sp.renameServer}
             serverIcon={sp.activeSpace?.icon || null}
             onChangeServerIcon={sp.changeServerIcon}

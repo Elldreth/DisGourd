@@ -56,6 +56,7 @@ export default function ChannelList({
   isOwner,
   onInvite,
   onDeleteServer,
+  onLeaveServer,
   onRenameServer,
   serverIcon = null, // the icon's URL, for Server settings › Overview
   onChangeServerIcon,
@@ -133,6 +134,7 @@ export default function ChannelList({
   const [catMenu, setCatMenu] = useState(null);
   const [renamingCat, setRenamingCat] = useState(null);
   const [confirmDeleteCat, setConfirmDeleteCat] = useState(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const [arrangeError, setArrangeError] = useState('');
   const [catPerms, setCatPerms] = useState(null); // { id, name }: its permissions dialog (P3-25d)
   const [confirmMove, setConfirmMove] = useState(null); // { next, names, category } (P3-25d)
@@ -462,6 +464,20 @@ export default function ChannelList({
                     }}
                   >
                     <Icon name="settings" size={16} /> Server settings
+                  </MenuItem>
+                </>
+              )}
+              {!isOwner && onLeaveServer && (
+                <>
+                  <div role="separator" aria-orientation="horizontal" className="my-1 h-px bg-ink-500/60" />
+                  <MenuItem
+                    danger
+                    onClick={() => {
+                      closeMenu();
+                      setConfirmLeave(true);
+                    }}
+                  >
+                    <Icon name="logout" size={16} /> Leave server
                   </MenuItem>
                 </>
               )}
@@ -801,6 +817,19 @@ export default function ChannelList({
             const { next } = confirmMove;
             setConfirmMove(null);
             arrange(next, { confirmed: true });
+          }}
+        />
+      )}
+      {confirmLeave && (
+        <ConfirmDialog
+          title={`Leave ${space}?`}
+          body="You won't be able to rejoin unless you get a new invite."
+          confirmLabel="Leave server"
+          danger
+          onCancel={() => setConfirmLeave(false)}
+          onConfirm={() => {
+            setConfirmLeave(false);
+            onLeaveServer();
           }}
         />
       )}

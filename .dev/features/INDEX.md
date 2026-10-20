@@ -142,6 +142,9 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P5-04 | Server settings window and a short server menu | 5 | COMPLETE | L | P5-02 | components/server-settings/* (new), ChannelList.jsx, Roles/ModLog/Bans/Emoji/ServerImagine dialogs |
 | P5-05 | Channel settings tabs and member menu header | 5 | COMPLETE | M | P5-02, P5-01 | ChannelSettingsDialog.jsx, MemberList.jsx |
 | P5-06 | Sound set, image-generation art, shorter voice warning | 5 | COMPLETE | M | P5-03 (art only) | sounds.js, web/public/sounds/*, ChannelList.jsx |
+| P6-01 | Leave server | 6 | REVIEW | S | none | routes/spaces.js, db/index.js, useSpaces.js, ChannelList.jsx |
+| P6-02 | Change password (signs out other devices; migration v25) | 6 | READY | M | none | routes/auth.js, auth/tokens.js, gateway, ProfileDialog.jsx, ChangePasswordDialog.jsx (new) |
+| P6-03 | Rename channel | 6 | READY | M | none (after P6-01: shared files) | routes/spaces.js, db/index.js, gateway/voice.js, useSpaces.js, ChannelSettingsDialog.jsx, ModLogSection.jsx |
 
 ## Dependency map (hard dependencies)
 
@@ -196,6 +199,7 @@ Units inside a lane run **sequentially**, because they share hot files. Differen
 | **F. Independent** | P2-11, P3-13, P3-07, P2-16 → (later, in a quiet window) P2-17 |
 | **G. Shine (Phase 4 polish, one at a time: shared files)** | P4-01 → P4-02 → P4-03 → P4-04 → P4-05 → P4-06 → P4-07 (order is the review's priority; the user picks the first) |
 | **H. Settings round 2 (one at a time: shared files)** | P5-01 → P5-02 → P5-03 → P5-04 → P5-05 → P5-06 (the owner agreed the map and all five recommendations on 2026-10-19) |
+| **I. Missing actions (Phase 6)** | P6-01 → P6-03 (shared files); P6-02 alongside either. Details agreed with the owner on 2026-10-20: leaving isn't logged; a password change signs out other devices; a voice channel rename keeps people connected; renames are logged. |
 
 Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at the same time as another lane-C unit.
 
