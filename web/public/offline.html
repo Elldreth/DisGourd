@@ -15,7 +15,7 @@
         text-align: center; padding: 24px; box-sizing: border-box;
       }
       main { max-width: 22rem; }
-      .mark { width: 72px; height: 72px; margin: 0 auto 20px; display: block; }
+      .mark { width: 96px; height: 96px; margin: 0 auto 20px; display: block; }
       h1 { font-size: 1.35rem; margin: 0 0 8px; letter-spacing: -0.01em; }
       p { margin: 0 0 20px; color: #a9a3bd; line-height: 1.5; }
       button {
@@ -27,11 +27,8 @@
   </head>
   <body>
     <main>
-      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
-        <path fill="#9466FF" d="M32 14c-6 0-9 5-9 10 0 3 1 5 1 7-5 3-9 8-9 14 0 9 8 15 17 15s17-6 17-15c0-6-4-11-9-14 0-2 1-4 1-7 0-5-3-10-9-10z" />
-        <path fill="#B8F34A" d="M33 3c6 0 10 4 10 9-5 0-9-3-10-9z" />
-        <path stroke="#B8F34A" stroke-width="2.6" stroke-linecap="round" fill="none" d="M32 14c0-4 1-8 1-11" />
-      </svg>
+      <!-- The mascot, asleep (P8; drawn from web/src/mascotParts.js). -->
+      <svg class="mark" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="-12 -4 120 108" aria-hidden="true"><path d="M44.5 24.5 Q44.5 21 48 21 H52 Q55.5 21 55.5 24.5 V26 C55.5 29.5 63.5 31 63.5 39.5 C63.5 45.5 59 47.5 59 51 C59 54 74 57.5 74 71.5 C74 84 63.5 92 50 92 C45.6 92 41.5 91.2 38 89.6 L23.5 97.5 L29.6 84.6 C27.3 80.9 26 76.4 26 71.5 C26 57.5 41 54 41 51 C41 47.5 36.5 45.5 36.5 39.5 C36.5 31 44.5 29.5 44.5 26 Z M37.4 80.4 C35.2 77.9 34 74.9 34 71.6 C34 64.6 41.2 59.6 50 59.6 C58.8 59.6 66 64.6 66 71.6 C66 78.6 58.8 83.8 50 83.8 C46.3 83.8 42.9 83 40.2 81.5 L33.6 85.6 Z" fill="#9466FF" fill-rule="evenodd"/><path d="M49.2 21 C48.8 17.2 46.8 14.3 43.6 12.6" fill="none" stroke="#B8F34A" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M51.6 20.2 C52.4 13.4 57.6 9.2 67.8 9.4 C67.6 16 62.2 20.6 51.6 20.2 Z M54.4 18.6 L64.2 12.4 L55.4 19.4 Z" fill="#B8F34A" fill-rule="evenodd"/><path d="M45.5 66 h9 l-9 11 h9" fill="none" stroke="#B8F34A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M73 36 h6 l-6 7 h6" fill="none" stroke="#B8F34A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M83 22 h8 l-8 9 h8" fill="none" stroke="#B8F34A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <h1>You’re offline</h1>
       <p>DisGourd can’t reach your server right now. Your messages will be here when you’re back online.</p>
       <button type="button" onclick="location.reload()">Try again</button>

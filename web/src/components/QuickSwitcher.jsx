@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Modal from './Modal.jsx';
+import Mascot from './Mascot.jsx';
 
 // Ctrl+K "go anywhere": channels in every server, the servers themselves and
 // your DMs. Items:
@@ -175,7 +176,8 @@ export default function QuickSwitcher({ items, recent, onPick, onClose, mode = '
         ))}
       </ul>
       {results.length === 0 && (
-        <p className="p-4 text-center text-sm text-gray-500">
+        <p className="flex flex-col items-center gap-2 p-4 text-center text-sm text-gray-500">
+          <Mascot pose="confused" size={48} />
           {people ? 'No one by that name in your servers. People you share a server with show up here.' : 'No matches. Try another name.'}
         </p>
       )}

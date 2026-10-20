@@ -61,6 +61,7 @@ export default function ChannelList({
   serverIcon = null, // the icon's URL, for Server settings › Overview
   onChangeServerIcon,
   onRemoveServerIcon,
+  onUseServerGlyph, // P8: a ready-made icon's PNG file
   onReframeServerIcon,
   canReframeIcon,
   role,
@@ -772,6 +773,7 @@ export default function ChannelList({
             onRename: onRenameServer,
             onChangeIcon: onChangeServerIcon,
             onRemoveIcon: onRemoveServerIcon,
+            onUseGlyph: onUseServerGlyph,
             onReframeIcon: onReframeServerIcon,
             onDeleteServer,
           }}

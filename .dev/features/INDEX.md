@@ -222,3 +222,10 @@ All closed (2026-10-20, P7-05), each with what was built or decided:
 - ~~P2-21: bitset permissions versus named thresholds.~~ Named permissions per role (the owner's choice, 2026-10-18).
 - ~~P2-22: thread model.~~ Decided 2026-10-17: hidden child channels; anyone who can post starts one; auto-archive after 7 quiet days; follow model (see P2-22-threads.md).
 - ~~P3-06: the template channel sets.~~ Approved as proposed (2026-10-17).
+
+## Art pass (P8)
+Kept as its own table so it doesn't collide with other sessions' rows.
+
+| ID | Title | Phase | State | Effort | Depends on | Main files |
+|---|---|---|---|---|---|---|
+| P8-01 | Art pass: mascot poses, sign-in art, ready-made server icons, share image | 8 | REVIEW | M | none | mascotParts.js, Mascot.jsx, LoginArt.jsx, serverGlyphs.js, GlyphPicker.jsx, AuthShell.jsx, server/static.js, web/public/og-image.png |
