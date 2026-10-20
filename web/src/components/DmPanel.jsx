@@ -11,10 +11,10 @@ import EmptyState from './EmptyState.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 
 // The conversation view in Direct Messages mode.
-export default function DmPanel({ username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
+export default function DmPanel({ conversationKey = '', username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
   // The message being replied to ({ id, author }), cleared on send, Esc or switching conversation.
   const [replyingTo, setReplyingTo] = useState(null);
-  useEffect(() => setReplyingTo(null), [username]);
+  useEffect(() => setReplyingTo(null), [conversationKey]);
   // Files dropped anywhere on the conversation go to the composer.
   const composerRef = useRef(null);
   const listRef = useRef(null);
@@ -77,8 +77,8 @@ export default function DmPanel({ username, messages, currentUser, newMessages =
         onLoadOlder={onLoadOlder}
         history={history}
         newMessages={newMessages}
-        onHidePreview={(m) => api.hideDmPreview(username, m.id).catch(() => {})}
-        loadVersions={(m) => api.getDmVersions(username, m.id)}
+        onHidePreview={(m) => api.hideDmPreview(conversationKey, m.id).catch(() => {})}
+        loadVersions={(m) => api.getDmVersions(conversationKey, m.id)}
         onReply={(m) => setReplyingTo({ id: m.id, author: m.author })}
         simple
         emptyHeading={`This is the beginning of your conversation with ${username}`}
@@ -89,7 +89,7 @@ export default function DmPanel({ username, messages, currentUser, newMessages =
       <Composer
         ref={composerRef}
         onEditLast={() => listRef.current?.startEditLast() ?? false}
-        channel={username}
+        channel={conversationKey}
         disabled={false}
         onSend={(content, attachments, spoiler) => {
           onSend(content, attachments, spoiler, replyingTo ? replyingTo.id : undefined);

@@ -54,7 +54,8 @@ self.addEventListener('push', (event) => {
     payload = { title: 'DisGourd' };
   }
   const data = payload.data || {};
-  const tag = data.dm ? `dm:${data.dm}` : `ch:${data.space}:${data.channel}`;
+  // P9-06b: one per conversation (`dm:c:<id>`, as the page tags them).
+  const tag = data.conversation != null ? `dm:c:${data.conversation}` : data.dm ? `dm:@${data.dm}` : `ch:${data.space}:${data.channel}`;
   event.waitUntil(
     self.registration.showNotification(payload.title || 'DisGourd', {
       body: payload.body || '',

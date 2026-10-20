@@ -4,7 +4,8 @@ import IconButton from './IconButton.jsx';
 import UserFooter from './UserFooter.jsx';
 import { unreadLabel } from '../util.js';
 
-// The second column when in Direct Messages mode: a list of conversations.
+// The second column when in Direct Messages mode: a list of conversations,
+// each with its `key` (P9-06b: `c:<id>`, or `@name` while being started).
 export default function DmSidebar({
   conversations,
   currentDm,
@@ -49,14 +50,14 @@ export default function DmSidebar({
           />
         )}
         {conversations.map((c) => {
-          const active = c.username === currentDm;
-          const count = unread[c.username] || 0;
+          const active = c.key === currentDm;
+          const count = unread[c.key] || 0;
           const hasUnread = count > 0 && !active;
           const preview = c.lastContent || (c.lastAttachment ? '📎 Attachment' : '');
           return (
             <button
-              key={c.username}
-              onClick={() => onSelect(c.username)}
+              key={c.key}
+              onClick={() => onSelect(c.key)}
               className={`tap-row mb-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition ${
                 active ? 'bg-ink-600' : 'hover:bg-ink-700/60'
               }`}

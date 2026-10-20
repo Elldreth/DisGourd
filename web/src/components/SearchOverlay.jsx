@@ -43,7 +43,7 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm, onOpen
   // Every result in display order, with what opening it does.
   const flat = [
     ...results.channels.map((m) => ({ key: `c${m.id}`, m, open: () => openResult(m) })),
-    ...results.dms.map((m) => ({ key: `d${m.id}`, m, open: () => onOpenDm(m.dmWith) })),
+    ...results.dms.map((m) => ({ key: `d${m.id}`, m, open: () => onOpenDm(m) })),
   ];
   const optionId = (i) => `${listId}-${i}`;
   const openResult = (m) => (m.thread && onOpenThread ? onOpenThread(m.space, m.thread) : onOpenChannel(m.space, m.channel));
@@ -128,7 +128,7 @@ export default function SearchOverlay({ onClose, onOpenChannel, onOpenDm, onOpen
                     selected={active === i}
                     m={m}
                     where={`@${m.dmWith}`}
-                    onClick={() => onOpenDm(m.dmWith)}
+                    onClick={() => onOpenDm(m)}
                   />
                 );
               })}

@@ -233,11 +233,14 @@ export function resolveReport(space, id, { action, resolution } = {}) {
 export function getMessageVersions(space, channel, id) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/versions`);
 }
-export function getDmVersions(username, id) {
-  return request(`/dms/${encodeURIComponent(username)}/messages/${id}/versions`);
+// P9-06b: a DM conversation's path from its key: `c:<id>`, or `@<username>`
+// (a pair not started yet).
+const dmPath = (key) => (key.startsWith('c:') ? `/dms/c/${key.slice(2)}` : `/dms/${encodeURIComponent(key.replace(/^@/, ''))}`);
+export function getDmVersions(key, id) {
+  return request(`${dmPath(key)}/messages/${id}/versions`);
 }
-export function hideDmPreview(username, id) {
-  return request(`/dms/${encodeURIComponent(username)}/messages/${id}/preview`, { method: 'DELETE' });
+export function hideDmPreview(key, id) {
+  return request(`${dmPath(key)}/messages/${id}/preview`, { method: 'DELETE' });
 }
 // A channel's topic (P3-20a); '' clears it.
 // P6-03: a new name, normalized and checked like a new channel's.
@@ -451,9 +454,9 @@ export function search(q) {
 export function getDms() {
   return request('/dms');
 }
-export function getDmMessages(username, { limit = 50, before, after, around } = {}) {
+export function getDmMessages(key, { limit = 50, before, after, around } = {}) {
   const qs = new URLSearchParams(around ? { around } : after ? { limit, after } : before ? { limit, before } : { limit });
-  return request(`/dms/${encodeURIComponent(username)}/messages?${qs}`);
+  return request(`${dmPath(key)}/messages?${qs}`);
 }
 
 // ---- Current user profile ----

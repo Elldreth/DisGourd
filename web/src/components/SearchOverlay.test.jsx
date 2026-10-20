@@ -41,7 +41,7 @@ test('keyboard only: type, ArrowDown, Enter opens the result', async () => {
   fireEvent.keyDown(box, { key: 'ArrowDown' }); // the DM result
   fireEvent.keyDown(box, { key: 'ArrowDown' }); // stays on the last one
   fireEvent.keyDown(box, { key: 'Enter' });
-  expect(onOpenDm).toHaveBeenCalledWith('bob');
+  expect(onOpenDm).toHaveBeenCalledWith(expect.objectContaining({ dmWith: 'bob' })); // P9-06b: the hit, for its conversation
   fireEvent.keyDown(box, { key: 'ArrowUp' });
   fireEvent.keyDown(box, { key: 'Enter' });
   expect(onOpenChannel).toHaveBeenCalledWith('S', 'random');

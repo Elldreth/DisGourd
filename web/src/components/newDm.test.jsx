@@ -17,8 +17,8 @@ afterEach(cleanup);
 test('peopleItems: your conversations first, then members of your servers, never you, no repeats', () => {
   const items = peopleItems({
     me: 'sandy',
-    conversations: [{ username: 'bob' }, { username: 'cara' }],
-    unread: { cara: 2 },
+    conversations: [{ key: 'c:1', username: 'bob' }, { key: 'c:2', username: 'cara' }],
+    unread: { 'c:2': 2 },
     members: [
       { username: 'sandy' }, // me
       { username: 'bob' }, // already a conversation
@@ -28,8 +28,8 @@ test('peopleItems: your conversations first, then members of your servers, never
     ],
   });
   expect(items).toEqual([
-    { kind: 'dm', username: 'bob', unread: 0 },
-    { kind: 'dm', username: 'cara', unread: 2 },
+    { kind: 'dm', key: 'c:1', username: 'bob', unread: 0 },
+    { kind: 'dm', key: 'c:2', username: 'cara', unread: 2 },
     { kind: 'person', username: 'dave' },
     { kind: 'person', username: 'erin' },
   ]);

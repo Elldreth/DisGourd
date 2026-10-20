@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P9-06)
 - **Phase:** 9
-- **State:** PLANNED (READY once P9-06b merges)
+- **State:** READY (once P9-06b merges)
 - **Effort:** M
 - **Depends on:** P9-06a, P9-06b
 

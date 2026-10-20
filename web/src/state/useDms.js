@@ -20,6 +20,17 @@ function dmFrameToMessage(m) {
   };
 }
 
+// P9-06b: conversations are keyed `c:<id>`; one you're starting with someone
+// you've never messaged is `@<username>` until its first message makes it.
+export const convKey = (c) => (c.id != null ? `c:${c.id}` : `@${c.username}`);
+export const frameKey = (f) => (f.conversation != null ? `c:${f.conversation}` : null);
+// What the gateway ops take for a key: { conversation } or the other person's name.
+function target(key, nameField = 'with') {
+  return key.startsWith('c:') ? { conversation: Number(key.slice(2)) } : { [nameField]: key.slice(1) };
+}
+// A saved or requested place: a key, or (saved before P9-06b) a bare username.
+const isKey = (k) => typeof k === 'string' && (k.startsWith('c:') || k.startsWith('@'));
+
 // Direct messages: the conversation list, the open conversation's messages,
 // per-conversation unread counts, typing, the gateway handlers that keep them
 // live, and the actions that send.
@@ -28,16 +39,16 @@ function dmFrameToMessage(m) {
 //   onIncoming(frame): told about every incoming DM (notifications, sounds)
 export function useDms({ active, user, send, status, reconnects = 0, onIncoming }) {
   const [conversations, setConversations] = useState([]);
-  const [current, setCurrent] = useState(''); // partner username
+  const [current, setCurrent] = useState(''); // the open conversation's key ('' for none)
   const [messages, dispatch] = useReducer(messagesReducer, []);
-  const [unread, setUnread] = useState({}); // username -> count
+  const [unread, setUnread] = useState({}); // key -> count
   const unreadNow = useRef(unread);
   unreadNow.current = unread;
   const [typing, setTyping] = useState({}); // username -> expires-at ms
   const paging = useHistoryPaging(`dm:${current}`);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
-  const loadedFor = useRef(null); // the partner whose messages are showing
+  const loadedFor = useRef(null); // the conversation whose messages are showing
   // What was new when you opened the conversation ({ since, count } or null):
   // drives the "New" divider, once per visit (P3-20b).
   const [newMessages, setNewMessages] = useState(null);
@@ -52,17 +63,22 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
   userRef.current = user;
 
   // The server only lists conversations that have messages, so keep the one
-  // you've just started (open() adds it) until its first message is sent.
+  // you've just started (open() adds it as `@name`) until its first message
+  // is sent; once the list has that pair, switch to its real key.
   function loadConversations() {
     api
       .getDms()
-      .then((list) =>
+      .then((rows) => {
+        const list = rows.map((d) => ({ ...d, key: convKey(d) }));
+        const open = currentRef.current;
+        const draft = open.startsWith('@') ? open.slice(1) : null;
+        const made = draft && list.find((d) => d.kind === 'pair' && d.username === draft);
+        if (made) setCurrent(made.key);
         setConversations((prev) => {
-          const open = currentRef.current;
-          const keep = open && !list.some((d) => d.username === open) ? prev.filter((d) => d.username === open) : [];
+          const keep = draft && !made ? prev.filter((d) => d.key === open) : [];
           return [...keep, ...list];
-        })
-      )
+        });
+      })
       .catch(() => {});
   }
 
@@ -71,15 +87,23 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
       onIncoming?.({ kind: 'dm', ...m });
       const me = userRef.current;
       const partner = m.from === me ? m.to : m.from;
-      const viewing = activeRef.current && currentRef.current === partner;
-      if (viewing) {
+      const key = frameKey(m) || `@${partner}`;
+      const open = currentRef.current;
+      // The first message of a conversation you'd just started makes it real.
+      const started = partner && open === `@${partner}` && key !== open;
+      if (started) {
+        currentRef.current = key;
+        setCurrent(key);
+      }
+      const viewing = activeRef.current && (currentRef.current === key);
+      if (viewing && !started) {
         // Reading older history: it's picked up by loadNewer / Jump to present.
         if (!paging.hasNewerRef.current) {
           dispatch({ type: 'merged', messages: [dmFrameToMessage(m)] });
-          if (m.id) send({ op: 'dm_read', with: partner, lastId: m.id });
+          if (m.id) send({ op: 'dm_read', ...target(key), lastId: m.id });
         }
-      } else if (m.from !== me) {
-        setUnread((prev) => ({ ...prev, [partner]: (prev[partner] || 0) + 1 }));
+      } else if (!viewing && m.from !== me) {
+        setUnread((prev) => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
       }
       if (activeRef.current) loadConversations(); // refresh previews/order
     },
@@ -87,13 +111,15 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     dm_delete: (d) => dispatch({ type: 'deleted', id: d.id }),
     dm_embeds: (e) => dispatch({ type: 'embeds', id: e.id, embeds: e.embeds }),
     dm_typing: (t) => {
-      if (activeRef.current && currentRef.current === t.from) {
+      const open = currentRef.current;
+      const here = frameKey(t) ? open === frameKey(t) : open === `@${t.from}`;
+      if (activeRef.current && here) {
         setTyping((prev) => ({ ...prev, [t.from]: Date.now() + 4000 }));
       }
     },
     dm_unread: (f) => {
       const map = {};
-      for (const c of f.counts || []) map[c.with] = c.count;
+      for (const c of f.counts || []) map[frameKey(c) || `@${c.with}`] = c.count;
       setUnread(map);
     },
   };
@@ -109,7 +135,7 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
       return undefined;
     }
     send({ op: 'focus' }); // clear any channel focus
-    send({ op: 'dm_focus', with: current });
+    send({ op: 'dm_focus', ...target(current) });
     // Reading older history (a jump): keep that window; Jump to present reloads.
     if (paging.hasNewerRef.current) return undefined;
     let cancelled = false;
@@ -134,7 +160,7 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
           setNewMessages(count > 0 && since != null ? { since, count } : null);
         }
         const maxId = msgs.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
-        send({ op: 'dm_read', with: current, lastId: maxId });
+        if (maxId) send({ op: 'dm_read', ...target(current), lastId: maxId });
         setUnread((prev) => {
           if (!prev[current]) return prev;
           const next = { ...prev };
@@ -171,11 +197,21 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     return () => clearInterval(iv);
   }, []);
 
-  // Open a conversation, adding it to the list if it's new.
+  // Open the conversation with someone, adding a placeholder if you've never
+  // messaged them (it becomes real with the first message).
   function open(username) {
     if (!username || username === user) return;
-    setCurrent(username);
-    setConversations((prev) => (prev.find((d) => d.username === username) ? prev : [{ username, unread: 0 }, ...prev]));
+    const pair = conversations.find((d) => d.kind !== 'group' && d.username === username);
+    if (pair) return setCurrent(pair.key);
+    const key = `@${username}`;
+    setCurrent(key);
+    setConversations((prev) => (prev.find((d) => d.key === key) ? prev : [{ key, id: null, kind: 'pair', username, members: [], unread: 0 }, ...prev]));
+  }
+  // Open by key; `@name` (or a bare username saved before P9-06b) opens the pair.
+  function select(key) {
+    if (!key) return setCurrent('');
+    if (isKey(key) && key.startsWith('c:')) return setCurrent(key);
+    open(key.startsWith('@') ? key.slice(1) : key);
   }
 
   // Fetch the page just older than the oldest message shown.
@@ -184,7 +220,7 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     if (!current || !oldest) return;
     const partner = current;
     paging.loadOlder(
-      (limit) => api.getDmMessages(partner, { limit, before: oldest }),
+      (limit) => api.getDmMessages(partner, { limit, before: oldest }), // `partner`: the key
       (rows) => dispatch({ type: 'merged', messages: rows })
     );
   }
@@ -208,15 +244,20 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     paging,
     onPresent: (rows) => {
       const maxId = rows.reduce((mx, m) => Math.max(mx, m.id || 0), 0);
-      send({ op: 'dm_read', with: current, lastId: maxId });
+      if (maxId) send({ op: 'dm_read', ...target(current), lastId: maxId });
     },
   });
+  // The open conversation (or the placeholder for one you're starting).
+  const currentConversation = !current
+    ? null
+    : conversations.find((d) => d.key === current) || (current.startsWith('@') ? { key: current, id: null, kind: 'pair', username: current.slice(1), members: [] } : null);
 
   return {
     history,
     conversations,
     current,
-    select: setCurrent,
+    currentConversation,
+    select,
     open,
     loadConversations,
     messages,
@@ -230,12 +271,12 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     handlers,
     reset,
     send: (content, attachments, spoiler, replyTo) => {
-      if (current) send({ op: 'dm', to: current, content, attachments, spoiler, replyTo });
+      if (current) send({ op: 'dm', ...target(current, 'to'), content, attachments, spoiler, replyTo });
     },
     edit: (id, content) => send({ op: 'dm_edit', id, content }),
     remove: (id) => send({ op: 'dm_delete', id }),
     sendTyping: () => {
-      if (current) send({ op: 'dm_typing', with: current });
+      if (current) send({ op: 'dm_typing', ...target(current) });
     },
   };
 }
