@@ -211,6 +211,14 @@ export default function App() {
       startCooldown(cooldownKey(f.space, f.channel), f.retryAfter * 1000);
       toastRef.current?.show({ id: 'slowmode', message: `Slow mode is on: your message wasn’t sent. Try again in ${f.retryAfter} s.`, tone: 'error' });
     },
+    // Your password was changed (P6-02): every older sign-in was ended. On the
+    // device that changed it the new token is already stored, so carry on with
+    // it; anywhere else the check fails and you're back at sign-in.
+    signed_out: () => {
+      api.stillSignedIn().then((ok) => {
+        if (ok) setToken(api.getToken());
+      });
+    },
     // You changed your status in another tab.
     my_presence: (f) => setProfile((p) => (p ? { ...p, presence: f.mode } : p)),
     // Your custom status changed elsewhere, or its time ran out.
@@ -715,6 +723,7 @@ export default function App() {
             setProfileOpen(false);
             logout();
           }}
+          onPasswordChanged={(next) => next && setToken(next)}
           onOutputChange={voice.applyOutput}
           onPttChange={voice.refreshPtt}
           onMicChange={voice.switchMic}

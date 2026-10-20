@@ -13,6 +13,7 @@ import ImagineVariations from './admin/imagine/VariationsPage.jsx';
 import ImagineKie from './admin/imagine/KiePage.jsx';
 import ImagineTry from './admin/imagine/TryPage.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
+import ChangePasswordDialog from './ChangePasswordDialog.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Modal from './Modal.jsx';
 import SettingsLayout from './settings/SettingsLayout.jsx';
@@ -57,7 +58,7 @@ function readSection(allowed) {
   }
 }
 
-export default function ProfileDialog({ profile, presence = 'online', onClose, onUpdated, onEditStatus, onLogout, onOutputChange, onPttChange, onMicChange, inCall, initialSection }) {
+export default function ProfileDialog({ profile, presence = 'online', onClose, onUpdated, onEditStatus, onLogout, onOutputChange, onPttChange, onMicChange, inCall, initialSection, onPasswordChanged }) {
   const sections = profile?.siteAdmin ? [...SECTIONS, ...ADMIN_SECTIONS] : SECTIONS;
   const ids = sections.map((s) => s.id);
   const [section, setSection] = useState(() => (ids.includes(initialSection) ? initialSection : readSection(ids) || ids[0]));
@@ -73,6 +74,8 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [crop, setCrop] = useState(null); // { src: File|url, initialCrop } while framing
+  const [passwordOpen, setPasswordOpen] = useState(false); // P6-02
+  const [passwordNote, setPasswordNote] = useState('');
 
   function pickFile(e) {
     const file = e.target.files?.[0];
@@ -181,6 +184,33 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
               )}
             </div>
           </div>
+
+          {onPasswordChanged && (
+            <div className="rounded-xl bg-ink-900/60 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Password</div>
+              <div className="mt-2 flex items-center gap-3">
+                <span className="min-w-0 flex-1 text-sm text-gray-400">
+                  {passwordNote || 'Changing it signs out your other devices.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPasswordOpen(true)}
+                  className="tap rounded-lg bg-ink-600 px-3 py-1.5 text-sm text-gray-200 transition hover:bg-ink-500"
+                >
+                  Change password
+                </button>
+              </div>
+            </div>
+          )}
+          {passwordOpen && (
+            <ChangePasswordDialog
+              onClose={() => setPasswordOpen(false)}
+              onChanged={(token) => {
+                setPasswordNote('Password changed. Your other devices were signed out.');
+                onPasswordChanged(token);
+              }}
+            />
+          )}
 
           {onLogout && (
             <div className="border-t border-ink-500/40 pt-5">

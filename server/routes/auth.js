@@ -18,7 +18,11 @@ function endOfToday(now, tzOffset) {
   const midnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + 1);
   return midnight + offset * 60e3;
 }
-const { broadcastPresence, sendToUser } = require('../gateway/delivery');
+const { broadcastPresence, sendToUser, endStaleSessions } = require('../gateway/delivery');
+
+// Password rules, as at sign-up (validateRegistration).
+const MIN_PASSWORD = 8;
+const MAX_PASSWORD = 200;
 
 const getJsonBody = readJsonBody;
 
@@ -130,6 +134,33 @@ const routes = [
         res.writeHead(400);
         return res.end(JSON.stringify({ error: e.message }));
       }
+    },
+  },
+  {
+    // POST /me/password { currentPassword, newPassword } — change your password
+    // (P6-02). Every other device is signed out; this one gets a fresh token.
+    match: ({ req, parsedUrl }) => parsedUrl.pathname === '/me/password' && req.method === 'POST',
+    run: async ({ req, res, parsedUrl }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      // Per account, so a stolen token can't be used to guess the password.
+      if (!rateLimitOk('password:' + userId, 10, 15 * 60 * 1000)) {
+        return sendJson(res, 429, { error: 'Too many attempts. Please try again later.' });
+      }
+      const { currentPassword, newPassword } = await getJsonBody(req);
+      if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD || newPassword.length > MAX_PASSWORD) {
+        return sendJson(res, 400, { error: `Your new password must be ${MIN_PASSWORD}-${MAX_PASSWORD} characters` });
+      }
+      const user = db.getUserById(userId);
+      const check = typeof currentPassword === 'string' && currentPassword.length <= MAX_PASSWORD
+        ? await verifyPassword(currentPassword, user)
+        : { ok: false };
+      if (!user || !check.ok) return sendJson(res, 403, { error: 'Your current password is incorrect' });
+      if (newPassword === currentPassword) return sendJson(res, 400, { error: 'Your new password must be different from the current one' });
+      const salt = generateSalt();
+      const version = db.changePassword(userId, await hashPassword(newPassword, salt), salt);
+      endStaleSessions(userId, version);
+      return sendJson(res, 200, { token: createToken(userId, user.username) });
     },
   },
   {

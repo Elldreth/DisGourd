@@ -25,6 +25,35 @@ export function decodeToken(token = getToken()) {
   }
 }
 
+// Change your password (P6-02). The server signs out every other device and
+// returns a fresh token for this one, stored here before anything else runs.
+// While it's in flight, a "signed_out" frame on this device's (old) socket
+// waits for it (see stillSignedIn) instead of signing this device out too.
+let passwordChange = null;
+export function changePassword(currentPassword, newPassword) {
+  const pending = request('/me/password', { method: 'POST', body: { currentPassword, newPassword } }).then((res) => {
+    if (res?.token) setToken(res.token);
+    return res;
+  });
+  passwordChange = pending;
+  pending.catch(() => {}).finally(() => {
+    if (passwordChange === pending) passwordChange = null;
+  });
+  return pending;
+}
+
+// After a "signed_out" frame: is the stored token still accepted? A 401 here
+// clears it and runs the unauthorized handler (back to the sign-in screen).
+export async function stillSignedIn() {
+  if (passwordChange) await passwordChange.catch(() => {});
+  try {
+    await request('/me');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Called when an authenticated request comes back 401 — i.e. the stored token
 // is invalid/expired (or the server was reset). The app uses this to log out
 // cleanly instead of getting stuck in an "Unauthorized / Reconnecting…" state.
