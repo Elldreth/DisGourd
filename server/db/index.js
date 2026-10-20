@@ -1761,6 +1761,21 @@ function getUserById(id) {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 }
 
+// The user's current token version (P6-02), or null when there's no such user.
+function getTokenVersion(userId) {
+  const row = db.prepare('SELECT token_version FROM users WHERE id = ?').get(userId);
+  return row ? row.token_version : null;
+}
+
+// A new password, and a new token version so every older sign-in stops
+// working. Returns the new version.
+function changePassword(userId, passwordHash, salt) {
+  return db.transaction(() => {
+    db.prepare('UPDATE users SET password_hash = ?, salt = ?, token_version = token_version + 1 WHERE id = ?').run(passwordHash, salt, userId);
+    return getTokenVersion(userId);
+  })();
+}
+
 function setUserPassword(userId, passwordHash, salt) {
   return db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?')
     .run(passwordHash, salt, userId).changes > 0;
@@ -2297,6 +2312,8 @@ module.exports = {
   getUserByEmail,
   getUserById,
   setUserPassword,
+  getTokenVersion,
+  changePassword,
   setUserAvatar,
   createFriendRequest,
   getIncomingFriendRequests,

@@ -647,6 +647,16 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 25,
+    name: 'token version',
+    up(db) {
+      // P6-02: sign-in tokens carry this number; changing the password bumps
+      // it, so every older token stops working. Existing tokens (no number)
+      // count as 0, so nobody is signed out by the upgrade.
+      db.exec('ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

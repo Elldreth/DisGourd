@@ -89,6 +89,7 @@ function attachGateway(httpServer, wss) {
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       ws.userId = payload.sub;
+      ws.tokenVersion = payload.ver || 0;
       ws.focus = null;
       ws.threadFocus = null;
       ws.isAlive = true;

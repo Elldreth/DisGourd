@@ -16,6 +16,19 @@ function sendToUser(userId, frameStr) {
   set.forEach((ws) => { if (ws.readyState === WebSocket.OPEN) ws.send(frameStr); });
 }
 
+// Close the user's sockets that signed in with an older token version (a
+// password change, P6-02), telling them why first.
+function endStaleSessions(userId, version) {
+  const set = userClients[userId];
+  if (!set) return;
+  const frame = JSON.stringify({ type: 'signed_out', reason: 'password_changed' });
+  for (const ws of [...set]) {
+    if (ws.tokenVersion === version) continue;
+    if (ws.readyState === WebSocket.OPEN) ws.send(frame);
+    ws.close(4001, 'Signed out');
+  }
+}
+
 function deliverToSpaceMembers(spaceName, frameStr) {
   const space = db.getSpaceByName(spaceName);
   if (!space) return;
@@ -66,4 +79,4 @@ function tellFollow(userId, space, thread, followed) {
   }));
 }
 
-module.exports = { userClients, sendToUser, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus, publicPresence, tellFollow };
+module.exports = { userClients, sendToUser, endStaleSessions, deliverToSpaceMembers, deliverToChannelViewers, broadcastPresence, effectiveStatus, publicPresence, tellFollow };

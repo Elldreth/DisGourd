@@ -1,0 +1,52 @@
+// P6-02: the API side of a password change — the fresh token is stored, and a
+// "signed out" check made while the change is in flight waits for it, so the
+// device that changed the password isn't signed out by its own change.
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import * as api from './api.js';
+
+const reply = (status, body) => ({ status, ok: status < 400, statusText: '', text: async () => JSON.stringify(body) });
+
+beforeEach(() => {
+  localStorage.clear();
+  api.setToken('old.token');
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  api.setUnauthorizedHandler(null);
+});
+
+test('a successful change stores the new token', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => reply(200, { token: 'new.token' })));
+  await api.changePassword('old-password', 'new-password');
+  expect(api.getToken()).toBe('new.token');
+  const [url, init] = fetch.mock.calls[0];
+  expect(url).toBe('/me/password');
+  expect(JSON.parse(init.body)).toEqual({ currentPassword: 'old-password', newPassword: 'new-password' });
+});
+
+test('stillSignedIn waits for a change in flight, then checks with the new token', async () => {
+  let finish;
+  const seen = [];
+  vi.stubGlobal('fetch', vi.fn((url, init) => {
+    seen.push([url, init.headers.Authorization]);
+    if (url === '/me/password') return new Promise((r) => { finish = () => r(reply(200, { token: 'new.token' })); });
+    return Promise.resolve(init.headers.Authorization === 'Bearer new.token' ? reply(200, {}) : reply(401, { error: 'Unauthorized' }));
+  }));
+  const change = api.changePassword('old-password', 'new-password');
+  const check = api.stillSignedIn(); // the signed_out frame beat the response
+  await Promise.resolve();
+  finish();
+  await change;
+  expect(await check).toBe(true);
+  expect(seen.at(-1)).toEqual(['/me', 'Bearer new.token']);
+  expect(api.getToken()).toBe('new.token');
+});
+
+test('on another device the check fails: the token is dropped and the app signs out', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => reply(401, { error: 'Unauthorized' })));
+  const onUnauthorized = vi.fn();
+  api.setUnauthorizedHandler(onUnauthorized);
+  expect(await api.stillSignedIn()).toBe(false);
+  expect(api.getToken()).toBe('');
+  expect(onUnauthorized).toHaveBeenCalled();
+});
