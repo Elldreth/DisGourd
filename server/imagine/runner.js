@@ -16,14 +16,19 @@ const ORDINAL = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st
 // An upscale (P3-29) says so; its failure reads like any other, so it gets Retry.
 // A variation (P3-36a) says which strength; its failure reads like any other.
 const VERB = { upscale: '🔍 Upscaling', vary: '🎲 Varying' };
+// The style, when there's more than one to choose from (P9-04c): "imagined (Anime)".
+const tagged = (job, ...parts) => {
+  const all = [...parts, job.styleName].filter(Boolean);
+  return all.length ? ` (${all.join(', ')})` : '';
+};
 const text = {
   queued: (job, place) => `${VERB[job.kind] || '🎨 Imagining'} for **${job.username}**… ${ORDINAL(place)} in line`,
   running: (job) => `${VERB[job.kind] || '🎨 Imagining'} for **${job.username}**… ${job.kind === 'upscale' ? 'working' : 'generating'}`,
   done: (job) => (job.kind === 'upscale'
-    ? `🔍 **${job.username}** upscaled: ${job.request.prompt}`
+    ? `🔍 **${job.username}** upscaled${tagged(job)}: ${job.request.prompt}`
     : job.kind === 'vary'
-      ? `🎲 **${job.username}** varied (${job.vary}): ${job.request.prompt}`
-      : `🎨 **${job.username}** imagined: ${job.request.prompt}`),
+      ? `🎲 **${job.username}** varied${tagged(job, job.vary)}: ${job.request.prompt}`
+      : `🎨 **${job.username}** imagined${tagged(job)}: ${job.request.prompt}`),
   failed: (job, reason) => `⚠️ Couldn't imagine that for **${job.username}**: ${reason}`,
 };
 

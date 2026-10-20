@@ -1079,6 +1079,9 @@ describe('the admin routes and the chat path', () => {
       expect(graph()['4'].inputs.ckpt_name).toBe(MODELS[2]);
       expect(graph()['3'].inputs.sampler_name).toBe('euler_ancestral');
       expect(graph()['6'].inputs.text).toBe('anime screencap, a gourd at dusk');
+      // P9-04c: with more than one style, the message names it (not the prefix).
+      const said = (id) => db.raw.prepare('SELECT content FROM messages WHERE id = ?').get(id).content;
+      expect(said(aJob.message_id)).toBe('🎨 **admin** imagined (Anime): a gourd at dusk');
       // No style asked: the default.
       const p = await ask({ prompt: 'a gourd at noon' });
       expect(await settle(p.jobId)).toMatchObject({ preset: 'photo', model: MODELS[1] });
@@ -1086,12 +1089,14 @@ describe('the admin routes and the chat path', () => {
       // A Variation of the Anime image keeps Anime, whatever the default.
       const v = await ask({ from: aJob.message_id, vary: 'subtle' });
       expect(await settle(v.jobId)).toMatchObject({ kind: 'vary', preset: 'anime', model: MODELS[2] });
+      expect(said(v.messageId)).toBe('🎲 **admin** varied (subtle, Anime): a gourd at dusk');
       expect(graph()['6'].inputs.text).toBe('anime screencap, a gourd at dusk');
       // Anime is deleted: a Variation of its image falls back to the default.
       await call('admin', 'PUT', '/admin/imagine', { engines: { comfyui: { presets: [{ id: 'photo', name: 'Photoreal', model: MODELS[1], family: 'sdxl', sampler: 'euler' }], defaultPreset: 'photo' } } });
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
       const v2 = await ask({ from: aJob.message_id, vary: 'strong' });
       expect(await settle(v2.jobId)).toMatchObject({ preset: 'photo', model: MODELS[1] });
+      expect(said(v2.messageId)).toBe('🎲 **admin** varied (strong): a gourd at dusk'); // one style left: not named
       expect(warn.mock.calls.flat().join(' ')).toMatch(/the style "anime" is gone; used "Photoreal"/);
       warn.mockRestore();
     } finally {

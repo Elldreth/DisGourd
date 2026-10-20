@@ -4,7 +4,7 @@ import { attachmentInfo } from '../util.js';
 import Icon from './Icon.jsx';
 import EmojiPicker from './EmojiPicker.jsx';
 import { insertAtCaret } from '../emoji.js';
-import ImaginePanel from './ImaginePanel.jsx';
+import ImaginePanel, { showStyles, startingStyle, rememberStyle } from './ImaginePanel.jsx';
 
 // "/imagine …" at the start of the box (P2-20d).
 const IMAGINE_RE = /^\/imagine(?:\s|$)/i;
@@ -36,6 +36,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
   const [imgShape, setImgShape] = useState('square');
   const [imgQuality, setImgQuality] = useState('standard');
   const [imgEngine, setImgEngine] = useState('');
+  const [imgStyle, setImgStyle] = useState(''); // ComfyUI style picked here (P9-04c)
   const [imgBusy, setImgBusy] = useState(false);
   const [imgError, setImgError] = useState('');
   // Starting from a picture (P3-36b): { url, name } uploaded here, or the
@@ -64,6 +65,12 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
     else setUseReplyPicture(false);
   }
   const isImagine = !!imagine && IMAGINE_RE.test(text);
+  const engineNow = imgEngine || imagine?.engines[0]?.id;
+  const styleNow = imagine && (imagine.styles.some((s) => s.id === imgStyle) ? imgStyle : startingStyle(imagine));
+  function pickStyle(id) {
+    setImgStyle(id);
+    rememberStyle(id);
+  }
   // Typing "/" (or the start of "/imagine") suggests the command.
   const suggestImagine = !!imagine?.available && text.length > 0 && '/imagine'.startsWith(text.toLowerCase()) && !IMAGINE_RE.test(text);
   function pickImagine() {
@@ -83,6 +90,7 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
         delete fields.shape; // the shape follows the picture
       }
       if (imgEngine && imagine.engines.some((e) => e.id === imgEngine)) fields.engine = imgEngine;
+      if (showStyles(imagine, engineNow) && styleNow) fields.preset = styleNow;
       await imagine.run(fields);
       setText('');
       setImgSource(null);
@@ -375,10 +383,12 @@ const Composer = forwardRef(function Composer({ channel, disabled, onSend, onTyp
           imagine={imagine}
           shape={imgShape}
           quality={imgQuality}
-          engine={imgEngine || imagine.engines[0]?.id}
+          engine={engineNow}
           onShape={setImgShape}
           onQuality={setImgQuality}
           onEngine={setImgEngine}
+          style={styleNow}
+          onStyle={pickStyle}
           busy={imgBusy || imgUploading}
           error={imgError}
           picture={startPicture}
