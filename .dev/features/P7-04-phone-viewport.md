@@ -19,7 +19,7 @@
 - [x] AC-2: the message box has `env(safe-area-inset-bottom)` padding at the bottom, and `index.html` declares `viewport-fit=cover`.
 - [x] AC-3: desktop is unchanged (same screenshot as before at 1280×800).
 - [x] AC-4: a web test checks the composer's safe-area class and the viewport meta. The suite stays green.
-- [x] AC-5: a sandbox check at 375×812 in the pane, with screenshots. **A real phone can't be tested from here**: the pane has no address bar to collapse and no home indicator. The owner checks on a phone, or this is merged as "can't be fully verified here".
+- [ ] AC-5 (partly; needs a real phone): a sandbox check at 375×812 in the pane, with screenshots. **A real phone can't be tested from here**: the pane has no address bar to collapse and no home indicator. The owner checks on a phone, or this is merged as "can't be fully verified here".
 
 ## Expected Areas of Change
 `web/src/index.css`, `web/index.html`, `web/src/components/Composer.jsx`, plus a test.
