@@ -1,7 +1,7 @@
 import EmptyState from './EmptyState.jsx';
 import { useEffect, useState } from 'react';
 import * as api from '../api.js';
-import Modal from './Modal.jsx';
+import SidePanel from './SidePanel.jsx';
 import RoleName from './RoleName.jsx';
 import Avatar from './Avatar.jsx';
 import { formatDay, formatTime } from '../util.js';
@@ -18,9 +18,10 @@ function preview(m) {
   return m.attachments?.length ? 'Attachment' : '';
 }
 
-// "Pinned messages" for the open channel. Clicking one closes this and jumps
-// to it (loading the history around it if needed). `version` changes whenever
-// this channel's pins change, so the list reloads.
+// "Pinned messages" for the open channel, in a side column (P7-03). Clicking
+// one jumps to it (loading the history around it if needed) and the list stays
+// open, so you can go through several. `version` changes whenever this
+// channel's pins change, so the list reloads.
 export default function PinsPanel({ space, channel, version, canPin = false, onUnpin, onJump, onClose }) {
   const [pins, setPins] = useState(null); // null while loading
   const [error, setError] = useState('');
@@ -37,21 +38,8 @@ export default function PinsPanel({ space, channel, version, canPin = false, onU
   }, [space, channel, version]);
 
   return (
-    <Modal
-      onClose={onClose}
-      label="Pinned messages"
-      backdropClassName="flex items-start justify-center bg-black/50 p-4 pt-20"
-      panelClassName="flex max-h-[70vh] w-full max-w-lg flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
-    >
-      <div className="flex items-center justify-between border-b border-ink-500/40 px-4 py-3">
-        <h2 className="font-semibold">
-          Pinned messages <span className="font-normal text-gray-500">in #{channel}</span>
-        </h2>
-        <button type="button" onClick={onClose} className="rounded-sm px-2 text-sm text-gray-400 hover:text-fg">
-          Close
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-2">
+    <SidePanel label="Pinned messages" icon="pin" title="Pinned messages" subtitle={`#${channel}`} backLabel={`Back to #${channel}`} onClose={onClose}>
+      <div>
         {error && (
           <p role="alert" className="p-4 text-center text-sm text-danger">
             {error}
@@ -67,10 +55,7 @@ export default function PinsPanel({ space, channel, version, canPin = false, onU
               <li key={m.id} className="group flex items-start gap-2 rounded-lg p-2 hover:bg-ink-700/60">
                 <button
                   type="button"
-                  onClick={() => {
-                    onClose();
-                    onJump(m.id);
-                  }}
+                  onClick={() => onJump(m.id)}
                   aria-label={`Jump to ${m.author || 'Unknown'}'s message: ${preview(m)}`}
                   className="flex min-w-0 flex-1 items-start gap-2 text-left"
                 >
@@ -100,6 +85,6 @@ export default function PinsPanel({ space, channel, version, canPin = false, onU
           </ul>
         )}
       </div>
-    </Modal>
+    </SidePanel>
   );
 }

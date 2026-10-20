@@ -1,7 +1,7 @@
 import EmptyState from './EmptyState.jsx';
 import { useEffect, useState } from 'react';
 import * as api from '../api.js';
-import Modal from './Modal.jsx';
+import SidePanel from './SidePanel.jsx';
 import Icon from './Icon.jsx';
 import { formatAgo } from '../util.js';
 
@@ -28,32 +28,27 @@ export default function ThreadsList({ space, channel, version, badge, onOpen, on
   }, [space, channel, archived, version]);
 
   return (
-    <Modal
-      onClose={onClose}
+    <SidePanel
       label="Threads"
-      backdropClassName="flex items-start justify-center bg-black/50 p-4 pt-20"
-      panelClassName="flex max-h-[70vh] w-full max-w-lg flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
-    >
-      <div className="flex items-center gap-3 border-b border-ink-500/40 px-4 py-3">
-        <h2 className="font-semibold">
-          Threads <span className="font-normal text-gray-500">in #{channel}</span>
-        </h2>
-        <div className="flex-1" />
+      icon="thread"
+      title="Threads"
+      subtitle={`#${channel}`}
+      backLabel={`Back to #${channel}`}
+      onClose={onClose}
+      actions={
         <button
           type="button"
           onClick={() => setArchived((a) => !a)}
           aria-pressed={archived}
-          className={`rounded-md px-2 py-1 text-xs ring-1 transition ${
+          className={`tap-chip shrink-0 rounded-md px-2 py-1 text-xs ring-1 transition ${
             archived ? 'bg-brand/20 text-fg ring-brand-hi' : 'text-gray-400 ring-ink-500/60 hover:text-fg'
           }`}
         >
           Archived
         </button>
-        <button type="button" onClick={onClose} className="rounded-sm px-2 text-sm text-gray-400 hover:text-fg">
-          Close
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-2">
+      }
+    >
+      <div>
         {error && (
           <p role="alert" className="p-4 text-center text-sm text-danger">
             {error}
@@ -78,8 +73,8 @@ export default function ThreadsList({ space, channel, version, badge, onOpen, on
                   <button
                     type="button"
                     onClick={() => {
+                      onOpen(t); // the thread panel takes this column's place (P7-03)
                       onClose();
-                      onOpen(t);
                     }}
                     aria-label={`Open thread ${t.name}, ${replyCount(t.messageCount)}${state}${t.followed ? ', following' : ''}`}
                     className="flex w-full items-start gap-3 rounded-lg p-2 text-left hover:bg-ink-700/60"
@@ -107,6 +102,6 @@ export default function ThreadsList({ space, channel, version, badge, onOpen, on
           </ul>
         )}
       </div>
-    </Modal>
+    </SidePanel>
   );
 }
