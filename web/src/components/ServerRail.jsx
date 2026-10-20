@@ -65,16 +65,16 @@ export default function ServerRail({
       >
         <Gourd size={34} color="currentColor" title="Direct Messages" />
         {dmUnread > 0 && !dmActive && (
-          <span aria-hidden="true" className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
+          <span aria-hidden="true" className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 pt-px text-xs font-bold leading-none text-ink-900">
             {dmUnread > 99 ? '99+' : dmUnread}
           </span>
         )}
       </button>
       <div role="separator" aria-orientation="horizontal" className="h-px w-8 bg-ink-500/50" />
 
-      {/* The full rail width (and a little room at the top), so badges on top
-          of an icon's corner aren't clipped by this scrolling list (P9-01). */}
-      <div className="-mt-1.5 flex w-full flex-1 flex-col items-center gap-2 overflow-y-auto pt-1.5">
+      {/* The full rail width (and a little room above and below), so badges on
+          top of an icon's corner aren't clipped by this scrolling list (P9-01). */}
+      <div className="-my-1.5 flex w-full flex-1 flex-col items-center gap-2 overflow-y-auto py-1.5">
         {spaces.map((s, i) => {
           const active = s.name === currentSpace;
           const count = unread[s.name] || 0;
@@ -108,12 +108,18 @@ export default function ServerRail({
                 ) : (
                   initials(s.name)
                 )}
-                {mentionCount > 0 && !active && (
-                  <span aria-hidden="true" className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 text-xs font-bold text-ink-900">
-                    {mentionCount > 99 ? '99+' : mentionCount}
-                  </span>
-                )}
               </button>
+              {mentionCount > 0 && !active && (
+                // Mentions, on top of the icon's bottom-right corner: outside
+                // the button like the reports badge, so the mask can't clip it.
+                <span
+                  aria-hidden="true"
+                  data-testid={`mentions-badge-${s.name}`}
+                  className="pointer-events-none absolute -bottom-1.5 -right-1.5 z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-danger px-1 pt-px text-xs font-bold leading-none text-ink-900"
+                >
+                  {mentionCount > 99 ? '99+' : mentionCount}
+                </span>
+              )}
               {s.openReports > 0 && (
                 // P9-01: open reports, for the people who handle them, on top of
                 // the icon's top-right corner (outside the button, so its mask

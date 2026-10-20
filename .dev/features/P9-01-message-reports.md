@@ -40,6 +40,7 @@
     - The owner asked for this after the first version sat inside the mask and was cut off on unselected (circle) icons.
     - The rail's scrolling list was only as wide as the icons (48px), so it clipped the badge's right edge too. It now spans the full rail (72px), with a little room at the top for the first server (`-mt-1.5 pt-1.5`, so the icons don't move).
     - The number is centered: Inter's digits sit high in their line, so the badge has 1px of top padding. Measured: 3.5px above and below the digit's ink, 5.4px / 5.6px left and right. (Tabular digits pushed the "1" off-center, so they aren't used.)
+    - At the owner's request, the red **mention** badge got the same treatment in this PR: it moved outside the masked button to the icon's bottom-right corner and is centered the same way; the scrolling list has room below too (`-my-1.5 py-1.5`). The DM button's red badge wasn't masked, but it gets the same number centering. Sandbox: with a report and a mention on unselected Tx Check, both badges measure fully visible and centered (3.5px / 3.5px, 5.4px / 5.6px).
 - **Confirming:** the dialog itself shows "Thanks — the moderators will take a look." instead of a toast.
 - **Open / Closed** are toggle buttons (`aria-pressed`), not tabs, so they don't mix with the window's section tabs.
 - **Delete message** from the queue is `POST …/resolve { action: 'delete' }`. Deleting was only a gateway op, so the server now deletes with the same rank check, tells viewers, and logs both `message_delete` and `report_resolve`.
