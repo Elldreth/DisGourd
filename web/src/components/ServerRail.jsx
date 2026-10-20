@@ -72,7 +72,9 @@ export default function ServerRail({
       </button>
       <div role="separator" aria-orientation="horizontal" className="h-px w-8 bg-ink-500/50" />
 
-      <div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto">
+      {/* The full rail width (and a little room at the top), so badges on top
+          of an icon's corner aren't clipped by this scrolling list (P9-01). */}
+      <div className="-mt-1.5 flex w-full flex-1 flex-col items-center gap-2 overflow-y-auto pt-1.5">
         {spaces.map((s, i) => {
           const active = s.name === currentSpace;
           const count = unread[s.name] || 0;
@@ -115,11 +117,12 @@ export default function ServerRail({
               {s.openReports > 0 && (
                 // P9-01: open reports, for the people who handle them, on top of
                 // the icon's top-right corner (outside the button, so its mask
-                // never clips it, selected or not).
+                // never clips it, selected or not). Inter's digits sit a little
+                // high in their line, so 1px of top padding centers the number.
                 <span
                   aria-hidden="true"
                   data-testid={`reports-badge-${s.name}`}
-                  className="pointer-events-none absolute -right-1.5 -top-1.5 z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-idle px-1 text-xs font-bold leading-none text-ink-900"
+                  className="pointer-events-none absolute -right-1.5 -top-1.5 z-10 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-ink-900 bg-idle px-1 pt-px text-xs font-bold leading-none text-ink-900"
                 >
                   {s.openReports > 99 ? '99+' : s.openReports}
                 </span>
