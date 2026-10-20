@@ -3,7 +3,7 @@ import * as api from './api.js';
 import { useGateway } from './useSocket.js';
 import { useHandlerTable } from './state/gatewayHandlers.js';
 import { useChannelMessages, badgeCounts, unreadKey, threadRootId } from './state/useChannelMessages.js';
-import { useDms } from './state/useDms.js';
+import { useDms, MAX_GROUP } from './state/useDms.js';
 import { useSpaces } from './state/useSpaces.js';
 import { useVoiceCall } from './state/useVoiceCall.js';
 import { useDocumentAttention } from './attention.js';
@@ -29,6 +29,8 @@ import ImageCropper from './components/ImageCropper.jsx';
 import StatusDialog from './components/StatusDialog.jsx';
 import { useToasts } from './components/Toasts.jsx';
 import { useUndoDelete } from './state/useUndoDelete.js';
+import PeoplePicker from './components/PeoplePicker.jsx';
+import GroupMembersDialog from './components/GroupMembersDialog.jsx';
 import QuickSwitcher, { itemKey, loadRecent, recordVisit, peopleItems } from './components/QuickSwitcher.jsx';
 import { useShortcuts, stepChannel } from './shortcuts.js';
 import ShortcutsSheet from './components/ShortcutsSheet.jsx';
@@ -117,7 +119,14 @@ export default function App() {
   const { status, send, reconnects } = useGateway({ token, handlers: gatewayTable.handlers });
   const voice = useVoiceCall({ send, myId });
   const notifier = useNotifications();
-  const dm = useDms({ active: view === 'dm', user, send, status, reconnects, onIncoming: notifier.onIncoming });
+  const dm = useDms({
+    active: view === 'dm', user, send, status, reconnects, onIncoming: notifier.onIncoming,
+    // P9-06d: you left a group, or were removed from one.
+    onLeft: (f) => toastRef.current?.show({
+      id: `left-${f.conversation}`,
+      message: f.reason === 'removed' ? `You were removed from ${f.name || 'the group'}` : `You left ${f.name || 'the group'}`,
+    }),
+  });
   const sp = useSpaces({
     token,
     myId,
@@ -203,6 +212,12 @@ export default function App() {
     dnd: presence === 'dnd', // Do Not Disturb: no notifications or sounds
     openChannel: (space, channel) => openChannelFromSearch(space, channel),
     openDm: (key) => selectDm(key),
+    // P9-06d: muted conversations stay quiet; a group's notification names it.
+    dmMuted: (key) => !!dm.conversations.find((c) => c.key === key)?.muted,
+    dmTitle: (key) => {
+      const c = dm.conversations.find((d) => d.key === key);
+      return c?.kind === 'group' ? dm.title(c) : null;
+    },
     openThread: (space, t) => openThreadFromSearch(space, t),
   });
   // "Create a server" / "Join with an invite" from the empty screen open the
@@ -412,6 +427,36 @@ export default function App() {
   // you're in are fetched when it opens (one small request per server); the
   // list shows your conversations straight away and fills in as they arrive.
   const [people, setPeople] = useState([]);
+  // Group DMs (P9-06d): the multi-person picker ({ mode: 'new' | 'pair' | 'add', with? })
+  // and the open group's Members dialog.
+  const [groupPicker, setGroupPicker] = useState(null);
+  const [groupMembersOpen, setGroupMembersOpen] = useState(false);
+  const [friends, setFriends] = useState([]);
+  function loadPickable() {
+    Promise.all(sp.spaces.map((s) => api.getMembers(s.name).then((r) => r.members || []).catch(() => []))).then((lists) => setPeople(lists.flat()));
+    api.getFriends().then((r) => setFriends(Array.isArray(r) ? r : r?.friends || [])).catch(() => {});
+  }
+  function openGroupPicker(request) {
+    setSwitcher(null);
+    loadPickable();
+    setGroupPicker(request);
+  }
+  // Who can be picked: people you share a server with, and friends; not you, no repeats.
+  const pickable = (() => {
+    const seen = new Set([user]);
+    const out = [];
+    for (const p of [...people, ...friends]) {
+      if (!p?.username || seen.has(p.username)) continue;
+      seen.add(p.username);
+      out.push({ username: p.username, avatar: p.avatar || p.avatar_url || null });
+    }
+    return out.sort((a, b) => a.username.localeCompare(b.username));
+  })();
+  // A refused group action (not allowed, too many…): say why.
+  useEffect(() => {
+    if (dm.groupError) toast.show({ id: 'group-error', message: dm.groupError.error || 'That didn’t work', tone: 'error' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dm.groupError]);
   function openPeoplePicker() {
     if (dm.conversations.length === 0) dm.loadConversations();
     setPeople([]);
@@ -457,7 +502,7 @@ export default function App() {
           }))
         ),
         ...sp.orderedSpaces.map((s) => ({ kind: 'server', name: s.name, unread: spaceUnread[s.name] || 0, mention: spaceMentions[s.name] || 0 })),
-        ...dm.conversations.map((d) => ({ kind: 'dm', key: d.key, username: d.username, unread: dm.unread[d.key] || 0 })),
+        ...dm.conversations.map((d) => ({ kind: 'dm', key: d.key, username: dm.title(d), unread: dm.unread[d.key] || 0 })),
       ];
   function goToPicked(it) {
     setSwitcher(null);
@@ -522,6 +567,8 @@ export default function App() {
           <DmSidebar
             conversations={dm.conversations}
             currentDm={dm.current}
+            titleOf={dm.title}
+            myId={myId}
             onNewMessage={openPeoplePicker}
             unread={dm.unread}
             onSelect={(u) => {
@@ -636,6 +683,11 @@ export default function App() {
       {view === 'dm' ? (
         <DmPanel
           conversationKey={dm.current}
+          conversation={dm.currentConversation}
+          title={dm.title(dm.currentConversation)}
+          myId={myId}
+          onAddPeople={() => openGroupPicker({ mode: 'pair', with: dm.currentConversation?.username })}
+          onShowMembers={() => setGroupMembersOpen(true)}
           username={dm.currentConversation?.username || ''}
           messages={shownDmMessages}
           currentUser={user}
@@ -809,7 +861,59 @@ export default function App() {
         />
       )}
       {switcher && (
-        <QuickSwitcher mode={switcher.mode} items={switcherItems} recent={switcher.recent} onPick={goToPicked} onClose={() => setSwitcher(null)} />
+        <QuickSwitcher
+          mode={switcher.mode}
+          items={switcherItems}
+          recent={switcher.recent}
+          onPick={goToPicked}
+          onClose={() => setSwitcher(null)}
+          onNewGroup={() => openGroupPicker({ mode: 'new' })}
+        />
+      )}
+      {groupPicker && (() => {
+        const conv = dm.currentConversation;
+        const inGroup = groupPicker.mode === 'add' ? new Set((conv?.members || []).map((m) => m.username)) : new Set();
+        const room = groupPicker.mode === 'add' ? MAX_GROUP - (conv?.members?.length || 0) : MAX_GROUP - 1;
+        return (
+          <PeoplePicker
+            title={groupPicker.mode === 'add' ? `Add people to ${dm.title(conv)}` : groupPicker.mode === 'pair' ? `Start a group with ${groupPicker.with}` : 'Start a group'}
+            people={pickable.filter((p) => !inGroup.has(p.username))}
+            locked={groupPicker.mode === 'pair' ? [groupPicker.with] : []}
+            min={groupPicker.mode === 'add' ? 1 : 2}
+            max={room}
+            withName={groupPicker.mode !== 'add'}
+            note={groupPicker.mode === 'pair' ? `This starts a new group. Your messages with ${groupPicker.with} stay private.` : groupPicker.mode === 'new' ? 'Pick at least two people.' : null}
+            confirmLabel={(n) => (groupPicker.mode === 'add' ? `Add ${n || ''}`.trim() : n ? `Start a group (${n + 1} people)` : 'Start a group')}
+            onConfirm={({ members, name }) => {
+              if (groupPicker.mode === 'add') dm.addToGroup(conv.id, members);
+              else {
+                setView('dm');
+                dm.createGroup(members, name);
+              }
+              setGroupPicker(null);
+            }}
+            onClose={() => setGroupPicker(null)}
+          />
+        );
+      })()}
+      {groupMembersOpen && dm.currentConversation?.kind === 'group' && (
+        <GroupMembersDialog
+          conversation={dm.currentConversation}
+          title={dm.title(dm.currentConversation)}
+          myId={myId}
+          onAdd={() => {
+            setGroupMembersOpen(false);
+            openGroupPicker({ mode: 'add' });
+          }}
+          onRemove={(username) => dm.removeFromGroup(dm.currentConversation.id, username)}
+          onRename={(name) => dm.renameGroup(dm.currentConversation.id, name)}
+          onMute={(muted) => dm.setMuted(dm.currentConversation.id, muted)}
+          onLeave={() => {
+            setGroupMembersOpen(false);
+            dm.leaveGroup(dm.currentConversation.id);
+          }}
+          onClose={() => setGroupMembersOpen(false)}
+        />
       )}
       {statusOpen && (
         <StatusDialog current={profile || {}} onSave={saveStatus} onClose={() => setStatusOpen(false)} />

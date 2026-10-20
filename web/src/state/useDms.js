@@ -17,8 +17,21 @@ function dmFrameToMessage(m) {
     spoiler: m.spoiler,
     replyTo: m.replyTo ?? null,
     timestamp: m.timestamp,
+    ...(m.kind ? { kind: m.kind } : {}), // 'system': a group notice (P9-06d)
   };
 }
+
+// What a conversation is called (P9-06d): a group's name, else the other
+// members' names ("bob, cara and dee"); a pair, the other person.
+export function conversationTitle(c, me) {
+  if (!c) return '';
+  if (c.kind !== 'group') return c.username || '';
+  if (c.name) return c.name;
+  const names = (c.members || []).map((m) => m.username).filter((n) => n !== me);
+  if (!names.length) return 'Just you';
+  return names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+export const MAX_GROUP = 10;
 
 // P9-06b: conversations are keyed `c:<id>`; one you're starting with someone
 // you've never messaged is `@<username>` until its first message makes it.
@@ -37,7 +50,8 @@ const isKey = (k) => typeof k === 'string' && (k.startsWith('c:') || k.startsWit
 //   active: the DM view is showing (not a server)
 //   send:   gateway send; status: the gateway status
 //   onIncoming(frame): told about every incoming DM (notifications, sounds)
-export function useDms({ active, user, send, status, reconnects = 0, onIncoming }) {
+// `onLeft({ conversation, reason, name })` (P9-06d): you left or were removed from a group.
+export function useDms({ active, user, send, status, reconnects = 0, onIncoming, onLeft }) {
   const [conversations, setConversations] = useState([]);
   const [current, setCurrent] = useState(''); // the open conversation's key ('' for none)
   const [messages, dispatch] = useReducer(messagesReducer, []);
@@ -45,6 +59,8 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
   const unreadNow = useRef(unread);
   unreadNow.current = unread;
   const [typing, setTyping] = useState({}); // username -> expires-at ms
+  // The last refusal of a group action (P9-06d): { op, code, error } or null.
+  const [groupError, setGroupError] = useState(null);
   const paging = useHistoryPaging(`dm:${current}`);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -84,13 +100,13 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
 
   const handlers = {
     dm: (m) => {
-      onIncoming?.({ kind: 'dm', ...m });
+      if (m.kind !== 'system') onIncoming?.({ ...m, kind: 'dm' }); // a group's notices don't notify (P9-06d)
       const me = userRef.current;
       const partner = m.from === me ? m.to : m.from;
       const key = frameKey(m) || `@${partner}`;
       const open = currentRef.current;
       // The first message of a conversation you'd just started makes it real.
-      const started = partner && open === `@${partner}` && key !== open;
+      const started = !!m.to && partner && open === `@${partner}` && key !== open; // pairs only: a group's frames have no `to`
       if (started) {
         currentRef.current = key;
         setCurrent(key);
@@ -116,6 +132,32 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
       if (activeRef.current && here) {
         setTyping((prev) => ({ ...prev, [t.from]: Date.now() + 4000 }));
       }
+    },
+    // P9-06d: a conversation's summary changed (or a group you were added to).
+    dm_conversation: (f) => {
+      const c = { ...f.conversation, key: `c:${f.conversation.id}` };
+      setConversations((prev) => (prev.some((d) => d.key === c.key) ? prev.map((d) => (d.key === c.key ? { ...d, ...c } : d)) : [c, ...prev]));
+    },
+    // The group you just made: open it.
+    dm_group_created: (f) => {
+      setGroupError(null);
+      setCurrent(`c:${f.conversation}`);
+    },
+    // You left, or were removed: it goes from the list (and the view).
+    dm_left: (f) => {
+      const key = `c:${f.conversation}`;
+      setConversations((prev) => prev.filter((d) => d.key !== key));
+      setUnread((prev) => {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      if (currentRef.current === key) setCurrent('');
+      onLeft?.(f);
+    },
+    error: (f) => {
+      if (typeof f.op === 'string' && (f.op.startsWith('dm_group_') || f.op === 'dm_mute')) setGroupError({ op: f.op, code: f.code, error: f.error });
     },
     dm_unread: (f) => {
       const map = {};
@@ -273,6 +315,25 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming 
     send: (content, attachments, spoiler, replyTo) => {
       if (current) send({ op: 'dm', ...target(current, 'to'), content, attachments, spoiler, replyTo });
     },
+    // ---- Groups (P9-06d) ----
+    groupError,
+    clearGroupError: () => setGroupError(null),
+    createGroup: (members, name = '') => {
+      setGroupError(null);
+      send({ op: 'dm_group_create', members, name });
+    },
+    addToGroup: (conversationId, members) => {
+      setGroupError(null);
+      send({ op: 'dm_group_add', conversation: conversationId, members });
+    },
+    removeFromGroup: (conversationId, member) => send({ op: 'dm_group_remove', conversation: conversationId, member }),
+    leaveGroup: (conversationId) => send({ op: 'dm_group_leave', conversation: conversationId }),
+    renameGroup: (conversationId, name) => {
+      setGroupError(null);
+      send({ op: 'dm_group_rename', conversation: conversationId, name });
+    },
+    setMuted: (conversationId, muted) => send({ op: 'dm_mute', conversation: conversationId, muted }),
+    title: (c) => conversationTitle(c, user),
     edit: (id, content) => send({ op: 'dm_edit', id, content }),
     remove: (id) => send({ op: 'dm_delete', id }),
     sendTyping: () => {

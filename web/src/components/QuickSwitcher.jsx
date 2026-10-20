@@ -21,7 +21,7 @@ export function peopleItems({ me, conversations = [], unread = {}, members = [] 
   const seen = new Set([me]);
   const items = [];
   for (const c of conversations) {
-    if (seen.has(c.username)) continue;
+    if (c.kind === 'group' || !c.username || seen.has(c.username)) continue; // people only (groups: the go-anywhere list)
     seen.add(c.username);
     items.push({ kind: 'dm', key: c.key, username: c.username, unread: unread[c.key] || 0 });
   }
@@ -90,7 +90,8 @@ export function rankItems(items, query, recent) {
 
 const MAX_SHOWN = 50;
 
-export default function QuickSwitcher({ items, recent, onPick, onClose, mode = 'go' }) {
+// `onNewGroup` (people mode, P9-06d): a "Start a group" button.
+export default function QuickSwitcher({ items, recent, onPick, onClose, mode = 'go', onNewGroup }) {
   const people = mode === 'people';
   const prompt = people ? 'Message who?' : 'Where do you want to go?';
   const [query, setQuery] = useState('');
@@ -181,9 +182,14 @@ export default function QuickSwitcher({ items, recent, onPick, onClose, mode = '
           {people ? 'No one by that name in your servers. People you share a server with show up here.' : 'No matches. Try another name.'}
         </p>
       )}
-      <p className="border-t border-ink-500/40 px-3 py-2 text-xs text-gray-500">
-        {people ? '↑↓ to choose · Enter to message · Esc to close' : '↑↓ to choose · Enter to go · Esc to close · Alt+↑↓ switches channels'}
-      </p>
+      <div className="flex items-center justify-between gap-2 border-t border-ink-500/40 px-3 py-2 text-xs text-gray-500">
+        <span>{people ? '↑↓ to choose · Enter to message · Esc to close' : '↑↓ to choose · Enter to go · Esc to close · Alt+↑↓ switches channels'}</span>
+        {people && onNewGroup && (
+          <button type="button" onClick={onNewGroup} className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-brand-hi hover:bg-ink-700">
+            Start a group
+          </button>
+        )}
+      </div>
     </Modal>
   );
 }

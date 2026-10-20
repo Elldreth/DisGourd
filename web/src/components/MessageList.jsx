@@ -99,7 +99,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
   // Edit your newest loaded message that has text (the composer's up arrow;
   // attachment-only messages are skipped). Returns whether there was one.
   function startEditLast() {
-    const last = [...messages].reverse().find((m) => m.author === currentUser && m.content && onEdit);
+    const last = [...messages].reverse().find((m) => m.author === currentUser && m.content && !m.kind && onEdit);
     if (!last) return false;
     editReturn.current = 'composer';
     setEditingId(last.id);
@@ -364,6 +364,12 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
       rows.push({ kind: 'new', key: 'new-divider' });
       lastAuthor = null;
     }
+    // A group DM's notice ("sandy added bob", P9-06d): its own centered line.
+    if (m.kind === 'system') {
+      rows.push({ kind: 'system', key: m.id, m });
+      lastAuthor = null;
+      return;
+    }
     // A reply always starts a new block, so its quote line sits under a header.
     const grouped = !m.replyTo && m.author === lastAuthor && m.timestamp - lastTs < 5 * 60 * 1000;
     rows.push({ kind: 'msg', key: m.id, m, grouped });
@@ -452,6 +458,11 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               <div className="h-px flex-1 bg-pink/70" />
               <span>New</span>
             </div>
+          ) : row.kind === 'system' ? (
+            <p key={row.key} data-msg-id={row.m.id} role="note" className="my-2 text-center text-xs text-gray-500">
+              {row.m.content}
+              <span className="ml-2 text-gray-600">{formatTime(row.m.timestamp)}</span>
+            </p>
           ) : row.kind === 'divider' ? (
             <div key={row.key} className="my-3 flex items-center gap-3 text-xs text-gray-500">
               <div className="h-px flex-1 bg-ink-500/40" />

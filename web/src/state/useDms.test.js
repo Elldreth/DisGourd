@@ -109,3 +109,59 @@ test('P9-06b: frames, unread, typing and sending go by conversation; a new DM be
   await waitFor(() => expect(send).toHaveBeenCalledWith({ op: 'dm_focus', conversation: 9 }));
   expect(result.current.unread['c:9']).toBeUndefined(); // your own first message isn't unread
 });
+
+test('P9-06d: group frames: a summary adds or updates it; the one you made opens; leaving closes it and tells you; refusals; notices', async () => {
+  send.mockClear();
+  const onLeft = vi.fn();
+  const onIncoming = vi.fn();
+  const { result } = renderHook((props) => useDms({ user: 'sandy', send, status: 'open', active: true, onLeft, onIncoming, ...props }));
+  await waitFor(() => expect(result.current.conversations).toEqual(listed));
+  const summary = { id: 5, kind: 'group', name: null, ownerId: 1, muted: false, members: [{ id: 1, username: 'sandy' }, { id: 2, username: 'bob' }, { id: 3, username: 'cara' }], unread: 0 };
+  act(() => result.current.handlers.dm_conversation({ type: 'dm_conversation', conversation: summary }));
+  expect(result.current.conversations[0]).toMatchObject({ key: 'c:5', kind: 'group' });
+  expect(result.current.title(result.current.conversations[0])).toBe('bob and cara');
+  act(() => result.current.handlers.dm_conversation({ type: 'dm_conversation', conversation: { ...summary, name: 'Gourd Club', muted: true } }));
+  expect(result.current.conversations.filter((c) => c.key === 'c:5')).toEqual([expect.objectContaining({ name: 'Gourd Club', muted: true })]);
+  // The group you made opens.
+  act(() => result.current.handlers.dm_group_created({ type: 'dm_group_created', conversation: 5 }));
+  expect(result.current.current).toBe('c:5');
+  expect(result.current.currentConversation).toMatchObject({ name: 'Gourd Club' });
+  // A notice is shown but doesn't notify; a message from the group does, and counts as from the group.
+  act(() => result.current.handlers.dm({ type: 'dm', kind: 'system', id: 30, conversation: 5, from: 'sandy', to: null, content: 'sandy started the group' }));
+  expect(result.current.messages.at(-1)).toMatchObject({ id: 30, kind: 'system' });
+  expect(onIncoming).not.toHaveBeenCalled();
+  act(() => result.current.handlers.dm({ type: 'dm', id: 31, conversation: 5, from: 'bob', to: null, content: 'hi all' }));
+  expect(onIncoming).toHaveBeenCalledWith(expect.objectContaining({ kind: 'dm', conversation: 5, from: 'bob' }));
+  // Actions send the group ops.
+  act(() => result.current.createGroup(['bob', 'cara'], 'Club'));
+  expect(send).toHaveBeenLastCalledWith({ op: 'dm_group_create', members: ['bob', 'cara'], name: 'Club' });
+  act(() => result.current.addToGroup(5, ['dee']));
+  expect(send).toHaveBeenLastCalledWith({ op: 'dm_group_add', conversation: 5, members: ['dee'] });
+  act(() => result.current.removeFromGroup(5, 'cara'));
+  expect(send).toHaveBeenLastCalledWith({ op: 'dm_group_remove', conversation: 5, member: 'cara' });
+  act(() => result.current.renameGroup(5, 'Squash'));
+  expect(send).toHaveBeenLastCalledWith({ op: 'dm_group_rename', conversation: 5, name: 'Squash' });
+  act(() => result.current.setMuted(5, false));
+  expect(send).toHaveBeenLastCalledWith({ op: 'dm_mute', conversation: 5, muted: false });
+  act(() => result.current.leaveGroup(5));
+  expect(send).toHaveBeenLastCalledWith({ op: 'dm_group_leave', conversation: 5 });
+  // A refusal is kept for the app to show; other ops' errors aren't.
+  act(() => result.current.handlers.error({ type: 'error', op: 'message', code: 'SLOWMODE' }));
+  expect(result.current.groupError).toBeNull();
+  act(() => result.current.handlers.error({ type: 'error', op: 'dm_group_add', code: 'NOT_ALLOWED', error: 'You can only add…' }));
+  expect(result.current.groupError).toEqual({ op: 'dm_group_add', code: 'NOT_ALLOWED', error: 'You can only add…' });
+  // Removed: gone from the list and the view; the app is told.
+  act(() => result.current.handlers.dm_left({ type: 'dm_left', conversation: 5, reason: 'removed', name: 'Gourd Club' }));
+  expect(result.current.conversations.some((c) => c.key === 'c:5')).toBe(false);
+  expect(result.current.current).toBe('');
+  expect(onLeft).toHaveBeenCalledWith(expect.objectContaining({ reason: 'removed', name: 'Gourd Club' }));
+});
+
+test('P9-06d: with a new 1-to-1 open, a group message from that person doesn’t take it over', async () => {
+  const { result } = setup(true);
+  await waitFor(() => expect(result.current.conversations).toEqual(listed));
+  act(() => result.current.open('cara'));
+  act(() => result.current.handlers.dm({ type: 'dm', id: 40, conversation: 9, from: 'cara', to: null, content: 'in a group' }));
+  expect(result.current.current).toBe('@cara');
+  expect(result.current.unread['c:9']).toBe(1);
+});
