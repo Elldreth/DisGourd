@@ -24,7 +24,7 @@ function setup(props = {}) {
   return { onClose };
 }
 
-const bobRow = () => screen.getByText('bob').closest('button');
+const bobRow = () => screen.getAllByText('bob')[0].closest('button'); // the row (the open menu's header names bob too)
 const menuOpen = () => screen.queryByRole('button', { name: 'Message' }) !== null;
 
 test('Esc closes the member menu and puts focus back on the member', () => {

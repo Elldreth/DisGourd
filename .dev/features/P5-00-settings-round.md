@@ -16,8 +16,8 @@ Every setting lives where its effect lives: your Settings for you, Server settin
 | P5-01 | Quick fixes: image overflow, member menu dismissal | S | B1, M1 | COMPLETE (#159) |
 | P5-02 | Settings kit and your settings | M | S1, S4, S5, S6, F1, A1 | COMPLETE (#160) |
 | P5-03 | Site admin: General and Image generation pages | L | S2, S3, V2 | COMPLETE (#161) |
-| P5-04 | Server settings window and a short server menu | L | V1, V2, V3, V4 | REVIEW |
-| P5-05 | Channel settings tabs and member menu header | M | C1, M2 | PLANNED (P5-02; P5-01 for the menu) |
+| P5-04 | Server settings window and a short server menu | L | V1, V2, V3, V4 | COMPLETE (#162) |
+| P5-05 | Channel settings tabs and member menu header | M | C1, M2 | REVIEW |
 | P5-06 | Sound set, image-generation art, shorter voice warning | M | A2, F2 (+ art for P5-03) | PLANNED (art lands after P5-03) |
 
 ## Cross-child dependencies and hot files

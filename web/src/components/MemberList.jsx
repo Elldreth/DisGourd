@@ -17,6 +17,8 @@ import RoleName from './RoleName.jsx';
 // focus moves into it and goes back where it was when it closes.
 // Spoken after a member's name (the dot alone isn't enough).
 const STATUS_WORDS = { idle: 'Idle', dnd: 'Do Not Disturb' };
+// The member menu's header says the status in words (P5-05).
+const HEADER_STATUS = { online: 'Online', idle: 'Idle', dnd: 'Do Not Disturb', offline: 'Offline' };
 
 // canKickMembers / myPosition (from the server's roles): who I may remove.
 // roles (highest first) name each member's badge; canManageRoles offers
@@ -105,6 +107,7 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
     if (canKick) {
       acts.push({
         label: 'Remove from server',
+        mod: 2,
         danger: true,
         onClick: () => {
           // The menu item disappears; put focus on the member's row so the
@@ -117,11 +120,12 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
     // Timeouts (P3-26c): "time out members", and they sit strictly below me.
     if (!self && canTimeoutMembers && (m.position ?? 0) < myPosition) {
       if (timedOut(m)) {
-        acts.push({ label: 'Remove timeout', onClick: () => onRemoveTimeout(m.username) });
+        acts.push({ label: 'Remove timeout', mod: 1, onClick: () => onRemoveTimeout(m.username) });
       } else {
         acts.push({
           label: 'Time out…',
-          danger: true,
+          mod: 1,
+          caution: true, // reversible: amber, not red (P5-05)
           onClick: () => {
             panelRef.current?.querySelector(`button[title="${CSS.escape(m.username)}"]`)?.focus();
             setTimingOut(m.username);
@@ -133,6 +137,7 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
     if (!self && canBanMembers && (m.position ?? 0) < myPosition) {
       acts.push({
         label: 'Ban…',
+        mod: 3,
         danger: true,
         onClick: () => {
           panelRef.current?.querySelector(`button[title="${CSS.escape(m.username)}"]`)?.focus();
@@ -186,21 +191,43 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
                 {topRoleName(m) && <RoleBadge>{topRoleName(m)}</RoleBadge>}
               </button>
               {open && acts.length > 0 && (
-                <div className="anim-pop mb-1 ml-9 mr-1 overflow-hidden rounded-lg bg-ink-900 shadow-lg ring-1 ring-ink-500/50">
-                  {acts.map((a) => (
-                    <button
-                      key={a.label}
-                      onClick={() => {
-                        setMenuFor(null);
-                        a.onClick();
-                      }}
-                      className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-ink-600 ${
-                        a.danger ? 'text-danger' : 'text-gray-200'
-                      }`}
-                    >
-                      {a.label}
-                    </button>
-                  ))}
+                // P5-05: who it's about at the top, then everyday actions, then
+                // moderation (Time out, Remove, Ban) after a separator.
+                <div role="group" aria-label={`Actions for ${m.username}`} className="anim-pop mb-1 ml-2 mr-1 overflow-hidden rounded-lg bg-ink-900 shadow-lg ring-1 ring-ink-500/50">
+                  <div data-testid="member-menu-header" className="flex items-center gap-2 border-b border-ink-500/40 px-3 py-2">
+                    <Avatar name={m.username} size={28} status={statusOf(m)} src={m.avatar} />
+                    <span className="min-w-0">
+                      <RoleName name={m.username} className="block truncate text-sm font-semibold" />
+                      <span className="block truncate text-xs text-gray-400">
+                        {[topRoleName(m), HEADER_STATUS[statusOf(m)]].filter(Boolean).join(' · ')}
+                      </span>
+                    </span>
+                  </div>
+                  {(() => {
+                    const plain = acts.filter((a) => !a.mod);
+                    const mod = acts.filter((a) => a.mod).sort((x, y) => x.mod - y.mod);
+                    const item = (a) => (
+                      <button
+                        key={a.label}
+                        onClick={() => {
+                          setMenuFor(null);
+                          a.onClick();
+                        }}
+                        className={`tap-row block w-full px-3 py-1.5 text-left text-sm hover:bg-ink-600 ${
+                          a.danger ? 'text-danger' : a.caution ? 'text-idle' : 'text-gray-200'
+                        }`}
+                      >
+                        {a.label}
+                      </button>
+                    );
+                    return (
+                      <>
+                        {plain.map(item)}
+                        {plain.length > 0 && mod.length > 0 && <div role="separator" className="my-1 h-px bg-ink-500/50" />}
+                        {mod.map(item)}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>

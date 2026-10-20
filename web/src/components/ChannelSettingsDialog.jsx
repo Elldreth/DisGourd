@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import * as api from '../api.js';
 import Icon from './Icon.jsx';
 import Modal from './Modal.jsx';
+import SettingRow from './settings/SettingRow.jsx';
+import Switch from './settings/Switch.jsx';
 
 // An override cell: '' default, '1' allow, '0' deny.
 const CHOICES = [
@@ -118,198 +120,238 @@ export default function ChannelSettingsDialog({ space, channel, meta, roles = []
     }
   }
 
+  // Tabs (P5-05): Overview (topic, place, 18+, delete), Permissions (the role
+  // table) and, for text channels, Moderation (slow mode). A category edits
+  // only its access, so it has no tabs. Every tab stays mounted; one Save.
+  const tabs = category ? [] : [['overview', 'Overview'], ['permissions', 'Permissions'], ...(isVoice ? [] : [['moderation', 'Moderation']])];
+  const [tab, setTab] = useState('overview');
+  const shown = (id) => category ? id === 'permissions' : tab === id;
+  const tabsId = useId();
+  function onTabKey(e) {
+    const ids = tabs.map(([id]) => id);
+    const i = ids.indexOf(tab);
+    const next = { ArrowRight: ids[(i + 1) % ids.length], ArrowLeft: ids[(i + ids.length - 1) % ids.length], Home: ids[0], End: ids[ids.length - 1] }[e.key];
+    if (!next) return;
+    e.preventDefault();
+    setTab(next);
+    document.getElementById(`${tabsId}-tab-${next}`)?.focus();
+  }
+  const panelProps = (id) => ({
+    role: category ? undefined : 'tabpanel',
+    id: `${tabsId}-panel-${id}`,
+    'aria-labelledby': category ? undefined : `${tabsId}-tab-${id}`,
+    hidden: !shown(id),
+    className: 'space-y-4',
+  });
+  const label = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400';
+
   return (
     <Modal
       onClose={onClose}
       initialFocusRef={bodyRef}
-      panelClassName="flex max-h-[90vh] w-full max-w-md flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
+      panelClassName="flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-ink-800 shadow-2xl ring-1 ring-ink-500/50"
     >
-      <div className="flex items-center justify-between border-b border-ink-500/40 px-6 py-4">
-        <Modal.Title>{category ? `${category.name} permissions` : `${isVoice ? channel : `#${channel}`} settings`}</Modal.Title>
-        <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">Close</button>
-      </div>
+      <Modal.Header title={category ? `${category.name} permissions` : `${isVoice ? channel : `#${channel}`} settings`} onClose={onClose} />
 
-      <div ref={bodyRef} className="space-y-3 overflow-y-auto p-6">
-        {category && (
-          <p className="text-sm text-gray-400">
-            Channels created in this category, or moved into it, start with this access. Channels already in it aren’t changed unless you use
-            {' '}<strong>Apply to all channels</strong>.
-          </p>
-        )}
-        {!category && placement && (
-          <div role="group" aria-label="Place in the channel list" className="flex flex-wrap items-end gap-2">
-            <div className="min-w-0 flex-1">
-              <label htmlFor="channel-category" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Category</label>
-              <select
-                id="channel-category"
-                value={placement.category ?? ''}
-                onChange={(e) => placement.onMoveTo(e.target.value === '' ? null : Number(e.target.value))}
-                className="input"
-              >
-                <option value="">No category (top of the list)</option>
-                {placement.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <button type="button" disabled={!placement.canUp} onClick={() => placement.onMove(-1)} className="rounded-lg bg-ink-600 px-3 py-2 text-sm text-gray-200 transition hover:bg-ink-500 disabled:opacity-40">
-              Move up
+      {tabs.length > 0 && (
+        <div role="tablist" aria-label="Channel settings sections" className="flex shrink-0 gap-1 border-b border-ink-500/40 px-4">
+          {tabs.map(([id, name]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              id={`${tabsId}-tab-${id}`}
+              aria-selected={tab === id}
+              aria-controls={`${tabsId}-panel-${id}`}
+              tabIndex={tab === id ? 0 : -1}
+              onClick={() => setTab(id)}
+              onKeyDown={onTabKey}
+              className={`tap-row -mb-px border-b-2 px-3 py-2.5 text-sm transition ${
+                tab === id ? 'border-brand-hi text-fg' : 'border-transparent text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              {name}
             </button>
-            <button type="button" disabled={!placement.canDown} onClick={() => placement.onMove(1)} className="rounded-lg bg-ink-600 px-3 py-2 text-sm text-gray-200 transition hover:bg-ink-500 disabled:opacity-40">
-              Move down
-            </button>
-          </div>
-        )}
-        {!category && (
-        <div>
-          <label htmlFor="channel-topic" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Topic</label>
-          <textarea
-            id="channel-topic"
-            rows={2}
-            maxLength={300}
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="What’s this channel for?"
-            className="input resize-y"
-          />
-          <p className="mt-0.5 text-right text-xs text-gray-500" aria-live="polite">{topic.length}/300</p>
+          ))}
         </div>
-        )}
-        <p className="text-sm text-gray-400">
-          {category ? 'Who can see and post in its channels, by role.' : isVoice
-            ? 'Who can see and join this channel, by role.'
-            : 'Who can see and post here, by role. Deny @everyone and allow a role for a private channel; deny posting for a read-only one.'}
-        </p>
-        {cells === null ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
-                <th scope="col" className="pb-2 font-semibold">Role</th>
-                <th scope="col" className="pb-2 font-semibold">{isVoice ? 'See & join' : 'View'}</th>
-                {!isVoice && <th scope="col" className="pb-2 font-semibold">Post</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {ordered.map((r) => {
-                const locked = !editable(r);
-                return (
-                  <tr key={r.id} className="border-t border-ink-500/30">
-                    <th scope="row" className="py-1.5 pr-2 text-left font-normal text-gray-200">
-                      <span className="flex items-center gap-2">
-                        <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-ink-500" style={{ background: r.color || 'transparent' }} />
-                        <span className="truncate">{r.name}</span>
-                      </span>
-                    </th>
-                    {(isVoice ? ['view'] : ['view', 'post']).map((field) => (
-                      <td key={field} className="py-1.5 pr-2">
-                        <select
-                          aria-label={`${r.name}: ${field === 'post' ? 'post' : isVoice ? 'see and join' : 'view'}`}
-                          value={cell(r.id, field)}
-                          disabled={locked}
-                          title={locked ? 'Only roles below your own can be changed' : undefined}
-                          onChange={(e) => setCell(r.id, field, e.target.value)}
-                          className="input py-1 disabled:opacity-50"
-                        >
-                          {CHOICES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}
-                        </select>
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-        <p className="text-xs text-gray-500">
-          Default follows @everyone, whose default is allowed. If any of someone’s roles allows, they’re allowed; posting always needs viewing.
-        </p>
-        {!isVoice && !category && (
-          <label className="flex items-start gap-2 border-t border-ink-500/30 pt-3 text-sm text-gray-200">
-            <input type="checkbox" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand" />
-            <span>
-              Age-restricted (18+)
-              <span className="mt-0.5 block text-xs text-gray-500">
-                Marks the channel 18+. If the instance allows it, /imagine here isn’t filtered.
-              </span>
-            </span>
-          </label>
-        )}
-        {!isVoice && !category && (
-          <div className="flex items-start gap-3 border-t border-ink-500/30 pt-3 text-sm text-gray-200">
-            <div className="flex-1">
-              <label htmlFor="channel-slowmode">Slow mode</label>
-              <span className="mt-0.5 block text-xs text-gray-500">
-                How long each person waits between messages here (and in its threads). Moderators aren’t limited.
-              </span>
-            </div>
-            <select id="channel-slowmode" value={slowmode} onChange={(e) => setSlowmode(Number(e.target.value))} className="input w-auto">
-              {SLOWMODE_CHOICES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </div>
-        )}
-        {error && <div role="alert" className="text-sm text-danger">{error}</div>}
-      </div>
+      )}
 
-      {category ? (
-        <div className="border-t border-ink-500/40 px-6 py-4">
-          {applied !== null && <p role="status" className="mb-2 text-sm text-online">Applied to {applied} channel{applied === 1 ? '' : 's'}.</p>}
-          {!confirmApply ? (
-            <button onClick={() => setConfirmApply(true)} disabled={cells === null} className="text-sm font-medium text-brand-hi transition hover:underline disabled:opacity-50">
-              Apply to all channels in {category.name}…
-            </button>
-          ) : (
-            <div className="rounded-lg bg-ink-900/60 p-3 ring-1 ring-ink-500/40">
-              <p className="text-sm text-gray-200">
-                Replace the access of every channel in <span className="font-semibold">{category.name}</span> with this? Their own settings are
-                overwritten.
-              </p>
-              <div className="mt-3 flex justify-end gap-2">
-                <button onClick={() => setConfirmApply(false)} disabled={busy} className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-fg">
-                  Cancel
-                </button>
-                <button onClick={applyToAll} disabled={busy} className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60">
-                  {busy ? 'Applying…' : 'Apply to all'}
-                </button>
+      {/* A fixed height, so switching tabs doesn't resize and re-centre the dialog. */}
+      <div ref={bodyRef} className={`overflow-y-auto p-6 ${category ? '' : 'h-[min(28rem,65vh)]'}`}>
+        {!category && (
+          <section {...panelProps('overview')}>
+            <div>
+              <label htmlFor="channel-topic" className={label}>Topic</label>
+              <textarea
+                id="channel-topic"
+                rows={2}
+                maxLength={300}
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="What’s this channel for?"
+                className="input resize-y"
+              />
+              <p className="mt-0.5 text-right text-xs text-gray-500" aria-live="polite">{topic.length}/300</p>
+            </div>
+            {placement && (
+              <div role="group" aria-label="Place in the channel list">
+                <label htmlFor="channel-category" className={label}>Category</label>
+                <select
+                  id="channel-category"
+                  value={placement.category ?? ''}
+                  onChange={(e) => placement.onMoveTo(e.target.value === '' ? null : Number(e.target.value))}
+                  className="input"
+                >
+                  <option value="">No category (top of the list)</option>
+                  {placement.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" disabled={!placement.canUp} onClick={() => placement.onMove(-1)} className="rounded-lg bg-ink-600 px-3 py-1.5 text-sm text-gray-200 transition hover:bg-ink-500 disabled:opacity-40">
+                    Move channel up
+                  </button>
+                  <button type="button" disabled={!placement.canDown} onClick={() => placement.onMove(1)} className="rounded-lg bg-ink-600 px-3 py-1.5 text-sm text-gray-200 transition hover:bg-ink-500 disabled:opacity-40">
+                    Move channel down
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Moves happen right away. You can also drag channels in the list.</p>
               </div>
+            )}
+            {!isVoice && (
+              <SettingRow label="Age-restricted (18+)" description="Marks the channel 18+. If the instance allows it, /imagine here isn’t filtered.">
+                <Switch label="Age-restricted (18+)" checked={nsfw} onChange={setNsfw} />
+              </SettingRow>
+            )}
+            <section aria-label="Danger zone" className="rounded-xl p-4 ring-1 ring-danger/40">
+              {!confirmDelete ? (
+                <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-2 text-sm font-medium text-danger transition hover:underline">
+                  <Icon name="trash" size={15} /> Delete channel
+                </button>
+              ) : (
+                <div>
+                  <p className="text-sm text-gray-200">
+                    Delete <span className="font-semibold">{isVoice ? channel : `#${channel}`}</span>? This
+                    permanently removes the channel{isVoice ? '' : ' and every message in it'}. This can’t be
+                    undone.
+                  </p>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button onClick={() => setConfirmDelete(false)} disabled={busy} className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-fg">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={remove}
+                      disabled={busy}
+                      className="rounded-lg bg-danger px-3 py-1.5 text-sm font-semibold text-ink-900 transition hover:brightness-110 active:scale-95 disabled:opacity-60 disabled:active:scale-100"
+                    >
+                      {busy ? 'Deleting…' : 'Delete channel'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </section>
+        )}
+
+        <section {...panelProps('permissions')}>
+          {category && (
+            <p className="text-sm text-gray-400">
+              Channels created in this category, or moved into it, start with this access. Channels already in it aren’t changed unless you use
+              {' '}<strong>Apply to all channels</strong>.
+            </p>
+          )}
+          <p className="text-sm text-gray-400">
+            {category ? 'Who can see and post in its channels, by role.' : isVoice
+              ? 'Who can see and join this channel, by role.'
+              : 'Who can see and post here, by role. Deny @everyone and allow a role for a private channel; deny posting for a read-only one.'}
+          </p>
+          {cells === null ? (
+            <p className="text-sm text-gray-500">Loading…</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
+                  <th scope="col" className="pb-2 font-semibold">Role</th>
+                  <th scope="col" className="pb-2 font-semibold">{isVoice ? 'See & join' : 'View'}</th>
+                  {!isVoice && <th scope="col" className="pb-2 font-semibold">Post</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {ordered.map((r) => {
+                  const locked = !editable(r);
+                  return (
+                    <tr key={r.id} className="border-t border-ink-500/30">
+                      <th scope="row" className="py-1.5 pr-2 text-left font-normal text-gray-200">
+                        <span className="flex items-center gap-2">
+                          <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-ink-500" style={{ background: r.color || 'transparent' }} />
+                          <span className="truncate">{r.name}</span>
+                        </span>
+                      </th>
+                      {(isVoice ? ['view'] : ['view', 'post']).map((field) => (
+                        <td key={field} className="py-1.5 pr-2">
+                          <select
+                            aria-label={`${r.name}: ${field === 'post' ? 'post' : isVoice ? 'see and join' : 'view'}`}
+                            value={cell(r.id, field)}
+                            disabled={locked}
+                            title={locked ? 'Only roles below your own can be changed' : undefined}
+                            onChange={(e) => setCell(r.id, field, e.target.value)}
+                            className="input py-1 disabled:opacity-50"
+                          >
+                            {CHOICES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}
+                          </select>
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <p className="text-xs text-gray-500">
+            Default follows @everyone, whose default is allowed. If any of someone’s roles allows, they’re allowed; posting always needs viewing.
+          </p>
+          {category && (
+            <div className="border-t border-ink-500/40 pt-4">
+              {applied !== null && <p role="status" className="mb-2 text-sm text-online">Applied to {applied} channel{applied === 1 ? '' : 's'}.</p>}
+              {!confirmApply ? (
+                <button onClick={() => setConfirmApply(true)} disabled={cells === null} className="text-sm font-medium text-brand-hi transition hover:underline disabled:opacity-50">
+                  Apply to all channels in {category.name}…
+                </button>
+              ) : (
+                <div className="rounded-lg bg-ink-900/60 p-3 ring-1 ring-ink-500/40">
+                  <p className="text-sm text-gray-200">
+                    Replace the access of every channel in <span className="font-semibold">{category.name}</span> with this? Their own settings are
+                    overwritten.
+                  </p>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button onClick={() => setConfirmApply(false)} disabled={busy} className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-fg">
+                      Cancel
+                    </button>
+                    <button onClick={applyToAll} disabled={busy} className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60">
+                      {busy ? 'Applying…' : 'Apply to all'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      ) : (
-      <div className="border-t border-ink-500/40 px-6 py-4">
-        {!confirmDelete ? (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="flex items-center gap-2 text-sm font-medium text-danger transition hover:underline"
-          >
-            <Icon name="trash" size={15} /> Delete channel
-          </button>
-        ) : (
-          <div className="rounded-lg bg-danger/10 p-3 ring-1 ring-danger/30">
-            <p className="text-sm text-gray-200">
-              Delete <span className="font-semibold">{isVoice ? channel : `#${channel}`}</span>? This
-              permanently removes the channel{isVoice ? '' : ' and every message in it'}. This can’t be
-              undone.
-            </p>
-            <div className="mt-3 flex justify-end gap-2">
-              <button
-                onClick={() => setConfirmDelete(false)}
-                disabled={busy}
-                className="rounded-lg px-3 py-1.5 text-sm text-gray-300 transition hover:text-fg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={remove}
-                disabled={busy}
-                className="rounded-lg bg-danger px-3 py-1.5 text-sm font-semibold text-ink-900 transition hover:brightness-110 active:scale-95 disabled:opacity-60 disabled:active:scale-100"
-              >
-                {busy ? 'Deleting…' : 'Delete channel'}
-              </button>
+        </section>
+
+        {!category && !isVoice && (
+          <section {...panelProps('moderation')}>
+            <div className="flex items-start gap-3 text-sm text-gray-200">
+              <div className="flex-1">
+                <label htmlFor="channel-slowmode">Slow mode</label>
+                <span className="mt-0.5 block text-xs text-gray-500">
+                  How long each person waits between messages here (and in its threads). Moderators aren’t limited.
+                </span>
+              </div>
+              <select id="channel-slowmode" value={slowmode} onChange={(e) => setSlowmode(Number(e.target.value))} className="input w-auto">
+                {SLOWMODE_CHOICES.map(([value, name]) => <option key={value} value={value}>{name}</option>)}
+              </select>
             </div>
-          </div>
+          </section>
         )}
+        {error && <div role="alert" className="mt-4 text-sm text-danger">{error}</div>}
       </div>
-      )}
 
       <div className="flex justify-end gap-2 border-t border-ink-500/40 px-6 py-3">
         <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:text-fg">Cancel</button>
