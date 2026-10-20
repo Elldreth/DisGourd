@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
+import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
 
 // Connection trouble wins over your chosen status in the footer.
@@ -20,8 +21,9 @@ export const PRESENCE_MODES = [
 const DOT_CLASS = { online: 'bg-online', idle: 'bg-idle', dnd: 'bg-pink', offline: 'bg-gray-500' };
 
 // The current-user strip at the bottom of the left sidebar: your avatar (click
-// it to set your status), your name and status (click for your profile), and
-// sign-out.
+// it to set your status), your name and status (click for your settings), and
+// a Settings gear. Sign out lives at the bottom of the status menu and in
+// Settings › My account (P5-02), not one click away in the footer.
 // statusText/statusEmoji: your custom status (shown under your name instead
 // of the plain status word), set from the menu via onEditStatus.
 export default function UserFooter({ user, avatar, status, presence = 'online', statusText, statusEmoji, onSetPresence, onEditStatus, onOpenProfile, onLogout }) {
@@ -91,10 +93,10 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
         </span>
       </button>
       <IconButton
-        icon="logout"
-        size={17}
-        label="Sign out"
-        onClick={onLogout}
+        icon="settings"
+        size={18}
+        label="Settings"
+        onClick={onOpenProfile}
         className="tap rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
       />
       {menuOpen && (
@@ -142,6 +144,24 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
               >
                 <span aria-hidden="true" className="w-2.5 text-center">✎</span>
                 Set a custom status
+              </button>
+            </>
+          )}
+          {onLogout && (
+            <>
+              <div className="my-1 h-px bg-ink-500/50" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLogout();
+                }}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-gray-300 transition hover:bg-ink-600 hover:text-danger focus-visible:bg-ink-600"
+              >
+                <Icon name="logout" size={12} className="shrink-0" />
+                Sign out
               </button>
             </>
           )}

@@ -136,8 +136,8 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P4-06 | Hierarchy and a11y polish (10 small items) | 4 | COMPLETE | S | none | ServerRail.jsx, ChannelList.jsx, MessageList.jsx, MessageActions.jsx, AuthShell.jsx, ThreadPanel.jsx, AudioSettings.jsx, Gourd.jsx |
 | P4-07 | Thread panel on phones: back + hardware back | 4 | COMPLETE | S | none | overlayHistory.js (new), ThreadPanel.jsx, App.jsx, MemberList.jsx |
 | P5-00 | Settings and menus round 2 (Container: 01–06) | 5 | PLANNED | 2 S, 2 M, 2 L | none (map agreed 2026-10-19) | see children; source design/settings-review-2026-10/REVIEW.md |
-| P5-01 | Quick fixes: image overflow, member menu dismissal | 5 | REVIEW | S | none | MessageList/Attachment, MemberList.jsx |
-| P5-02 | Settings kit and your settings | 5 | PLANNED | M | P5-01 (order) | components/settings/* (new), ProfileDialog.jsx, UserFooter.jsx, Modal.jsx |
+| P5-01 | Quick fixes: image overflow, member menu dismissal | 5 | COMPLETE | S | none | MessageList/Attachment, MemberList.jsx |
+| P5-02 | Settings kit and your settings | 5 | REVIEW | M | P5-01 (order) | components/settings/* (new), ProfileDialog.jsx, UserFooter.jsx, Modal.jsx |
 | P5-03 | Site admin: General and Image generation pages | 5 | PLANNED | L | P5-02 | components/admin/imagine/* (new), ImagineAdmin.jsx, RegistrationAdmin.jsx |
 | P5-04 | Server settings window and a short server menu | 5 | PLANNED | L | P5-02 | components/server-settings/* (new), ChannelList.jsx, Roles/ModLog/Bans/Emoji/ServerImagine dialogs |
 | P5-05 | Channel settings tabs and member menu header | 5 | PLANNED | M | P5-02, P5-01 | ChannelSettingsDialog.jsx, MemberList.jsx |

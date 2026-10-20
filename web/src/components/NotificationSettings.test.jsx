@@ -109,7 +109,7 @@ test('push: the switch subscribes with the previews choice, and the text switch 
   const { default: Settings } = await import('./NotificationSettings.jsx');
   mockNotification('default', 'granted');
   render(<Settings />);
-  const push = await screen.findByRole('checkbox', { name: 'Push notifications for mentions and DMs' });
+  const push = await screen.findByRole('switch', { name: 'Push notifications for mentions and DMs' });
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
@@ -120,7 +120,7 @@ test('push: the switch subscribes with the previews choice, and the text switch 
   expect(pwa.subscribeToPush).toHaveBeenCalledWith({ previews: true });
   expect(push.checked).toBe(true);
   await act(async () => {
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Include message text in push notifications' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Include message text in push notifications' }));
   });
   expect(pwa.subscribeToPush).toHaveBeenLastCalledWith({ previews: false });
   expect(localStorage.getItem('disgourd.pushPreviews')).toBe('0');
