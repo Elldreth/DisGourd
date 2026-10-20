@@ -210,6 +210,16 @@ body,
 #root {
   height: 100%;
 }
+/* P7-04: on phones, the visible height (100% counts the space behind the
+   browser's address bar, pushing the message box below the fold). With
+   viewport-fit=cover the page reaches the screen edges, so keep clear of
+   side notches in landscape; the bottom gap is on the message box and the
+   user footer. All of these are 0 on desktop. */
+#root {
+  height: 100dvh;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
 
 body {
   margin: 0;
