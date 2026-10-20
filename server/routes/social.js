@@ -23,6 +23,15 @@ const routes = [
         const convos = db.getDmConversations(userId).map((c) => ({ ...c, unread: unread[c.username] || 0 }));
         return sendJson(res, 200, convos);
       }
+      // GET /dms/:username/messages/:id/versions — a DM's edit history (P3-27),
+      // for either person in the conversation.
+      if (pathSegments[2] === 'messages' && pathSegments[4] === 'versions' && pathSegments.length === 5 && req.method === 'GET') {
+        const other = db.getUserByUsername(pathSegments[1]);
+        const dm = other ? db.getDmById(parseInt(pathSegments[3], 10) || 0) : null;
+        const between = dm && [dm.user_a, dm.user_b].includes(userId) && [dm.user_a, dm.user_b].includes(other.id);
+        if (!between) return sendJson(res, 404, { error: 'Message not found in this conversation' });
+        return sendJson(res, 200, db.getDmVersions(dm.id));
+      }
       // DELETE /dms/:username/messages/:id/preview — the author removes a DM's
       // link cards (P3-20c); both people's copies drop them live.
       if (pathSegments[2] === 'messages' && pathSegments[4] === 'preview' && pathSegments.length === 5 && req.method === 'DELETE') {

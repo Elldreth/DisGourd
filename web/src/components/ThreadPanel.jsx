@@ -165,6 +165,7 @@ export default function ThreadPanel({
       <MessageList
         ref={listRef}
         onHidePreview={(m) => api.hideChannelPreview(space, thread.channel, m.id).catch(() => {})}
+        loadVersions={(m) => api.getMessageVersions(space, thread.channel, m.id)}
         imagineAgain={imagine?.available ? imagine.run : null}
         imagineUpscale={!!imagine?.canUpscale}
         imagineVary={!!imagine?.canVary}

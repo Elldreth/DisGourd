@@ -623,6 +623,30 @@ const MIGRATIONS = [
       db.exec('ALTER TABLE channels ADD COLUMN slowmode_seconds INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    version: 24,
+    name: 'edit history',
+    up(db) {
+      // P3-27: each text a message had before an edit, with when it was
+      // written. They go when the message does.
+      db.exec(`
+        CREATE TABLE message_versions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          content TEXT NOT NULL,
+          written_at INTEGER
+        );
+        CREATE INDEX message_versions_message ON message_versions(message_id, id);
+        CREATE TABLE dm_message_versions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          message_id INTEGER NOT NULL REFERENCES dm_messages(id) ON DELETE CASCADE,
+          content TEXT NOT NULL,
+          written_at INTEGER
+        );
+        CREATE INDEX dm_message_versions_message ON dm_message_versions(message_id, id);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

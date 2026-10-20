@@ -78,6 +78,7 @@ export default function DmPanel({ username, messages, currentUser, newMessages =
         history={history}
         newMessages={newMessages}
         onHidePreview={(m) => api.hideDmPreview(username, m.id).catch(() => {})}
+        loadVersions={(m) => api.getDmVersions(username, m.id)}
         onReply={(m) => setReplyingTo({ id: m.id, author: m.author })}
         simple
         emptyHeading={`This is the beginning of your conversation with ${username}`}

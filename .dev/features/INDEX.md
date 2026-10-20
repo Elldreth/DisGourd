@@ -115,7 +115,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P3-26b | Ban (with message clean-up, Bans list, invite refusal) | 3 | COMPLETE | M | P3-26a | migrations, routes, invites, member menu, BansDialog |
 | P3-26c | Timeout (posting, reacting, voice blocked; auto-lift); calls end on ban / removal | 3 | COMPLETE | M | P3-26a | migrations, chat / imagine / voice checks, Composer |
 | P3-26d | Slow mode per channel | 3 | COMPLETE | S–M | P3-26a | migrations, chat gateway, ChannelSettingsDialog, Composer |
-| P3-27 | Message edit history (channels, threads and DMs; anyone who sees the message) | 3 | READY | M | none | migrations, db, chat + dm gateway, routes, MessageList, EditHistoryDialog |
+| P3-27 | Message edit history (channels, threads and DMs; anyone who sees the message) | 3 | REVIEW | M | none | migrations, db, chat + dm gateway, routes, MessageList, EditHistoryDialog |
 | P3-28 | ComfyUI hires fix (High quality: upscale model + light repaint) | 3 | COMPLETE | S–M | P3-24 | engines/comfyui.js, ImagineAdmin |
 | P3-29 | Upscale button on /imagine images (model only or tiled repaint) | 3 | COMPLETE | M | P3-23, P3-24, P3-28 | migrations, imagine/index.js, runner, engines/comfyui.js, ImagineAgain, ImagineAdmin |
 | P3-30 | Image viewer: right-click to save, real size, Download | 3 | COMPLETE | S | none | MessageList (row events), Lightbox, Icon |

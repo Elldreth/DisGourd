@@ -311,6 +311,7 @@ export default function ChatPanel({
         ref={listRef}
         emptyBody={topic || undefined}
         onHidePreview={(m) => api.hideChannelPreview(space, channel, m.id).catch(() => {})}
+        loadVersions={(m) => api.getMessageVersions(space, channel, m.id)}
         imagineAgain={imagine?.available ? imagine.run : null}
         imagineUpscale={!!imagine?.canUpscale}
         imagineVary={!!imagine?.canVary}

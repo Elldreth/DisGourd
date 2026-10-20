@@ -362,6 +362,16 @@ const routes = [
 
       if (pathSegments[2] === 'channels') {
         const channelName = pathSegments[3];
+        // GET …/messages/:id/versions — a message's edit history (P3-27), for
+        // anyone who can view the channel (or thread).
+        if (channelName && pathSegments[4] === 'messages' && pathSegments[6] === 'versions' && pathSegments.length === 7 && req.method === 'GET') {
+          const id = parseInt(pathSegments[5], 10);
+          const loc = id > 0 ? db.getMessageLocation(id) : null;
+          if (!loc || loc.space !== spaceName || loc.channel !== channelName || !canViewChannel(spaceName, channelName, userId)) {
+            return sendJson(res, 404, { error: 'Message not found in this channel' });
+          }
+          return sendJson(res, 200, db.getMessageVersions(id));
+        }
         // GET messages — must be a member AND allowed to view this channel.
         // Latest page by default; ?around=<id> is a window around one message
         // (jumping to it; 404 if it isn't in this channel), ?after=<id> loads
