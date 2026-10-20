@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../../../api.js';
 import { numOrNull } from './constants.js';
 import SaveBar from '../../settings/SaveBar.jsx';
@@ -13,19 +13,62 @@ import SaveBar from '../../settings/SaveBar.jsx';
 const Ctx = createContext(null);
 export const useImagine = () => useContext(Ctx);
 
-// The ComfyUI draft from the saved settings.
-function comfyDraft(c) {
+// Style presets (P9-04b): what belongs to one style; the rest is shared.
+export const STYLE_FIELDS = ['model', 'kind', 'family', 'clip1', 'clip2', 'vae', 'sampler', 'scheduler', 'cfgScale', 'negative', 'steps', 'promptPrefix', 'workflowMode', 'workflow', 'upscaleWorkflow', 'img2imgWorkflow'];
+const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
+const omit = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+
+// One style's draft from the saved settings.
+export function styleDraft(c = {}) {
   return {
-    enabled: !!c.enabled, url: c.url || '', model: c.model || '', kind: c.kind || 'checkpoint', family: c.family || (c.kind === 'unet' ? '' : 'sdxl'),
-    tier: c.tier || 'medium', clip1: c.clip1 || '', clip2: c.clip2 || '', vae: c.vae || '',
-    hires: c.hires !== false, upscaler: c.upscaler || '',
-    upscaleMode: c.upscaleMode || 'model', tileDenoise: c.tileDenoise ?? 0.3, tileSize: c.tileSize || 1024,
+    model: c.model || '', kind: c.kind || 'checkpoint', family: c.family || (c.kind === 'unet' ? '' : 'sdxl'),
+    clip1: c.clip1 || '', clip2: c.clip2 || '', vae: c.vae || '',
     sampler: c.sampler || '', scheduler: c.scheduler || '', cfgScale: c.cfgScale ?? '', negative: c.negative || '',
     steps: { draft: c.steps?.draft ?? '', standard: c.steps?.standard ?? '', high: c.steps?.high ?? '' },
+    promptPrefix: c.promptPrefix || '',
+    workflowMode: c.workflowMode || 'builtin', workflow: c.workflow || '', upscaleWorkflow: c.upscaleWorkflow || '', img2imgWorkflow: c.img2imgWorkflow || '',
+  };
+}
+
+// The ComfyUI draft from the saved settings: the shared settings, plus
+// `styles` ([{ id, name, saved, …style }]) and `defaultStyle`.
+function comfyDraft(c) {
+  const presets = c.presets?.length ? c.presets : [{ id: 'default', name: 'Default', ...c }];
+  return {
+    enabled: !!c.enabled, url: c.url || '',
+    tier: c.tier || 'medium',
+    hires: c.hires !== false, upscaler: c.upscaler || '',
+    upscaleMode: c.upscaleMode || 'model', tileDenoise: c.tileDenoise ?? 0.3, tileSize: c.tileSize || 1024,
     detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.4,
     detailerPasses: c.detailerPasses || 1, tilePasses: c.tilePasses || 1, varyLoops: c.varyLoops || 2,
     varySubtle: c.varySubtle ?? 0.3, varyStrong: c.varyStrong ?? 0.65,
-    workflowMode: c.workflowMode || 'builtin', workflow: c.workflow || '', upscaleWorkflow: c.upscaleWorkflow || '', img2imgWorkflow: c.img2imgWorkflow || '',
+    styles: presets.map((p) => ({ id: p.id, name: p.name, saved: true, ...styleDraft(p) })),
+    defaultStyle: c.defaultPreset || presets[0].id,
+  };
+}
+
+// One style as Save sends it (P9-04b; the fields as the single form sent them).
+function styleBody(s) {
+  return {
+    // A new style has no id yet: the server makes one from its name.
+    ...(s.saved ? { id: s.id } : {}),
+    name: s.name.trim(),
+    model: s.model || null, kind: s.kind, family: s.family || null,
+    clip1: s.kind === 'unet' ? s.clip1 || null : null,
+    clip2: s.kind === 'unet' && s.family === 'flux' ? s.clip2 || null : null,
+    vae: s.kind === 'unet' ? s.vae || null : null,
+    // Advanced (P3-31): blanks go back to the model type's defaults.
+    sampler: s.sampler || null,
+    scheduler: s.scheduler || null,
+    cfgScale: numOrNull(s.cfgScale),
+    steps: { draft: numOrNull(s.steps.draft), standard: numOrNull(s.steps.standard), high: numOrNull(s.steps.high) },
+    negative: s.negative.trim() || null,
+    promptPrefix: s.promptPrefix.trim() || null,
+    // Custom workflows (P3-34): the boxes are kept even while Built-in is chosen.
+    workflowMode: s.workflowMode,
+    workflow: s.workflow.trim() || null,
+    upscaleWorkflow: s.upscaleWorkflow.trim() || null,
+    img2imgWorkflow: s.img2imgWorkflow.trim() || null,
   };
 }
 
@@ -37,31 +80,20 @@ export function saveBody({ comfy, kie, kieKey, defaultEngine, general, savedDefa
   return {
     engines: {
       comfyui: {
-        enabled: comfy.enabled, url: comfy.url, model: comfy.model || null, kind: comfy.kind, family: comfy.family || null, tier: comfy.tier,
-        clip1: comfy.kind === 'unet' ? comfy.clip1 || null : null,
-        clip2: comfy.kind === 'unet' && comfy.family === 'flux' ? comfy.clip2 || null : null,
-        vae: comfy.kind === 'unet' ? comfy.vae || null : null,
+        enabled: comfy.enabled, url: comfy.url, tier: comfy.tier,
         hires: comfy.hires,
         upscaler: comfy.upscaler || null,
         upscaleMode: comfy.upscaleMode,
         ...(comfy.upscaleMode === 'tiled' ? { tileDenoise: Number(comfy.tileDenoise), tileSize: Number(comfy.tileSize), tilePasses: Number(comfy.tilePasses) } : {}),
-        // Advanced (P3-31): blanks go back to the model type's defaults.
-        sampler: comfy.sampler || null,
-        scheduler: comfy.scheduler || null,
-        cfgScale: numOrNull(comfy.cfgScale),
-        steps: { draft: numOrNull(comfy.steps.draft), standard: numOrNull(comfy.steps.standard), high: numOrNull(comfy.steps.high) },
-        negative: comfy.negative.trim() || null,
         varyLoops: Number(comfy.varyLoops),
         varySubtle: Number(comfy.varySubtle),
         varyStrong: Number(comfy.varyStrong),
         detailer: comfy.detailer,
         detector: comfy.detector || null,
         ...(comfy.detailer ? { detailerDenoise: Number(comfy.detailerDenoise), detailerPasses: Number(comfy.detailerPasses) } : {}),
-        // Custom workflows (P3-34): the boxes are kept even while Built-in is chosen.
-        workflowMode: comfy.workflowMode,
-        workflow: comfy.workflow.trim() || null,
-        upscaleWorkflow: comfy.upscaleWorkflow.trim() || null,
-        img2imgWorkflow: comfy.img2imgWorkflow.trim() || null,
+        // Style presets (P9-04b): every style, and which is the default.
+        presets: comfy.styles.map(styleBody),
+        defaultPreset: comfy.defaultStyle,
       },
       kie: {
         enabled: kie.enabled,
@@ -81,7 +113,10 @@ const NO_PARTS = { clips: [], vaes: [], upscalers: [], suggested: {}, tiledAvail
 
 export function ImagineSettingsProvider({ children, onDirtyChange, onNavigate }) {
   const [data, setData] = useState(null);
-  const [comfy, setComfy] = useState(null); // the ComfyUI draft
+  const [comfyAll, setComfyAll] = useState(null); // the ComfyUI draft: shared settings, `styles`, `defaultStyle`
+  const [editingId, setEditingId] = useState(null); // the style the pages edit (P9-04b)
+  const editingRef = useRef(null);
+  editingRef.current = editingId;
   const [kie, setKie] = useState(null); // the kie.ai draft (never holds the saved key)
   const [kieKey, setKieKey] = useState(''); // a new key typed in, sent once on Save
   const [kieNote, setKieNote] = useState({ text: '', ok: false });
@@ -108,7 +143,13 @@ export function ImagineSettingsProvider({ children, onDirtyChange, onNavigate })
       defaultEngine: view.defaultEngine,
       general: { dailyLimit: view.dailyLimit, permissive: !!view.permissive },
     };
-    setComfy(drafts.comfy);
+    setComfyAll(drafts.comfy);
+    // Keep editing the same style (by name: a new one just got its id), else the default.
+    setEditingId((id) => {
+      const before = comfyRef.current?.styles?.find((s) => s.id === id);
+      const same = drafts.comfy.styles.find((s) => s.id === id) || (before && drafts.comfy.styles.find((s) => s.name === before.name));
+      return same ? same.id : drafts.comfy.defaultStyle;
+    });
     setKie(drafts.kie);
     setKieKey('');
     setDefaultEngine(drafts.defaultEngine);
@@ -128,7 +169,61 @@ export function ImagineSettingsProvider({ children, onDirtyChange, onNavigate })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const current = comfy && { comfy, kie, kieKey, defaultEngine, general };
+  // The pages see one flat ComfyUI draft: the shared settings plus the style
+  // being edited; their changes go back to the right place (P9-04b).
+  const comfyRef = useRef(null);
+  comfyRef.current = comfyAll;
+  const editing = comfyAll && (comfyAll.styles.find((s) => s.id === editingId) || comfyAll.styles[0]);
+  const comfy = comfyAll && { ...omit(comfyAll, ['styles', 'defaultStyle']), ...pick(editing, STYLE_FIELDS) };
+  const setComfy = (update) =>
+    setComfyAll((all) => {
+      const style = all.styles.find((s) => s.id === editingRef.current) || all.styles[0];
+      const flat = { ...omit(all, ['styles', 'defaultStyle']), ...pick(style, STYLE_FIELDS) };
+      const next = typeof update === 'function' ? update(flat) : update;
+      return {
+        ...all,
+        ...omit(next, STYLE_FIELDS),
+        styles: all.styles.map((s) => (s.id === style.id ? { ...s, ...pick(next, STYLE_FIELDS) } : s)),
+      };
+    });
+
+  // ---- The style list (P9-04b) ----
+  const uniqueName = (base, styles) => {
+    let name = base;
+    for (let n = 2; styles.some((s) => s.name.toLowerCase() === name.toLowerCase()); n++) name = `${base} ${n}`;
+    return name;
+  };
+  const newIds = useRef(0);
+  const styleActions = {
+    edit: (id) => setEditingId(id),
+    add: () => {
+      const id = `new-${++newIds.current}`;
+      setComfyAll((all) => ({ ...all, styles: [...all.styles, { id, name: uniqueName('New style', all.styles), saved: false, ...styleDraft() }] }));
+      setEditingId(id);
+    },
+    duplicate: (id) => {
+      const copyId = `new-${++newIds.current}`;
+      setComfyAll((all) => {
+        const src = all.styles.find((s) => s.id === id);
+        const i = all.styles.indexOf(src);
+        const copy = { ...src, id: copyId, saved: false, name: uniqueName(`${src.name} copy`, all.styles) };
+        return { ...all, styles: [...all.styles.slice(0, i + 1), copy, ...all.styles.slice(i + 1)] };
+      });
+      setEditingId(copyId);
+    },
+    rename: (id, name) => setComfyAll((all) => ({ ...all, styles: all.styles.map((s) => (s.id === id ? { ...s, name } : s)) })),
+    makeDefault: (id) => setComfyAll((all) => ({ ...all, defaultStyle: id })),
+    remove: (id) => {
+      setComfyAll((all) => {
+        if (all.styles.length < 2) return all;
+        const styles = all.styles.filter((s) => s.id !== id);
+        return { ...all, styles, defaultStyle: all.defaultStyle === id ? styles[0].id : all.defaultStyle };
+      });
+      setEditingId((e) => (e === id ? null : e));
+    },
+  };
+
+  const current = comfyAll && { comfy: comfyAll, kie, kieKey, defaultEngine, general };
   const dirty = useMemo(() => !!(current && baseline) && JSON.stringify(current) !== JSON.stringify(baseline), [current, baseline]);
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -200,18 +295,22 @@ export function ImagineSettingsProvider({ children, onDirtyChange, onNavigate })
     setError('');
     setSaved(false);
     try {
-      const view = await api.saveImagineSettings(saveBody({ comfy, kie, kieKey, defaultEngine, general, savedDefault: data.defaultEngine }));
+      const view = await api.saveImagineSettings(saveBody({ comfy: comfyAll, kie, kieKey, defaultEngine, general, savedDefault: data.defaultEngine }));
       adopt(view);
       setSaved(true);
     } catch (err) {
       setError(err.message || 'Could not save');
+      // "Anime: …" — show the style the problem is in.
+      const named = comfyAll.styles.find((s) => (err.message || '').startsWith(`${s.name}: `));
+      if (named) setEditingId(named.id);
     } finally {
       setSaving(false);
     }
   }
 
   function reset() {
-    setComfy(baseline.comfy);
+    setComfyAll(baseline.comfy);
+    setEditingId((id) => (baseline.comfy.styles.some((s) => s.id === id) ? id : baseline.comfy.defaultStyle));
     setKie(baseline.kie);
     setKieKey('');
     setDefaultEngine(baseline.defaultEngine);
@@ -221,7 +320,8 @@ export function ImagineSettingsProvider({ children, onDirtyChange, onNavigate })
 
   const value = {
     ready: !!(data && comfy), loadError: !data ? error : '', data,
-    comfy, setComfy, kie, setKie, kieKey, setKieKey, kieNote, defaultEngine, setDefaultEngine, general, setGeneral,
+    comfy, setComfy, kie, setKie,
+    styles: comfyAll?.styles || [], defaultStyle: comfyAll?.defaultStyle, editingStyle: editing, styleActions, kieKey, setKieKey, kieNote, defaultEngine, setDefaultEngine, general, setGeneral,
     models, parts, filter, setFilter, testing, testNote, test, pickModel, pickFamily, testKie,
     dirty, saving, saved, error, save, reset, onNavigate,
   };

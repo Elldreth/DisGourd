@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P9-04)
 - **Phase:** 9
-- **State:** REVIEW
+- **State:** COMPLETE (#184)
 - **Starting baseline:** main at baccfa4 (#183 merged)
 - **Effort:** M (migration v28)
 - **Depends on:** P9-04 design (agreed 2026-10-20)

@@ -7,14 +7,28 @@ const MODELS = [
   { name: 'SD1\\absolutereality_v16.safetensors', family: 'sd15' },
 ];
 // What Save sends when nothing in Advanced was touched (P3-31).
-const NO_ADVANCED = { sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65, detailer: false, detector: null, workflowMode: 'builtin', workflow: null, upscaleWorkflow: null, img2imgWorkflow: null };
+const NO_ADVANCED = { promptPrefix: null, sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65, detailer: false, detector: null, workflowMode: 'builtin', workflow: null, upscaleWorkflow: null, img2imgWorkflow: null };
+// Like the server (P9-04a): the default style's fields also flat, beside `presets`.
+const asServer = (comfy) => {
+  if (!comfy.presets) return comfy;
+  const def = comfy.presets.find((p) => p.id === comfy.defaultPreset) || comfy.presets[0];
+  const presets = comfy.presets.map((p, i) => ({ ...p, id: p.id || p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `style-${i}` }));
+  return { ...comfy, ...def, presets, defaultPreset: presets[comfy.presets.indexOf(def)].id };
+};
 const view = (comfy = {}) => ({
   defaultEngine: null,
   permissive: false,
   dailyLimit: 20,
   dailyCeiling: 100,
-  engines: [{ id: 'comfyui', name: 'ComfyUI (local)', config: { enabled: false, url: '', model: null, family: null, tier: 'medium', ...comfy } }],
+  engines: [{ id: 'comfyui', name: 'ComfyUI (local)', config: { enabled: false, url: '', model: null, family: null, tier: 'medium', ...asServer(comfy) } }],
 });
+// What the last Save sent for ComfyUI, flat: the shared settings plus the
+// default style's own (P9-04b sends `presets`).
+const sent = (body = api.saveImagineSettings.mock.calls.at(-1)[0]) => {
+  const { presets, defaultPreset, ...shared } = body.engines.comfyui;
+  const { id, name, ...style } = presets.find((p) => p.id === defaultPreset) || presets[0];
+  return { ...shared, ...style };
+};
 vi.mock('../api.js', () => ({
   getImagineSettings: vi.fn(),
   testKie: vi.fn(),
@@ -51,12 +65,12 @@ test('Test connection lists the models; picking one guesses its type; Save sends
   fireEvent.click(screen.getByRole('radio', { name: /High/ }));
   fireEvent.change(screen.getByLabelText('Images per person per day'), { target: { value: '8' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(api.saveImagineSettings).toHaveBeenCalled());
+  expect(sent()).toEqual({ enabled: true, url: 'http://127.0.0.1:8188', model: MODELS[0].name, kind: 'checkpoint', family: 'flux', tier: 'high', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', ...NO_ADVANCED });
+  expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui.presets).toHaveLength(1);
   await waitFor(() =>
     expect(api.saveImagineSettings).toHaveBeenCalledWith(
       expect.objectContaining({
-        engines: expect.objectContaining({
-          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: MODELS[0].name, kind: 'checkpoint', family: 'flux', tier: 'high', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', ...NO_ADVANCED },
-        }),
         defaultEngine: 'comfyui',
         dailyLimit: 8,
         permissive: false,
@@ -214,15 +228,8 @@ test('split models: grouped in the list; picking one fills its text encoders and
   fireEvent.change(screen.getByLabelText('VAE'), { target: { value: SPLIT.vaes[1] } }); // the host's own choice
   fireEvent.click(screen.getByLabelText('Use my ComfyUI (local, free)'));
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-  await waitFor(() =>
-    expect(api.saveImagineSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        engines: expect.objectContaining({
-          comfyui: { enabled: true, url: 'http://127.0.0.1:8188', model: 'mystery.safetensors', kind: 'unet', family: 'flux', tier: 'medium', clip1: SPLIT.clips[0], clip2: SPLIT.clips[1], vae: SPLIT.vaes[1], hires: true, upscaler: null, upscaleMode: 'model', ...NO_ADVANCED },
-        }),
-      })
-    )
-  );
+  await waitFor(() => expect(api.saveImagineSettings).toHaveBeenCalled());
+  expect(sent()).toEqual({ enabled: true, url: 'http://127.0.0.1:8188', model: 'mystery.safetensors', kind: 'unet', family: 'flux', tier: 'medium', clip1: SPLIT.clips[0], clip2: SPLIT.clips[1], vae: SPLIT.vaes[1], hires: true, upscaler: null, upscaleMode: 'model', ...NO_ADVANCED });
 });
 
 test('a saved split model shows its parts before any test', async () => {
@@ -246,11 +253,11 @@ test('P3-28: the hires fix switch and its upscale model (suggested after a test)
   fireEvent.change(screen.getByLabelText('Upscale model'), { target: { value: '4x-AnimeSharp.pth' } });
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ hires: true, upscaler: '4x-AnimeSharp.pth' }));
+  await waitFor(() => expect(sent()).toMatchObject({ hires: true, upscaler: '4x-AnimeSharp.pth' }));
   fireEvent.click(hires);
   expect(screen.getByLabelText('Upscale model').value).toBe('4x-AnimeSharp.pth'); // still used by the Upscale button
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ hires: false }));
+  await waitFor(() => expect(sent()).toMatchObject({ hires: false }));
 });
 
 test('P3-29: the Upscale button mode; tiled needs the node, and saves its strength and tile size', async () => {
@@ -275,7 +282,7 @@ test('P3-29: the Upscale button mode; tiled needs the node, and saves its streng
   fireEvent.change(screen.getByLabelText('Tiled passes'), { target: { value: '2' } }); // P3-33
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ upscaleMode: 'tiled', tileDenoise: 0.25, tileSize: 768, tilePasses: 2, upscaler: null })); // blank upscaler = automatic
+  await waitFor(() => expect(sent()).toMatchObject({ upscaleMode: 'tiled', tileDenoise: 0.25, tileSize: 768, tilePasses: 2, upscaler: null })); // blank upscaler = automatic
 });
 
 test('P3-31: Advanced starts closed; its lists come from the test; defaults are shown; values and blanks are saved', async () => {
@@ -301,7 +308,7 @@ test('P3-31: Advanced starts closed; its lists come from the test; defaults are 
   fireEvent.change(screen.getByLabelText('Face detailer passes'), { target: { value: '3' } }); // P3-33
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
-    expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({
+    expect(sent()).toMatchObject({
       sampler: 'dpmpp_2m_sde', scheduler: null, cfgScale: 4.5, steps: { draft: null, standard: null, high: 40 }, negative: 'extra fingers',
       detailer: true, detector: 'bbox/face_yolov8m.pt', detailerDenoise: 0.35, detailerPasses: 3,
     })
@@ -348,7 +355,7 @@ test('P3-34: My own: paste or load a workflow, see the placeholders, and save it
   expect(screen.getByText('Your upscale workflow is used instead of these.')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
-    expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({
+    expect(sent()).toMatchObject({
       workflowMode: 'custom', workflow: WF, upscaleWorkflow: expect.stringContaining('LoadImage'),
     })
   );
@@ -375,7 +382,7 @@ test('P3-36a: Variation loops in Advanced (a loopback, explained) are saved', as
   expect(screen.getByLabelText('Strong strength').value).toBe('0.65');
   fireEvent.change(screen.getByLabelText('Strong strength'), { target: { value: '0.75' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ varyLoops: 3, varySubtle: 0.3, varyStrong: 0.75 }));
+  await waitFor(() => expect(sent()).toMatchObject({ varyLoops: 3, varySubtle: 0.3, varyStrong: 0.75 }));
 });
 
 test('P3-36b: My own has an optional image-to-image workflow box, saved with the others', async () => {
@@ -388,5 +395,76 @@ test('P3-36b: My own has an optional image-to-image workflow box, saved with the
   fireEvent.change(box, { target: { value: '{"1":{"class_type":"LoadImage","inputs":{"image":"{{image}}"}}}' } });
   expect(screen.getAllByText('{{denoise}}').length).toBeGreaterThan(0);
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-  await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui).toMatchObject({ img2imgWorkflow: expect.stringContaining('{{image}}') }));
+  await waitFor(() => expect(sent()).toMatchObject({ img2imgWorkflow: expect.stringContaining('{{image}}') }));
+});
+
+test('P9-04b: Styles: an old setup shows as "Default"; add, rename, duplicate, make default and delete; Save sends every style', async () => {
+  api.getImagineSettings.mockResolvedValue(view({ enabled: true, url: 'http://127.0.0.1:8188', model: MODELS[0].name, family: 'flux', sampler: 'euler' }));
+  api.saveImagineSettings.mockImplementation(async (body) => ({ ...view(body.engines.comfyui), defaultEngine: 'comfyui' }));
+  render(<ImagineAdmin />);
+  const list = await screen.findByRole('list', { name: 'Styles' });
+  expect(within(list).getAllByRole('button').map((b) => b.textContent)).toEqual(['Defaultflux1-dev-fp8Default']);
+  expect(screen.getByRole('button', { name: 'Delete' }).disabled).toBe(true); // the last style stays
+  // A new style starts blank and is the one being edited.
+  fireEvent.click(screen.getByRole('button', { name: 'Add style' }));
+  expect(screen.getByText('Editing style: New style')).toBeTruthy();
+  expect(screen.getByLabelText('Model').value).toBe('');
+  fireEvent.change(screen.getByLabelText('Style name'), { target: { value: 'Photoreal' } });
+  fireEvent.change(screen.getByLabelText('Model'), { target: { value: `checkpoint:${MODELS[1].name}` } });
+  fireEvent.change(screen.getByLabelText('Prompt prefix (optional)'), { target: { value: ' RAW photo, ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Make default' }));
+  // A duplicate name is flagged.
+  fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+  expect(screen.getByLabelText('Style name').value).toBe('Photoreal copy');
+  fireEvent.change(screen.getByLabelText('Style name'), { target: { value: 'photoreal' } });
+  expect(screen.getByText('Another style has this name.')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Style name'), { target: { value: 'Anime' } });
+  // Shared settings change for every style; the first style kept its own model.
+  fireEvent.click(screen.getByRole('radio', { name: /High/ }));
+  fireEvent.click(within(list).getByRole('button', { name: /^Default/ }));
+  expect(screen.getByLabelText('Model').value).toBe(`checkpoint:${MODELS[0].name}`);
+  // Delete Anime (asks first).
+  fireEvent.click(within(list).getByRole('button', { name: /^Anime/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete style' }));
+  expect(within(list).queryByRole('button', { name: /^Anime/ })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(api.saveImagineSettings).toHaveBeenCalled());
+  const body = api.saveImagineSettings.mock.calls.at(-1)[0].engines.comfyui;
+  expect(body.tier).toBe('high');
+  expect(body.model).toBeUndefined(); // style fields go only in `presets`
+  expect(body.presets.map((p) => [p.id, p.name, p.model, p.promptPrefix])).toEqual([
+    ['default', 'Default', MODELS[0].name, null],
+    [undefined, 'Photoreal', MODELS[1].name, 'RAW photo,'], // new: the server makes its id
+  ]);
+  expect(body.presets[0].sampler).toBe('euler');
+  // The new default is the new style, picked by name until it has an id.
+  expect(body.defaultPreset).toMatch(/^new-/);
+  // After saving, the styles are as saved, and the same style is still being edited.
+  await waitFor(() => expect(within(list).getAllByRole('button')).toHaveLength(2));
+  expect(screen.getByText('Editing style: Default')).toBeTruthy();
+});
+
+test('P9-04b: a save error that names a style shows that style; Advanced picks the style it edits', async () => {
+  api.getImagineSettings.mockResolvedValue(view({ url: 'http://127.0.0.1:8188', presets: [
+    { id: 'photo', name: 'Photoreal', model: MODELS[1].name, family: 'sdxl', steps: { standard: 30 } },
+    { id: 'mine', name: 'Mine', workflowMode: 'custom', workflow: '{"1":{}}' },
+  ], defaultPreset: 'photo' }));
+  api.saveImagineSettings.mockRejectedValueOnce(new Error('Mine: Workflow: your ComfyUI doesn’t have this node: MyCustomSampler'));
+  render(<ImagineAdmin />);
+  const list = await screen.findByRole('list', { name: 'Styles' });
+  expect(within(list).getAllByRole('button').map((b) => b.textContent)).toEqual(['PhotorealIllustrious-XL-v2.0Default', 'MineOwn workflow']);
+  expect(screen.getByText('Editing style: Photoreal')).toBeTruthy();
+  // Advanced has a Style picker when there's more than one, showing that style's values.
+  const style = screen.getByLabelText('Style');
+  expect(style.value).toBe('photo');
+  expect(screen.getByLabelText('Standard').value).toBe('30');
+  fireEvent.change(style, { target: { value: 'mine' } });
+  expect(screen.getByText('Editing style: Mine')).toBeTruthy();
+  expect(screen.getByLabelText('Standard').value).toBe('');
+  fireEvent.change(style, { target: { value: 'photo' } });
+  fireEvent.change(screen.getByLabelText('Style name'), { target: { value: 'Photo' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  expect(await screen.findByText(/Mine: Workflow: your ComfyUI/)).toBeTruthy();
+  expect(screen.getByText('Editing style: Mine')).toBeTruthy();
 });
