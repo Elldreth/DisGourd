@@ -132,6 +132,10 @@ export function createSpace(name, template) {
 export function deleteSpace(space) {
   return request(`/spaces/${encodeURIComponent(space)}`, { method: 'DELETE' });
 }
+// Leave a server you're a member of (not one you own) — P6-01.
+export function leaveSpace(space) {
+  return request(`/spaces/${encodeURIComponent(space)}/members/me`, { method: 'DELETE' });
+}
 export function renameSpace(space, name) {
   return request(`/spaces/${encodeURIComponent(space)}`, { method: 'PATCH', body: { name } });
 }
