@@ -64,5 +64,5 @@ test('dm_unread on connect keys counts by `with`', async () => {
   ag.close();
 
   expect(frame).toBeTruthy();
-  expect(frame.counts).toEqual([{ with: 'bob', count: 2 }]);
+  expect(frame.counts).toEqual([{ conversation: expect.any(Number), with: 'bob', count: 2 }]); // P9-06a: and its conversation
 });

@@ -723,6 +723,56 @@ const MIGRATIONS = [
       db.exec('CREATE INDEX IF NOT EXISTS idx_imagine_jobs_message ON imagine_jobs(message_id)');
     },
   },
+  {
+    version: 30,
+    name: 'dm conversations',
+    up(db) {
+      // P9-06a: a DM belongs to a conversation (today's pairs; groups in
+      // P9-06c) instead of being keyed by its two users. Each existing pair
+      // becomes one 'pair' conversation (pair_key "a:b", smaller id first)
+      // with its two people, their read position from dm_read_state, and its
+      // messages. user_a / user_b stay on dm_messages (they're NOT NULL with a
+      // user foreign key): pairs keep writing them; a group message will hold
+      // its author in both. dm_read_state is no longer read.
+      db.exec(`
+        CREATE TABLE dm_conversations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          kind TEXT NOT NULL DEFAULT 'pair',
+          name TEXT,
+          owner_id INTEGER,
+          created_at INTEGER NOT NULL,
+          pair_key TEXT UNIQUE
+        );
+        CREATE TABLE dm_participants (
+          conversation_id INTEGER NOT NULL REFERENCES dm_conversations(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL,
+          joined_at INTEGER NOT NULL,
+          muted INTEGER NOT NULL DEFAULT 0,
+          last_read_id INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(conversation_id, user_id)
+        );
+        CREATE INDEX idx_dm_participants_user ON dm_participants(user_id);
+        ALTER TABLE dm_messages ADD COLUMN conversation_id INTEGER;
+        ALTER TABLE dm_messages ADD COLUMN kind TEXT;
+
+        INSERT INTO dm_conversations(kind, created_at, pair_key)
+          SELECT 'pair', MIN(COALESCE(created_at, 0)), user_a || ':' || user_b
+          FROM dm_messages GROUP BY user_a, user_b;
+        INSERT OR IGNORE INTO dm_participants(conversation_id, user_id, joined_at, last_read_id)
+          SELECT c.id, p.user_a, c.created_at,
+                 COALESCE((SELECT last_read_id FROM dm_read_state WHERE user_id = p.user_a AND other_id = p.user_b), 0)
+          FROM (SELECT DISTINCT user_a, user_b FROM dm_messages) p
+          JOIN dm_conversations c ON c.pair_key = p.user_a || ':' || p.user_b;
+        INSERT OR IGNORE INTO dm_participants(conversation_id, user_id, joined_at, last_read_id)
+          SELECT c.id, p.user_b, c.created_at,
+                 COALESCE((SELECT last_read_id FROM dm_read_state WHERE user_id = p.user_b AND other_id = p.user_a), 0)
+          FROM (SELECT DISTINCT user_a, user_b FROM dm_messages) p
+          JOIN dm_conversations c ON c.pair_key = p.user_a || ':' || p.user_b;
+        UPDATE dm_messages SET conversation_id = (SELECT id FROM dm_conversations WHERE pair_key = dm_messages.user_a || ':' || dm_messages.user_b);
+        CREATE INDEX idx_dm_conversation ON dm_messages(conversation_id, id);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
