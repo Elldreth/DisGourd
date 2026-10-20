@@ -4,13 +4,14 @@ import {
 } from './constants.js';
 import SettingRow from '../../settings/SettingRow.jsx';
 import Switch from '../../settings/Switch.jsx';
+import StylesSection from './StylesSection.jsx';
 
 // Image generation › ComfyUI: where it is, which workflow, which model and
 // its parts, and how much graphics memory there is.
 export default function ComfyPage() {
   const s = useImagine();
   if (!s.ready) return <ImagineLoading />;
-  const { comfy, setComfy, models, parts, filter, setFilter, testing, testNote, test, pickModel, pickFamily } = s;
+  const { comfy, setComfy, editingStyle, models, parts, filter, setFilter, testing, testNote, test, pickModel, pickFamily } = s;
 
   const list = (models || (comfy.model ? [{ name: comfy.model, kind: comfy.kind, family: comfy.family }] : [])).filter(
     (m) => !filter || m.name.toLowerCase().includes(filter.toLowerCase()) || m.name === comfy.model
@@ -53,6 +54,10 @@ export default function ComfyPage() {
           ComfyUI on another computer must be started with <code>--listen</code>, and that computer needs a fixed address.
         </p>
       </div>
+
+      <StylesSection />
+
+      <p className="text-sm font-semibold text-fg">Editing style: {editingStyle.name.trim() || 'Untitled'}</p>
 
       <fieldset className={card}>
         <legend className={`${heading} float-left w-full`}>Workflow</legend>
@@ -175,6 +180,21 @@ export default function ComfyPage() {
           </div>
         )}
       </div>
+
+      <div className={card}>
+        <label htmlFor="imagine-prompt-prefix" className={heading}>Prompt prefix (optional)</label>
+        <input
+          id="imagine-prompt-prefix"
+          value={comfy.promptPrefix}
+          maxLength={300}
+          onChange={(e) => setComfy((c) => ({ ...c, promptPrefix: e.target.value }))}
+          placeholder="e.g. RAW photo, natural light,"
+          className="input"
+        />
+        <p className="text-xs text-gray-500">Goes in front of every prompt in this style. The message in chat still shows only what the person typed.</p>
+      </div>
+
+      <p className="text-sm font-semibold text-fg">Shared by every style</p>
 
       <fieldset className={card}>
         <legend className={`${heading} float-left w-full`}>Graphics card memory (VRAM)</legend>

@@ -8,7 +8,7 @@ import Switch from '../../settings/Switch.jsx';
 export default function QualityPage() {
   const s = useImagine();
   if (!s.ready) return <ImagineLoading />;
-  const { comfy, setComfy, models, parts } = s;
+  const { comfy, setComfy, models, parts, styles, editingStyle, styleActions } = s;
   const custom = comfy.workflowMode === 'custom';
   const d = TYPE_DEFAULTS[comfy.family] || TYPE_DEFAULTS.sdxl;
   const listOr = (list, current) => (list.length ? list : current ? [current] : []);
@@ -161,7 +161,17 @@ export default function QualityPage() {
       <details className="rounded-xl bg-ink-900/60 px-4 py-3" aria-label="Advanced settings">
         <summary className="cursor-pointer select-none text-sm font-semibold text-gray-200">Advanced</summary>
         <div className="mt-3 space-y-3">
-          <p className="text-xs text-gray-500">For every /imagine on this instance. Blank uses the model type’s tuned default.</p>
+          {styles.length > 1 ? (
+            <div>
+              <label htmlFor="imagine-advanced-style" className={heading}>Style</label>
+              <select id="imagine-advanced-style" value={editingStyle.id} onChange={(e) => styleActions.edit(e.target.value)} className="input sm:w-64">
+                {styles.map((st) => <option key={st.id} value={st.id}>{st.name.trim() || 'Untitled'}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">Each style has its own Advanced settings. Blank uses the model type’s tuned default.</p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500">For every /imagine on this instance. Blank uses the model type’s tuned default.</p>
+          )}
           {custom && (
             <p className="rounded-md bg-ink-800 px-2 py-1 text-xs text-gray-400">
               With your own workflow, only Steps and the Negative prompt are used (through {'{{steps}}'} and {'{{negative}}'}); the rest is up to the workflow.
