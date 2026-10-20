@@ -6,6 +6,7 @@ import {
   OWNER_POSITION,
   loadViewState,
   saveViewState,
+  renameChannelIn,
   loadServerOrder,
   saveServerOrder,
   applyServerOrder,
@@ -217,6 +218,14 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       loadSpaces();
     },
     space_updated: () => loadSpaces(),
+    // A channel was renamed (P6-03): rename it in the list and, if you're in
+    // it, move along with it, in one update (otherwise the "channel gone" check
+    // above sends you to the first channel), then reload to be sure.
+    channel_renamed: (f) => {
+      setSpaces((prev) => prev.map((s) => (s.name === f.space ? renameChannelIn(s, f.channel, f.newName) : s)));
+      if (spaceRef.current === f.space && channelRef.current === f.channel) setCurrentChannel(f.newName);
+      loadSpaces();
+    },
     space_renamed: (f) => {
       loadSpaces().then(() => {
         if (spaceRef.current === f.space) setCurrentSpace(f.newName);

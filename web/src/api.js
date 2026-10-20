@@ -193,6 +193,10 @@ export function hideDmPreview(username, id) {
   return request(`/dms/${encodeURIComponent(username)}/messages/${id}/preview`, { method: 'DELETE' });
 }
 // A channel's topic (P3-20a); '' clears it.
+// P6-03: a new name, normalized and checked like a new channel's.
+export function renameChannel(space, channel, name) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, { method: 'PATCH', body: { name } });
+}
 export function setChannelTopic(space, channel, topic) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}`, { method: 'PATCH', body: { topic } });
 }

@@ -138,6 +138,20 @@ const ops = {
   },
 };
 
+// A voice channel was renamed (P6-03): move its room to the new name so
+// nobody is dropped, and tell everyone who's in it now.
+function voiceRenameChannel(spaceName, oldName, newName) {
+  const room = voiceRooms.get(voiceKey(spaceName, oldName));
+  if (!room) return false;
+  const key = voiceKey(spaceName, newName);
+  voiceRooms.delete(voiceKey(spaceName, oldName));
+  room.channel = newName;
+  voiceRooms.set(key, room);
+  for (const p of room.members.values()) p.ws.voiceRoom = key;
+  broadcastVoiceState(room);
+  return true;
+}
+
 // Someone's voice session in a server, if any: { room, entry }.
 function voiceSessionIn(userId, spaceName) {
   for (const room of voiceRooms.values()) {
@@ -171,4 +185,4 @@ function voiceForceMute(userId, spaceName, on) {
   return true;
 }
 
-module.exports = { ops, voiceLeave, voiceStatesFor, voiceEject, voiceForceMute };
+module.exports = { ops, voiceLeave, voiceStatesFor, voiceEject, voiceForceMute, voiceRenameChannel };

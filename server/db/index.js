@@ -627,6 +627,24 @@ function deleteChannel(spaceName, channelName) {
   return stmt.run(spaceName, channelName).changes > 0;
 }
 
+// Rename a channel (P6-03). Everything else points at its id; read_state is
+// keyed by name, so it moves in the same transaction. Threads can't be
+// renamed. Returns { oldName, newName }, or { error: 'not_found' | 'taken' }.
+function renameChannel(spaceName, channelName, newName) {
+  const row = db.prepare(`
+    SELECT c.id, c.space_id FROM channels c JOIN spaces s ON c.space_id = s.id
+    WHERE s.name = ? AND c.name = ? AND c.type IS NOT 'thread'
+  `).get(spaceName, channelName);
+  if (!row) return { error: 'not_found' };
+  if (newName === channelName) return { oldName: channelName, newName };
+  if (db.prepare('SELECT 1 FROM channels WHERE space_id = ? AND name = ?').get(row.space_id, newName)) return { error: 'taken' };
+  db.transaction(() => {
+    db.prepare('UPDATE read_state SET channel = ? WHERE space = ? AND channel = ?').run(newName, spaceName, channelName);
+    db.prepare('UPDATE channels SET name = ? WHERE id = ?').run(newName, row.id);
+  })();
+  return { oldName: channelName, newName };
+}
+
 // ---- Spaces: ownership, membership, invites ----
 
 // Rename a space. read_state is keyed by space *name*, so migrate those rows in
@@ -2154,6 +2172,7 @@ module.exports = {
   applyCategoryOverrides,
   deleteSpace,
   deleteChannel,
+  renameChannel,
   renameSpace,
   getSpaceByName,
   getSpaceById,

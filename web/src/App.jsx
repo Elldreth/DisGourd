@@ -224,6 +224,9 @@ export default function App() {
     // Your custom status changed elsewhere, or its time ran out.
     my_status: (f) =>
       setProfile((p) => (p ? { ...p, statusText: f.statusText, statusEmoji: f.statusEmoji, statusExpiresAt: f.statusExpiresAt } : p)),
+    // The open thread's channel was renamed (P6-03).
+    channel_renamed: (f) =>
+      setOpenThread((t) => (t && t.space === f.space && t.parentChannel === f.channel ? { ...t, parentChannel: f.newName } : t)),
     // The open thread was archived or reopened (by the sweep, a reply, or a moderator).
     thread_updated: (f) =>
       setOpenThread((t) => (t && t.space === f.space && t.channel === f.thread?.channel ? { ...t, archived: !!f.thread.archived, name: f.thread.name } : t)),

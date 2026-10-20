@@ -40,6 +40,22 @@ export function loadViewState(userId) {
     return null;
   }
 }
+// A channel name as the server stores it (server/validate.js): lowercase,
+// spaces to dashes, only a-z 0-9 _ -, at most 60 characters.
+export const MAX_CHANNEL_NAME = 60;
+export function normalizeChannelName(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '');
+}
+
+// One server from GET /spaces with a channel renamed in place (P6-03), so the
+// open channel can switch to the new name before the list is reloaded.
+export function renameChannelIn(space, from, to) {
+  const swap = (list) => (list || []).map((c) => (c === from ? to : c));
+  const channelMeta = {};
+  for (const [name, meta] of Object.entries(space.channelMeta || {})) channelMeta[name === from ? to : name] = meta;
+  return { ...space, channels: swap(space.channels), voiceChannels: swap(space.voiceChannels), channelMeta };
+}
+
 export function saveViewState(userId, state) {
   try {
     localStorage.setItem(`disgourd.view.${userId || 'anon'}`, JSON.stringify(state));
