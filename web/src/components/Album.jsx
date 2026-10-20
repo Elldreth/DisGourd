@@ -11,7 +11,7 @@ function SingleMedia({ info, onOpen }) {
         src={info.url}
         controls
         preload="metadata"
-        className="max-h-80 max-w-md rounded-lg border border-ink-500/50"
+        className="max-h-80 max-w-[min(28rem,100%)] rounded-lg border border-ink-500/50"
       />
     );
   }
@@ -21,7 +21,7 @@ function SingleMedia({ info, onOpen }) {
         src={info.url}
         alt={info.name}
         loading="lazy"
-        className="max-h-80 max-w-md rounded-lg border border-ink-500/50 object-contain"
+        className="max-h-80 max-w-[min(28rem,100%)] rounded-lg border border-ink-500/50 object-contain"
       />
     </button>
   );
@@ -35,7 +35,7 @@ function Grid({ media, onOpen }) {
   const extra = media.length - shown.length;
   const cols = media.length <= 4 ? 'grid-cols-2' : 'grid-cols-3';
   return (
-    <div className={`grid ${cols} w-fit max-w-md gap-1`}>
+    <div className={`grid ${cols} w-fit max-w-[min(28rem,100%)] gap-1`}>
       {shown.map((info, i) => {
         const isLast = i === shown.length - 1 && extra > 0;
         return (
@@ -90,7 +90,7 @@ export default function Album({ items, spoiler }) {
   return (
     <>
       {spoiler && !revealed ? (
-        <div className="relative mt-1 w-fit">
+        <div className="relative mt-1 w-fit max-w-full">
           <div className="pointer-events-none blur-2xl">{content}</div>
           <button
             onClick={() => setRevealed(true)}
