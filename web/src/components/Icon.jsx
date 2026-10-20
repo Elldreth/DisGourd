@@ -235,6 +235,13 @@ const ICONS = {
     </>
   ),
   shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+  // A flag: reporting a message (P9-01).
+  flag: (
+    <>
+      <path d="M4 22V4" />
+      <path d="M4 4h12l-2 4 2 4H4" />
+    </>
+  ),
   // A clock: timeouts.
   clock: (
     <>

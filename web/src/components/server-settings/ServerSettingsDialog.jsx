@@ -8,12 +8,13 @@ import RolesSection from './RolesSection.jsx';
 import ImagineSection from './ImagineSection.jsx';
 import ModLogSection from './ModLogSection.jsx';
 import BansSection from './BansSection.jsx';
+import ReportsSection from './ReportsSection.jsx';
 
 // Server settings (P5-04): one window for everything about a server, on the
 // settings kit, instead of a window per menu item. Each section shows only
 // with its permission (`can`), as the menu items did:
 //   overview (edit the server, or the owner), emoji, roles, imagine,
-//   modLog, bans
+//   reports, modLog, bans
 // Unsaved changes in Overview or Image generation make Close ask first.
 export function serverSettingsSections(can) {
   return [
@@ -21,12 +22,13 @@ export function serverSettingsSections(can) {
     can.emoji && { id: 'emoji', label: 'Emoji' },
     can.roles && { id: 'roles', label: 'Roles' },
     can.imagine && { id: 'imagine', label: 'Image generation' },
+    can.reports && { id: 'reports', label: 'Reports', group: 'Moderation' },
     can.modLog && { id: 'modlog', label: 'Moderation log', group: 'Moderation' },
     can.bans && { id: 'bans', label: 'Bans', group: 'Moderation' },
   ].filter(Boolean);
 }
 
-export default function ServerSettingsDialog({ space, can, initialSection, onClose, overview, emoji, roles, imagine, modLog }) {
+export default function ServerSettingsDialog({ space, can, initialSection, onClose, overview, emoji, roles, imagine, modLog, reports }) {
   const sections = serverSettingsSections(can);
   const ids = sections.map((s) => s.id);
   const [section, setSectionState] = useState(ids.includes(initialSection) ? initialSection : ids[0]);
@@ -50,6 +52,7 @@ export default function ServerSettingsDialog({ space, can, initialSection, onClo
     if (id === 'emoji') return visited.has(id) ? <EmojiSection space={space} {...emoji} /> : null;
     if (id === 'roles') return <RolesSection space={space} {...roles} />;
     if (id === 'imagine') return <ImagineSection space={space} {...imagine} onDirtyChange={markDirty('imagine')} />;
+    if (id === 'reports') return visited.has(id) ? <ReportsSection space={space} {...reports} /> : null;
     if (id === 'modlog') return visited.has(id) ? <ModLogSection space={space} {...modLog} /> : null;
     if (id === 'bans') return visited.has(id) ? <BansSection space={space} /> : null;
     return null;

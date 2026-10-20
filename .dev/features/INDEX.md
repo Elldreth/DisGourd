@@ -229,4 +229,4 @@ Kept as its own table so it doesn't collide with other sessions' rows.
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
 | P8-01 | Art pass: mascot poses, sign-in art, ready-made server icons, share image | 8 | COMPLETE | M | none | mascotParts.js, Mascot.jsx, LoginArt.jsx, serverGlyphs.js, GlyphPicker.jsx, AuthShell.jsx, server/static.js, web/public/og-image.png |
-| P9-01 | Message reports (moderators' Reports queue; servers only) | 9 | READY | M | P3-26, P1-10 | migrations v26, routes, gateway, MessageList menu, ReportsDialog |
+| P9-01 | Message reports (moderators' Reports queue; servers only) | 9 | REVIEW | M | P3-26, P1-10 | migrations v26, routes, gateway, MessageList menu, ReportsDialog |

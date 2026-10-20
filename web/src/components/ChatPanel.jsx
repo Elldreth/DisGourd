@@ -6,6 +6,7 @@ import CreateThreadDialog from './CreateThreadDialog.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import TimedOutNotice from './TimedOutNotice.jsx';
+import ReportDialog from './ReportDialog.jsx';
 import { cooldownKey, useCooldown } from '../slowmode.js';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
@@ -26,6 +27,7 @@ export default function ChatPanel({
   canPost = true,
   timedOut = null, // P3-26c: { until, reason } while I'm timed out here
   slowmode = 0, // P3-26d: seconds between my posts here (0: off, or I'm exempt)
+  jumpRequest = null, // P9-01: { space, channel, id, n } — go to that message once it's this channel
   messages,
   currentUser,
   typingUsers = [],
@@ -136,6 +138,15 @@ export default function ChatPanel({
   useOverlayHistory('threads', threadsOpen, () => closeSide());
   // The message being replied to ({ id, author }), shown above the composer.
   const [replyingTo, setReplyingTo] = useState(null);
+  const [reportFor, setReportFor] = useState(null); // the message being reported (P9-01)
+  // Jump to a message asked for from elsewhere (Reports), once its channel is open.
+  const jumped = useRef(null);
+  useEffect(() => {
+    if (!jumpRequest || jumped.current === jumpRequest.n) return;
+    if (jumpRequest.space !== space || jumpRequest.channel !== channel) return;
+    jumped.current = jumpRequest.n;
+    listRef.current?.jumpTo(jumpRequest.id);
+  }, [jumpRequest, space, channel]);
   const cooldown = useCooldown(cooldownKey(space, channel)); // slow mode (P3-26d)
   useEffect(() => setReplyingTo(null), [space, channel]);
   // Files dropped anywhere on the panel go to the composer.
@@ -342,6 +353,7 @@ export default function ChatPanel({
         emptyBody={topic || undefined}
         onHidePreview={(m) => api.hideChannelPreview(space, channel, m.id).catch(() => {})}
         loadVersions={(m) => api.getMessageVersions(space, channel, m.id)}
+        onReport={(m) => setReportFor(m)}
         imagineAgain={imagine?.available ? imagine.run : null}
         imagineUpscale={!!imagine?.canUpscale}
         imagineVary={!!imagine?.canVary}
@@ -415,6 +427,9 @@ export default function ChatPanel({
           onOpen={(t) => onOpenThread(t, { opener: sideOpener.current })}
           onClose={() => closeSide({ refocus: false })}
         />
+      )}
+      {reportFor && (
+        <ReportDialog author={reportFor.author} onReport={(r) => api.reportMessage(space, channel, reportFor.id, r)} onClose={() => setReportFor(null)} />
       )}
       {pinsOpen && (
         <PinsPanel

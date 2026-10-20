@@ -67,7 +67,7 @@ function gateway(token) {
 
 test('v25 adds the token version; tokens from before it (no version) still work', async () => {
   const { db } = serverModule;
-  expect(db.raw.pragma('user_version', { simple: true })).toBe(25);
+  expect(db.raw.pragma('user_version', { simple: true })).toBeGreaterThanOrEqual(25);
   await register('olduser');
   const id = db.getUserByUsername('olduser').id;
   expect(db.getTokenVersion(id)).toBe(0);

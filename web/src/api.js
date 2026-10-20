@@ -182,6 +182,18 @@ export function setServerImagine(space, { enabled, dailyLimit }) {
 export function hideChannelPreview(space, channel, id) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/preview`, { method: 'DELETE' });
 }
+// P9-01: message reports.
+export function reportMessage(space, channel, id, { reason, note } = {}) {
+  return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/report`, { method: 'POST', body: { reason, note } });
+}
+export function getReports(space, { status = 'open', before } = {}) {
+  const qs = new URLSearchParams({ status });
+  if (before) qs.set('before', before);
+  return request(`/spaces/${encodeURIComponent(space)}/reports?${qs}`);
+}
+export function resolveReport(space, id, { action, resolution } = {}) {
+  return request(`/spaces/${encodeURIComponent(space)}/reports/${id}/resolve`, { method: 'POST', body: { action, resolution } });
+}
 // P3-27: a message's edit history.
 export function getMessageVersions(space, channel, id) {
   return request(`/spaces/${encodeURIComponent(space)}/channels/${encodeURIComponent(channel)}/messages/${id}/versions`);

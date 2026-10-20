@@ -44,7 +44,7 @@ test('the owner menu is short: Invite, Create channel, Create category, Server s
 test('the owner sees every section, Moderation as a group', () => {
   list(owner);
   const dialog = openSettings();
-  expect(within(dialog).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Emoji', 'Roles', 'Image generation', 'Moderation log', 'Bans']);
+  expect(within(dialog).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Emoji', 'Roles', 'Image generation', 'Reports', 'Moderation log', 'Bans']);
   expect(within(dialog).getByText('Moderation')).toBeTruthy();
   expect(within(dialog).getByText('Tx')).toBeTruthy(); // the server's name under the title
 });

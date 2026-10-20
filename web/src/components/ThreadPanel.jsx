@@ -4,6 +4,7 @@ import MessageList from './MessageList.jsx';
 import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import TimedOutNotice from './TimedOutNotice.jsx';
+import ReportDialog from './ReportDialog.jsx';
 import { cooldownKey, useCooldown } from '../slowmode.js';
 import RoleName from './RoleName.jsx';
 import Avatar from './Avatar.jsx';
@@ -55,6 +56,7 @@ export default function ThreadPanel({
 }) {
   const [root, setRoot] = useState(thread.root || null); // null while loading; false = deleted
   const [replyingTo, setReplyingTo] = useState(null);
+  const [reportFor, setReportFor] = useState(null); // the message being reported (P9-01)
   const cooldown = useCooldown(cooldownKey(space, thread.channel)); // slow mode (P3-26d), from the parent
   const composerRef = useRef(null);
   const listRef = useRef(null);
@@ -166,6 +168,7 @@ export default function ThreadPanel({
         ref={listRef}
         onHidePreview={(m) => api.hideChannelPreview(space, thread.channel, m.id).catch(() => {})}
         loadVersions={(m) => api.getMessageVersions(space, thread.channel, m.id)}
+        onReport={(m) => setReportFor(m)}
         imagineAgain={imagine?.available ? imagine.run : null}
         imagineUpscale={!!imagine?.canUpscale}
         imagineVary={!!imagine?.canVary}
@@ -216,6 +219,9 @@ export default function ThreadPanel({
         <div className="mx-4 mb-5 mt-1 flex items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-3 text-center text-sm text-gray-400 ring-1 ring-ink-500/40">
           <Icon name="shield" size={15} className="shrink-0" /> You don’t have permission to post in this channel.
         </div>
+      )}
+      {reportFor && (
+        <ReportDialog author={reportFor.author} onReport={(r) => api.reportMessage(space, thread.channel, reportFor.id, r)} onClose={() => setReportFor(null)} />
       )}
     </aside>
   );

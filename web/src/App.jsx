@@ -127,6 +127,8 @@ export default function App() {
   // The open thread (a side panel next to the channel): { space, parentChannel,
   // channel: '~tN', name, rootMessageId, root? } or null.
   const [openThread, setOpenThread] = useState(null);
+  // P9-01: a message to show once its channel is open (from Reports).
+  const [jumpRequest, setJumpRequest] = useState(null);
   const chat = useChannelMessages({
     space: sp.currentSpace,
     channel: sp.currentChannel,
@@ -563,6 +565,12 @@ export default function App() {
             canManageRoles={sp.canManageRoles}
             myPosition={sp.myPosition}
             abilities={sp.activeSpace?.abilities || []}
+            openReports={sp.activeSpace?.openReports || 0}
+            onJumpToReport={(r) => {
+              if (r.thread) return openThreadFromSearch(sp.currentSpace, r.thread);
+              openChannelFromSearch(sp.currentSpace, r.channel);
+              setJumpRequest({ space: sp.currentSpace, channel: r.channel, id: r.messageId, n: Date.now() });
+            }}
             onRolesChanged={sp.reloadRoles}
             imagineInfo={sp.activeSpace?.imagine || null}
             channelMeta={sp.channelMeta}
@@ -616,6 +624,7 @@ export default function App() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {call.room && call.videos.length > 0 && <VideoStage videos={call.videos} />}
             <ChatPanel
+              jumpRequest={jumpRequest}
               space={sp.currentSpace}
               channel={sp.currentChannel}
               status={status}

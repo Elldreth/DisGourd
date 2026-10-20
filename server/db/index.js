@@ -777,6 +777,8 @@ function getUserSpaces(userId) {
       channelMeta,
       categories: getCategories(s.id), // P3-25a: in order
       timeout: getMemberTimeout(s.id, userId), // P3-26c: { until, reason } while I'm timed out
+      // P9-01: open reports, for the people who handle them.
+      ...(access && (access.owner || access.actions.has('delete_others_messages')) ? { openReports: countOpenReports(s.id) } : {}),
     };
   });
 }
@@ -1677,6 +1679,50 @@ function memberMessagesSince(spaceId, userId, since) {
   `).all(spaceId, userId, since);
 }
 
+// ---- Message reports (P9-01) ----
+const REPORT_PAGE = 50;
+const nameOfUser = (id) => (id == null ? null : db.prepare('SELECT username FROM users WHERE id = ?').get(id)?.username ?? null);
+// File a report. Returns { id } or { already: true } when this person already
+// has an open report on that message.
+function createReport(spaceId, { messageId, channel, authorId, reporterId, reason, note, excerpt }) {
+  const open = db.prepare("SELECT id FROM reports WHERE message_id = ? AND reporter_id = ? AND status = 'open'").get(messageId, reporterId);
+  if (open) return { already: true, id: open.id };
+  const info = db.prepare(`
+    INSERT INTO reports(space_id, message_id, channel, author_id, author_name, reporter_id, reporter_name, reason, note, excerpt, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(spaceId, messageId, channel, authorId, nameOfUser(authorId), reporterId, nameOfUser(reporterId), reason, note || null, excerpt || '', Date.now());
+  return { id: Number(info.lastInsertRowid) };
+}
+const REPORT_SELECT = `
+  SELECT id, message_id AS messageId, channel, author_id AS authorId, author_name AS author, reporter_name AS reporter, reason, note,
+    excerpt, status, resolved_by AS resolvedBy, resolution, created_at AS createdAt, resolved_at AS resolvedAt,
+    (message_id IS NOT NULL) AS messageExists
+  FROM reports`;
+const shapeReport = (r) => r && { ...r, messageExists: !!r.messageExists };
+// A page of a server's reports, newest first: open ones, or closed ones.
+function listReports(spaceId, { status = 'open', before = null } = {}) {
+  const rows = db.prepare(`${REPORT_SELECT} WHERE space_id = ? AND ${status === 'open' ? "status = 'open'" : "status != 'open'"} ${before ? 'AND id < ?' : ''} ORDER BY id DESC LIMIT ?`)
+    .all(...[spaceId, ...(before ? [before] : []), REPORT_PAGE + 1]).map(shapeReport);
+  return { reports: rows.slice(0, REPORT_PAGE), more: rows.length > REPORT_PAGE };
+}
+function getReport(spaceId, id) {
+  return shapeReport(db.prepare(`${REPORT_SELECT} WHERE space_id = ? AND id = ?`).get(spaceId, id));
+}
+function countOpenReports(spaceId) {
+  return db.prepare("SELECT COUNT(*) AS n FROM reports WHERE space_id = ? AND status = 'open'").get(spaceId).n;
+}
+// Close a report and every other open report on the same message.
+function closeReports(spaceId, report, status, byId, resolution = null) {
+  const by = nameOfUser(byId);
+  const now = Date.now();
+  if (report.messageId != null) {
+    return db.prepare("UPDATE reports SET status = ?, resolved_by = ?, resolution = ?, resolved_at = ? WHERE space_id = ? AND status = 'open' AND (id = ? OR message_id = ?)")
+      .run(status, by, resolution, now, spaceId, report.id, report.messageId).changes;
+  }
+  return db.prepare("UPDATE reports SET status = ?, resolved_by = ?, resolution = ?, resolved_at = ? WHERE space_id = ? AND id = ? AND status = 'open'")
+    .run(status, by, resolution, now, spaceId, report.id).changes;
+}
+
 // ---- Moderation log (P3-26a) ----
 const MOD_LOG_PAGE = 50;
 
@@ -2262,6 +2308,11 @@ module.exports = {
   getDmVersions,
   logModAction,
   getModLog,
+  createReport,
+  listReports,
+  getReport,
+  countOpenReports,
+  closeReports,
   setMemberTimeout,
   setChannelSlowmode,
   slowmodeFor,
