@@ -87,6 +87,7 @@ export default function ChannelList({
   statusText,
   statusEmoji,
   onEditStatus,
+  onOpenShortcuts,
   onLogout,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -753,6 +754,7 @@ export default function ChannelList({
         statusText={statusText}
         statusEmoji={statusEmoji}
         onEditStatus={onEditStatus}
+        onOpenShortcuts={onOpenShortcuts}
         onOpenProfile={onOpenProfile}
         onLogout={onLogout}
       />

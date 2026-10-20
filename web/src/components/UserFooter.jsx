@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
+import { isMac, keyNames } from '../shortcuts.js';
 
 // Connection trouble wins over your chosen status in the footer.
 const CONNECTION = {
@@ -26,7 +27,7 @@ const DOT_CLASS = { online: 'bg-online', idle: 'bg-idle', dnd: 'bg-pink', offlin
 // Settings › My account (P5-02), not one click away in the footer.
 // statusText/statusEmoji: your custom status (shown under your name instead
 // of the plain status word), set from the menu via onEditStatus.
-export default function UserFooter({ user, avatar, status, presence = 'online', statusText, statusEmoji, onSetPresence, onEditStatus, onOpenProfile, onLogout }) {
+export default function UserFooter({ user, avatar, status, presence = 'online', statusText, statusEmoji, onSetPresence, onEditStatus, onOpenShortcuts, onOpenProfile, onLogout }) {
   const custom = [statusEmoji, statusText].filter(Boolean).join(' ');
   const mode = PRESENCE_MODES.find((m) => m.id === presence) || PRESENCE_MODES[0];
   const trouble = status !== 'open' ? CONNECTION[status] || CONNECTION.idle : null;
@@ -105,7 +106,7 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
           role="menu"
           aria-label="Set status"
           onKeyDown={onMenuKey}
-          className="anim-pop absolute bottom-full left-2 z-40 mb-2 w-60 rounded-lg bg-ink-900 p-1 shadow-xl ring-1 ring-ink-500/60"
+          className="anim-pop absolute bottom-full left-2 right-2 z-40 mb-2 rounded-lg bg-ink-900 p-1 shadow-xl ring-1 ring-ink-500/60"
         >
           {PRESENCE_MODES.map((m) => (
             <button
@@ -144,6 +145,25 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
               >
                 <span aria-hidden="true" className="w-2.5 text-center">✎</span>
                 Set a custom status
+              </button>
+            </>
+          )}
+          {onOpenShortcuts && (
+            <>
+              <div className="my-1 h-px bg-ink-500/50" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenShortcuts();
+                }}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-gray-300 transition hover:bg-ink-600 focus-visible:bg-ink-600"
+              >
+                <span aria-hidden="true" className="w-2.5 text-center">⌨</span>
+                <span className="flex-1">Keyboard shortcuts</span>
+                <span aria-hidden="true" className="text-xs text-gray-500">{keyNames(['Mod', '/'], isMac()).join(isMac() ? '' : '+')}</span>
               </button>
             </>
           )}
