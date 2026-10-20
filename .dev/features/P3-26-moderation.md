@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (not implemented directly)
 - **Phase:** 3
-- **State:** PLANNED
+- **State:** COMPLETE (a #152, b #153, c #154, d #155)
 - **Effort:** L in total: a M, b M, c M, d S–M
 - **Depends on:** P2-21 (roles and permissions), P1-10 (message moderation)
 - **Requirement Source:** the user, 2026-10-18 ("moderation tools"). Design agreed with the user on 2026-10-19:
