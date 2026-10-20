@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** REVIEW (PR open, 2026-10-20; AC-1 waits for the owner to listen)
+- **State:** COMPLETE (merged in #164, 2026-10-20; the owner approved the sounds)
 - **Effort:** M
 - **Depends on:** P5-03 for the art placement only
 - **Serialize with:** anything editing `sounds.js`, `ChannelList.jsx` (voice panel)
@@ -14,7 +14,7 @@
 - **Voice warning:** the five-line "No microphone…" note becomes one line with a "Why?" link that opens Settings › Voice & video.
 
 ## Acceptance criteria
-- [ ] AC-1: each sound file is under 15 KB and under 1 s; the set is reviewed by the owner (listen page or files attached to the PR) before it ships.
+- [x] AC-1: each sound file is under 15 KB and under 1 s; the set is reviewed by the owner (listen page or files attached to the PR) before it ships.
 - [x] AC-2: with a sound file missing (network blocked in a test), the synth tone plays instead and nothing throws.
 - [x] AC-3: sounds still respect DND, the message-sound switch and the join/leave switch (existing tests green).
 - [x] AC-4: the art renders in both themes and in one colour, and is under 5 KB inline.
@@ -53,7 +53,7 @@ Revision: `87c3ac2` (main after #163). Web suite before: 87 files / 718 tests.
 ## Verification Evidence
 | Acceptance Criterion | Status | Verification Type | Evidence |
 |---|---|---|---|
-| AC-1 | Partly verified: the owner still has to listen | Measurement + listen page | Every file is under 15 KB (largest 5.0 KB) and at most 1.0 s long (chimes 1.00 s, pops 0.20–0.45 s). Peaks after encoding are −3.6 to −6.7 dBFS. **The owner's review by ear** is the listen page above; the PR stays open for that |
+| AC-1 | Verified (the owner approved by ear, 2026-10-20: "The sounds are good") | Measurement + listen page | Every file is under 15 KB (largest 5.0 KB) and at most 1.0 s long (chimes 1.00 s, pops 0.20–0.45 s). Peaks after encoding are −3.6 to −6.7 dBFS. **The owner's review by ear** is the listen page above; the PR stays open for that |
 | AC-2 | Verified | `sounds.test.js` | A 404, a network error and an undecodable file each play the synth tones without throwing. A good file plays through a buffer source and is fetched once |
 | AC-3 | Verified | Existing tests | The callers (`notify.js`, `voice.js`, the settings previews) are unchanged; their DND, sound-switch and join/leave tests pass. Full web suite 89 files / 724 tests |
 | AC-4 | Verified | Test + sandbox | `EmptyState.test.jsx`: theme variables only, no literal colours, under the size limit. Sandbox: shown in dark and light (`shots/p5-06-imagine-art-*.jpg`). I turned both engines off to show it, then back on, and the server confirmed it |

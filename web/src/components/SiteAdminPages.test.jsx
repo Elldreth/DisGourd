@@ -110,7 +110,8 @@ test('closing with unsaved changes asks first; Discard closes, Keep editing stay
 
 test('the Overview cards say how each engine stands and open its page', async () => {
   await open();
-  const card = await within(panelFor('Image generation')).findByRole('listitem');
+  const item = await within(panelFor('Image generation')).findByRole('listitem');
+  const card = within(item).getByRole('button'); // a list of buttons (P5-00 integration: axe)
   expect(card.textContent).toMatch(/ComfyUI\s*On/);
   expect(card.textContent).toContain('sdxl.safetensors');
   fireEvent.click(card);

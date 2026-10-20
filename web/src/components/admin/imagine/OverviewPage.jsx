@@ -58,25 +58,25 @@ export default function OverviewPage() {
         which roles may use it.
       </p>
 
-      <div className="grid gap-3 sm:grid-cols-2" role="list" aria-label="Engines">
+      <ul className="grid gap-3 sm:grid-cols-2" aria-label="Engines">
         {engines.map((e) => (
-          <button
-            key={e.id}
-            type="button"
-            role="listitem"
-            onClick={() => onNavigate?.(e.id === 'comfyui' ? 'imagine-comfy' : 'imagine-kie')}
-            className="group flex flex-col gap-1 rounded-xl bg-ink-900/60 p-4 text-left ring-1 ring-ink-500/40 transition hover:ring-brand-hi"
-          >
-            <span className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-fg">{e.name}</span>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.on ? 'bg-online/15 text-online' : 'bg-ink-600 text-gray-400'}`}>{e.on ? 'On' : 'Off'}</span>
-              <Icon name="chevronLeft" size={16} className="ml-auto rotate-180 text-gray-500 transition group-hover:text-fg" />
-            </span>
-            <span className="truncate text-xs text-gray-400">{e.lines[0]}</span>
-            <span className={`truncate text-xs ${e.bad ? 'text-danger' : 'text-gray-500'}`}>{e.lines[1]}</span>
-          </button>
+          <li key={e.id} className="flex">
+            <button
+              type="button"
+              onClick={() => onNavigate?.(e.id === 'comfyui' ? 'imagine-comfy' : 'imagine-kie')}
+              className="group flex w-full min-w-0 flex-col gap-1 rounded-xl bg-ink-900/60 p-4 text-left ring-1 ring-ink-500/40 transition hover:ring-brand-hi"
+            >
+              <span className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-fg">{e.name}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.on ? 'bg-online/15 text-online' : 'bg-ink-600 text-gray-400'}`}>{e.on ? 'On' : 'Off'}</span>
+                <Icon name="chevronLeft" size={16} className="ml-auto rotate-180 text-gray-500 transition group-hover:text-fg" />
+              </span>
+              <span className="truncate text-xs text-gray-400">{e.lines[0]}</span>
+              <span className={`truncate text-xs ${e.bad ? 'text-danger' : 'text-gray-500'}`}>{e.lines[1]}</span>
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {bothOn && (
         <fieldset className={card}>

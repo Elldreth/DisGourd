@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (children P5-01 … P5-06)
 - **Phase:** 5 (design)
-- **State:** PLANNED (settings map and all five recommendations agreed by the owner, 2026-10-19)
+- **State:** COMPLETE (2026-10-20; all six children merged, #159–#164; integration check below)
 - **Effort:** 2 S-ish, 2 M, 2 L
 - **Depends on:** nothing beyond main at `99c7991` (#157 merged)
 - **Requirement Source:** `design/settings-review-2026-10/REVIEW.md`. The owner asked (2026-10-19) for settings that "land in appropriate places" without cluttering or confusing, menus that work well, and a strong graphical aesthetic, with kie.ai spend approved.
@@ -18,7 +18,7 @@ Every setting lives where its effect lives: your Settings for you, Server settin
 | P5-03 | Site admin: General and Image generation pages | L | S2, S3, V2 | COMPLETE (#161) |
 | P5-04 | Server settings window and a short server menu | L | V1, V2, V3, V4 | COMPLETE (#162) |
 | P5-05 | Channel settings tabs and member menu header | M | C1, M2 | COMPLETE (#163) |
-| P5-06 | Sound set, image-generation art, shorter voice warning | M | A2, F2 (+ art for P5-03) | REVIEW |
+| P5-06 | Sound set, image-generation art, shorter voice warning | M | A2, F2 (+ art for P5-03) | COMPLETE (#164) |
 
 ## Cross-child dependencies and hot files
 - P5-02 creates the kit (`settings/SettingsLayout.jsx`, `SettingRow.jsx`, `Switch.jsx`, `SaveBar.jsx`); P5-03, P5-04 and P5-05 use it, so they wait for it.
@@ -46,3 +46,23 @@ Every setting lives where its effect lives: your Settings for you, Server settin
   4. A save bar for site-admin, server and channel settings; personal settings apply instantly.
   5. A designed sound set replaces the sine beeps, with the synth kept as a fallback.
 - Order: P5-01 first (the owner's choice), then P5-02 … P5-06.
+
+## Integration verification (done 2026-10-20, on main after #164)
+Sandbox only: the sandbox server on :3005, with a dev server on the branch (main plus this PR's one fix) on :5175.
+
+| Check | Result |
+|---|---|
+| Every settings window at 1024×768, dark and light | Scripted walk: Settings (11 sections), Server settings (6) and Channel settings (3), every section opened in turn. The section list never moved (same box on every section), and no page or panel scrolls sideways, in both themes |
+| Every settings window at 375×812, dark and light | All 20 sections open (through the list and Back on phones); no sideways scroll; Settings and Server settings fill the screen |
+| A non-admin member | bob (Mods: invite and pin only) sees My account, Voice & audio, Notifications and Appearance, with no Site admin group. The server menu offers only Invite people, with no Server settings item, since he has nothing to manage. I gave Mods "Delete others' messages" for a moment: after a reload, bob's menu offered Server settings with only Moderation log, which loaded the log (`shots/p5-00-bob-moderation-log-only.jpg`, taken as the window opened). Then I set Mods back to pin only |
+| axe-core 4.10.2 (titles stripped first) | One minor finding: the Image generation Overview's engine cards were `<button role="listitem">` (aria-allowed-role). Fixed in this PR with a real list of buttons. After the fix: no violations on any section of the three windows, nor on the main screen with the member menu open |
+| Suites | Web 89 files / 724 tests; server 42 suites / 402 tests; `vite build` clean |
+
+## Round summary
+- **Your settings:** a fixed-size window; on phones, a list first and then a page; My account with status and Sign out; switches; a gear in the footer.
+- **Site admin:** General, plus Image generation as an Overview and five short pages sharing one save bar, with "Discard changes?" on close.
+- **Server settings:** one window replaces eleven menu items, with sections gated by permission and grouped role permissions.
+- **Channel settings:** three tabs at a fixed height. The member menu has a header and a moderation group.
+- **Media:** designed sounds (the old beep stays as a fallback), "not set up" art, and a one-line mic warning.
+- **Fixes:** image overflow on narrow screens and phones; the member menu now closes on Escape or a click outside.
+- **kie.ai spend for the round:** 15 credits (sounds) + 8 (art references).
