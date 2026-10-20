@@ -125,9 +125,9 @@ export default function App() {
     reconnects,
     view,
     dmCurrent: dm.current,
-    onRestoreDm: (name) => {
+    onRestoreDm: (saved) => {
       setView('dm');
-      dm.select(name);
+      dm.select(saved); // a conversation key, or a username saved before P9-06b
     },
   });
   // The open thread (a side panel next to the channel): { space, parentChannel,
@@ -202,7 +202,7 @@ export default function App() {
     dm: dm.current,
     dnd: presence === 'dnd', // Do Not Disturb: no notifications or sounds
     openChannel: (space, channel) => openChannelFromSearch(space, channel),
-    openDm: (name) => selectDm(name),
+    openDm: (key) => selectDm(key),
     openThread: (space, t) => openThreadFromSearch(space, t),
   });
   // "Create a server" / "Join with an invite" from the empty screen open the
@@ -281,6 +281,7 @@ export default function App() {
   const openFromPush = useRef(null);
   openFromPush.current = (data) => {
     if (!data) return;
+    if (data.conversation != null) return selectDm(`c:${data.conversation}`); // P9-06b
     if (data.dm) return startDm(data.dm);
     if (data.thread) return openThreadFromSearch(data.space, { channel: data.channel, name: data.thread.name, parentChannel: data.thread.parentChannel });
     if (data.space && data.channel) openChannelFromSearch(data.space, data.channel);
@@ -354,9 +355,10 @@ export default function App() {
   function openDms() {
     setView('dm'); // useDms loads the conversation list when the view opens
   }
-  function selectDm(username) {
+  // A conversation by key (`c:<id>`, or `@name` for someone not yet messaged).
+  function selectDm(key) {
     setView('dm');
-    dm.select(username);
+    dm.select(key);
   }
   function startDm(username) {
     if (!username || username === user) return;
@@ -375,9 +377,11 @@ export default function App() {
     sp.openChannel(space, t.parentChannel);
     openThreadPanel(t, { space, parentChannel: t.parentChannel });
   }
-  function openDmFromSearch(username) {
+  // A DM search hit: its conversation (P9-06b), else the person.
+  function openDmFromSearch(hit) {
     setSearchOpen(false);
-    startDm(username);
+    if (hit.conversationId != null) selectDm(`c:${hit.conversationId}`);
+    else startDm(hit.dmWith);
   }
 
   // Unread + mention badges: per-channel (for the current server) and per-server totals.
@@ -398,7 +402,7 @@ export default function App() {
   // Remember where you've been, so the switcher can rank recent places first.
   const here =
     view === 'dm'
-      ? dm.current && itemKey({ kind: 'dm', username: dm.current })
+      ? dm.current && itemKey({ kind: 'dm', key: dm.current })
       : sp.currentSpace && sp.currentChannel && itemKey({ kind: 'channel', space: sp.currentSpace, channel: sp.currentChannel });
   useEffect(() => {
     if (here) recordVisit(here, myId);
@@ -453,7 +457,7 @@ export default function App() {
           }))
         ),
         ...sp.orderedSpaces.map((s) => ({ kind: 'server', name: s.name, unread: spaceUnread[s.name] || 0, mention: spaceMentions[s.name] || 0 })),
-        ...dm.conversations.map((d) => ({ kind: 'dm', username: d.username, unread: dm.unread[d.username] || 0 })),
+        ...dm.conversations.map((d) => ({ kind: 'dm', key: d.key, username: d.username, unread: dm.unread[d.key] || 0 })),
       ];
   function goToPicked(it) {
     setSwitcher(null);
@@ -462,6 +466,7 @@ export default function App() {
       setView('server');
       sp.openChannel(it.space, it.channel);
     } else if (it.kind === 'server') selectSpace(it.name);
+    else if (it.key) selectDm(it.key);
     else startDm(it.username);
   }
 
@@ -630,7 +635,8 @@ export default function App() {
       {/* Main content — full width on phones, alongside the nav on desktop. */}
       {view === 'dm' ? (
         <DmPanel
-          username={dm.current}
+          conversationKey={dm.current}
+          username={dm.currentConversation?.username || ''}
           messages={shownDmMessages}
           currentUser={user}
           newMessages={dm.newMessages}

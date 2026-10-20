@@ -11,13 +11,17 @@ import { playMessage, playMention } from './sounds.js';
 // { me, focused, view: 'server'|'dm', space, channel, thread, dm, level, sounds }
 // (thread: the '~tN' channel open in the thread panel, if any).
 
+// A DM frame's conversation key (P9-06b), or `@<sender>` without one.
+export const dmKeyOf = (frame) => (frame.conversation != null ? `c:${frame.conversation}` : `@${frame.from}`);
+
 // What an incoming message is to you: 'mention' | 'dm' | 'message', or null
 // when it's yours or you're looking right at it (window focused, that
 // channel or DM open).
 export function attentionKind(frame, ctx) {
   if (frame.kind === 'dm') {
     if (frame.from === ctx.me) return null;
-    if (ctx.focused && ctx.view === 'dm' && ctx.dm === frame.from) return null;
+    // P9-06b: ctx.dm is the open conversation's key (`c:<id>`, or `@name`).
+    if (ctx.focused && ctx.view === 'dm' && ctx.dm === dmKeyOf(frame)) return null;
     return 'dm';
   }
   if (frame.author === ctx.me) return null;
@@ -114,13 +118,13 @@ export function useNotifications() {
         body: notificationText(frame.content, frame.attachments || []),
         icon: '/icon-192.png',
         // One notification per conversation: a newer one replaces the older.
-        tag: isDm ? `dm:${author}` : `ch:${frame.space}:${frame.channel}`,
+        tag: isDm ? `dm:${dmKeyOf(frame)}` : `ch:${frame.space}:${frame.channel}`,
       });
       open.current.add(n);
       n.onclose = () => open.current.delete(n);
       n.onclick = () => {
         window.focus();
-        if (isDm) w.openDm?.(author);
+        if (isDm) w.openDm?.(dmKeyOf(frame));
         else if (frame.thread) w.openThread?.(frame.space, { channel: frame.channel, name: frame.thread.name, parentChannel: frame.thread.parentChannel });
         else w.openChannel?.(frame.space, frame.channel);
         n.close();

@@ -54,9 +54,12 @@ test('a push shows a notification from the payload, grouped per conversation', a
   listeners.push(event({ data: { json: () => ({ title: 'bob in #general · S', body: 'hi', data: { space: 'S', channel: 'general' } }) } }));
   await event.last;
   expect(scope.registration.showNotification).toHaveBeenCalledWith('bob in #general · S', expect.objectContaining({ body: 'hi', tag: 'ch:S:general', icon: '/icon-192.png', data: { space: 'S', channel: 'general' } }));
-  listeners.push(event({ data: { json: () => ({ title: 'bob', data: { dm: 'bob' } }) } }));
+  listeners.push(event({ data: { json: () => ({ title: 'bob', data: { dm: 'bob', conversation: 7 } }) } }));
   await event.last;
-  expect(scope.registration.showNotification).toHaveBeenLastCalledWith('bob', expect.objectContaining({ body: '', tag: 'dm:bob' }));
+  expect(scope.registration.showNotification).toHaveBeenLastCalledWith('bob', expect.objectContaining({ body: '', tag: 'dm:c:7' })); // P9-06b: per conversation
+  listeners.push(event({ data: { json: () => ({ title: 'bob', data: { dm: 'bob' } }) } })); // a push from before P9-06a
+  await event.last;
+  expect(scope.registration.showNotification).toHaveBeenLastCalledWith('bob', expect.objectContaining({ tag: 'dm:@bob' }));
 });
 
 test('clicking it focuses an open tab and tells it where to go, or opens the app at ?open=', async () => {

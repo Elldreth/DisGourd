@@ -6,14 +6,14 @@ import Mascot from './Mascot.jsx';
 // your DMs. Items:
 //   { kind: 'channel', space, channel, unread?, mention? }
 //   { kind: 'server', name, unread?, mention? }
-//   { kind: 'dm', username, unread? }
+//   { kind: 'dm', key, username, unread? }  (key: the conversation's, P9-06b)
 //   { kind: 'person', username }       (people mode: a member you haven't messaged yet)
 //
 // `mode="people"` is the "New message" picker: the same dialog, listing only
 // people (your conversations, then everyone you share a server with).
 
 export const itemKey = (it) =>
-  it.kind === 'channel' ? `c:${JSON.stringify([it.space, it.channel])}` : it.kind === 'server' ? `s:${it.name}` : `d:${it.username}`;
+  it.kind === 'channel' ? `c:${JSON.stringify([it.space, it.channel])}` : it.kind === 'server' ? `s:${it.name}` : `d:${it.key || it.username}`;
 
 // The people-mode list: your conversations (with their unread counts) first,
 // then members of your servers you haven't messaged, never yourself, no repeats.
@@ -23,7 +23,7 @@ export function peopleItems({ me, conversations = [], unread = {}, members = [] 
   for (const c of conversations) {
     if (seen.has(c.username)) continue;
     seen.add(c.username);
-    items.push({ kind: 'dm', username: c.username, unread: unread[c.username] || 0 });
+    items.push({ kind: 'dm', key: c.key, username: c.username, unread: unread[c.key] || 0 });
   }
   for (const m of members) {
     if (seen.has(m.username)) continue;

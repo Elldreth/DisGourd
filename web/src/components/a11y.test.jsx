@@ -154,7 +154,7 @@ test('ChatPanel and DmPanel headers are named', () => {
 });
 
 test('DmSidebar: a conversation announces its unread count', () => {
-  render(<DmSidebar conversations={[{ username: 'bob' }]} unread={{ bob: 2 }} user="sandy" status="open" />);
+  render(<DmSidebar conversations={[{ key: 'c:1', username: 'bob' }]} unread={{ 'c:1': 2 }} user="sandy" status="open" />);
   expectNamedControls();
   expect(screen.getByRole('button', { name: /bob.*2 unread/ })).toBeTruthy();
 });

@@ -30,7 +30,10 @@ describe('attentionKind', () => {
 
   test('nothing for the channel or DM you are looking at with the window focused', () => {
     expect(attentionKind(msg({ channel: 'general', mentions: ['sandy'] }), ctx())).toBeNull();
-    expect(attentionKind(dmFrame(), ctx({ view: 'dm', dm: 'bob' }))).toBeNull();
+    // P9-06b: the open DM is a conversation key.
+    expect(attentionKind(dmFrame({ conversation: 7 }), ctx({ view: 'dm', dm: 'c:7' }))).toBeNull();
+    expect(attentionKind(dmFrame({ conversation: 8 }), ctx({ view: 'dm', dm: 'c:7' }))).toBe('dm');
+    expect(attentionKind(dmFrame(), ctx({ view: 'dm', dm: '@bob' }))).toBeNull(); // a frame without one: by sender
   });
 
   test('the open channel still counts when the window is in the background', () => {
