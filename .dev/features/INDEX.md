@@ -150,7 +150,7 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P7-02 | Keyboard shortcuts sheet (Ctrl+/) and hints in tooltips | 7 | COMPLETE | S | none | shortcuts, status menu |
 | P7-03 | Pins and Threads open beside the chat | 7 | COMPLETE | M | none | ChatPanel, PinsPanel, ThreadsList |
 | P7-04 | Phones: full visible height, a gap above the home bar | 7 | COMPLETE | S | none | index.css, App layout |
-| P7-05 | Small fixes: kie.ai spend on the overview, dev-server font note, closing old questions | 7 | REVIEW | S | none | imagine/index.js, OverviewPage.jsx, INDEX |
+| P7-05 | Small fixes: kie.ai spend on the overview, dev-server font note, closing old questions | 7 | COMPLETE | S | none | imagine/index.js, OverviewPage.jsx, INDEX |
 
 ## Dependency map (hard dependencies)
 
@@ -228,4 +228,5 @@ Kept as its own table so it doesn't collide with other sessions' rows.
 
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
-| P8-01 | Art pass: mascot poses, sign-in art, ready-made server icons, share image | 8 | REVIEW | M | none | mascotParts.js, Mascot.jsx, LoginArt.jsx, serverGlyphs.js, GlyphPicker.jsx, AuthShell.jsx, server/static.js, web/public/og-image.png |
+| P8-01 | Art pass: mascot poses, sign-in art, ready-made server icons, share image | 8 | COMPLETE | M | none | mascotParts.js, Mascot.jsx, LoginArt.jsx, serverGlyphs.js, GlyphPicker.jsx, AuthShell.jsx, server/static.js, web/public/og-image.png |
+| P9-01 | Message reports (moderators' Reports queue; servers only) | 9 | READY | M | P3-26, P1-10 | migrations v26, routes, gateway, MessageList menu, ReportsDialog |
