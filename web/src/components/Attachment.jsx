@@ -12,7 +12,7 @@ export default function Attachment({ url, spoiler }) {
 
   if (info.isImage) {
     return (
-      <div className="relative mt-1 w-fit overflow-hidden rounded-lg">
+      <div className="relative mt-1 w-fit max-w-full overflow-hidden rounded-lg">
         <a
           href={info.url}
           target="_blank"
@@ -26,7 +26,7 @@ export default function Attachment({ url, spoiler }) {
             src={info.url}
             alt={revealed ? info.name : 'Spoiler image'}
             loading="lazy"
-            className={`max-h-80 max-w-md rounded-lg border border-ink-500/50 object-contain transition ${
+            className={`max-h-80 max-w-[min(28rem,100%)] rounded-lg border border-ink-500/50 object-contain transition ${
               revealed ? '' : 'blur-2xl'
             }`}
           />
@@ -66,7 +66,7 @@ export default function Attachment({ url, spoiler }) {
       target="_blank"
       rel="noreferrer"
       download={info.name}
-      className="mt-1 flex w-fit max-w-md items-center gap-3 rounded-lg border border-ink-500/50 bg-ink-800 px-3 py-2.5 transition hover:border-brand-hi"
+      className="mt-1 flex w-fit max-w-[min(28rem,100%)] items-center gap-3 rounded-lg border border-ink-500/50 bg-ink-800 px-3 py-2.5 transition hover:border-brand-hi"
     >
       <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-brand/20 text-brand-hi"><Icon name="paperclip" size={17} /></div>
       <div className="min-w-0">

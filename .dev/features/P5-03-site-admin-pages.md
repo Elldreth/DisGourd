@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** PLANNED (needs P5-02; owner decisions 1, 2 and 4)
+- **State:** PLANNED (needs P5-02; decisions agreed)
 - **Effort:** L (may split into a: General + Overview/ComfyUI, b: Quality/Variations/kie.ai/Try it, if the working set gets too big)
 - **Depends on:** P5-02 (kit)
 - **Serialize with:** anything editing `ImagineAdmin.jsx` or `RegistrationAdmin.jsx`

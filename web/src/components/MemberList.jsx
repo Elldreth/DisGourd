@@ -43,6 +43,30 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
   }, [open]);
 
   const [menuFor, setMenuFor] = useState(null);
+  // The open member menu (its row and actions): Esc or a click outside closes
+  // it, and Esc puts focus back on the member's row (P5-01).
+  const menuWrapRef = useRef(null);
+  useEffect(() => {
+    if (!menuFor) return undefined;
+    const close = () => setMenuFor(null);
+    const away = (e) => {
+      if (!menuWrapRef.current?.contains(e.target)) close();
+    };
+    // Capture phase, and stopped there, so Esc closes only the menu and not
+    // the member drawer around it on phones.
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      menuWrapRef.current?.querySelector('button')?.focus();
+      close();
+    };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [menuFor]);
   // status: online | idle | dnd | offline (older servers only sent `online`).
   const statusOf = (m) => m.status || (m.online ? 'online' : 'offline');
   const online = members.filter((m) => statusOf(m) !== 'offline');
@@ -130,7 +154,7 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
           const acts = actionsFor(m);
           const open = menuFor === m.username;
           return (
-            <div key={m.username}>
+            <div key={m.username} ref={open ? menuWrapRef : undefined}>
               <button
                 onClick={() => acts.length && setMenuFor(open ? null : m.username)}
                 title={acts.length ? m.username : 'You'}

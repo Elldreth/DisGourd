@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P5-00)
 - **Phase:** 5
-- **State:** PLANNED (owner decision 5; the art needs P5-03's Overview page)
+- **State:** PLANNED (sound set agreed; the art needs P5-03's Overview page)
 - **Effort:** M
 - **Depends on:** P5-03 for the art placement only
 - **Serialize with:** anything editing `sounds.js`, `ChannelList.jsx` (voice panel)
