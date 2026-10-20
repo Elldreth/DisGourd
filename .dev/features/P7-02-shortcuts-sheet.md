@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 7 (UX review follow-ups)
-- **State:** REVIEW
+- **State:** COMPLETE (merged #172)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P7-04 if both touch `App.jsx` (they touch different lines)

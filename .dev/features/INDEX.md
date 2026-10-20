@@ -1,7 +1,7 @@
 # DisGourd feature packets: index
 
 Source: `design/IMPROVEMENT-PLAN.md`. Every item was revalidated against `main` (935fd85) on 2026-10-15.
-States: **READY** means the dependencies are satisfied and it can start now. **PLANNED** means it's waiting on dependencies. Nothing is BLOCKED on external input except the open questions flagged in P1-15 and P2-20.
+States: **READY** means the dependencies are satisfied and it can start now. **PLANNED** means it's waiting on dependencies. Nothing is BLOCKED on external input.
 
 ## Already done (dropped from the packets)
 - **Phase 0, all of 0.1–0.8.** Includes `PRAGMA foreign_keys` plus orphan cleanup, the size limits (JSON 64 KB, WS 256 KB, message 4,000 characters, crop sanitised), async scrypt, and the `canView` delivery helper.
@@ -145,7 +145,12 @@ States: **READY** means the dependencies are satisfied and it can start now. **P
 | P6-01 | Leave server | 6 | COMPLETE | S | none | routes/spaces.js, db/index.js, useSpaces.js, ChannelList.jsx |
 | P6-02 | Change password (signs out other devices; migration v25) | 6 | COMPLETE | M | none | routes/auth.js, auth/tokens.js, gateway, ProfileDialog.jsx, ChangePasswordDialog.jsx (new) |
 | P6-03 | Rename channel | 6 | COMPLETE | M | none (after P6-01: shared files) | routes/spaces.js, db/index.js, gateway/voice.js, useSpaces.js, ChannelSettingsDialog.jsx, ModLogSection.jsx |
-| P6-04 | Leftovers: server rename keeps calls, countdowns follow renames, duplicate CSS | 6 | REVIEW | S | P6-03 | gateway/voice.js, routes/spaces.js, voice.js, useVoiceCall.js, slowmode.js, App.jsx, index.css |
+| P6-04 | Leftovers: server rename keeps calls, countdowns follow renames, duplicate CSS | 6 | COMPLETE | S | P6-03 | gateway/voice.js, routes/spaces.js, voice.js, useVoiceCall.js, slowmode.js, App.jsx, index.css |
+| P7-01 | Setup wizard: the invite link first, with "Copy link" | 7 | COMPLETE | S | none | setup wizard |
+| P7-02 | Keyboard shortcuts sheet (Ctrl+/) and hints in tooltips | 7 | COMPLETE | S | none | shortcuts, status menu |
+| P7-03 | Pins and Threads open beside the chat | 7 | COMPLETE | M | none | ChatPanel, PinsPanel, ThreadsList |
+| P7-04 | Phones: full visible height, a gap above the home bar | 7 | COMPLETE | S | none | index.css, App layout |
+| P7-05 | Small fixes: kie.ai spend on the overview, dev-server font note, closing old questions | 7 | REVIEW | S | none | imagine/index.js, OverviewPage.jsx, INDEX |
 
 ## Dependency map (hard dependencies)
 
@@ -206,13 +211,14 @@ Units inside a lane run **sequentially**, because they share hot files. Differen
 Lanes B and C both touch MessageList in P1-08 and P2-05. Never run those two at the same time as another lane-C unit.
 
 ## Open questions flagged for the human
-- P1-01: fail fast on a migration error at boot (a behaviour change)?
-- P1-10: moderators can delete only lower-ranked authors' messages (assumed)?
-- P1-12/P1-19: hooks + useReducer (no store library), and Vitest (assumed)?
+All closed (2026-10-20, P7-05), each with what was built or decided:
+- ~~P1-01: fail fast on a migration error at boot?~~ Yes: a failed migration rolls back and stops the server with a clear error (`runMigrations`, tested in `db-migrations.test.js`).
+- ~~P1-10: moderators can delete only lower-ranked authors' messages?~~ Yes, built that way (P1-10), and it's the same rank rule as kick, ban and timeout (P3-26).
+- ~~P1-12/P1-19: hooks + useReducer (no store library), and Vitest?~~ Yes, both in use.
 - ~~P1-15: UID/GID for Unraid volumes (99:100?), plus a one-time chown needed.~~ 99:100 (2026-10-17); chown documented in the README.
 - ~~P2-12: proxy og:images to hide viewer IPs (v1 assumes no)?~~ Yes, built in P2-23 (2026-10-17).
-- P2-18: iOS install requirement for push; push message previews?
-- P2-20: design agreed 2026-10-18 (two engines, shared options, NSFW only in 18+ channels). Still open: the ComfyUI models and VRAM, the kie.ai models and prices (check at build time), default limits.
-- P2-21: bitset permissions versus named thresholds.
+- ~~P2-18: iOS install requirement for push; push message previews?~~ Built: iPhone/iPad need DisGourd added to the Home Screen first (Notification settings says so), and pushes show a short preview. The owner hasn't confirmed a push on a real phone yet.
+- ~~P2-20: ComfyUI models and VRAM, kie.ai models and prices, default limits.~~ Settled while building P2-20b/c and P3-21–P3-36 (the owner's ComfyUI, the kie.ai catalogue with real prices, a daily default per instance and per server).
+- ~~P2-21: bitset permissions versus named thresholds.~~ Named permissions per role (the owner's choice, 2026-10-18).
 - ~~P2-22: thread model.~~ Decided 2026-10-17: hidden child channels; anyone who can post starts one; auto-archive after 7 quiet days; follow model (see P2-22-threads.md).
 - ~~P3-06: the template channel sets.~~ Approved as proposed (2026-10-17).

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 7 (UX review follow-ups)
-- **State:** REVIEW (option A, a side panel, chosen by the owner on 2026-10-20)
+- **State:** COMPLETE (merged #173; option A, a side panel, chosen by the owner on 2026-10-20)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** none

@@ -5,6 +5,13 @@ import Switch from '../../settings/Switch.jsx';
 import Icon from '../../Icon.jsx';
 import EmptyState from '../../EmptyState.jsx';
 
+// The kie.ai card's money line (P7-05): what it has cost since the 1st,
+// against the monthly cap if there is one.
+function kieSpend(spent = 0, cap = null) {
+  if (cap) return `${spent} of ${cap} credits used this month`;
+  return `${spent} credit${spent === 1 ? '' : 's'} used this month · no cap`;
+}
+
 // Image generation › Overview: is each engine set up (a card that opens its
 // page), which one is the default, and the rules for everyone: the daily
 // allowance and the 18+ policy.
@@ -37,7 +44,7 @@ export default function OverviewPage() {
       on: !!savedKie.enabled,
       lines: [
         kieModelName || 'No model picked yet',
-        savedKie.keySaved || savedKie.envKey ? (savedKie.monthlyCredits ? `Cap: ${savedKie.monthlyCredits} credits a month` : 'No monthly cap') : 'No API key yet',
+        savedKie.keySaved || savedKie.envKey ? kieSpend(kieEngine.spentThisMonth, savedKie.monthlyCredits) : 'No API key yet',
       ],
     },
   ].filter(Boolean);

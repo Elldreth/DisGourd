@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 7 (UX review follow-ups)
-- **State:** REVIEW
+- **State:** COMPLETE (merged #170)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** none
