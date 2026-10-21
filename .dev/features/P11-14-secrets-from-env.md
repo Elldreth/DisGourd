@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 9 in P11-00)
+- **State:** COMPLETE (merged in #223; build order 9 in P11-00)
 - **Starting baseline:** main at 7590c22 (#222 merged)
 - **Effort:** S
 - **Depends on:** none

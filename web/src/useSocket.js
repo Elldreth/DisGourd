@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 // connection regardless of which channel is open.
 //
 //  - Auto-reconnects with exponential backoff + jitter after any unclean close.
+//  - Signs in with its first frame ({ op: 'auth', token }), never the URL.
 //  - Queues outgoing frames while offline and flushes them on reconnect.
 //  - Dispatches incoming frames to handlers keyed by the frame's `type`.
 //
@@ -34,7 +35,8 @@ export function useGateway({ token, handlers }) {
 
     const url = () => {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${proto}//${window.location.host}/gateway?token=${encodeURIComponent(token)}`;
+      // P11-07: no token in the URL (it would end up in logs); the first frame signs in.
+      return `${proto}//${window.location.host}/gateway`;
     };
 
     const flush = () => {
@@ -70,6 +72,11 @@ export function useGateway({ token, handlers }) {
       }
 
       ws.onopen = () => {
+        try {
+          ws.send(JSON.stringify({ op: 'auth', token }));
+        } catch {
+          /* the close handler reconnects */
+        }
         attempt = 0;
         setStatus('open');
         if (openedBefore) setReconnects((n) => n + 1);
