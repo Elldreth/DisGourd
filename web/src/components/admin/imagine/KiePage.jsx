@@ -78,23 +78,33 @@ export default function KiePage() {
             />
           )}
         </div>
-        {needsPictureModel && (
-          <div>
-            <label htmlFor="imagine-kie-picture-model" className={heading}>Model for pictures</label>
-            <select id="imagine-kie-picture-model" value={kie.pictureModel} onChange={(e) => setKie((k) => ({ ...k, pictureModel: e.target.value }))} className="input">
-              <option value="">None (pictures use ComfyUI, if it’s on)</option>
-              {pictureModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-            <p className="mt-1 text-xs text-gray-500">{kieModel?.id === 'custom' ? 'A custom model' : kieModel?.name} can’t start from a picture, so “Start from a picture” and Variations use this one.</p>
+        {kie.model && (
+          // P10-05: what happens to pictures, as its own labelled part.
+          <div role="group" aria-labelledby="imagine-kie-pictures" className="space-y-2 border-t border-ink-500/40 pt-3">
+            <div id="imagine-kie-pictures" className={heading}>Pictures</div>
+            <p className="text-sm text-gray-200" role="note" aria-label="Pictures on kie.ai">
+              {picturesBy
+                ? `${picturesBy.name} image-to-image · ${picturesBy.picture.strength ? 'Subtle, Medium and Strong' : 'no strength setting, so Variations are one button'}`
+                : 'kie.ai won’t take pictures with this model.'}
+            </p>
+            {needsPictureModel && (
+              <div>
+                <label htmlFor="imagine-kie-picture-model" className={heading}>Model for pictures</label>
+                <select id="imagine-kie-picture-model" value={kie.pictureModel} onChange={(e) => setKie((k) => ({ ...k, pictureModel: e.target.value }))} className="input">
+                  <option value="">None (pictures use ComfyUI, if it’s on)</option>
+                  {pictureModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">{kieModel?.id === 'custom' ? 'A custom model' : kieModel?.name} can’t start from a picture, so “Start from a picture” and Variations use this one.</p>
+              </div>
+            )}
+            {picturesBy && (
+              <p className="text-xs text-gray-500">For “Start from a picture” and Variations. Each time, DisGourd uploads that one picture to kie.ai’s file storage; kie.ai deletes it after 24 hours.</p>
+            )}
           </div>
         )}
-        {kie.model && (
-          <p className="text-xs text-gray-500" role="note" aria-label="Pictures on kie.ai">
-            {picturesBy
-              ? `Pictures (“Start from a picture” and Variations) use ${picturesBy.name} image-to-image${picturesBy.picture.strength ? ', with Subtle, Medium and Strong' : '; it has no strength setting, so Variations are one button'}. For each one, DisGourd uploads that one picture to kie.ai’s file storage; kie.ai deletes it after 24 hours.`
-              : 'kie.ai won’t take pictures with this model.'}
-          </p>
-        )}
+      </div>
+
+      <div className={card}>
         <div>
           <label htmlFor="imagine-kie-cap" className={heading}>Monthly credit cap</label>
           <input

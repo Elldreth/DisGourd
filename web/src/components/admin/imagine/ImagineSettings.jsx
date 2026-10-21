@@ -308,7 +308,10 @@ export function ImagineSettingsProvider({ children, onDirtyChange, onNavigate })
       setError(err.message || 'Could not save');
       // "Anime: …" — show the style the problem is in.
       const named = comfyAll.styles.find((s) => (err.message || '').startsWith(`${s.name}: `));
-      if (named) setEditingId(named.id);
+      if (named) {
+        setEditingId(named.id);
+        onNavigate?.('imagine-styles'); // P10-05: where that style's settings are
+      }
     } finally {
       setSaving(false);
     }

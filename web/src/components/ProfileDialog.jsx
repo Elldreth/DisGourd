@@ -9,6 +9,7 @@ import RegistrationAdmin from './RegistrationAdmin.jsx';
 import { ImagineSettingsProvider, ImagineSaveBar } from './admin/imagine/ImagineSettings.jsx';
 import ImagineOverview from './admin/imagine/OverviewPage.jsx';
 import ImagineComfy from './admin/imagine/ComfyPage.jsx';
+import ImagineStyles from './admin/imagine/StylesPage.jsx';
 import ImagineQuality from './admin/imagine/QualityPage.jsx';
 import ImagineVariations from './admin/imagine/VariationsPage.jsx';
 import ImagineKie from './admin/imagine/KiePage.jsx';
@@ -34,11 +35,12 @@ const SECTIONS = [
   { id: 'appearance', label: 'Appearance' },
 ];
 // Site admin: General (sign-up, site admins, link previews), then Image
-// generation as an overview and five short pages (P5-03).
+// generation as an overview and six short pages (P5-03; Styles: P10-05).
 const ADMIN_SECTIONS = [
   { id: 'admin', label: 'General', group: 'Site admin' },
   { id: 'imagine', label: 'Image generation', group: 'Site admin' },
   { id: 'imagine-comfy', label: 'ComfyUI', group: 'Site admin', indent: true },
+  { id: 'imagine-styles', label: 'Styles', group: 'Site admin', indent: true }, // P10-05
   { id: 'imagine-quality', label: 'Quality', group: 'Site admin', indent: true },
   { id: 'imagine-variations', label: 'Variations', group: 'Site admin', indent: true },
   { id: 'imagine-kie', label: 'kie.ai', group: 'Site admin', indent: true },
@@ -47,6 +49,7 @@ const ADMIN_SECTIONS = [
 const IMAGINE_PAGES = {
   imagine: ImagineOverview,
   'imagine-comfy': ImagineComfy,
+  'imagine-styles': ImagineStyles,
   'imagine-quality': ImagineQuality,
   'imagine-variations': ImagineVariations,
   'imagine-kie': ImagineKie,

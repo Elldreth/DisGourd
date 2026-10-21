@@ -12,19 +12,12 @@ function summary(s) {
   return s.model.split(/[\\/]/).pop().replace(/\.(safetensors|ckpt|gguf|pt|pth|bin)$/i, '');
 }
 
-// Image generation › ComfyUI › Styles (P9-04b): the named setups people pick
-// in the Imagine panel. Choosing one here shows its settings below.
+// Image generation › Styles (P9-04b; its own page since P10-05): the named
+// setups people pick in the Imagine panel. Choosing one here shows its
+// settings in the panel below (StylesPage).
 export default function StylesSection() {
   const { styles, defaultStyle, editingStyle, styleActions } = useImagine();
   const [deleting, setDeleting] = useState(null);
-  const name = editingStyle.name;
-  const nameProblem = !name.trim()
-    ? 'Give the style a name.'
-    : name.trim().length > 30
-      ? 'Keep the name to 30 characters or fewer.'
-      : styles.some((s) => s !== editingStyle && s.name.trim().toLowerCase() === name.trim().toLowerCase())
-        ? 'Another style has this name.'
-        : '';
   const small = 'rounded-md px-2 py-1 text-xs font-medium text-brand-hi hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
@@ -32,7 +25,7 @@ export default function StylesSection() {
       <div>
         <h3 id="imagine-styles-heading" className={heading}>Styles</h3>
         <p className="text-xs text-gray-500">
-          People pick a style in the Imagine panel. Each style has its own workflow, model and Advanced settings. The address, graphics memory, Quality, Upscale and Variations settings are shared by every style.
+          People pick a style in the Imagine panel. Pick one here to edit it below: its workflow, model, prompt prefix and Advanced settings. The address and graphics memory (ComfyUI), Quality and Variations are shared by every style.
         </p>
       </div>
 
@@ -66,20 +59,6 @@ export default function StylesSection() {
         {styles.length >= MAX_STYLES && <span className="text-xs text-gray-500">At most {MAX_STYLES} styles.</span>}
       </div>
 
-      <div>
-        <label htmlFor="imagine-style-name" className={heading}>Style name</label>
-        <input
-          id="imagine-style-name"
-          value={name}
-          maxLength={40}
-          onChange={(e) => styleActions.rename(editingStyle.id, e.target.value)}
-          className="input"
-          aria-invalid={!!nameProblem}
-          aria-describedby={nameProblem ? 'imagine-style-name-problem' : undefined}
-        />
-        {nameProblem && <p id="imagine-style-name-problem" className="mt-1 text-xs text-danger">{nameProblem}</p>}
-      </div>
-
       {deleting && (
         <ConfirmDialog
           title={`Delete “${deleting.name.trim() || 'Untitled'}”?`}
@@ -94,5 +73,34 @@ export default function StylesSection() {
         />
       )}
     </section>
+  );
+}
+
+// The chosen style's name, with what's wrong with it (P10-05: at the top of
+// the style's panel).
+export function StyleNameField() {
+  const { styles, editingStyle, styleActions } = useImagine();
+  const name = editingStyle.name;
+  const nameProblem = !name.trim()
+    ? 'Give the style a name.'
+    : name.trim().length > 30
+      ? 'Keep the name to 30 characters or fewer.'
+      : styles.some((s) => s !== editingStyle && s.name.trim().toLowerCase() === name.trim().toLowerCase())
+        ? 'Another style has this name.'
+        : '';
+  return (
+    <div>
+      <label htmlFor="imagine-style-name" className={heading}>Style name</label>
+      <input
+        id="imagine-style-name"
+        value={name}
+        maxLength={40}
+        onChange={(e) => styleActions.rename(editingStyle.id, e.target.value)}
+        className="input"
+        aria-invalid={!!nameProblem}
+        aria-describedby={nameProblem ? 'imagine-style-name-problem' : undefined}
+      />
+      {nameProblem && <p id="imagine-style-name-problem" className="mt-1 text-xs text-danger">{nameProblem}</p>}
+    </div>
   );
 }

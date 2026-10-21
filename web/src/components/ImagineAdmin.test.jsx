@@ -453,7 +453,7 @@ test('P9-04b: Styles: an old setup shows as "Default"; add, rename, duplicate, m
   expect(screen.getByText('Editing style: Default')).toBeTruthy();
 });
 
-test('P9-04b: a save error that names a style shows that style; Advanced picks the style it edits', async () => {
+test('P9-04b: a save error that names a style shows that style; Advanced follows the chosen style (P10-05: on the Styles page)', async () => {
   api.getImagineSettings.mockResolvedValue(view({ url: 'http://127.0.0.1:8188', presets: [
     { id: 'photo', name: 'Photoreal', model: MODELS[1].name, family: 'sdxl', steps: { standard: 30 } },
     { id: 'mine', name: 'Mine', workflowMode: 'custom', workflow: '{"1":{}}' },
@@ -463,14 +463,13 @@ test('P9-04b: a save error that names a style shows that style; Advanced picks t
   const list = await screen.findByRole('list', { name: 'Styles' });
   expect(within(list).getAllByRole('button').map((b) => b.textContent)).toEqual(['PhotorealIllustrious-XL-v2.0Default', 'MineOwn workflow']);
   expect(screen.getByText('Editing style: Photoreal')).toBeTruthy();
-  // Advanced has a Style picker when there's more than one, showing that style's values.
-  const style = screen.getByLabelText('Style');
-  expect(style.value).toBe('photo');
+  // P10-05: Advanced sits in the style's panel, so it shows the chosen style's values; no second picker.
+  expect(screen.queryByLabelText('Style')).toBeNull();
   expect(screen.getByLabelText('Standard').value).toBe('30');
-  fireEvent.change(style, { target: { value: 'mine' } });
+  fireEvent.click(within(list).getByRole('button', { name: /^Mine/ }));
   expect(screen.getByText('Editing style: Mine')).toBeTruthy();
   expect(screen.getByLabelText('Standard').value).toBe('');
-  fireEvent.change(style, { target: { value: 'photo' } });
+  fireEvent.click(within(list).getByRole('button', { name: /^Photoreal/ }));
   fireEvent.change(screen.getByLabelText('Style name'), { target: { value: 'Photo' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   expect(await screen.findByText(/Mine: Workflow: your ComfyUI/)).toBeTruthy();
@@ -485,16 +484,84 @@ test('P9-05b: kie.ai pictures: which model they use and the upload note; Z-Image
   expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['None (pictures use ComfyUI, if it’s on)', 'Flux-2 Pro']);
   expect(screen.getByRole('note', { name: 'Pictures on kie.ai' }).textContent).toBe('kie.ai won’t take pictures with this model.');
   fireEvent.change(picker, { target: { value: 'flux-2/pro-text-to-image' } });
-  expect(screen.getByRole('note', { name: 'Pictures on kie.ai' }).textContent).toBe(
-    'Pictures (“Start from a picture” and Variations) use Flux-2 Pro image-to-image; it has no strength setting, so Variations are one button. For each one, DisGourd uploads that one picture to kie.ai’s file storage; kie.ai deletes it after 24 hours.'
-  );
+  // P10-05: a one-line summary in its own Pictures part; the upload note is help text under it.
+  expect(screen.getByRole('note', { name: 'Pictures on kie.ai' }).textContent).toBe('Flux-2 Pro image-to-image · no strength setting, so Variations are one button');
+  expect(screen.getByRole('group', { name: 'Pictures' }).textContent).toMatch(/kie\.ai deletes it after 24 hours/);
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.saveImagineSettings.mock.calls.at(-1)[0].engines.kie).toMatchObject({ model: 'z-image', pictureModel: 'flux-2/pro-text-to-image' }));
   // A model with its own picture version: no picker, and the note names it.
   fireEvent.change(screen.getByLabelText('kie.ai model'), { target: { value: 'flux-2/pro-text-to-image' } });
   expect(screen.queryByLabelText('Model for pictures')).toBeNull();
-  expect(screen.getByRole('note', { name: 'Pictures on kie.ai' }).textContent).toMatch(/use Flux-2 Pro image-to-image; it has no strength/);
+  expect(screen.getByRole('note', { name: 'Pictures on kie.ai' }).textContent).toMatch(/^Flux-2 Pro image-to-image · no strength/);
   // Nano Banana here has no picture info: it can't take pictures, so the picker shows.
   fireEvent.change(screen.getByLabelText('kie.ai model'), { target: { value: 'nano-banana-2' } });
   expect(screen.getByLabelText('Model for pictures').value).toBe('flux-2/pro-text-to-image');
+});
+
+// ---- P10-05: a Styles page; ComfyUI and Quality keep the shared settings ----
+test('P10-05: each page holds its own things; ComfyUI links to Styles; a save error about a style opens Styles', async () => {
+  const { ImagineSettingsProvider, ImagineSaveBar } = await import('./admin/imagine/ImagineSettings.jsx');
+  const { default: ComfyPage } = await import('./admin/imagine/ComfyPage.jsx');
+  const { default: StylesPage } = await import('./admin/imagine/StylesPage.jsx');
+  const { default: QualityPage } = await import('./admin/imagine/QualityPage.jsx');
+  api.getImagineSettings.mockResolvedValue(view({ url: 'http://127.0.0.1:8188', presets: [
+    { id: 'photo', name: 'Photoreal', model: MODELS[1].name, family: 'sdxl' },
+    { id: 'mine', name: 'Mine', workflowMode: 'custom', workflow: '{"1":{}}' },
+  ], defaultPreset: 'photo' }));
+  const onNavigate = vi.fn();
+  const page = (Page) => render(
+    <ImagineSettingsProvider onNavigate={onNavigate}>
+      <Page />
+      <ImagineSaveBar />
+    </ImagineSettingsProvider>
+  );
+  // ComfyUI: the address and memory, a summary of the styles, no model or workflow.
+  page(ComfyPage);
+  await screen.findByLabelText('ComfyUI address');
+  expect(screen.queryByLabelText('Model')).toBeNull();
+  expect(screen.queryByRole('list', { name: 'Styles' })).toBeNull();
+  expect(screen.getByText(/2 styles/).textContent).toMatch(/default: Photoreal/);
+  fireEvent.click(screen.getByRole('button', { name: 'Edit styles' }));
+  expect(onNavigate).toHaveBeenCalledWith('imagine-styles');
+  cleanup();
+  // Quality: shared settings only, no per-style Advanced.
+  page(QualityPage);
+  await screen.findByLabelText('Upscale model');
+  expect(screen.queryByRole('group', { name: 'Advanced settings' })).toBeNull();
+  expect(screen.queryByLabelText('Sampler')).toBeNull();
+  cleanup();
+  // Styles: the list, then the chosen style's name, model (full width) and Advanced together.
+  page(StylesPage);
+  const list = await screen.findByRole('list', { name: 'Styles' });
+  const panel = screen.getByRole('region', { name: 'Editing style: Photoreal' });
+  for (const label of ['Style name', 'Model', 'Model type', 'Prompt prefix (optional)', 'Sampler', 'Negative prompt']) {
+    expect(within(panel).getByLabelText(label)).toBeTruthy();
+  }
+  expect(within(panel).getByLabelText('Model').closest('.sm\:grid-cols-2')).toBeNull(); // not squeezed into half a row
+  fireEvent.click(within(list).getByRole('button', { name: /^Mine/ }));
+  expect(screen.getByRole('region', { name: 'Editing style: Mine' })).toBeTruthy();
+  // A save error naming a style selects it and opens this page.
+  onNavigate.mockClear();
+  fireEvent.click(within(list).getByRole('button', { name: /^Photoreal/ }));
+  fireEvent.change(screen.getByLabelText('Prompt prefix (optional)'), { target: { value: 'RAW photo,' } });
+  api.saveImagineSettings.mockRejectedValueOnce(new Error('Mine: Workflow: your ComfyUI doesn’t have this node: X'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('imagine-styles'));
+  expect(screen.getByRole('region', { name: 'Editing style: Mine' })).toBeTruthy();
+});
+
+test('P10-05: strengths are sliders with their value shown and a reset to the default', async () => {
+  const { default: StrengthSlider } = await import('./admin/imagine/StrengthSlider.jsx');
+  const onChange = vi.fn();
+  render(<StrengthSlider id="s" label="Hires strength" value={0.6} onChange={onChange} min={0.1} max={0.8} defaultValue={0.45} low="closer" high="more detail" />);
+  const slider = screen.getByLabelText('Hires strength');
+  expect(slider.type).toBe('range');
+  expect(screen.getByText('0.60')).toBeTruthy();
+  fireEvent.change(slider, { target: { value: '0.3' } });
+  expect(onChange).toHaveBeenCalledWith(0.3);
+  fireEvent.click(screen.getByRole('button', { name: 'Reset to 0.45' }));
+  expect(onChange).toHaveBeenCalledWith(0.45);
+  cleanup();
+  render(<StrengthSlider id="s" label="Hires strength" value={0.45} onChange={onChange} defaultValue={0.45} />);
+  expect(screen.queryByRole('button', { name: /^Reset/ })).toBeNull(); // already the default
 });
