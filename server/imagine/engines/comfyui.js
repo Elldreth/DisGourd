@@ -15,6 +15,9 @@
 // come from the host's own ComfyUI, and the parts suggested for a split model
 // are guesses by name that the host can change.
 const crypto = require('crypto');
+const dns = require('dns');
+const net = require('net');
+const { isLinkLocalOrMetadata, METADATA_HOSTS } = require('../../net/safeFetch');
 
 const FAMILIES = {
   sd15: { name: 'SD 1.5', mp: { draft: 0.26, standard: 0.33, high: 0.45 }, steps: { draft: 16, standard: 26, high: 34 }, classic: true, cfg: 7, sampler: 'dpmpp_2m', scheduler: 'karras' },
@@ -425,17 +428,57 @@ function buildUpscaleWorkflow(request, cfg, imageName, { permissive = false, see
 const base = (url) => String(url).replace(/\/+$/, '');
 const fail = (code, message) => Object.assign(new Error(message), { code });
 
+// ---- Where ComfyUI may be (P11-10) ----
+// ComfyUI lives on the LAN, a tailnet or this machine, so private addresses
+// are fine. Link-local and the cloud metadata service never are: a stolen
+// admin login could otherwise read instance credentials through the test and
+// list replies. Checked when the address is saved, before every request, and
+// on every redirect (followed by hand, GETs only, at most 3).
+const REFUSED_ADDRESS = 'That address isn’t allowed for ComfyUI';
+let lookup = (host) => dns.promises.lookup(host, { all: true, verbatim: true });
+function hostRefused(hostname) {
+  const host = String(hostname).replace(/^\[|\]$/g, '').toLowerCase();
+  if (METADATA_HOSTS.has(host)) return true;
+  return net.isIP(host) ? isLinkLocalOrMetadata(host) : false;
+}
+async function vetTarget(href) {
+  const u = new URL(href);
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) throw fail('REFUSED', REFUSED_ADDRESS);
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  if (hostRefused(host)) throw fail('REFUSED', REFUSED_ADDRESS);
+  if (net.isIP(host)) return;
+  let addresses;
+  try {
+    addresses = await lookup(host);
+  } catch {
+    return; // unresolvable: fetch fails next with the usual "isn't reachable"
+  }
+  if ((addresses || []).some((a) => isLinkLocalOrMetadata(a.address))) throw fail('REFUSED', REFUSED_ADDRESS);
+}
+async function guardedFetch(href, init) {
+  let current = href;
+  for (let hop = 0; ; hop += 1) {
+    await vetTarget(current);
+    const res = await fetch(current, { ...init, redirect: 'manual' });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (!location) return res;
+    if (hop >= 3 || (init.method && init.method !== 'GET')) throw fail('ENGINE', 'ComfyUI answered with a redirect');
+    current = new URL(location, current).toString();
+  }
+}
+
 async function comfy(url, path, { method = 'GET', body, signal, timeoutMs = 15000, raw = false } = {}) {
   const signals = [AbortSignal.timeout(timeoutMs), signal].filter(Boolean);
   let res;
   try {
-    res = await fetch(`${base(url)}${path}`, {
+    res = await guardedFetch(`${base(url)}${path}`, {
       method,
       headers: body ? { 'content-type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined,
       signal: signals.length > 1 ? AbortSignal.any(signals) : signals[0],
     });
   } catch (err) {
+    if (err.code === 'REFUSED' || err.code === 'ENGINE') throw err;
     if (signal?.aborted) throw fail('ABORTED', 'Stopped');
     throw fail('UNAVAILABLE', `ComfyUI isn't reachable at ${base(url)}`);
   }
@@ -526,8 +569,9 @@ async function uploadImage(url, { buffer, contentType = 'image/png', filename },
   form.append('overwrite', 'true');
   let res;
   try {
-    res = await fetch(`${base(url)}/upload/image`, { method: 'POST', body: form, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000) });
-  } catch {
+    res = await guardedFetch(`${base(url)}/upload/image`, { method: 'POST', body: form, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000) });
+  } catch (err) {
+    if (err.code === 'REFUSED' || err.code === 'ENGINE') throw err;
     if (signal?.aborted) throw fail('ABORTED', 'Stopped');
     throw fail('UNAVAILABLE', `ComfyUI isn't reachable at ${base(url)}`);
   }
@@ -827,6 +871,7 @@ function validateFlat(input, prev = {}) {
       return { error: 'The ComfyUI address must be a URL like http://192.168.1.20:8188' };
     }
     if (!/^https?:$/.test(u.protocol) || u.username || u.password) return { error: 'The ComfyUI address must be http(s), without a username or password' };
+    if (hostRefused(u.hostname)) return { error: REFUSED_ADDRESS }; // P11-10 (a name that resolves there is refused on use)
     cfg.url = base(u.toString());
   }
   if (i.kind !== undefined) {
@@ -1078,6 +1123,8 @@ function publicConfig(cfg = {}) {
 }
 
 module.exports = {
+  // Tests: replace DNS for the address checks (P11-10).
+  _setLookup: (fn) => { lookup = fn; },
   id: 'comfyui',
   name: 'ComfyUI (local)',
   available: () => true,

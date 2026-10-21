@@ -104,6 +104,21 @@ function isBlockedAddress(ip) {
   return true; // not an address at all
 }
 
+// P11-10: link-local, "this network" and the cloud metadata addresses. For
+// services that legitimately live on the LAN (ComfyUI), which may use any
+// private address but never these.
+const METADATA_HOSTS = new Set(['metadata.google.internal', 'metadata', 'instance-data', 'instance-data.ec2.internal']);
+function isLinkLocalOrMetadata(ip) {
+  const v = net.isIP(ip);
+  if (v === 4) return ip.startsWith('169.254.') || ip.startsWith('0.');
+  if (v !== 6) return true; // not an address at all
+  const w = v6Words(ip);
+  const zero = (from, to) => w.slice(from, to).every((x) => x === 0);
+  if (zero(0, 5) && w[5] === 0xffff) return isLinkLocalOrMetadata(wordsToV4(w[6], w[7])); // ::ffff:a.b.c.d
+  if ((w[0] & 0xffc0) === 0xfe80) return true; // fe80::/10
+  return w[0] === 0xfd00 && w[1] === 0xec2 && zero(2, 7) && w[7] === 0x254; // AWS IMDS over IPv6
+}
+
 function isLoopback(ip) {
   if (net.isIP(ip) === 4) return ip.startsWith('127.');
   return net.isIP(ip) === 6 && v6Words(ip).join(':') === '0:0:0:0:0:0:0:1';
@@ -260,4 +275,4 @@ async function safeFetch(
   }
 }
 
-module.exports = { safeFetch, isBlockedAddress, USER_AGENT };
+module.exports = { safeFetch, isBlockedAddress, isLinkLocalOrMetadata, METADATA_HOSTS, USER_AGENT };

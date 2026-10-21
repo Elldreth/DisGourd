@@ -1348,6 +1348,7 @@ function getMentionCounts(userId) {
 }
 
 // ---- Web Push subscriptions (P2-18b) ----
+const MAX_PUSH_SUBSCRIPTIONS = 10;
 function getPushSubscriptions(userId) {
   return db.prepare('SELECT id, endpoint, p256dh, auth, previews FROM push_subscriptions WHERE user_id = ? ORDER BY id').all(userId);
 }
@@ -1358,6 +1359,12 @@ function savePushSubscription(userId, subscription, previews = true) {
     INSERT INTO push_subscriptions(user_id, endpoint, p256dh, auth, previews, created_at) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, previews = excluded.previews
   `).run(userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, previews ? 1 : 0, Date.now());
+  // P11-10: at most MAX_PUSH_SUBSCRIPTIONS per person; the oldest go first.
+  db.prepare(`
+    DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
+      SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?
+    )
+  `).run(userId, userId, MAX_PUSH_SUBSCRIPTIONS);
 }
 function deletePushSubscription(userId, endpoint) {
   return db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(userId, endpoint).changes > 0;

@@ -25,6 +25,8 @@ beforeAll((done) => {
   process.env.DB_PATH = ':memory:';
   process.env.UPLOADS_DIR = path.join(os.tmpdir(), `disgourd-test-uploads-groups-${process.pid}`);
   serverModule = require('../server');
+  // P11-10: pushes check DNS before sending; answer with a public address, no network.
+  require('../net/pushHosts').setLookup(async () => [{ address: '142.250.0.1', family: 4 }]);
   db = serverModule.db;
   serverModule.httpServer.listen(0, () => {
     port = serverModule.httpServer.address().port;
@@ -100,7 +102,7 @@ test('create: 3–10 people, only people you share a server with or friends; the
 
 test('messages, typing and edits reach current members only; notices can’t be edited, deleted or replied to; pushes name the group', async () => {
   const conv = db.getDmConversations(users.ann.id).find((c) => c.name === 'Gourd Club').id;
-  await fetch(`${base()}/push/subscriptions`, { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Bearer ${users.lou.token}` }, body: JSON.stringify({ subscription: { endpoint: 'https://push.example/lou', keys: { p256dh: 'k', auth: 'a' } } }) });
+  await fetch(`${base()}/push/subscriptions`, { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Bearer ${users.lou.token}` }, body: JSON.stringify({ subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/lou', keys: { p256dh: 'k', auth: 'a' } } }) });
   gws.ann.send({ op: 'dm_group_add', conversation: conv, members: ['lou'] });
   await wait(120);
   webpush.sendNotification.mockClear();
@@ -114,7 +116,7 @@ test('messages, typing and edits reach current members only; notices can’t be 
   expect(gws.dot.of('dm').filter((f) => f.conversation === conv)).toHaveLength(0);
   expect(gws.ben.of('dm_typing').at(-1)).toEqual({ type: 'dm_typing', from: 'ann', conversation: conv });
   // lou is away: a push titled with the group, body "ann: …".
-  expect(pushes()).toEqual([expect.objectContaining({ endpoint: 'https://push.example/lou', title: 'Gourd Club', body: 'ann: hello group', data: { dm: 'ann', conversation: conv } })]);
+  expect(pushes()).toEqual([expect.objectContaining({ endpoint: 'https://fcm.googleapis.com/fcm/send/lou', title: 'Gourd Club', body: 'ann: hello group', data: { dm: 'ann', conversation: conv } })]);
   // Notices: no edit, delete or reply.
   const noticeId = db.raw.prepare("SELECT id FROM dm_messages WHERE conversation_id = ? AND kind = 'system' ORDER BY id LIMIT 1").get(conv).id;
   gws.ann.send({ op: 'dm_edit', id: noticeId, content: 'hacked' });
