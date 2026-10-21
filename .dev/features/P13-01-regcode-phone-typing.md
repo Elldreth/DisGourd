@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 13 (small fixes found on the live server)
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #224)
 - **Effort:** S
 - **Depends on:** none
 - **Starting baseline:** main after #222
