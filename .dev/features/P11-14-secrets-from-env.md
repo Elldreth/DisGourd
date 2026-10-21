@@ -2,7 +2,8 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY (build order 9 in P11-00; start only when the owner says so)
+- **State:** REVIEW (build order 9 in P11-00)
+- **Starting baseline:** main at 7590c22 (#222 merged)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P11-13 (both touch `backup.js` and the README backup section). This goes first.
@@ -34,11 +35,40 @@
 - **A rule for later packets:** the email (SMTP) packet must take its password from the environment. It's written into this packet's "Not in scope" so it isn't missed.
 
 ## Acceptance criteria
-- [ ] AC-1: with `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` set and no `.vapid.json`, the server starts, doesn't write the file, and `/push/vapid-key` returns the env public key.
-- [ ] AC-2: one of the two set without the other → the start stops with the message (a test of the loader).
-- [ ] AC-3: `KIEAI_API_KEY_FILE` pointing at a file is used like `KIEAI_API_KEY`.
-- [ ] AC-4: the warning is logged when both an env key and a saved key exist, and not otherwise.
-- [ ] AC-5: both suites pass.
+- [x] AC-1: with `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` set and no `.vapid.json`, the server starts, doesn't write the file, and `/push/vapid-key` returns the env public key.
+- [x] AC-2: one of the two set without the other → the start stops with the message (a test of the loader).
+- [x] AC-3: `KIEAI_API_KEY_FILE` pointing at a file is used like `KIEAI_API_KEY`.
+- [x] AC-4: the warning is logged when both an env key and a saved key exist, and not otherwise.
+- [x] AC-5: both suites pass.
+
+## As built
+- **`server/secrets.js` (new):** `secretFromEnv(NAME)` returns `NAME`, else the contents of the file named by `NAME_FILE` (trimmed, read once and remembered). A `NAME_FILE` that can't be read throws, naming the variable and the path, so a typo stops the start. It's its own module rather than in `config.js`, because `config.js` loads the database and writes `.jwt-secret` as it loads.
+- **`server/push.js`:** `vapidFromEnv()` reads `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (or `VAPID_PRIVATE_KEY_FILE`). Both set: those keys are used and `.vapid.json` is neither read nor written. Neither set: the file, or a new pair, as before. One alone: the start stops with "Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY (or VAPID_PRIVATE_KEY_FILE) both, or neither". `loadKeys()` takes `{ env, file, ephemeral }` so tests can exercise the non-test path.
+- **`server/imagine/engines/kie.js`:** the key is `KIEAI_API_KEY`, else `KIEAI_API_KEY_FILE`, else the saved one. `duplicateKeyWarning(cfg)` returns the warning when the environment has a key and one is also saved. `imagine.start()` logs it at start.
+- **`JWT_SECRET_FILE`** already existed (the path of the generated secret, which can also point at a Docker secret); now documented.
+- **`server/scripts/print-secrets-env.js` (new):** `node server/scripts/print-secrets-env.js [/config]` prints `JWT_SECRET=`, `VAPID_PUBLIC_KEY=` and `VAPID_PRIVATE_KEY=` from the folder's `.jwt-secret` and `.vapid.json`. It reads only; a reminder that these are secrets goes to stderr.
+- **Settings › Image generation › kie.ai:** when a key is saved there, a "Forget the saved key" button. With the environment's key in use, it's in a highlighted note: "A key (••••1234) is also saved in the database, and so in its backups…". Clicking it marks the draft ("The saved key will be removed when you save"), and Save sends `apiKey: null`. The server's existing rule still applies: kie.ai can't stay on without a key from somewhere.
+- **README:** `JWT_SECRET_FILE`, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` and `KIEAI_API_KEY` (with their `_FILE` forms) in the table, and a new "Secrets and backups" section:
+  - the table of secrets, where each is read from, and what losing it does;
+  - the rule (host secret store or 0600 env file, never `site_settings`);
+  - the print script;
+  - what the backups contain (and don't);
+  - Litestream to R2 with a private bucket and a token for that bucket only. Litestream 0.5.x has no client-side encryption: `age` was removed after 0.3.x (litestream.io config reference, checked 2026-10-21), so the README says so instead of recommending it;
+  - backing up the secrets apart from the database;
+  - a restore drill.
+
+## Verification Evidence
+| Acceptance Criterion | Status | Verification Type | Evidence |
+|---|---|---|---|
+| AC-1 | Verified | Jest `secrets.test.js`, `push-env.test.js` | `loadKeys` with both env keys, a temp `.vapid.json` path and the non-test path returns the env pair and leaves no file. A server started with the env keys answers `/push/vapid-key` with `{ key: <env public key> }`. `VAPID_PRIVATE_KEY_FILE` works too |
+| AC-2 | Verified | Jest `secrets.test.js` | Only the public key, or only the private key → throws "…both, or neither…" |
+| AC-3 | Verified | Jest `secrets.test.js` | `KIEAI_API_KEY_FILE` pointing at a file: `keyOf` returns its contents over a saved key, and `envKey` is true. An unreadable `*_FILE` throws, naming the variable and the path |
+| AC-4 | Verified | Jest; sandbox DB copy | Unit: no env key → no warning; env key and nothing saved → none; both → the warning. Then `imagine.start()` against a copy of the sandbox DB with a dummy key saved: silent without `KIEAI_API_KEY`, and the warning with it |
+| AC-5 | Verified | Jest, Vitest | Server 64 suites / 562 tests; web 107 files / 846 tests; `vite build` clean |
+| UI | Verified | Vitest `ImagineAdmin.test.jsx`; sandbox :3005 | Tests: the highlighted note and its button with an env key, Save sends `apiKey: null`, and the quiet button without one. Sandbox: saved a dummy key → "A key is saved (••••0000)" and the quiet button. Forget → the note. Save with kie.ai on → refused ("Add an API key…"), as designed. kie.ai off → saved, the key gone. Then the sandbox's own state was restored (kie.ai on, no key) |
+
+## Discovered Work (not done here)
+- **TURN relays and the CSP (from P11-06):** the README's voice section says to set `window.__DISGOURD_ICE__` "via a small inline script". With P11-06's `script-src 'self'`, an inline script is now blocked. Nobody uses a TURN relay today, but the advice no longer works. A small fix: serve an optional `/ice.js` (or an `ICE_SERVERS` setting the client fetches) and update the README.
 
 ## Expected Areas of Change
 `server/push.js`, `server/imagine/engines/kie.js`, `server/config.js` (a shared `fromEnvOrFile` helper), `web/src/components/admin/imagine/KiePage.jsx` (the button's prominence), the README, tests (`push.test.js`, `imagine-kie.test.js`).
