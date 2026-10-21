@@ -317,6 +317,8 @@ h3 {
   font-size: 0.85em;
   line-height: 1.5;
 }
+/* The block clips its corners, so draw the focus ring inside the code area. */
+.md-codeblock pre:focus-visible { outline-offset: -2px; }
 .md-quote {
   margin: 0.15rem 0;
   padding-left: 0.65rem;

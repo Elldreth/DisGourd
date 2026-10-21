@@ -263,6 +263,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P10-06 | /imagine panel: labelled chip groups and a steady height | 10 | COMPLETE | S–M | P9-04c, P9-05b | ImaginePanel.jsx, tests |
 | P10-07 | Small things: transfer button and list, ☰ badge dot, light amber badge | 10 | COMPLETE | S | none | OverviewSection.jsx, TransferDialog.jsx, the channel header in App.jsx, ServerRail.jsx, tests |
 | P10-08 | New art and sound: "all clear", group scene, "privacy" poses; group glyph; two sounds | 10 | COMPLETE | S–M | P8-01 | mascotParts.js, Mascot.jsx, serverGlyphs.js, sounds.js, web/public/sounds/, design/design-review-p10/refs/, tests |
+| P10-09 | Code blocks in messages can be reached by keyboard (axe scrollable-region-focusable) | 10 | REVIEW | S | none | markdown.jsx, index.css, markdown.test.jsx |
 
 ## Security for the public cloud (P11)
 Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **P11-01 to P11-05 should land before the instance is public.**

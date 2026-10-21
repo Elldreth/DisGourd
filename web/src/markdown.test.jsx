@@ -81,6 +81,16 @@ describe('code blocks', () => {
     expect(block.querySelector('.md-codeblock-lang')).toBeNull();
   });
 
+  test('the code area is keyboard-focusable and named, so long lines can be scrolled', () => {
+    const named = md('```js\nconst a = 1;\n```').querySelector('.md-codeblock pre');
+    expect(named.getAttribute('tabindex')).toBe('0');
+    expect(named.getAttribute('role')).toBe('group');
+    expect(named.getAttribute('aria-label')).toBe('js code');
+    const plain = md('```\nplain\n```').querySelector('.md-codeblock pre');
+    expect(plain.getAttribute('tabindex')).toBe('0');
+    expect(plain.getAttribute('aria-label')).toBe('Code');
+  });
+
   test('an unclosed fence is literal text', () => {
     const el = md('```js\nno end');
     expect(el.querySelector('.md-codeblock')).toBeNull();
