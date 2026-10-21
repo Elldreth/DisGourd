@@ -115,9 +115,9 @@ Severity measures how bad it is on a public cloud instance with registration by 
 - Exploit: a stolen site-admin login points ComfyUI at `http://169.254.169.254/…` (or the provider's metadata hostname) and reads instance credentials back through the error and list replies. Separately, the obvious way to reach the home ComfyUI from the cloud, port-forwarding it to the internet, exposes an unauthenticated service that runs arbitrary workflows (custom nodes run code).
 - Fix: refuse link-local addresses (169.254.0.0/16, fe80::/10) and the metadata hostnames for the ComfyUI URL, before the request and on each redirect (`redirect: 'manual'`). LAN and tailnet ranges stay allowed, because ComfyUI legitimately lives there. Document reaching ComfyUI over Tailscale or WireGuard, never a public port. Use IMDSv2 on hosts that have it.
 
-**M6. Usernames are case-sensitive, so "Elldreth" and "elldreth" can both exist** — P11-12
+**M6. Usernames are case-sensitive, so "Sandy" and "sandy" can both exist** — P11-12
 - Where: `server/db/migrations.js:43` (`username TEXT UNIQUE`, no NOCASE) and `server/db/index.js` (`getUserByUsername` is an exact match).
-- Exploit: someone registers `Elldreth` next to the owner's `elldreth`, DMs members as "the admin", and is @mentioned by mistake. `SITE_ADMINS` matching (C1) is exact too.
+- Exploit: someone registers `Sandy` next to an existing `sandy`, DMs members as "the admin", and is @mentioned by mistake. `SITE_ADMINS` matching (C1) is exact too.
 - Fix: a migration adding a case-insensitive unique index. It lists any existing collisions first and stops with a clear message. Lookups become case-insensitive.
 
 **M7. Anyone on the instance can DM anyone** — P11-09
@@ -248,21 +248,21 @@ The owner deployed on the Unraid box, not a VPS (reported by the hosting session
 
 - **Front door: a Cloudflare Tunnel.**
   - `cloudflare/cloudflared:latest` runs on the `proxynet` Docker network (`tunnel run`, `TUNNEL_TOKEN` and `NO_AUTOUPDATE=true` from the environment).
-  - Two public hostnames: `disgourd.<domain>` → `http://disgourd:3000` and an audiobookshelf hostname.
+  - Two public hostnames: `disgourd.<domain>` → `http://disgourd:3000` and a hostname for another app.
   - SWAG is no longer in the path, so there's no nginx real-IP module, no proxy body limit and no fail2ban. DisGourd's direct peer is the cloudflared container.
 - **DNS and the router:** only those two proxied CNAMEs exist; the DuckDNS, wildcard, root and Matrix records are gone. Every router port forward is removed except Plex 32400 (kept on purpose). Checked from the LAN: only 32400 answers.
 - **The DisGourd container:**
   - Built from `/mnt/user/appdata/disgourd-src` (main) with `DOCKER_BUILDKIT=0 docker build`; the compose file is in `/mnt/user/appdata/disgourd-stack/`.
   - It runs as `99:100` with `cap_drop: [ALL]` and `no-new-privileges`, on `proxynet` only, with **no published ports**.
-  - Environment: `TRUST_PROXY=1`, `SITE_ADMINS=elldreth`, `REGISTRATION_MODE=closed`. `JWT_SECRET` isn't set, so `/config/.jwt-secret` is used; VAPID is in `/config/.vapid.json`.
+  - Environment: `TRUST_PROXY=1`, `SITE_ADMINS=<owner>`, `REGISTRATION_MODE=closed`. `JWT_SECRET` isn't set, so `/config/.jwt-secret` is used; VAPID is in `/config/.vapid.json`.
   - DB on the cache drive (`/config`), uploads on the array.
 - **Updates:** an Unraid User Script runs `git pull --ff-only`, builds, stops, copies the DB, runs `compose up`, and checks health.
 
 **What this changes, finding by finding:**
 | Finding | Status in this deployment | Still to do |
 |---|---|---|
-| C1 (first account) | **Live.** The owner started fresh (the old data moved to `disgourd-old`), and the live DB has no accounts. `/auth-info` answered `setup: true` through the tunnel before the container was stopped. | Step 0 (the owner creates `elldreth` before the tunnel is back), then P11-01 second in the build order, so a future empty volume is never exposed again. |
-| H3 (public port, spoofable X-Forwarded-For) | **Mostly closed.** No published port, no router forward, origin reachable only through the tunnel. | With `TRUST_PROXY=1`, the app trusts X-Forwarded-For from *any* peer, and every container on `proxynet` (audiobookshelf, SWAG if still running, anything added later) can reach `disgourd:3000` and send any header. Cloudflare appends the visitor's address to X-Forwarded-For, so the last-hop rule probably already sees the right IP through cloudflared. **Check it on the live box** (P11-05 AC). The repo's `docker-compose.yml` still publishes 3000 for other installs. P11-05 narrows the trust to cloudflared. |
+| C1 (first account) | **Live.** The owner started fresh (the old data moved to `disgourd-old`), and the live DB has no accounts. `/auth-info` answered `setup: true` through the tunnel before the container was stopped. | Step 0 (the owner creates their account before the tunnel is back), then P11-01 second in the build order, so a future empty volume is never exposed again. |
+| H3 (public port, spoofable X-Forwarded-For) | **Mostly closed.** No published port, no router forward, origin reachable only through the tunnel. | With `TRUST_PROXY=1`, the app trusts X-Forwarded-For from *any* peer, and every container on `proxynet` (other apps, SWAG if still running, anything added later) can reach `disgourd:3000` and send any header. Cloudflare appends the visitor's address to X-Forwarded-For, so the last-hop rule probably already sees the right IP through cloudflared. **Check it on the live box** (P11-05 AC). The repo's `docker-compose.yml` still publishes 3000 for other installs. P11-05 narrows the trust to cloudflared. |
 | L8 (container hardening) | **Partly done:** 99:100, `cap_drop: [ALL]`, `no-new-privileges`, no ports, one network, two mounts. | `read_only: true` + tmpfs `/tmp`; pin the `cloudflared` and `node` images to versions; a `DOCKER-USER` rule so the container can't reach the LAN (router, Unraid UI, SMB) except ComfyUI:8188. |
 | Origin lock (Hosting setups) | **Done** by the tunnel: there's no origin port to hit. | Nothing. |
 | Upload limits | No proxy limit now. Cloudflare's free plan still refuses bodies over 100 MB at the edge. | Keep `MAX_UPLOAD_BYTES` (25 MB default) at or under 100 MB (README note in P11-05). |
@@ -281,7 +281,7 @@ The owner deployed on the Unraid box, not a VPS (reported by the hosting session
 ## Plan: the order to build in
 **Step 0, before the server is reachable again (the owner, by hand, no code):** the live database is empty, so whoever registers first becomes site admin (C1).
 - Keep `cloudflared` stopped.
-- Start DisGourd and create the `elldreth` account from inside the network: temporarily publish `3000` on the LAN and use the setup wizard at `http://<unraid-ip>:3000`, or run `docker run --rm --network proxynet curlimages/curl -s -X POST http://disgourd:3000/register -H 'content-type: application/json' -d '{"username":"elldreth","email":"…","password":"…"}'` (use a long password).
+- Start DisGourd and create the owner's account from inside the network: temporarily publish `3000` on the LAN and use the setup wizard at `http://<unraid-ip>:3000`, or run `docker run --rm --network proxynet curlimages/curl -s -X POST http://disgourd:3000/register -H 'content-type: application/json' -d '{"username":"<owner>","email":"…","password":"…"}'` (use a long password).
 - Check that `/auth-info` now says `"setup":false`.
 - Remove the temporary port, then start `cloudflared`.
 - Every future reset to an empty volume needs the same step until P11-01 lands.

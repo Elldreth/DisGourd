@@ -9,7 +9,7 @@
 # Requires:
 #   • "disgourd" covered by your SWAG certificate (SUBDOMAINS env, or a wildcard).
 #   • The disgourd container on the same Docker network as SWAG (so the name
-#     "disgourd" resolves). See docker-compose.yml.
+#     "disgourd" resolves). See docker-compose.yml in this folder.
 #
 # WebSockets (the /gateway realtime connection) work automatically: SWAG's
 # bundled proxy.conf already sets proxy_http_version and the Upgrade/Connection
@@ -24,8 +24,9 @@ server {
 
     include /config/nginx/ssl.conf;
 
-    # DisGourd streams file uploads (images/videos) — don't let nginx cap them.
-    client_max_body_size 0;
+    # Match MAX_UPLOAD_BYTES (25 MB by default), so nginx refuses anything
+    # bigger before it reaches DisGourd. Raise both together.
+    client_max_body_size 25m;
 
     location / {
         include /config/nginx/proxy.conf;

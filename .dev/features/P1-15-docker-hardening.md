@@ -13,7 +13,7 @@
 - Runtime: `RUN mkdir -p /config /uploads && chown node:node /config /uploads`, then `USER node`.
 - `HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/auth-info').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`. Node 22 has global fetch.
 - docker-compose.yml: document `user: "99:100"` for Unraid (nobody:users) as a commented option.
-- README: an "Upgrading to the non-root image" note with a one-time `chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/bigboi/media/images` (or 1000:1000 if not using `user:`).
+- README: an "Upgrading to the non-root image" note with a one-time `chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/your-share/disgourd-uploads` (or 1000:1000 if not using `user:`).
 - Check that `.dockerignore` excludes `node_modules`, `web/dist`, `.git`, `design/`, `uploads/` and `*.db`.
 
 ## Acceptance criteria
@@ -54,5 +54,5 @@ Server tests: 194 pass (3 new). Web unaffected.
 
 ### For the user (one time, on Unraid, before pulling this image)
 ```
-chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/bigboi/media/images
+chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/your-share/disgourd-uploads
 ```

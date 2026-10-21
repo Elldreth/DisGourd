@@ -266,7 +266,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P10-09 | Code blocks in messages can be reached by keyboard (axe scrollable-region-focusable) | 10 | COMPLETE | S | none | markdown.jsx, index.css, markdown.test.jsx |
 
 ## Security for the public cloud (P11)
-Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **The live setup (2026-10-21) is the Unraid box behind a Cloudflare Tunnel** (see the review's "Deployment as built"). **C1 is live (the database was started fresh): the owner creates the `elldreth` account before the tunnel is back (P11-00, "Step 0").** **Build order: P11-10 first (the go-live blocker), then P11-01, 02, 03, 08, 05, 04, 06, 14, 07, 09, 12, 11, 13**, one PR each, starting only when the owner says so.
+Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **The live setup (2026-10-21) is the Unraid box behind a Cloudflare Tunnel** (see the review's "Deployment as built"). **C1 is live (the database was started fresh): the owner creates their account before the tunnel is back (P11-00, "Step 0").** **Build order: P11-10 first (the go-live blocker), then P11-01, 02, 03, 08, 05, 04, 06, 14, 07, 09, 12, 11, 13**, one PR each, starting only when the owner says so.
 
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
@@ -274,7 +274,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-01 | First-run setup code; safe SITE_ADMINS (C1; live: build order 2) | 11 | COMPLETE | S | none | config.js, routes/auth.js, server.js, SetupWizard.jsx, README |
 | P11-02 | Role hierarchy on the legacy member-tier route (H1) | 11 | COMPLETE | S | none | routes/spaces.js, tests |
 | P11-03 | Gateway abuse limits: `read` checks, per-user op limits, socket cap, search limit (H2) | 11 | COMPLETE | M | none | gateway/router.js, gateway/chat.js, gateway/index.js, routes/social.js, composer notice |
-| P11-04 | Upload quotas, cleanup with their messages, sandboxed serving (H2, M4) | 11 | REVIEW | M | none | routes/uploads.js, migrations, db/index.js, uploadsGc.js (new) |
+| P11-04 | Upload quotas, cleanup with their messages, sandboxed serving (H2, M4) | 11 | COMPLETE | M | none | routes/uploads.js, migrations, db/index.js, uploadsGc.js (new) |
 | P11-05 | Behind the Cloudflare Tunnel: trust only cloudflared, read-only root, LAN egress rule, pinned images (H3 rest, L8, L10) | 11 | COMPLETE | S–M | none | auth/rateLimit.js, static.js, routes/admin.js, deploy/unraid-tunnel/ (new), docker-compose.yml, Dockerfile, README |
 | P11-06 | Security headers, CSP and same-origin CORS (M1) | 11 | READY | S–M | none (soft P11-05) | http/handler.js, static.js, proxy samples |
 | P11-07 | Session tokens out of URLs: first-frame socket auth, Origin check (M2, L5) | 11 | PLANNED | S–M | P11-03 | gateway/index.js, auth/tokens.js, useSocket.js |

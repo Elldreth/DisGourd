@@ -52,7 +52,7 @@ On an instance with no accounts, `POST /register` skips the registration mode an
 | AC-1 | Verified | Jest `setup-code.test.js` + fresh install | No code → 403 with the message; wrong → 403; right → 201, `/me` siteAdmin true. Fresh install (:3006, its own temp DB): a wrong code in the wizard shows the server's message; the code from `.setup-code` moves on to step 2 |
 | AC-2 | Verified | Jest + fresh install | `REGISTRATION_MODE=closed` in both. A second registration → 403, even with the old code |
 | AC-3 | Verified | Jest + fresh install | The file is gone after the first account; `ensureSetupCode()` (what boot does) returns null and writes nothing. `/auth-info` → `{"registration":"closed","setup":false}` |
-| AC-4 | Verified | Jest + fresh install log | `ghost` listed before it existed is not promoted after registering and a restart; the warning names Settings. The fresh install logged `SITE_ADMINS lists "elldreth", but there's no such account…` |
+| AC-4 | Verified | Jest + fresh install log | `ghost` listed before it existed is not promoted after registering and a restart; the warning names Settings. The fresh install logged `SITE_ADMINS lists "<owner>", but there's no such account…` |
 | AC-5 | Verified | Jest | `ivy` promoted once, demoted through the admin API, still demoted after `applySiteAdmins` runs again |
 | AC-6 | Verified | Vitest `SetupWizard.test.jsx` + fresh install screenshot | The field shows only with `needsCode`; the trimmed code is sent as the 5th argument; a refusal shows the server's message on step 1 |
 | Existing instance | Verified | Sandbox :3005 (restarted on this branch) | `/auth-info` → `{"registration":"open","setup":false}` (no `setupCode`); sandy signs in; no `.setup-code` written |

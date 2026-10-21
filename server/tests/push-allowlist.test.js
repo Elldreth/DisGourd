@@ -55,7 +55,7 @@ describe('which endpoints are allowed', () => {
   test.each([
     'https://192.168.1.1/push',
     'https://10.0.0.5/x',
-    'https://audiobookshelf/x',
+    'https://othercontainer/x',
     'https://example.com/x',
     'https://fcm.googleapis.com.evil.example/x',
     'https://evilfcm.googleapis.com/x',

@@ -1,11 +1,15 @@
-# DisGourd on Unraid, proxied by SWAG. Clone this repo somewhere on the server
-# and run:  docker compose up -d --build
+# DisGourd with Docker Compose: a generic starting point.
+#   docker compose up -d --build
 #
-# Behind a Cloudflare Tunnel instead (no open ports)? See deploy/unraid-tunnel/.
+# Data lives in ./data next to this file. On first start the server prints a
+# one-time setup code (docker logs disgourd); open the site and enter it to
+# create the first account, which becomes the site admin.
 #
-# Storage is split on purpose:
-#   • DB  -> the SSD/cache (small, and SQLite wants fast, non-FUSE storage)
-#   • uploads -> the array (that's where the images/videos pile up)
+# Recipes for specific setups, each with a "change these" list:
+#   deploy/unraid-tunnel/  Unraid behind a Cloudflare Tunnel (no open ports)
+#   deploy/swag/           Unraid (or any Docker host) behind SWAG / nginx
+#   deploy/linux-vps/      a Linux VPS behind Caddy or a Cloudflare Tunnel
+# Keep your own notes and real configs in ./local/ (git ignores it).
 
 services:
   disgourd:
@@ -13,12 +17,10 @@ services:
     image: disgourd:latest
     container_name: disgourd
     restart: unless-stopped
-    # Run as Unraid's nobody:users so files on the shares stay manageable from
-    # the host. The host folders below must belong to this user (one time:
-    #   chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/bigboi/media/images
-    # see "Upgrading to the non-root image" in the README). Remove this line to
-    # use the image's own non-root user (1000:1000) instead.
-    user: "99:100"
+    # The image runs as its own non-root user (1000:1000). To run as another
+    # user (Unraid's nobody:users is "99:100"), set it here, and give that user
+    # the data folders once:  chown -R 99:100 ./data
+    # user: "99:100"
     # Hardening (P11-05): a read-only root (it only writes /config, /uploads
     # and /tmp), no Linux capabilities, no privilege escalation.
     read_only: true
@@ -32,35 +34,23 @@ services:
       - PORT=3000
       - DB_PATH=/config/disgourd.db
       - UPLOADS_DIR=/uploads
-      # Set a long random value (32+ characters). The placeholder below is
-      # rejected; the server then generates a secret and keeps it in
-      # /config/.jwt-secret. Generate one with:  openssl rand -hex 48
-      - JWT_SECRET=CHANGE_ME_TO_A_LONG_RANDOM_STRING
-      # SWAG sits in front, so trust the X-Forwarded-For hop it appends (used
-      # for the login/registration rate limits). Remove if exposed directly.
-      - TRUST_PROXY=1
-      # Your admin username(s), comma-separated (becomes a site admin).
-      - SITE_ADMINS=elldreth
-      # open | code | closed  (closed = no new signups; use the in-app invites)
-      - REGISTRATION_MODE=closed
+      # open | code | closed. "code" (people need a code you make in Settings)
+      # suits a server for friends; it's only the starting value.
+      - REGISTRATION_MODE=code
+      # The login token secret is generated on first start and kept in
+      # /config/.jwt-secret. To set your own: JWT_SECRET=<openssl rand -hex 48>
+      # Behind a reverse proxy, trust only its network (see deploy/):
+      # - TRUSTED_PROXIES=172.30.80.0/24
+      # Extra site admins by username (the first account already is one):
+      # - SITE_ADMINS=someone
     volumes:
-      # DB on the SSD. If your appdata share isn't cache-only, use the direct
-      # cache path (e.g. /mnt/cache/appdata/disgourd) to keep SQLite off FUSE.
-      # Nightly database backups land in /config/backups (the newest 7 are
-      # kept; see BACKUP_* in the README).
-      - /mnt/user/appdata/disgourd:/config
-      # Uploads on the big array.
-      - /mnt/user/bigboi/media/images:/uploads
-    # Optional: expose on the LAN for direct testing. SWAG reaches it over the
-    # shared Docker network below, so this isn't required for the proxy.
-    # LAN only: never forward this port at the router (it's plain HTTP).
-    ports:
-      - "3000:3000"
-    networks:
-      - swag
-
-# Join the same Docker network SWAG is on so it can resolve "disgourd" by name.
-networks:
-  swag:
-    external: true
-    name: proxynet
+      # The database, its nightly backups (/config/backups) and the secrets.
+      # Keep SQLite on fast local storage (not a network share).
+      - ./data/config:/config
+      # Uploaded files.
+      - ./data/uploads:/uploads
+    # No published port: put a reverse proxy or tunnel in front (see deploy/).
+    # To try it on your LAN, uncomment (plain HTTP; never forward it at the
+    # router):
+    # ports:
+    #   - "3000:3000"
