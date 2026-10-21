@@ -2,7 +2,9 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY (the code; build order 13). Which TURN to use is owner decision 3 in P11-00.
+- **State:** ACTIVE (build order 13)
+- **Starting baseline:** main at 89cf451 (#228 merged)
+- **Owner decision 3 (2026-10-21):** Cloudflare TURN, with the key token in a secret file (`TURN_KEY_TOKEN_FILE`, via the P11-14 helper) next to `TURN_KEY_ID`; relay only when needed (`VOICE_RELAY_ONLY` off by default).
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** none
