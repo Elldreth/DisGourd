@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 14, the last in Phase 11)
+- **State:** COMPLETE (merged in #231; build order 14, the last in Phase 11)
 - **Starting baseline:** main at 33c555f (#229 merged)
 - **Effort:** S–M
 - **Depends on:** P11-01 … P11-12 merged (or at least P11-03, P11-07, P11-12)
