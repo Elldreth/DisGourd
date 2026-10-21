@@ -59,6 +59,8 @@ if (require.main === module) {
       console.log('  Note: the web client is not built yet. Run `npm run build` (or `npm run dev`');
       console.log('  for the hot-reloading dev server) to see the UI.\n');
     }
+    // P11-04: remove deleted messages' files, and sweep unused uploads daily.
+    require('./uploadsGc').start();
     // Only when run directly, so tests never start the backup timer.
     const backups = backupSettings();
     if (backups) {

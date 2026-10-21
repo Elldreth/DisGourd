@@ -178,6 +178,8 @@ All settings are optional and provided via environment variables (or
 | `DB_PATH`          | `server/db/disgourd.db`  | SQLite database file location                      |
 | `UPLOADS_DIR`      | `uploads/`               | Where uploaded files are stored                    |
 | `MAX_UPLOAD_BYTES` | `26214400` (25 MB)       | Maximum upload size                                |
+| `UPLOAD_QUOTA_BYTES_PER_DAY` | `524288000` (500 MB) | How much one person can upload in 24 hours (site admins are exempt). Deleting files doesn't give it back |
+| `UPLOADS_MAX_TOTAL_BYTES` | _(off)_           | Refuse new uploads once the uploads folder reaches this size |
 | `WEB_DIST`         | `web/dist`               | Location of the built web client                   |
 | `REGISTRATION_MODE`| `open`                   | Initial mode: `open`, `code`, or `closed`. Seeds the setting on first run; after that, site admins change it in-app |
 | `REGISTRATION_CODE`| _(none)_                 | An optional always-valid shared code (in addition to any codes minted in-app) |
@@ -289,7 +291,12 @@ To reset everything, stop the server and delete the database and uploads.
 - Login tokens are signed JWTs that expire after 7 days.
 - Auth endpoints are rate-limited against brute-force attempts.
 - Uploaded files get randomized storage paths and are served with
-  `X-Content-Type-Options: nosniff`; executable types are rejected.
+  `X-Content-Type-Options: nosniff` and a sandboxing CSP, cached only by the
+  viewer's browser (a day); executable types are rejected.
+- A file is deleted from disk when the last message (or avatar, server icon,
+  emoji) using it goes, within about 30 seconds; a daily sweep removes uploads
+  nothing ever used. Each person has a daily upload quota (see
+  `UPLOAD_QUOTA_BYTES_PER_DAY`).
 - The server only fetches things on its own for link previews, preview images
   and generated images, and those refuse private, loopback, link-local and
   Tailscale addresses. Push notifications go only to the browsers' push
