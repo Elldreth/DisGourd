@@ -3,7 +3,9 @@
 //
 // To add an op: write the handler in the matching domain file (chat.js, dm.js
 // or voice.js) and add one entry to OPS below.
+const WebSocket = require('ws');
 const { isPlainObject } = require('../http/util');
+const limits = require('./limits');
 const chat = require('./chat');
 const dm = require('./dm');
 const voice = require('./voice');
@@ -51,6 +53,16 @@ const OPS = new Map([
 ]);
 
 function handleGatewayMessage(ws, raw) {
+  // P11-03: a socket flooding far past the limits is closed.
+  if (limits.flooded(ws)) {
+    if (!ws.floodClosing) {
+      ws.floodClosing = true;
+      ws.close(1008, 'Too many messages');
+      // Don't wait out the close handshake with a flooding peer.
+      setTimeout(() => ws.terminate(), 1000).unref();
+    }
+    return;
+  }
   let msg;
   try { msg = JSON.parse(raw.toString()); } catch { return; }
   if (!isPlainObject(msg)) return;
@@ -59,7 +71,21 @@ function handleGatewayMessage(ws, raw) {
   }
   const userId = ws.userId;
   const handler = OPS.get(msg.op);
-  if (handler) handler({ ws, msg, userId });
+  if (!handler) return;
+  // P11-03: per-person rate limits; a refused frame is dropped.
+  const verdict = limits.allow(userId, msg.op);
+  if (!verdict.ok) {
+    if (!verdict.silent && ws.readyState === WebSocket.OPEN && limits.shouldTell(ws, msg.op)) {
+      ws.send(JSON.stringify({
+        type: 'error', op: msg.op, code: 'RATE_LIMITED', retryAfter: Math.max(1, Math.ceil(verdict.retryAfterMs / 1000)),
+        ...(typeof msg.space === 'string' && msg.space.length <= 100 ? { space: msg.space } : {}),
+        ...(typeof msg.channel === 'string' && msg.channel.length <= 100 ? { channel: msg.channel } : {}),
+        error: "You're sending messages too fast",
+      }));
+    }
+    return;
+  }
+  handler({ ws, msg, userId });
 }
 
 module.exports = { handleGatewayMessage };

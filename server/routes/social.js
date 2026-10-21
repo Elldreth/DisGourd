@@ -4,6 +4,7 @@ const db = require('../db');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, readJsonBody } = require('../http/util');
 const { sendToUser } = require('../gateway/delivery');
+const { rateLimitOk } = require('../auth/rateLimit');
 
 const getJsonBody = readJsonBody;
 
@@ -84,6 +85,8 @@ const routes = [
     run: async ({ req, res, parsedUrl }) => {
       const userId = authUserId(req, parsedUrl);
       if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      // P11-03: a search scans every message you can see, so it's limited per person.
+      if (!rateLimitOk(`search:${userId}`, 10, 60 * 1000)) return sendJson(res, 429, { error: 'Too many searches. Please wait a minute.' });
       const q = typeof parsedUrl.query.q === 'string' ? parsedUrl.query.q.trim().slice(0, 200) : '';
       if (q.length < 2) return sendJson(res, 200, { channels: [], dms: [] });
       return sendJson(res, 200, db.searchMessages(userId, q, 40));
