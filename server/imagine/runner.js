@@ -100,7 +100,7 @@ async function run(job) {
   } catch (err) {
     const reason = ac.signal.aborted
       ? `DisGourd stopped waiting after ${duration(timeoutMs())} (the image engine hadn't finished)`
-      : err.code === 'REFUSED' ? 'the engine refused this prompt' : err.message || 'something went wrong';
+      : err.code === 'REFUSED' ? err.message || 'the engine refused this prompt' : err.message || 'something went wrong';
     // P13-02: every failure is in the server log too, with how long it ran.
     const secs = Math.round((Date.now() - started) / 1000);
     console.warn(`[imagine] job ${job.id} (${job.engine.id}) failed after ${secs}s: ${ac.signal.aborted ? 'timed out' : err.message || err.code || 'unknown'}`);

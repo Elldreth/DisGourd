@@ -72,6 +72,8 @@ function startMock() {
           seen.timedOutOnce = true;
           return json(200, { code: 200, data: { state: 'fail', failCode: '501', failMsg: 'generate task timeout', creditsConsumed: 0 } });
         }
+        // P13-03: Flux's own wording when it judges the result, full stop included.
+        if (t.prompt.includes('[unsafe]')) return json(200, { code: 200, data: { state: 'fail', failCode: '400', failMsg: 'The generated images appear to be unsafe. Try modifying the prompts.', creditsConsumed: 0 } });
         if (t.prompt.includes('[odd]')) return json(200, { code: 200, data: { state: 'fail', failCode: '422', failMsg: 'prompt too long', creditsConsumed: 0 } });
         return json(200, { code: 200, data: { state: 'success', resultJson: JSON.stringify({ resultUrls: [`${mockUrl}/img/out.png`] }), creditsConsumed: 0.8, costTime: 3 } });
       }
@@ -220,6 +222,24 @@ describe('generating', () => {
     await expect(kie.generate(req({ prompt: 'x [refuse]' }), cfg())).rejects.toMatchObject({ code: 'REFUSED' });
     await expect(kie.generate(req({ prompt: 'x [broken]' }), cfg())).rejects.toMatchObject({ code: 'ENGINE', message: 'kie.ai’s Z-Image hit a problem on kie.ai’s side ("internal error"); try again in a moment' });
     await expect(kie.generate(req({ prompt: 'x [odd]' }), cfg())).rejects.toMatchObject({ code: 'ENGINE', message: 'kie.ai couldn’t make it with Z-Image: prompt too long. No credits were used' });
+  });
+
+  test('P13-03: a safety block says so, with the advice that fits the model and the channel, and no doubled full stop', async () => {
+    const flux = cfg({ model: 'flux-2/pro-text-to-image' });
+    const quote = '("The generated images appear to be unsafe. Try modifying the prompts")';
+    const n = seen.bodies.length;
+    await expect(kie.generate(req({ prompt: 'a [unsafe]' }), flux)).rejects.toMatchObject({
+      code: 'REFUSED',
+      message: `kie.ai’s safety filter blocked this one on Flux-2 Pro ${quote}. Try rewording, or post in an 18+ channel, where DisGourd turns this model’s filter off. No credits were used`,
+    });
+    expect(seen.bodies.length - n).toBe(1); // never retried
+    await expect(kie.generate(req({ prompt: 'b [unsafe]' }), flux, { permissive: true })).rejects.toMatchObject({
+      message: `kie.ai’s safety filter blocked this one on Flux-2 Pro ${quote}. This happened with the filter already off for this 18+ channel; try rewording. No credits were used`,
+    });
+    await expect(kie.generate(req({ prompt: 'c [unsafe]' }), cfg({ model: 'nano-banana-2' }))).rejects.toMatchObject({
+      message: `kie.ai’s safety filter blocked this one on Nano Banana 2 ${quote}. Nano Banana 2’s filter can’t be turned off; try rewording, or another model. No credits were used`,
+    });
+    await expect(kie.generate(req({ prompt: 'd [unsafe]' }), flux)).rejects.not.toMatchObject({ message: expect.stringContaining('..') });
     await expect(kie.generate(req(), cfg({ apiKey: '' }))).rejects.toMatchObject({ message: 'No kie.ai API key is set' });
   });
 
@@ -419,6 +439,10 @@ describe('admin routes and the chat path', () => {
       expect(pJob).toMatchObject({ engine: 'kie', kind: 'img2img', model: 'qwen/image-to-image', status: 'done', strength: 0.65 });
       expect(seen.uploads.length).toBe(ups + 1);
       expect(seen.bodies.at(-1)).toMatchObject({ model: 'qwen/image-to-image', input: { image_url: expect.stringMatching(/^https:\/\/tempfile\.example\//), strength: 0.65 } });
+      // P13-03: a safety block reads as one in the chat, not "the engine refused this prompt".
+      const blocked = await ask({ prompt: 'a gourd [unsafe]' });
+      expect(await settle(blocked.jobId)).toMatchObject({ status: 'failed' });
+      expect(said(blocked.messageId)).toMatch(/^⚠️ Couldn't imagine that for \*\*admin\*\*: kie\.ai’s safety filter blocked this one on .+ \("The generated images appear to be unsafe\. Try modifying the prompts"\)\. .+ No credits were used$/);
       // The message says which engine made it, in history and in the update frame.
       expect(db.getMessages(S, 'general', 50).find((m) => Number(m.id) === p.messageId).imagineEngine).toBe('kie');
       expect(frames.filter((f) => f.type === 'message_update' && Number(f.id) === p.messageId).at(-1).imagineEngine).toBe('kie');

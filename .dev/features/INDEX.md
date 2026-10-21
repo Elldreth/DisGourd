@@ -302,3 +302,4 @@ Container: `P12-00-email.md`. The owner's decisions (2026-10-21): Resend over SM
 |---|---|---|---|---|---|---|
 | P13-01 | Registration codes that survive a phone keyboard: easy-to-type codes, matching ignores case, spaces and dashes, no autocorrect | 13 | COMPLETE | S | none | auth/regCodes.js (new), db/index.js, routes/admin.js, routes/auth.js, Login.jsx, SetupWizard.jsx |
 | P13-02 | kie.ai failures in plain words (kie.ai's side vs DisGourd's limit), one retry when nothing was charged, failed jobs logged | 13 | COMPLETE | S | none | imagine/engines/kie.js, imagine/runner.js, tests |
+| P13-03 | kie.ai safety blocks said plainly ("unsafe" and the like), advice by model and channel, no doubled full stop | 13 | REVIEW | S | P13-02 | imagine/engines/kie.js, imagine/runner.js, tests |
