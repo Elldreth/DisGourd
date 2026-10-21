@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 7 in P11-00)
+- **State:** COMPLETE (merged in #220)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** none (`routes/uploads.js` and the delete paths in `db/index.js` aren't touched by the other P11 units)
