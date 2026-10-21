@@ -36,7 +36,15 @@ config.siteAdmins = String(process.env.SITE_ADMINS || config.siteAdmins || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
 // Only trust X-Forwarded-For when a reverse proxy (e.g. SWAG/nginx) sits in
 // front; otherwise any client could spoof it to dodge the auth rate limits.
-config.trustProxy = /^(1|true|yes|on)$/i.test(String(process.env.TRUST_PROXY || config.trustProxy || ''));
+// P11-05: the live setting lives in net/clientIp (TRUST_PROXY, TRUSTED_PROXIES,
+// CLIENT_IP_HEADER); config.trustProxy reads and writes it.
+const { proxyTrust } = require('./net/clientIp');
+if (/^(1|true|yes|on)$/i.test(String(config.trustProxy || ''))) proxyTrust.enabled = true; // config.json
+Object.defineProperty(config, 'trustProxy', {
+  enumerable: true,
+  get: () => proxyTrust.enabled,
+  set: (on) => { proxyTrust.enabled = !!on; },
+});
 // Tests share one IP and register many users, so they run unthrottled.
 config.rateLimit = process.env.NODE_ENV !== 'test';
 

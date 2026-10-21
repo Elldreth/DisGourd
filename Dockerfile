@@ -3,8 +3,13 @@
 # client; the slim image runs it. Data (DB + uploads) lives on mounted volumes,
 # never in the image — see docker-compose.yml.
 
+# Base images are pinned by digest (P11-05), so a rebuild can't silently pull
+# something different. To update: docker pull node:22-bookworm-slim (and
+# node:22-bookworm), then docker inspect --format '{{index .RepoDigests 0}}' <image>
+# and paste the new sha256 values below.
+
 # --- build: install deps (native better-sqlite3) and build the web client ---
-FROM node:22-bookworm AS build
+FROM node:22-bookworm@sha256:69a5713e7f4997e96d579aafd78734810e0dac0dd5ee4621d72c27a2891a4088 AS build
 WORKDIR /app
 # Install deps first so they cache independently of source changes. `npm ci`
 # installs exactly what the lockfiles say (and fails if they're out of date).
@@ -16,7 +21,7 @@ COPY . .
 RUN npm --prefix web run build
 
 # --- runtime: just Node + the server + the built client, run as non-root ---
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:3ed98443660ff48413b5af19ecefce3b9d50845a901a43420d47cc63a9fddbe9
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \

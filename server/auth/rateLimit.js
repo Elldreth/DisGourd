@@ -79,16 +79,10 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
-// The address used for rate limiting. Behind a trusted proxy we take the LAST
-// X-Forwarded-For hop: that's the one the proxy itself appended, while
-// everything to its left is whatever the client chose to send.
-function clientIp(req) {
-  const direct = (req.socket && req.socket.remoteAddress) || 'unknown';
-  if (!config.trustProxy) return direct;
-  const hops = String(req.headers['x-forwarded-for'] || '')
-    .split(',').map((s) => s.trim()).filter(Boolean);
-  return hops.length ? hops[hops.length - 1] : direct;
-}
+// The address used for rate limiting (P11-05: see net/clientIp). Only a
+// trusted proxy's forwarding headers count; then CLIENT_IP_HEADER if set,
+// else the right-most X-Forwarded-For hop that isn't itself a proxy.
+const { clientIp } = require('../net/clientIp');
 
 // The rate-limit key for a request's address (see addressKey).
 const limitKey = (req) => addressKey(clientIp(req));

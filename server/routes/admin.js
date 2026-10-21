@@ -6,11 +6,23 @@ const { authUserId } = require('../auth/tokens');
 const { sendJson, readJsonBody } = require('../http/util');
 const linkPreviews = require('../linkPreviews');
 const imagine = require('../imagine');
+const { clientIpVia, proxyTrust } = require('../net/clientIp');
 
 const getJsonBody = readJsonBody;
 
 // Tried in order; the first match handles the request.
 const routes = [
+  {
+    // GET /admin/client-ip (P11-05): the address this server sees for you, and
+    // how it got it, for checking a proxy or tunnel setup from a phone.
+    match: ({ req, pathSegments }) => pathSegments[0] === 'admin' && pathSegments[1] === 'client-ip' && pathSegments.length === 2 && req.method === 'GET',
+    run: async ({ req, res, parsedUrl }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can see this' });
+      return sendJson(res, 200, { ...clientIpVia(req), trustProxy: proxyTrust.enabled, trustedProxies: process.env.TRUSTED_PROXIES || null, clientIpHeader: proxyTrust.header || null });
+    },
+  },
   {
     // GET/PUT /admin/imagine — the instance's image engines and limits (P2-20)
     match: ({ req, pathSegments }) =>

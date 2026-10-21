@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { fromTrustedProxy } = require('./net/clientIp');
 
 // ---- Serving the built web client ----
 // In production the Node server hosts the compiled React app so the whole thing
@@ -35,9 +36,11 @@ const STATIC_TYPES = {
 function originFor(req) {
   if (!req) return '';
   const first = (v) => String(v || '').split(',')[0].trim();
-  const host = first(req.headers['x-forwarded-host']) || first(req.headers.host);
+  // P11-05: only a trusted proxy's X-Forwarded-Host / -Proto count.
+  const proxied = fromTrustedProxy(req);
+  const host = (proxied && first(req.headers['x-forwarded-host'])) || first(req.headers.host);
   if (!/^[A-Za-z0-9.-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?$/.test(host)) return '';
-  const fwd = first(req.headers['x-forwarded-proto']).toLowerCase();
+  const fwd = proxied ? first(req.headers['x-forwarded-proto']).toLowerCase() : '';
   const proto = fwd === 'https' || fwd === 'http' ? fwd : req.socket?.encrypted ? 'https' : 'http';
   return `${proto}://${host}`;
 }
