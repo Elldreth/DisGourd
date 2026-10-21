@@ -34,6 +34,7 @@ vi.mock('./api.js', () => ({
   getMessages: () =>
     Promise.resolve([{ id: 1, author: 'tester', content: 'hello from the smoke test', timestamp: Date.now(), reactions: [], thread: smokeThread }]),
   getDms: () => Promise.resolve([]),
+  getBlocks: () => Promise.resolve([]), // P9-07b
   getDmMessages: () => Promise.resolve([]),
   previewInvite: () => Promise.resolve({ space: 'Book Club', members: 3, alreadyMember: false }),
 }));

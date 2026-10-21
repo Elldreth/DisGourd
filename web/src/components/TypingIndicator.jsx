@@ -1,5 +1,9 @@
+import { useBlocked } from '../state/useBlocks.js';
+
 // Animated "X is typing…" line shown above the composer.
-export default function TypingIndicator({ names }) {
+export default function TypingIndicator({ names: all }) {
+  const blocks = useBlocked(); // P9-07b: not from people I've blocked
+  const names = all.filter((n) => !blocks.isBlocked(n));
   let text = '';
   if (names.length === 1) text = `${names[0]} is typing…`;
   else if (names.length === 2) text = `${names[0]} and ${names[1]} are typing…`;

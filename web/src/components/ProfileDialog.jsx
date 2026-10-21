@@ -15,6 +15,7 @@ import ImagineTry from './admin/imagine/TryPage.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import ChangePasswordDialog from './ChangePasswordDialog.jsx';
 import DevicesSection from './settings/DevicesSection.jsx';
+import BlockedSection from './settings/BlockedSection.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Modal from './Modal.jsx';
 import SettingsLayout from './settings/SettingsLayout.jsx';
@@ -204,6 +205,7 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
             </div>
           )}
           {onPasswordChanged && <DevicesSection onToken={onPasswordChanged} />}
+          {onPasswordChanged && <BlockedSection />}
           {passwordOpen && (
             <ChangePasswordDialog
               onClose={() => setPasswordOpen(false)}

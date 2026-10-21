@@ -12,6 +12,7 @@ import EditHistoryDialog from './EditHistoryDialog.jsx';
 import { renderMarkdown } from '../markdown.jsx';
 import { newDivider } from '../newMessages.js';
 import { emojiLookup, parseEmojiToken } from '../emoji.js';
+import { useBlocked } from '../state/useBlocks.js';
 
 const LONG_PRESS_MS = 450;
 const JUMP_MAX_PAGES = 10; // how far back "Jump" will page before giving up
@@ -85,6 +86,11 @@ function mentionsUser(content, me) {
 // (`history.hasNewer`), offers newer pages and "Jump to present".
 const MessageList = forwardRef(function MessageList({ messages, channel, currentUser, onEdit, onDelete, onReact, onReply, canModerate, hasMore = false, loadingOlder = false, onLoadOlder, newMessages = null, onEditDone, onHidePreview, imagineAgain = null, imagineUpscale = false, imaginePictures = null, simple = false, emptyHeading, emptyBody, emptyIcon = null, emptyArt = null, topAligned = false, history = null, onPin, onCreateThread, onOpenThread, threadBadge, label, emoji = [], loadVersions, onReport }, ref) {
   const bottomRef = useRef(null);
+  // P9-07b: messages from people I've blocked are collapsed until shown
+  // (per message, until the channel changes).
+  const blocks = useBlocked();
+  const [revealed, setRevealed] = useState(() => new Set());
+  useEffect(() => setRevealed(new Set()), [channel]);
   const emojiMap = useMemo(() => emojiLookup(emoji), [emoji]);
   const emojiById = useMemo(() => new Map(emoji.map((e) => [e.id, e])), [emoji]);
   const containerRef = useRef(null);
@@ -364,6 +370,15 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
       rows.push({ kind: 'new', key: 'new-divider' });
       lastAuthor = null;
     }
+    // A blocked person's message (P9-07b): one "Blocked message · Show" row
+    // for a run of them, until shown.
+    if (!m.kind && blocks.isBlocked(m.author) && !revealed.has(m.id)) {
+      const prev = rows[rows.length - 1];
+      if (prev && prev.kind === 'blocked') prev.ids.push(m.id);
+      else rows.push({ kind: 'blocked', key: `b-${m.id}`, ids: [m.id] });
+      lastAuthor = null;
+      return;
+    }
     // A group DM's notice ("sandy added bob", P9-06d): its own centered line.
     if (m.kind === 'system') {
       rows.push({ kind: 'system', key: m.id, m });
@@ -458,6 +473,17 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               <div className="h-px flex-1 bg-pink/70" />
               <span>New</span>
             </div>
+          ) : row.kind === 'blocked' ? (
+            <p key={row.key} data-msg-id={row.ids[0]} className="my-1 flex items-center gap-2 pl-14 text-xs italic text-gray-500">
+              {row.ids.length === 1 ? 'Blocked message' : `${row.ids.length} blocked messages`}
+              <button
+                type="button"
+                onClick={() => setRevealed((prev) => new Set([...prev, ...row.ids]))}
+                className="rounded px-1.5 py-0.5 not-italic font-medium text-brand-hi hover:bg-ink-600"
+              >
+                Show
+              </button>
+            </p>
           ) : row.kind === 'system' ? (
             <p key={row.key} data-msg-id={row.m.id} role="note" className="my-2 text-center text-xs text-gray-500">
               {row.m.content}
@@ -540,6 +566,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
 export default MessageList;
 
 function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete, onHidePreview, imagineAgain, imagineUpscale, imaginePictures, onReact, onReply, onPin, onCreateThread, onOpenThread, threadBadge, emoji, emojiMap, emojiById, onJumpTo, flash, simple, tabIndex, onFocusRow, onNavigate, editing, onStartEdit, onEndEdit, onShowHistory, onReport }) {
+  const blocks = useBlocked(); // P9-07b: the Block item and reply quotes
   const [draft, setDraft] = useState(m.content || '');
   const editRef = useRef(null);
   // Entering edit mode (from this row or the composer's up arrow): start from
@@ -679,6 +706,14 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
       onSelect: () => {
         closePopup();
         onOpenThread(m.thread, m, rowRef.current);
+      },
+    },
+    // P9-07b: block the author (just for me), beside Report.
+    !mine && !m.bot && !m.kind && m.author && blocks.requestBlock && !blocks.isBlocked(m.author) && {
+      id: 'block', label: `Block ${m.author}…`, icon: 'ban',
+      onSelect: () => {
+        closePopup();
+        blocks.requestBlock(m.author);
       },
     },
     // Others' messages (not the bot's): flag them for the moderators (P9-01).
@@ -832,7 +867,7 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
             >
               <Icon name="reply" size={12} className="shrink-0" />
               <span className="shrink-0 font-semibold text-brand-hi">@{m.replyTo.author}</span>
-              <span className="truncate">{m.replyTo.snippet}</span>
+              <span className="truncate">{blocks.isBlocked(m.replyTo.author) ? 'Blocked message' : m.replyTo.snippet}</span>
             </button>
           )
         )}

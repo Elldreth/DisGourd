@@ -4,6 +4,8 @@ import { useGateway } from './useSocket.js';
 import { useHandlerTable } from './state/gatewayHandlers.js';
 import { useChannelMessages, badgeCounts, unreadKey, threadRootId } from './state/useChannelMessages.js';
 import { useDms, MAX_GROUP } from './state/useDms.js';
+import { useBlocks, BlocksContext } from './state/useBlocks.js';
+import ConfirmDialog from './components/ConfirmDialog.jsx';
 import { useSpaces } from './state/useSpaces.js';
 import { useVoiceCall } from './state/useVoiceCall.js';
 import { useDocumentAttention } from './attention.js';
@@ -127,6 +129,9 @@ export default function App() {
       message: f.reason === 'removed' ? `You were removed from ${f.name || 'the group'}` : `You left ${f.name || 'the group'}`,
     }),
   });
+  // Blocking (P9-07b): who I've blocked; "Block bob?" asks first.
+  const blocks = useBlocks({ token, reconnects });
+  const [blockAsk, setBlockAsk] = useState(null); // a username awaiting the confirm
   const sp = useSpaces({
     token,
     myId,
@@ -203,6 +208,7 @@ export default function App() {
   // Notifications need to know what you're looking at, and how to open what
   // a clicked notification is about.
   notifier.update({
+    blocked: blocks.isBlocked, // P9-07b: no notifications or sounds from people I've blocked
     me: user,
     view,
     space: sp.currentSpace,
@@ -231,9 +237,16 @@ export default function App() {
   const slowmodeOf = (channel) => (sp.slowmodeExempt ? 0 : sp.channelMeta[channel]?.slowmode || 0);
   const slowmodeHere = slowmodeOf(sp.currentChannel);
   const slowmodeThread = openThread ? slowmodeOf(openThread.parentChannel) : 0;
-  gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, thread.handlers, dm.handlers, imagineReq.handlers, {
+  gatewayTable.fill(sp.handlers, voice.handlers, chat.handlers, thread.handlers, dm.handlers, imagineReq.handlers, blocks.handlers, {
+    // P9-07b: a block changed in another tab: the DM list's `blocked` marks too.
+    blocks_changed: () => dm.loadConversations(),
     // A post refused by slow mode: sync the countdown, and say it wasn't sent.
     error: (f) => {
+      // P9-07b: a DM refused because one of you has blocked the other.
+      if (f.op === 'dm' && f.code === 'BLOCKED') {
+        toastRef.current?.show({ id: 'dm-blocked', message: f.error || 'You can’t message this person', tone: 'error' });
+        return;
+      }
       if (f.op !== 'message' || f.code !== 'SLOWMODE') return;
       startCooldown(cooldownKey(f.space, f.channel), f.retryAfter * 1000);
       toastRef.current?.show({ id: 'slowmode', message: `Slow mode is on: your message wasn’t sent. Try again in ${f.retryAfter} s.`, tone: 'error' });
@@ -446,7 +459,7 @@ export default function App() {
     const seen = new Set([user]);
     const out = [];
     for (const p of [...people, ...friends]) {
-      if (!p?.username || seen.has(p.username)) continue;
+      if (!p?.username || seen.has(p.username) || blocks.isBlocked(p.username)) continue; // P9-07b
       seen.add(p.username);
       out.push({ username: p.username, avatar: p.avatar || p.avatar_url || null });
     }
@@ -490,7 +503,7 @@ export default function App() {
   const switcherItems = !switcher
     ? []
     : switcher.mode === 'people'
-      ? peopleItems({ me: user, conversations: dm.conversations, unread: dm.unread, members: people })
+      ? peopleItems({ me: user, conversations: dm.conversations, unread: dm.unread, members: people.filter((m) => !blocks.isBlocked(m.username)) })
       : [
         ...sp.orderedSpaces.flatMap((s) =>
           s.channels.map((c) => ({
@@ -536,7 +549,20 @@ export default function App() {
     );
   }
 
+  // What the app's screens read about blocking (P9-07b).
+  const blocksValue = {
+    list: blocks.list,
+    isBlocked: blocks.isBlocked,
+    requestBlock: (username) => setBlockAsk(username),
+    unblock: (username) =>
+      blocks.unblock(username).then(() => {
+        dm.loadConversations();
+        toast.show({ id: `unblock-${username}`, message: `Unblocked ${username}` });
+      }).catch((err) => toast.show({ id: 'unblock-error', message: err.message || 'Could not unblock', tone: 'error' })),
+  };
+
   return (
+    <BlocksContext.Provider value={blocksValue}>
     <div className="relative flex h-full w-full overflow-hidden">
       {/* Left navigation: static columns on desktop, a slide-in drawer on phones. */}
       <div
@@ -933,6 +959,24 @@ export default function App() {
           {sp.error}
         </div>
       )}
+      {blockAsk && (
+        <ConfirmDialog
+          title={`Block ${blockAsk}?`}
+          body="They can’t message you or add you to groups, and their messages are hidden behind “Show”. They aren’t told."
+          confirmLabel="Block"
+          danger
+          onConfirm={() => {
+            const who = blockAsk;
+            setBlockAsk(null);
+            blocks.block(who).then(() => {
+              dm.loadConversations();
+              toast.show({ id: `block-${who}`, message: `Blocked ${who}` });
+            }).catch((err) => toast.show({ id: 'block-error', message: err.message || 'Could not block', tone: 'error' }));
+          }}
+          onCancel={() => setBlockAsk(null)}
+        />
+      )}
     </div>
+    </BlocksContext.Provider>
   );
 }
