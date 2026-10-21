@@ -67,6 +67,12 @@ function startMock() {
         if (t.prompt.includes('[slow]') || t.polls < 2) return json(200, { code: 200, data: { state: 'generating' } });
         if (t.prompt.includes('[refuse]')) return json(200, { code: 200, data: { state: 'fail', failCode: '400', failMsg: 'Content flagged as sensitive by the safety filter', creditsConsumed: 0 } });
         if (t.prompt.includes('[broken]')) return json(200, { code: 200, data: { state: 'fail', failCode: '500', failMsg: 'internal error' } });
+        // P13-02: kie.ai's own timeout, charged nothing; "[timeout-once]" only on the first task.
+        if (t.prompt.includes('[timeout]') || (t.prompt.includes('[timeout-once]') && !seen.timedOutOnce)) {
+          seen.timedOutOnce = true;
+          return json(200, { code: 200, data: { state: 'fail', failCode: '501', failMsg: 'generate task timeout', creditsConsumed: 0 } });
+        }
+        if (t.prompt.includes('[odd]')) return json(200, { code: 200, data: { state: 'fail', failCode: '422', failMsg: 'prompt too long', creditsConsumed: 0 } });
         return json(200, { code: 200, data: { state: 'success', resultJson: JSON.stringify({ resultUrls: [`${mockUrl}/img/out.png`] }), creditsConsumed: 0.8, costTime: 3 } });
       }
       json(404, { code: 404, msg: 'not found' });
@@ -212,8 +218,26 @@ describe('generating', () => {
     await expect(kie.generate(req({ prompt: 'x [402]' }), cfg())).rejects.toMatchObject({ message: 'The kie.ai account is out of credits' });
     await expect(kie.generate(req({ prompt: 'x [429]' }), cfg())).rejects.toMatchObject({ message: 'kie.ai is limiting requests; try again in a moment' });
     await expect(kie.generate(req({ prompt: 'x [refuse]' }), cfg())).rejects.toMatchObject({ code: 'REFUSED' });
-    await expect(kie.generate(req({ prompt: 'x [broken]' }), cfg())).rejects.toMatchObject({ code: 'ENGINE', message: 'kie.ai: internal error' });
+    await expect(kie.generate(req({ prompt: 'x [broken]' }), cfg())).rejects.toMatchObject({ code: 'ENGINE', message: 'kie.ai’s Z-Image hit a problem on kie.ai’s side ("internal error"); try again in a moment' });
+    await expect(kie.generate(req({ prompt: 'x [odd]' }), cfg())).rejects.toMatchObject({ code: 'ENGINE', message: 'kie.ai couldn’t make it with Z-Image: prompt too long. No credits were used' });
     await expect(kie.generate(req(), cfg({ apiKey: '' }))).rejects.toMatchObject({ message: 'No kie.ai API key is set' });
+  });
+
+  test('P13-02: kie.ai’s own timeout is explained, retried once when nothing was charged, then reported', async () => {
+    const before = seen.bodies.length;
+    await expect(kie.generate(req({ prompt: 'x [timeout]' }), cfg({ model: 'nano-banana-2' }))).rejects.toMatchObject({
+      code: 'ENGINE',
+      message: 'kie.ai’s Nano Banana 2 ran out of time on kie.ai’s own servers ("generate task timeout"). The request was fine; try again, or a lower quality. No credits were used (tried twice)',
+    });
+    expect(seen.bodies.length - before).toBe(2); // one retry, no more
+    // A timeout that clears on the retry just works.
+    seen.timedOutOnce = false;
+    const out = await kie.generate(req({ prompt: 'y [timeout-once]' }), cfg());
+    expect(out.images).toHaveLength(1);
+    // The refusal and a charged failure aren't retried.
+    const n = seen.bodies.length;
+    await expect(kie.generate(req({ prompt: 'z [refuse]' }), cfg())).rejects.toMatchObject({ code: 'REFUSED' });
+    expect(seen.bodies.length - n).toBe(1);
   });
 
   test('stopping a job stops the polling', async () => {

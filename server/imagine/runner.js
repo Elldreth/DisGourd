@@ -9,6 +9,10 @@ const db = require('../db');
 const { UPLOADS_DIR } = require('../routes/uploads');
 
 const timeoutMs = () => parseInt(process.env.IMAGINE_TIMEOUT_MS, 10) || 5 * 60 * 1000;
+// "5 minutes", "90 seconds": how long a job may run, in words.
+const duration = (ms) => (ms >= 60000 && ms % 60000 === 0
+  ? `${ms / 60000} minute${ms === 60000 ? '' : 's'}`
+  : `${Math.max(1, Math.round(ms / 1000))} second${Math.round(ms / 1000) === 1 ? '' : 's'}`);
 const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 const ORDINAL = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
 
@@ -83,6 +87,7 @@ async function run(job) {
   show(job, text.running(job));
   refreshPlaces(l);
   const ac = new AbortController();
+  const started = Date.now();
   const timer = setTimeout(() => ac.abort(), timeoutMs());
   try {
     const result = await job.engine.generate(job.request, job.config, { permissive: job.permissive, signal: ac.signal });
@@ -93,7 +98,12 @@ async function run(job) {
     db.updateImagineJob(job.id, { status: 'done', finishedAt: Date.now(), model: result.model || null, cost: result.cost ?? job.cost });
     show(job, text.done(job), urls);
   } catch (err) {
-    const reason = ac.signal.aborted ? 'it took too long' : err.code === 'REFUSED' ? 'the engine refused this prompt' : err.message || 'something went wrong';
+    const reason = ac.signal.aborted
+      ? `DisGourd stopped waiting after ${duration(timeoutMs())} (the image engine hadn't finished)`
+      : err.code === 'REFUSED' ? 'the engine refused this prompt' : err.message || 'something went wrong';
+    // P13-02: every failure is in the server log too, with how long it ran.
+    const secs = Math.round((Date.now() - started) / 1000);
+    console.warn(`[imagine] job ${job.id} (${job.engine.id}) failed after ${secs}s: ${ac.signal.aborted ? 'timed out' : err.message || err.code || 'unknown'}`);
     db.updateImagineJob(job.id, { status: 'failed', finishedAt: Date.now(), error: reason });
     show(job, text.failed(job, reason));
   } finally {

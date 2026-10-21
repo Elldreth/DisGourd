@@ -189,7 +189,7 @@ test('a failure and a timeout replace the placeholder with the reason', async ()
   expect(botMessage(failed.messageId).content).toBe("⚠️ Couldn't imagine that for **artist**: The test engine failed on purpose");
   const hung = await ask('owner', { prompt: 'never ends [hang]' });
   await until(() => db.getImagineJob(hung.jobId).status === 'failed', 3000);
-  expect(botMessage(hung.messageId).content).toMatch(/it took too long$/);
+  expect(botMessage(hung.messageId).content).toMatch(/DisGourd stopped waiting after \d+ seconds? \(the image engine hadn't finished\)$/);
   await until(() => imagine.idle());
 });
 
