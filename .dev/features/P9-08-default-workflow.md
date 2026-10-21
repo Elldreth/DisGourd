@@ -14,7 +14,7 @@ Faces in full-body images come out barely touched. Today the detailer enlarges a
 ### /imagine at High
 1. **Load the model.**
 2. **CLIP skip 2:** `CLIPSetLastLayer` at −2 between the checkpoint's CLIP and the prompt encoders (and everything that encodes later). A per-style **CLIP skip** setting in Advanced (1 or 2) can turn it off; the default is 2 for this family.
-3. **The first pass:** an empty latent with a **1024 short edge** (portrait 1024×1536, square 1216×1216, landscape 1536×1024, wide 1792×1024, multiples of 8). `KSampler` with **15 steps, CFG 5, dpmpp_2m / karras**. This is "the original generated image".
+3. **The base image:** an empty latent with a **1024 short edge** (portrait 1024×1536, square 1216×1216, landscape 1536×1024, wide 1792×1024, multiples of 8). `KSampler` with **15 steps, CFG 5, dpmpp_2m / karras**. This is "the original generated image".
 4. **The hires fix:**
    - Enlarge with the upscale model, then resize to **2048 on the long edge** (portrait 1368×2048).
    - Then **15 steps at denoise 0.45**, the same sampler, CFG and seed.
@@ -29,12 +29,12 @@ Faces in full-body images come out barely touched. Today the detailer enlarges a
      - bbox_threshold 0.5, bbox_dilation 10, bbox_crop_factor **3.0**;
      - sam_detection_hint center-1, sam_dilation 0, sam_threshold 0.93, sam_bbox_expansion 0, sam_mask_hint_threshold 0.7, sam_mask_hint_use_negative False;
      - drop_size 10;
-     - **cycle** = passes from Settings. Each cycle re-samples the previous one's result.
+     - **cycle** = passes from Settings, **default 3** (was 1). Each cycle re-samples the previous one's result.
 6. **Color Match** (KJNodes `ColorMatch`, **hm-mvgd-hm**, multithread on): `image_ref` = **the original generated image** (step 3), `image_target` = the detailer's output.
 7. **Save.** High stops here: about 1368×2048, the detailed image.
 
 ### The other qualities
-- **Standard:** steps 1–3, then 5–7 on the first-pass image (no hires).
+- **Standard:** steps 1–3, then 5–7 on the base image (no hires).
 - **Draft:** steps 1–3 only, at about 1 MP and 10 steps.
 
 ### The Upscale button (the owner's Phase 5; tiled mode)
@@ -54,8 +54,8 @@ After each loop (the repaint, then the detailer), a **Color Match** back to the 
 
 ### Graphics memory tiers
 - **High** (24 GB+, e.g. RTX 5090): as above.
-- **Medium:** the first pass at about 1 MP, hires to 1792 on the long edge.
-- **Low:** the first pass at about 1 MP, hires to 1536 on the long edge.
+- **Medium:** the base image at about 1 MP, hires to 1792 on the long edge.
+- **Low:** the base image at about 1 MP, hires to 1536 on the long edge.
 - Tiled Upscale works on any tier (it's tiled).
 
 ## Optional pieces
@@ -65,7 +65,7 @@ SAM (Impact Pack's SAMLoader and the sam_vit_b model), KJNodes (Color Match) and
 - **The SDXL family's built-in defaults become:**
   - steps 10 / 15 / 15 (Draft / Standard / High), plus hires steps 15;
   - CFG 5, dpmpp_2m / karras;
-  - hires denoise 0.45, detailer denoise 0.3;
+  - hires denoise 0.45, detailer denoise 0.3, detailer passes 3;
   - tiled Upscale: denoise 0.2, tile size 1280.
 - **The detailer's and the tiled upscale's own sampling is built in, separate from the style's:**
   - detailer: 30 steps, CFG 5, ddim / simple, crop factor 3;
@@ -81,7 +81,7 @@ SAM (Impact Pack's SAMLoader and the sam_vit_b model), KJNodes (Color Match) and
 
 ## Acceptance criteria
 - [ ] **Server tests** on the built graphs:
-  - **SDXL High:** CLIP skip −2 feeding the encoders; a 1024×1536 first pass with 15 steps, CFG 5, dpmpp_2m / karras; hires to 1368×2048 with 15 steps at 0.45; FaceDetailer with the owner's values plus SAM and `cycle` = passes; Color Match from the first-pass image to the detailer output; saving from Color Match.
+  - **SDXL High:** CLIP skip −2 feeding the encoders; a 1024×1536 first pass with 15 steps, CFG 5, dpmpp_2m / karras; hires to 1368×2048 with 15 steps at 0.45; FaceDetailer with the owner's values plus SAM and `cycle` = passes; Color Match from the base image to the detailer output; saving from Color Match.
   - **Standard:** no hires; detailer and Color Match on the first pass.
   - **Draft:** 10 steps, nothing else.
   - **Tiers** cap the hires size; **CLIP skip 1** removes the node; **saved overrides** win; other families unaffected apart from the detailer and Color Match.
