@@ -50,8 +50,15 @@ echo "uid=$uid gid=$gid"
 
 step "register, upload, restart: data persists"
 base="http://localhost:$PORT"
+# P11-01: an empty instance writes a one-time setup code next to the database.
+setup="$(docker exec "$NAME" cat /config/.setup-code)"
+[ -n "$setup" ] || fail "no setup code in /config/.setup-code"
+[ "$(curl -fsS "$base/auth-info" | jq -r .setupCode)" = true ] || fail "auth-info doesn't ask for the setup code"
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/register" -H 'content-type: application/json' \
+  -d '{"username":"nocode","password":"smoke-pass-123","email":"nocode@example.test"}')"
+[ "$code" = 403 ] || fail "the first account without the setup code got $code, expected 403"
 token="$(curl -fsS -X POST "$base/register" -H 'content-type: application/json' \
-  -d '{"username":"smoke","password":"smoke-pass-123","email":"smoke@example.test"}' | jq -r .token)"
+  -d "{\"username\":\"smoke\",\"password\":\"smoke-pass-123\",\"email\":\"smoke@example.test\",\"setupCode\":\"$setup\"}" | jq -r .token)"
 [ -n "$token" ] && [ "$token" != null ] || fail "register gave no token"
 url="$(curl -fsS -X POST "$base/uploads?name=hello.txt" -H "Authorization: Bearer $token" \
   --data-binary 'hello from the smoke test' | jq -r .url)"

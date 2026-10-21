@@ -41,10 +41,38 @@ config.trustProxy = /^(1|true|yes|on)$/i.test(String(process.env.TRUST_PROXY || 
 config.rateLimit = process.env.NODE_ENV !== 'test';
 
 // Seed the registration mode from env/config on first run; the DB is
-// authoritative afterwards so the in-app admin panel can change it. Also apply
-// any env-designated site admins.
+// authoritative afterwards so the in-app admin panel can change it.
 if (!db.getSetting('registration_mode')) db.setSetting('registration_mode', config.registrationMode);
-for (const name of config.siteAdmins) db.setSiteAdminByUsername(name, true);
+
+// SITE_ADMINS (P11-01): each listed name is looked at once. An account that
+// exists then is promoted; a name nobody has yet is remembered as missing and
+// never promoted later (a stranger could register it on an open server and
+// become admin at the next restart). A site admin demoted in the app stays
+// demoted. Either way, Settings → Registration & access makes someone admin.
+function applySiteAdmins(names) {
+  let seen = {};
+  try {
+    seen = JSON.parse(db.getSetting('site_admins_seen') || '{}') || {};
+  } catch {
+    seen = {};
+  }
+  for (const name of names) {
+    const user = db.getUserByUsername(name);
+    if (seen[name] === 'missing' && user && !user.site_admin) {
+      console.warn(`[security] SITE_ADMINS lists "${name}", but that account was created after the name was listed, so it isn't made a site admin automatically. If it's yours, make it one in Settings → Registration & access.`);
+    }
+    if (seen[name]) continue;
+    if (user) {
+      db.setSiteAdminByUsername(name, true);
+      seen[name] = 'applied';
+    } else {
+      console.warn(`[security] SITE_ADMINS lists "${name}", but there's no such account. It won't be promoted when someone registers that name; make it a site admin in Settings → Registration & access instead.`);
+      seen[name] = 'missing';
+    }
+  }
+  db.setSetting('site_admins_seen', JSON.stringify(seen));
+}
+applySiteAdmins(config.siteAdmins);
 function registrationMode() {
   return db.getSetting('registration_mode') || config.registrationMode || 'open';
 }
@@ -86,4 +114,57 @@ function resolveJwtSecret(candidate, secretFile) {
 }
 config.jwtSecret = resolveJwtSecret(config.jwtSecret, SECRET_FILE);
 
-module.exports = { config, registrationMode, isWeakSecret, resolveJwtSecret, SECRET_FILE, MIN_JWT_SECRET_LENGTH };
+// ---- First-run setup code (P11-01) ----
+// On an instance with no accounts, the first registration becomes site admin
+// whatever the registration mode, so it needs a one-time code that only the
+// operator can see: SETUP_CODE, or one generated into .setup-code (0600) next
+// to the JWT secret and printed at start. Tests run without it unless they
+// set REQUIRE_SETUP_CODE=1.
+const SETUP_CODE_FILE = process.env.SETUP_CODE_FILE || path.join(path.dirname(SECRET_FILE), '.setup-code');
+config.requireSetupCode = process.env.NODE_ENV !== 'test' || /^(1|true|yes|on)$/i.test(String(process.env.REQUIRE_SETUP_CODE || ''));
+let setupCodeValue = null;
+
+// The code while the instance is empty (creating it if needed), else null.
+function ensureSetupCode() {
+  if (!config.requireSetupCode || db.countUsers() > 0) {
+    setupCodeValue = null;
+    return null;
+  }
+  const fromEnv = String(process.env.SETUP_CODE || '').trim();
+  if (fromEnv) return (setupCodeValue = fromEnv);
+  try {
+    const saved = fs.readFileSync(SETUP_CODE_FILE, 'utf8').trim();
+    if (saved.length >= 12) return (setupCodeValue = saved);
+  } catch {
+    /* none yet */
+  }
+  const generated = crypto.randomBytes(12).toString('base64url');
+  try {
+    fs.writeFileSync(SETUP_CODE_FILE, generated, { mode: 0o600 });
+  } catch (e) {
+    console.warn('[security] Could not save the setup code (it is only in this log):', e.message);
+  }
+  return (setupCodeValue = generated);
+}
+
+// Whether `provided` is the current setup code (constant time).
+function checkSetupCode(provided) {
+  const code = setupCodeValue || ensureSetupCode();
+  if (!code || typeof provided !== 'string') return false;
+  const a = Buffer.from(provided.trim());
+  const b = Buffer.from(code);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// The first account exists: the code is spent.
+function clearSetupCode() {
+  setupCodeValue = null;
+  fs.rmSync(SETUP_CODE_FILE, { force: true });
+}
+
+ensureSetupCode();
+
+module.exports = {
+  config, registrationMode, isWeakSecret, resolveJwtSecret, SECRET_FILE, MIN_JWT_SECRET_LENGTH,
+  applySiteAdmins, ensureSetupCode, checkSetupCode, clearSetupCode, SETUP_CODE_FILE,
+};

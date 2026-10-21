@@ -128,8 +128,9 @@ function safeJson(text) {
 }
 
 // ---- Auth ----
-export function register(username, password, email, code) {
-  return request('/register', { method: 'POST', auth: false, body: { username, password, email, code } });
+// setupCode (P11-01): the one-time code an empty server needs for its first account.
+export function register(username, password, email, code, setupCode) {
+  return request('/register', { method: 'POST', auth: false, body: { username, password, email, code, ...(setupCode ? { setupCode } : {}) } });
 }
 export function login(username, password) {
   return request('/login', { method: 'POST', auth: false, body: { username, password } });
