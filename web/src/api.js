@@ -136,8 +136,9 @@ function safeJson(text) {
 
 // ---- Auth ----
 // setupCode (P11-01): the one-time code an empty server needs for its first account.
-export function register(username, password, email, code, setupCode) {
-  return request('/register', { method: 'POST', auth: false, body: { username, password, email, code, ...(setupCode ? { setupCode } : {}) } });
+// invite (P14-02): the server invite this sign-up came from; it joins that server.
+export function register(username, password, email, code, setupCode, invite) {
+  return request('/register', { method: 'POST', auth: false, body: { username, password, email, code, ...(setupCode ? { setupCode } : {}), ...(invite ? { invite } : {}) } });
 }
 export function login(username, password) {
   return request('/login', { method: 'POST', auth: false, body: { username, password } });
@@ -157,6 +158,10 @@ export function setLinkPreviews(enabled) {
 }
 export function setRegistrationMode(mode) {
   return request('/admin/registration', { method: 'PUT', body: { mode } });
+}
+// P14-02: { closedAllowsInvites?, invitesCreateAccounts? } (and mode).
+export function setRegistrationSettings(settings) {
+  return request('/admin/registration', { method: 'PUT', body: settings });
 }
 export function createRegCode(opts) {
   return request('/admin/registration/codes', { method: 'POST', body: opts || {} });
@@ -409,6 +414,10 @@ export function kickMember(space, username) {
 }
 export function previewInvite(code) {
   return request(`/invites/${encodeURIComponent(code)}`);
+}
+// Public: what an invite link is for, before signing in (P14-01).
+export function getInvitePreview(code) {
+  return request(`/invites/${encodeURIComponent(code)}/preview`, { auth: false });
 }
 export function joinInvite(code) {
   return request(`/invites/${encodeURIComponent(code)}`, { method: 'POST' });

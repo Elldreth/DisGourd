@@ -2,7 +2,7 @@
 // or logging errors. It catches bugs `vite build` can't, such as a value read
 // before it's declared (which blanked the app in P1-13).
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const SPACE = {
   name: 'Smoke',
@@ -39,6 +39,12 @@ vi.mock('./api.js', () => ({
   getBlocks: () => Promise.resolve([]), // P9-07b
   getDmMessages: () => Promise.resolve([]),
   previewInvite: () => Promise.resolve({ space: 'Book Club', members: 3, alreadyMember: false }),
+  // P14-02: the public preview, and joining (which adds the server to the list).
+  getInvitePreview: vi.fn(() => Promise.resolve({ space: 'Book Club', icon: null, inviter: 'ann', members: 3, signUp: true })),
+  joinInvite: vi.fn((code) => {
+    if (!spaces.some((s) => s.name === 'Book Club')) spaces = [...spaces, { ...SPACE, name: 'Book Club', channels: ['general'], voiceChannels: [] }];
+    return Promise.resolve({ name: 'Book Club', code });
+  }),
 }));
 
 // A WebSocket that never connects anywhere.
@@ -95,30 +101,39 @@ test('signed out: renders the sign-in screen', async () => {
   expect(errors).toEqual([]);
 });
 
-test('invite link: signed out, the code waits through sign-in; signed in, Join opens prefilled and the URL is cleaned', async () => {
+test('invite link: signed out, it is the invite’s landing page; once signed in, the server is joined and opened', async () => {
+  const api = await import('./api.js');
   window.history.replaceState(null, '', '/invite/abc123');
   signedIn = false;
   await renderApp();
-  expect(await screen.findByText(/sign in/i, { selector: 'button' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'You’re invited to Book Club' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Create account' })).toBeTruthy(); // this link can create an account
+  expect(api.getInvitePreview).toHaveBeenCalledWith('abc123');
   cleanup();
 
   // Signing in reloads nothing, but a fresh render stands in for the signed-in app.
   window.history.replaceState(null, '', '/');
   signedIn = true;
+  spaces = [];
   await renderApp();
-  expect(screen.getByRole('dialog', { name: 'Add a server' })).toBeTruthy();
-  expect(screen.getByRole('textbox', { name: 'Invite code or link' }).value).toBe('abc123');
-  expect(await screen.findByText('Book Club')).toBeTruthy();
+  await waitFor(() => expect(api.joinInvite).toHaveBeenCalledWith('abc123'));
+  // Joined and in the rail (this test renders without the toast layer, so no "Welcome" toast).
+  expect((await screen.findAllByRole('button', { name: /^Book Club/ })).length).toBeGreaterThan(0);
+  expect(screen.queryByRole('dialog', { name: 'Add a server' })).toBeNull(); // no Join step any more
   expect(window.location.pathname).toBe('/');
   expect(sessionStorage.length).toBe(0);
   expect(errors).toEqual([]);
 });
 
-test('invite link while already signed in: Join opens prefilled and the URL is cleaned', async () => {
+test('invite link while already signed in: joined and opened at once, and the URL is cleaned', async () => {
+  const api = await import('./api.js');
+  api.joinInvite.mockClear();
   window.history.replaceState(null, '', '/?invite=abc123');
   signedIn = true;
+  spaces = [];
   await renderApp();
-  expect(screen.getByRole('textbox', { name: 'Invite code or link' }).value).toBe('abc123');
+  await waitFor(() => expect(api.joinInvite).toHaveBeenCalledWith('abc123'));
+  expect((await screen.findAllByRole('button', { name: /^Book Club/ })).length).toBeGreaterThan(0);
   expect(window.location.search).toBe('');
   expect(errors).toEqual([]);
 });

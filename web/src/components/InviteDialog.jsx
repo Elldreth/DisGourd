@@ -1,6 +1,7 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { copyText } from '../util.js';
 import { inviteLink } from '../inviteLink.js';
+import * as api from '../api.js';
 import Modal from './Modal.jsx';
 
 // P11-13 (L7): how long a new invite works. 7 days unless you pick otherwise.
@@ -17,14 +18,33 @@ export default function InviteDialog({ space, code, expiresInDays = 7, onExpiry,
   const link = inviteLink(code);
   const expiryId = useId();
   const current = EXPIRY_CHOICES.find((c) => c.days === expiresInDays) || EXPIRY_CHOICES[1];
+  // P14-02: whether this link can also create an account (the site's policy),
+  // asked of the same preview a signed-out person sees.
+  const [signUp, setSignUp] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setSignUp(null);
+    api
+      .getInvitePreview(code)
+      .then((p) => live && setSignUp(!!p.signUp))
+      .catch(() => live && setSignUp(null));
+    return () => {
+      live = false;
+    };
+  }, [code]);
   return (
     <Modal onClose={onClose} panelClassName="w-full max-w-md rounded-xl bg-ink-800 p-6 shadow-2xl ring-1 ring-ink-500/50">
       <Modal.Title>Invite people to {space}</Modal.Title>
       <p className="mt-1 text-sm text-gray-400">
-        Send this link. Opening it signs them in (or lets them register) and takes them straight to
-        joining. Already in the app? The code works under “Join a server” in the left rail.
+        Send this link. Opening it adds them to {space} and opens it. Already in the app? The code works under
+        “Join a server” in the left rail.
       </p>
       <CopyRow label="Invite link" value={link} buttonLabel="Copy link" className="mt-4" />
+      {signUp !== null && (
+        <p className="mt-2 text-xs text-gray-400">
+          {signUp ? 'New people can create an account with this link.' : 'Only people who already have an account can use this link.'}
+        </p>
+      )}
       <CopyRow label="Invite code" value={code} buttonLabel="Copy code" className="mt-3" />
       {onExpiry && (
         <div className="mt-4 flex items-center gap-3">

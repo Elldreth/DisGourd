@@ -5,8 +5,7 @@ import Gourd from './Gourd.jsx';
 import CreateServerDialog from './CreateServerDialog.jsx';
 
 // The far-left rail of server (space) icons, Discord-style, plus create/join.
-// pendingInvite: a code from an invite link; opens Join with it, then calls
-// onInviteOpened so the app can forget it.
+// (An invite link joins and opens its server directly since P14-02.)
 export default function ServerRail({
   spaces,
   currentSpace,
@@ -19,8 +18,6 @@ export default function ServerRail({
   onCreate,
   onJoin,
   onReorder,
-  pendingInvite = '',
-  onInviteOpened,
   openRequest = null, // { tab, n }: open the Add-a-server dialog on that tab (P3-20b)
 }) {
   const [dialog, setDialog] = useState(null); // { tab: 'create' | 'join', code } | null
@@ -32,14 +29,6 @@ export default function ServerRail({
     // A new request (n) opens it again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRequest?.n]);
-
-  useEffect(() => {
-    if (!pendingInvite) return;
-    setDialog({ tab: 'join', code: pendingInvite });
-    onInviteOpened?.();
-    // onInviteOpened is a fresh function each render; only a new code matters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingInvite]);
 
   function handleDrop(toIndex) {
     if (dragIndex !== null && dragIndex !== toIndex && onReorder) {

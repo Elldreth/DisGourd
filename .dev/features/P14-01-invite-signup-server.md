@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P14-00)
 - **Phase:** 14
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #236)
 - **Starting baseline:** main after #235
 - **Effort:** M
 - **Depends on:** P12-02
