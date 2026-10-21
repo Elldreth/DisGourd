@@ -187,6 +187,7 @@ All settings are optional and provided via environment variables (or
 | ------------------ | ------------------------ | -------------------------------------------------- |
 | `PORT`             | `3000`                   | Port the server listens on                         |
 | `JWT_SECRET`       | auto-generated           | Secret used to sign login tokens (32+ characters; placeholders are rejected) |
+| `JWT_SECRET_FILE`  | `.jwt-secret` next to the database | Where the JWT secret is read from (or generated into) when `JWT_SECRET` isn't set. Can point at a Docker secret |
 | `DB_PATH`          | `server/db/disgourd.db`  | SQLite database file location                      |
 | `UPLOADS_DIR`      | `uploads/`               | Where uploaded files are stored                    |
 | `MAX_UPLOAD_BYTES` | `26214400` (25 MB)       | Maximum upload size                                |
@@ -203,7 +204,9 @@ All settings are optional and provided via environment variables (or
 | `BACKUP_INTERVAL_HOURS` | `24`                | How often to take a backup                         |
 | `BACKUP_KEEP`      | `7`                      | How many backups to keep (oldest are deleted)      |
 | `THREAD_ARCHIVE_DAYS` | `7`                   | Threads with no new reply for this many days are archived (a new reply reopens them) |
-| `VAPID_CONTACT`    | `mailto:admin@disgourd.local` | Contact address sent to push services with web push notifications. The signing keys are generated on first run and kept in `.vapid.json` next to the database |
+| `VAPID_CONTACT`    | `mailto:admin@disgourd.local` | Contact address sent to push services with web push notifications |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | from `.vapid.json` | The push signing keys. Set both or neither (one alone stops the start). Without them, a pair is generated on first run and kept in `.vapid.json` next to the database. `VAPID_PRIVATE_KEY_FILE` reads the private key from a file |
+| `KIEAI_API_KEY`    | _(none)_                 | The kie.ai API key. Wins over a key saved in Settings (which is stored in the database, so it's in every backup). `KIEAI_API_KEY_FILE` reads it from a file |
 | `PUSH_HOSTS_EXTRA` | _(none)_                 | Extra push services to allow, comma-separated (`push.example.org` exact, or `*.example.org` for subdomains). The browsers' own services are always allowed |
 | `ALLOWED_ORIGINS`  | _(none)_                 | Other sites allowed to call the API from a browser (CORS), comma-separated, e.g. `https://app.example.org`. The built-in app is same-origin and needs none |
 
@@ -297,6 +300,57 @@ volume) with your normal file backups.
 4. Start the server again.
 
 To reset everything, stop the server and delete the database and uploads.
+
+## Secrets and backups
+
+A few values are secrets: anyone who has them can sign in as anyone, or spend
+your money. Keep them in the host's secret store or an env file (mode `0600`,
+not in git, not in the image), never in the app's settings.
+
+| Secret | Read from | If it's lost |
+| --- | --- | --- |
+| JWT secret | `JWT_SECRET`, else `.jwt-secret` next to the database (or `JWT_SECRET_FILE`) | Everyone is signed out and signs in again |
+| Push keys (VAPID) | `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` (or `VAPID_PRIVATE_KEY_FILE`), else `.vapid.json` next to the database | Every push subscription stops working; people turn notifications on again |
+| kie.ai key | `KIEAI_API_KEY` (or `KIEAI_API_KEY_FILE`), else the one saved in Settings | Generation with kie.ai stops until a key is added |
+| SMTP password (planned) | the environment only | Email stops |
+| Backup storage keys (R2, for Litestream) | Litestream's own environment, not DisGourd's | Replication stops |
+| TURN credentials (if you run a relay) | the TURN server's own config; browsers get them via `window.__DISGOURD_ICE__` | Calls between strict networks fail to connect |
+
+Every `*_FILE` variable names a file to read the value from, once at start,
+which is how Docker or compose secrets (`/run/secrets/...`) are passed without
+the value showing in `docker inspect`.
+
+**Moving generated secrets into the environment.** If DisGourd generated its
+JWT secret and push keys into files, print them as env lines (it only reads):
+
+```bash
+node server/scripts/print-secrets-env.js /config
+```
+
+In Docker: `docker exec disgourd node server/scripts/print-secrets-env.js /config`.
+Put the output in your secret store, restart, and then the files can go.
+
+**What the backups contain.** The nightly copies (and a Litestream replica) are
+the whole database: accounts and password hashes, every message and DM, and a
+kie.ai key if one was saved in Settings. The server warns at start if a kie.ai
+key is both in the environment and saved; remove the saved one in
+Settings › Image generation › kie.ai. The backups don't contain
+`.jwt-secret` or `.vapid.json`, so a restore from the backups alone signs
+everyone out and loses push subscriptions, unless those secrets are kept too.
+
+**Litestream to R2 (or any S3 storage).** Use a private bucket and an API token
+scoped to that one bucket. Give the token to Litestream, not DisGourd. The
+current release (0.5.x) has no client-side encryption (the `age` option was
+removed after 0.3.x), so the bucket holds the database as it is: treat access
+to it like access to the server.
+
+**Backing up the secrets themselves.** In a password manager or the host's
+secret store, not in the same bucket as the database.
+
+**A restore drill.** Now and then, restore the latest backup into a scratch copy
+(a separate `DB_PATH` and port, with the secrets from your store in the
+environment), start it, and sign in. If you can sign in without being signed
+out, the backup and the secrets match.
 
 ## Security notes
 

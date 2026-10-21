@@ -25,6 +25,15 @@ export default function KiePage() {
 
       <div className={card}>
         <label htmlFor="imagine-kie-key" className={heading}>kie.ai API key</label>
+        {/* P11-14: a saved key is also in every database backup; with the environment's key in use it's only a leftover. */}
+        {savedKie.envKey && savedKie.keySaved && !kie.forgetKey && (
+          <div role="alert" className="rounded-lg bg-idle/15 p-3 text-sm text-idle">
+            <p>A key ({savedKie.keyHint}) is also saved in the database, and so in its backups. The environment’s key is the one in use, so the saved one can go.</p>
+            <button type="button" onClick={() => setKie((k) => ({ ...k, forgetKey: true }))} className="mt-2 rounded-lg bg-ink-600 px-3 py-1.5 text-sm font-medium text-fg hover:bg-ink-500">
+              Forget the saved key
+            </button>
+          </div>
+        )}
         {savedKie.envKey ? (
           <p className="text-sm text-gray-400">Using the KIEAI_API_KEY set in the server’s environment.</p>
         ) : (
@@ -47,8 +56,14 @@ export default function KiePage() {
           >
             Test key
           </button>
+          {!savedKie.envKey && savedKie.keySaved && !kie.forgetKey && (
+            <button type="button" onClick={() => setKie((k) => ({ ...k, forgetKey: true }))} className="rounded-lg px-3 py-1.5 text-sm text-gray-400 hover:bg-ink-600 hover:text-fg">
+              Forget the saved key
+            </button>
+          )}
           {kieNote.text && <span role="status" className={`text-xs ${kieNote.ok ? 'text-online' : 'text-gray-400'}`}>{kieNote.text}</span>}
         </div>
+        {kie.forgetKey && <p className="text-xs text-idle">The saved key will be removed when you save.</p>}
         <p className="text-xs text-gray-500">The key stays on the server; it’s never shown again or sent to anyone’s browser.</p>
       </div>
 

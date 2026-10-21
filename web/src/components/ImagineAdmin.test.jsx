@@ -161,6 +161,29 @@ test('kie.ai card: a saved key is never shown; Test key reports the balance; pri
   await waitFor(() => expect(screen.getByLabelText('kie.ai API key').value).toBe('')); // not kept in the page
 });
 
+test('kie.ai (P11-14): with the environment key in use, a saved key is called out and Forget sends apiKey: null', async () => {
+  api.getImagineSettings.mockResolvedValue(withKie({ envKey: true, keySaved: true, keyHint: '••••1234', enabled: true, model: 'z-image' }));
+  api.saveImagineSettings.mockImplementation(async () => withKie({ envKey: true, keySaved: false, enabled: true, model: 'z-image' }));
+  render(<ImagineAdmin />);
+  const note = await screen.findByRole('alert');
+  expect(note.textContent).toMatch(/A key \(••••1234\) is also saved in the database/);
+  fireEvent.click(within(note).getByRole('button', { name: 'Forget the saved key' }));
+  expect(screen.getByText(/The saved key will be removed when you save/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() =>
+    expect(api.saveImagineSettings).toHaveBeenCalledWith(expect.objectContaining({ engines: expect.objectContaining({ kie: expect.objectContaining({ apiKey: null }) }) }))
+  );
+  await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+});
+
+test('kie.ai: without an environment key, a saved key can be forgotten too (quietly)', async () => {
+  api.getImagineSettings.mockResolvedValue(withKie({ keySaved: true, keyHint: '••••1234', model: 'z-image' }));
+  render(<ImagineAdmin />);
+  await screen.findByLabelText('kie.ai API key');
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Forget the saved key' })).toBeTruthy();
+});
+
 test('kie.ai: a custom model id; a key from the environment; the default engine when both are on; the test image engine choice', async () => {
   api.getImagineSettings.mockResolvedValue(withKie({ envKey: true, enabled: true, model: 'z-image' }, { enabled: true, url: 'http://pc:8188', model: MODELS[0].name, family: 'flux' }));
   api.saveImagineSettings.mockImplementation(async (body) => withKie({ envKey: true, ...body.engines.kie }, body.engines.comfyui));

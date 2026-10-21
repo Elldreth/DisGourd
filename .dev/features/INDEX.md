@@ -284,7 +284,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-11 | Voice: TURN credentials from the server (hosted TURN for the tunnel setup), relay-only option, honour forced mute (M8) | 11 | READY | M | none (which TURN: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
 | P11-12 | Case-insensitive usernames and emails (M6) | 11 | PLANNED | S–M | P11-01 | migrations, db/index.js, routes/auth.js, config.js |
 | P11-13 | Low-severity sweep (L1–L7, L9) | 11 | PLANNED | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
-| P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning; off-box copy of `/config` | 11 | READY | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |
+| P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning; off-box copy of `/config` | 11 | REVIEW | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |
 
 ## Email (P12)
 Container: `P12-00-email.md`. The owner's decisions (2026-10-21): Resend over SMTP 587; password reset and security notices first; confirmation optional, with an admin switch to require it; email optional. Builds after P11-01 and P11-12.

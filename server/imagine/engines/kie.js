@@ -15,6 +15,7 @@
 const crypto = require('crypto');
 const db = require('../../db');
 const { safeFetch } = require('../../net/safeFetch');
+const { secretFromEnv } = require('../../secrets');
 
 const API = () => (process.env.KIE_API_BASE || 'https://api.kie.ai').replace(/\/+$/, '');
 const UPLOAD_API = () => (process.env.KIE_UPLOAD_BASE || 'https://kieai.redpandaai.co').replace(/\/+$/, '');
@@ -61,7 +62,14 @@ const PREFER = { square: ['1:1'], portrait: ['2:3', '3:4', '9:16'], landscape: [
 const fail = (code, message) => Object.assign(new Error(message), { code });
 const modelId = (cfg) => (cfg.model === 'custom' ? cfg.customModel : cfg.model);
 const specFor = (cfg) => MODELS[cfg.model] || CUSTOM;
-const keyOf = (cfg) => process.env.KIEAI_API_KEY || cfg.apiKey || '';
+// The environment's key (KIEAI_API_KEY, or KIEAI_API_KEY_FILE: P11-14) wins over a saved one.
+const envKey = () => secretFromEnv('KIEAI_API_KEY');
+const keyOf = (cfg) => envKey() || cfg.apiKey || '';
+// P11-14: said at start when the environment has a key and one is also saved.
+function duplicateKeyWarning(cfg = {}) {
+  if (!envKey() || !cfg.apiKey) return null;
+  return '[imagine] KIEAI_API_KEY is set, and a kie.ai key is also saved in the database (and so in its backups). Remove it in Settings › Image generation › kie.ai ("Forget the saved key")';
+}
 
 // The catalogue entry pictures use: the main model's own, else `pictureModel`'s.
 function pictureEntry(cfg) {
@@ -267,7 +275,7 @@ function publicConfig(cfg = {}) {
     monthlyCredits: cfg.monthlyCredits ?? null,
     keySaved: !!saved,
     keyHint: saved ? `••••${saved.slice(-4)}` : null,
-    envKey: !!process.env.KIEAI_API_KEY,
+    envKey: !!envKey(),
   };
 }
 // The catalogue for the settings screen, with each model's price.
@@ -293,6 +301,7 @@ module.exports = {
   generate,
   testKey,
   keyOf,
+  duplicateKeyWarning,
   catalogue,
   buildInput,
   MODELS,

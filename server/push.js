@@ -1,11 +1,13 @@
 // Web Push (P2-18b): a notification for an @mention or a DM when the person
-// has no open socket. VAPID keys are generated once and kept next to the JWT
-// secret (`.vapid.json`); tests get an ephemeral pair.
+// has no open socket. VAPID keys come from the environment, else are generated
+// once and kept next to the JWT secret (`.vapid.json`); tests get an
+// ephemeral pair.
 const path = require('path');
 const fs = require('fs');
 const webpush = require('web-push');
 const db = require('./db');
 const { SECRET_FILE } = require('./config');
+const { secretFromEnv } = require('./secrets');
 const { userClients } = require('./gateway/delivery');
 const pushHosts = require('./net/pushHosts');
 
@@ -13,11 +15,28 @@ const KEYS_FILE = process.env.VAPID_KEYS_FILE || path.join(path.dirname(SECRET_F
 const CONTACT = process.env.VAPID_CONTACT || 'mailto:admin@disgourd.local';
 const PREVIEW_LENGTH = 100;
 
-function loadKeys() {
-  const ephemeral = process.env.NODE_ENV === 'test' || !process.env.DB_PATH || process.env.DB_PATH === ':memory:';
+// P11-14: VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY (or VAPID_PRIVATE_KEY_FILE)
+// win over the file. Both or neither: one alone stops the start.
+function vapidFromEnv(env = process.env) {
+  const publicKey = secretFromEnv('VAPID_PUBLIC_KEY', env);
+  const privateKey = secretFromEnv('VAPID_PRIVATE_KEY', env);
+  if (!publicKey && !privateKey) return null;
+  if (!publicKey || !privateKey) {
+    throw new Error('[push] Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY (or VAPID_PRIVATE_KEY_FILE) both, or neither. Only one is set');
+  }
+  return { publicKey, privateKey };
+}
+
+function loadKeys({
+  env = process.env,
+  file = KEYS_FILE,
+  ephemeral = process.env.NODE_ENV === 'test' || !process.env.DB_PATH || process.env.DB_PATH === ':memory:',
+} = {}) {
+  const fromEnv = vapidFromEnv(env);
+  if (fromEnv) return fromEnv;
   if (!ephemeral) {
     try {
-      const saved = JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
+      const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
       if (saved.publicKey && saved.privateKey) return saved;
     } catch {
       /* none yet */
@@ -26,8 +45,8 @@ function loadKeys() {
   const keys = webpush.generateVAPIDKeys();
   if (!ephemeral) {
     try {
-      fs.writeFileSync(KEYS_FILE, JSON.stringify(keys), { mode: 0o600 });
-      console.warn(`[push] Generated VAPID keys and saved them to ${KEYS_FILE}`);
+      fs.writeFileSync(file, JSON.stringify(keys), { mode: 0o600 });
+      console.warn(`[push] Generated VAPID keys and saved them to ${file}`);
     } catch (err) {
       console.warn('[push] Generated ephemeral VAPID keys (could not persist):', err.message);
     }
@@ -89,4 +108,4 @@ async function notifyIfAway(userId, { title, body, data }) {
   return sent;
 }
 
-module.exports = { publicKey, notifyIfAway, preview, PREVIEW_LENGTH, KEYS_FILE };
+module.exports = { publicKey, notifyIfAway, preview, PREVIEW_LENGTH, KEYS_FILE, loadKeys, vapidFromEnv };

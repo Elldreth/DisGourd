@@ -460,6 +460,8 @@ runner.setDeliver((space, channel, frame) => deliverToChannelViewers(space, chan
 function start() {
   db.ensureImagineBot();
   runner.recover();
+  const duplicate = ENGINES.get('kie').duplicateKeyWarning(engineConfig(getSettings(), 'kie')); // P11-14
+  if (duplicate) console.warn(duplicate);
 }
 
 module.exports = { imagineOp, tryEngine, decorateSpaces, getSettings, updateSettings, adminView, dailyLimitFor, start, idle: runner.idle, ENGINES, SHAPES, QUALITIES };
