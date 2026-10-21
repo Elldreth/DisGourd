@@ -2,7 +2,8 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** PLANNED (after P11-01). Build order 12.
+- **State:** ACTIVE (build order 12; P11-01 is merged)
+- **Starting baseline:** main at 5917e47 (#226 merged)
 - **Effort:** S–M
 - **Depends on:** P11-01 (both touch registration and SITE_ADMINS matching)
 - **Serialize with:** P11-01

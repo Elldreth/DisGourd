@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 11)
+- **State:** COMPLETE (merged in #226; build order 11)
 - **Starting baseline:** main at 1615bc5 (#225 merged)
 - **Effort:** M
 - **Depends on:** P11-03; owner decision 2 in P11-00 (the DM default): **decided 2026-10-21, "Friends + shared servers"**
