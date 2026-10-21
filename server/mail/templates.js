@@ -48,4 +48,20 @@ function testEmail({ serverName, publicUrl, by }) {
   return { subject: `Test email from ${serverName}`, text, html };
 }
 
-module.exports = { layout, testEmail, esc };
+// P12-02: "Confirm your email", sent when an address is added or changed.
+function confirmEmail({ serverName, publicUrl, username, link }) {
+  const { text, html } = layout({
+    serverName,
+    publicUrl,
+    heading: 'Confirm your email',
+    paragraphs: [
+      `Hi ${username}, please confirm this is your email address for ${serverName}. It’s used to reset your password if you forget it.`,
+      'The link works once and expires in 24 hours.',
+      `If you didn’t ask for this, you can ignore this email: nothing changes until the link is used.`,
+    ],
+    button: { label: 'Confirm my email', url: link },
+  });
+  return { subject: `Confirm your email for ${serverName}`, text, html };
+}
+
+module.exports = { layout, testEmail, confirmEmail, esc };

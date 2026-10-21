@@ -1,5 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import * as api from '../api.js';
+import SettingRow from './settings/SettingRow.jsx';
+import Switch from './settings/Switch.jsx';
 
 // Settings › Site admin › Email (P12-01): whether the server can send email,
 // what it sent today, and a test send. The settings themselves live in the
@@ -49,6 +51,16 @@ export default function EmailAdmin() {
       </p>
     );
   }
+  // P12-02: "Require a confirmed email" (only while email works).
+  async function setRequire(on) {
+    setError('');
+    try {
+      setStatus(await api.setRequireConfirmedEmail(on));
+    } catch (err) {
+      setResult({ ok: false, text: err.message || 'Couldn’t change that' });
+    }
+  }
+
   if (!status) return <p className="text-sm text-gray-400">Loading…</p>;
   const t = status.today;
 
@@ -82,6 +94,18 @@ export default function EmailAdmin() {
           </div>
         )}
       </section>
+
+      <SettingRow
+        className="rounded-xl bg-ink-900/60 px-4"
+        label="Require a confirmed email"
+        description={
+          status.enabled
+            ? 'Members without a confirmed address see only a “Confirm your email” step until they confirm one, and sign-up asks for an address. Site admins are never held back.'
+            : 'Set up email first: nobody could confirm an address while it’s off.'
+        }
+      >
+        <Switch label="Require a confirmed email" checked={!!status.requireConfirmed} disabled={!status.enabled} onChange={setRequire} />
+      </SettingRow>
 
       <section aria-labelledby="email-today" className="rounded-xl bg-ink-900/60 p-4">
         <h3 id="email-today" className="text-xs font-semibold uppercase tracking-wide text-gray-400">

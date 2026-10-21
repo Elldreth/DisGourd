@@ -253,8 +253,16 @@ reliably. Settings come from the server's environment only, and **Settings ›
 Site admin › Email** shows whether it's set up, what was sent today, and a
 **Send test email** button. The password is never shown there.
 
-What uses it: nothing yet besides the test. Password reset and security
-notices come next (P12-02 to P12-04).
+What uses it:
+
+- **Confirming addresses.** An email address is optional. Anyone can add or
+  change theirs in **Settings › My account › Email**, with their password,
+  and it's confirmed by a link that works once within 24 hours.
+- **"Require a confirmed email"** (Site admin › Email). Members without a
+  confirmed address see only a "Confirm your email" step until they confirm
+  one, and sign-up asks for an address. Site admins are never held back.
+
+Password reset and security notices come next (P12-03, P12-04).
 
 **With Resend** (free for 3,000 emails a month, 100 a day):
 

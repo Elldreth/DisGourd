@@ -237,3 +237,32 @@ test('P11-12 (v34): a database with names or emails that differ only in case ref
   expect(raw.pragma('user_version', { simple: true })).toBe(LATEST_VERSION);
   raw.close();
 });
+
+test('P12-02 (v35): users is rebuilt so email may be empty, keeping every row, session and foreign key', () => {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  runMigrations(db, MIGRATIONS.filter((m) => m.version <= 34));
+  expect(db.prepare('PRAGMA table_info(users)').all().find((c) => c.name === 'email').notnull).toBe(1);
+  db.prepare("INSERT INTO users(username, email, password_hash, salt) VALUES ('ann', 'ann@example.com', 'h', 's'), ('bo', 'bo@example.com', 'h', 's')").run();
+  db.prepare("INSERT INTO sessions(id, user_id, device, created_at, last_seen_at) VALUES ('s1', 1, 'Chrome', 1, 1), ('s2', 2, 'Firefox', 1, 1)").run();
+  runMigrations(db);
+  expect(db.pragma('user_version', { simple: true })).toBe(LATEST_VERSION);
+  expect(db.pragma('foreign_keys', { simple: true })).toBe(1); // back on
+  expect(db.pragma('foreign_key_check')).toEqual([]);
+  const cols = db.prepare('PRAGMA table_info(users)').all();
+  expect(cols.find((c) => c.name === 'email').notnull).toBe(0);
+  expect(cols.some((c) => c.name === 'email_verified_at')).toBe(true);
+  expect(db.prepare('SELECT username, email, email_verified_at FROM users ORDER BY id').all()).toEqual([
+    { username: 'ann', email: 'ann@example.com', email_verified_at: null },
+    { username: 'bo', email: 'bo@example.com', email_verified_at: null },
+  ]);
+  expect(db.prepare('SELECT COUNT(*) n FROM sessions').get().n).toBe(2);
+  // The case-insensitive unique indexes came back, and any number of empty emails is fine.
+  const idx = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'users'").all().map((r) => r.name);
+  expect(idx).toEqual(expect.arrayContaining(['users_username_nocase', 'users_email_nocase']));
+  db.prepare("UPDATE users SET email = NULL").run();
+  expect(() => db.prepare("INSERT INTO users(username, email, password_hash, salt) VALUES ('Ann', NULL, 'h', 's')").run()).toThrow(/UNIQUE/);
+  // Cascades still work through the rebuilt table.
+  db.prepare("DELETE FROM users WHERE username = 'bo'").run();
+  expect(db.prepare('SELECT COUNT(*) n FROM sessions').get().n).toBe(1);
+});

@@ -7,6 +7,9 @@ const { deviceLabel } = require('../auth/device');
 const { rateLimitOk, safeEqual, limitKey, accountLocked, accountFailed, accountSucceeded, ACCOUNT_MAX_FAILURES } = require('../auth/rateLimit');
 const { normalizeRegCode } = require('../auth/regCodes');
 const { passwordProblem } = require('../auth/commonPasswords');
+const mail = require('../mail');
+const { emailGateActive, gated } = require('../auth/emailGate');
+const { sendConfirmation, emailView } = require('./email');
 const { sendJson, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateRegistration, parseReactionEmoji } = require('../validate');
 
@@ -59,7 +62,12 @@ const routes = [
       // shows a first-run wizard, and that first account becomes the site admin.
       // P11-01: `setupCode` says the wizard must ask for the one-time setup code.
       const setup = db.countUsers() === 0;
-      return res.end(JSON.stringify({ registration: registrationMode(), setup, ...(setup && config.requireSetupCode ? { setupCode: true } : {}) }));
+      // P12-02: `email` says the server can send email; `emailRequired` that
+      // sign-up needs an address (a confirmed one is required).
+      return res.end(JSON.stringify({
+        registration: registrationMode(), setup, ...(setup && config.requireSetupCode ? { setupCode: true } : {}),
+        email: mail.enabled(), emailRequired: emailGateActive(),
+      }));
     },
   },
   {
@@ -70,7 +78,8 @@ const routes = [
           res.writeHead(429);
           return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
         }
-        const { username, password, email, code, setupCode } = await getJsonBody(req);
+        const { username, password, code, setupCode, email: rawEmail } = await getJsonBody(req);
+        const email = typeof rawEmail === 'string' && rawEmail.trim() ? rawEmail.trim() : null; // P12-02: optional
         // The very first account bootstraps the instance (and becomes site admin),
         // so the registration mode doesn't apply to it, but (P11-01) it needs
         // the one-time setup code from the server's log or .setup-code file.
@@ -101,13 +110,13 @@ const routes = [
           res.writeHead(403);
           return res.end(JSON.stringify({ error: 'This server has reached its account limit.' }));
         }
-        const invalid = validateRegistration({ username, password, email });
+        const invalid = validateRegistration({ username, password, email }, { requireEmail: emailGateActive() && !firstAccount });
         if (invalid) {
           res.writeHead(400);
           return res.end(JSON.stringify({ error: invalid }));
         }
         // P11-13 (L6): the same answer whether the name or the email is taken.
-        if (db.getUserByUsername(username) || db.getUserByEmail(email)) return sendJson(res, 409, { error: ACCOUNT_TAKEN });
+        if (db.getUserByUsername(username) || (email && db.getUserByEmail(email))) return sendJson(res, 409, { error: ACCOUNT_TAKEN });
         const salt = generateSalt();
         const hash = await hashPassword(password, salt);
         // The checks above ran before the (slow, async) hash. Re-check the account
@@ -123,6 +132,8 @@ const routes = [
         if (created.error === 'exists') return sendJson(res, 409, { error: ACCOUNT_TAKEN });
         const userId = created.userId;
         if (firstAccount) clearSetupCode(); // P11-01: spent
+        // P12-02: a new address gets its confirmation link straight away.
+        if (email) sendConfirmation(db.getUserById(userId), email);
         const token = signIn(req, userId, username);
         res.writeHead(201);
         return res.end(JSON.stringify({ token }));
@@ -294,7 +305,8 @@ const routes = [
       return sendJson(res, 200, {
         id: u.id,
         username: u.username,
-        email: u.email,
+        ...emailView(u), // P12-02: email, emailVerified, emailPending
+        emailConfirmRequired: gated(userId),
         avatar: u.avatar_url || null,
         avatarOriginal: u.avatar_original || null,
         avatarCrop: u.avatar_crop ? JSON.parse(u.avatar_crop) : null,

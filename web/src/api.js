@@ -88,6 +88,11 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }
 
+let onEmailUnconfirmed = null;
+export function setEmailUnconfirmedHandler(fn) {
+  onEmailUnconfirmed = fn;
+}
+
 async function request(path, { method = 'GET', body, auth = true, headers = {}, retried = false } = {}) {
   const finalHeaders = { ...headers };
   if (body !== undefined) finalHeaders['Content-Type'] = 'application/json';
@@ -112,9 +117,11 @@ async function request(path, { method = 'GET', body, auth = true, headers = {}, 
       if (onUnauthorized) onUnauthorized();
     }
   }
+  // P12-02: the server now requires a confirmed email that this account lacks.
+  if (res.status === 403 && data && data.code === 'EMAIL_UNCONFIRMED' && onEmailUnconfirmed) onEmailUnconfirmed();
   if (!res.ok) {
     const message = (data && data.error) || res.statusText || 'Request failed';
-    throw Object.assign(new Error(message), { status: res.status });
+    throw Object.assign(new Error(message), { status: res.status, code: data && data.code });
   }
   return data;
 }
@@ -164,6 +171,24 @@ export function searchUsers(q) {
 export function setSuspended(username, suspended, reason) {
   return request(`/admin/users/${encodeURIComponent(username)}`, { method: 'PUT', body: { suspended, ...(reason ? { reason } : {}) } });
 }
+// ---- Your email address (P12-02) ----
+export function changeEmail(email, password) {
+  return request('/me/email', { method: 'POST', body: { email, password } });
+}
+export function removeEmail(password) {
+  return request('/me/email', { method: 'DELETE', body: { password } });
+}
+export function resendEmailLink() {
+  return request('/me/email/resend', { method: 'POST' });
+}
+// From the link in the email; works signed in or out.
+export function confirmEmail(token) {
+  return request('/email/confirm', { method: 'POST', auth: false, body: { token } });
+}
+export function setRequireConfirmedEmail(requireConfirmed) {
+  return request('/admin/email', { method: 'PUT', body: { requireConfirmed } });
+}
+
 // ---- Instance admin: email (P12-01) ----
 export function getEmailStatus() {
   return request('/admin/email');
