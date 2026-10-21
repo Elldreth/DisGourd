@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P14-00)
 - **Phase:** 14
-- **State:** REVIEW (AC-4 is the owner's live check)
+- **State:** COMPLETE (merged in #238)
 - **Starting baseline:** main after #237
 - **Effort:** S
 - **Depends on:** P14-01, P12-01
@@ -50,4 +50,4 @@
 | AC-3 | Used up → 410; a bad address → 400; email off → 409 "This server can't send email right now" (and `/auth-info` `email: false`); with limits on, the 11th in an hour → 429. `inviteLanding.test.jsx`: Send → "Sent to friend@example.org." with the trimmed address; the limit message shows; the box is hidden while email is off; every control is named |
 | Suites | Server 653 (2 Linux-only skipped), web 878; `vite build` clean |
 | Sandbox | A throwaway copy of the sandbox DB on :3015, with a test-only transport printing each email. As sandy: Smoke Test's server menu → Invite → the dialog showed `5DBCH-3ZRRQ`, "New people can create an account with this link." and **Email this invite**. An address, then Send → "Sent to newfriend@example.org.". The log had the email: "sandy invited you to Smoke Test on DisGourd", the new-account paragraph, "This invite expires on October 28, 2026.", and "Join Smoke Test: http://localhost:3015/invite/5DBCH-3ZRRQ". The temporary entry and DB were removed |
-| AC-4 | Open: on the live server, email an invite from Den of Thieves to an inbox, then open its button → the landing page (P14-02) |
+| AC-4 (live, partly) | **The owner's server (2026-10-21):** an invite emailed from Den of Thieves **arrived, but in Gmail's spam folder** (a brand-new sending domain, and invite-style wording; the plain test email had reached the inbox). Signing up from it with a second address was blocked by an unconfirmed claim on that address, which P13-04 fixes. Opening the landing page from the email is to be rechecked after P13-04 |

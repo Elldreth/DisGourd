@@ -2088,6 +2088,15 @@ const confirmEmailTx = db.transaction((userId, email) => {
   return 'ok';
 });
 const confirmUserEmail = (userId, email) => confirmEmailTx(userId, email);
+// P13-04: take an address off any account that never confirmed it, so the
+// account adding it now can have it. A confirmed address is never touched.
+function releaseUnconfirmedEmail(email, exceptUserId = 0) {
+  const rows = db.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE AND email_verified_at IS NULL AND id != ?').all(email, exceptUserId);
+  if (!rows.length) return 0;
+  db.prepare('UPDATE users SET email = NULL WHERE email = ? COLLATE NOCASE AND email_verified_at IS NULL AND id != ?').run(email, exceptUserId);
+  for (const r of rows) console.warn(`[email] an unconfirmed address at …@${String(email).split('@').pop()} was taken off user ${r.id} (another account added it)`);
+  return rows.length;
+}
 // Set (unconfirmed) or clear the address directly: sign-up, removing it, or
 // adding one while the server can't send email.
 function setUserEmail(userId, email) {
@@ -2412,6 +2421,9 @@ const insertUserTx = db.transaction(({ username, email, passwordHash, salt, regC
     `).run(regCodeId, Date.now()).changes;
     if (!claimed) throw new RegistrationRefused('code');
   }
+  // P13-04: an address another account added but never confirmed gives way
+  // to the new account (a confirmed one was refused before we got here).
+  if (email) releaseUnconfirmedEmail(email);
   const userId = createUser(username, email, passwordHash, salt);
   // P14-01: signing up from an invite joins its server in the same step;
   // if it can't be redeemed (used up meanwhile), no account is made either.
@@ -2580,6 +2592,7 @@ function getUnfinishedImagineJobs() {
 if (versionBefore > 0 && versionBefore < 12) seedAllSpaceRoles();
 
 module.exports = {
+  releaseUnconfirmedEmail,
   getSpaceCard,
   createEmailToken,
   useEmailToken,

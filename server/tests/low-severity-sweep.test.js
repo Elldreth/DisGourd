@@ -143,6 +143,8 @@ describe('L4: tokens', () => {
 
 describe('L6: one sign-up message', () => {
   test('a taken username and a taken email get the same answer', async () => {
+    // P13-04: only a confirmed address counts as taken, so bob's is confirmed.
+    db.raw.prepare('UPDATE users SET email_verified_at = ? WHERE username = ?').run(Date.now(), 'bob');
     const name = await rawPost('/register', JSON.stringify({ username: 'bob', password: PASSWORD, email: 'new-bob@example.com' }));
     const email = await rawPost('/register', JSON.stringify({ username: 'robert', password: PASSWORD, email: 'bob@example.com' }));
     expect(name).toEqual({ status: 409, body: { error: 'That username or email can’t be used' } });

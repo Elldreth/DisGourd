@@ -130,7 +130,9 @@ const routes = [
           return res.end(JSON.stringify({ error: invalid }));
         }
         // P11-13 (L6): the same answer whether the name or the email is taken.
-        if (db.getUserByUsername(username) || (email && db.getUserByEmail(email))) return sendJson(res, 409, { error: ACCOUNT_TAKEN });
+        // P13-04: only a *confirmed* address blocks a sign-up; one another account
+        // added but never confirmed gives way (inside the account transaction).
+        if (db.getUserByUsername(username) || (email && db.emailConfirmedElsewhere(email, 0))) return sendJson(res, 409, { error: ACCOUNT_TAKEN });
         const salt = generateSalt();
         const hash = await hashPassword(password, salt);
         // The checks above ran before the (slow, async) hash. Re-check the account
