@@ -85,7 +85,7 @@ export default function Login({ onAuthed, notice = '' }) {
             />
           </Field>
 
-          {isRegister && regMode === 'code' && (
+          {isRegister && (regMode === 'invite' || regMode === 'code') && (
             <Field label="Registration code" hint="Ask the server owner">
               <input
                 value={code}

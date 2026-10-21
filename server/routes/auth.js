@@ -9,6 +9,8 @@ const { normalizeRegCode } = require('../auth/regCodes');
 const { passwordProblem } = require('../auth/commonPasswords');
 const mail = require('../mail');
 const { emailGateActive, gated } = require('../auth/emailGate');
+const { inviteCanCreateAccount, closedAllowsInvites } = require('../auth/invitePolicy');
+const { deliverToSpaceMembers } = require('../gateway/delivery');
 const { sendConfirmation, emailView } = require('./email');
 const { sendJson, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateRegistration, parseReactionEmoji } = require('../validate');
@@ -67,6 +69,7 @@ const routes = [
       return res.end(JSON.stringify({
         registration: registrationMode(), setup, ...(setup && config.requireSetupCode ? { setupCode: true } : {}),
         email: mail.enabled(), emailRequired: emailGateActive(),
+        closedAllowsInvites: closedAllowsInvites(), // P14-01
       }));
     },
   },
@@ -78,7 +81,7 @@ const routes = [
           res.writeHead(429);
           return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
         }
-        const { username, password, code, setupCode, email: rawEmail } = await getJsonBody(req);
+        const { username, password, code, setupCode, email: rawEmail, invite: inviteCode } = await getJsonBody(req);
         const email = typeof rawEmail === 'string' && rawEmail.trim() ? rawEmail.trim() : null; // P12-02: optional
         // The very first account bootstraps the instance (and becomes site admin),
         // so the registration mode doesn't apply to it, but (P11-01) it needs
@@ -86,23 +89,34 @@ const routes = [
         // After that, honor the registration mode.
         const firstAccount = db.countUsers() === 0;
         let usedCode = null;
+        // P14-01: a server invite link, if one came with the sign-up. It joins
+        // the new account to its server, and (by the site's invite policy) can
+        // stand in for a sign-up code. A bad one is refused up front.
+        let invite = null;
+        if (!firstAccount && typeof inviteCode === 'string' && inviteCode.trim()) {
+          invite = db.getInvite(inviteCode);
+          if (!invite) return sendJson(res, 404, { error: 'This invite is invalid or has expired' });
+          if (invite.expires_at && Date.now() > invite.expires_at) return sendJson(res, 410, { error: 'This invite has expired' });
+          if (invite.max_uses && invite.uses >= invite.max_uses) return sendJson(res, 410, { error: 'This invite has been fully used' });
+        }
+        const inviteOpensSignUp = !!invite && inviteCanCreateAccount(invite);
         if (firstAccount && config.requireSetupCode && !checkSetupCode(setupCode)) {
           return sendJson(res, 403, { error: "This server needs its setup code to create the first account. It's in the server's log, or in the .setup-code file next to the database." });
         }
-        if (!firstAccount) {
+        if (!firstAccount && !inviteOpensSignUp) {
           const mode = registrationMode();
           if (mode === 'closed') {
             res.writeHead(403);
-            return res.end(JSON.stringify({ error: 'Registration is closed on this server.' }));
+            return res.end(JSON.stringify({ error: invite ? 'This invite can’t be used to create an account here. Ask the server’s admins, or sign in if you already have an account.' : 'Registration is closed on this server.' }));
           }
-          if (mode === 'code') {
+          if (mode === 'invite') {
             // Case, spaces and dashes don't matter (phone keyboards; auth/regCodes.js).
             const provided = typeof code === 'string' ? code : '';
             const envOk = !!config.registrationCode && safeEqual(normalizeRegCode(provided), normalizeRegCode(config.registrationCode));
             usedCode = envOk ? null : db.findUsableRegCode(provided);
             if (!envOk && !usedCode) {
               res.writeHead(403);
-              return res.end(JSON.stringify({ error: 'A valid registration code is required to create an account.' }));
+              return res.end(JSON.stringify({ error: invite ? 'This invite can’t be used to create an account here. Ask the server’s admins, or sign in if you already have an account.' : 'A valid registration code is required to create an account.' }));
             }
           }
         }
@@ -126,7 +140,13 @@ const routes = [
           username, email, passwordHash: hash, salt,
           regCodeId: usedCode ? usedCode.id : null,
           maxAccounts: config.maxAccounts,
+          inviteCode: invite ? invite.code : null,
         });
+        // P14-01: the invite couldn't be redeemed after all; no account was made.
+        if (created.error && created.error.startsWith('invite-')) {
+          const why = { 'invite-expired': [410, 'This invite has expired'], 'invite-exhausted': [410, 'This invite has been fully used'], 'invite-banned': [403, 'You can’t join that server'] }[created.error];
+          return sendJson(res, why ? why[0] : 404, { error: why ? why[1] : 'This invite is invalid or has expired' });
+        }
         if (created.error === 'limit') return sendJson(res, 403, { error: 'This server has reached its account limit.' });
         if (created.error === 'code') return sendJson(res, 403, { error: 'A valid registration code is required to create an account.' });
         if (created.error === 'exists') return sendJson(res, 409, { error: ACCOUNT_TAKEN });
@@ -135,8 +155,17 @@ const routes = [
         // P12-02: a new address gets its confirmation link straight away.
         if (email) sendConfirmation(db.getUserById(userId), email);
         const token = signIn(req, userId, username);
+        // P14-01: the server the invite joined them to, so the app opens it.
+        let joined;
+        if (invite) {
+          const space = db.getSpaceById(invite.space_id);
+          if (space) {
+            joined = space.name;
+            deliverToSpaceMembers(space.name, JSON.stringify({ type: 'members_changed', space: space.name }));
+          }
+        }
         res.writeHead(201);
-        return res.end(JSON.stringify({ token }));
+        return res.end(JSON.stringify({ token, ...(joined ? { joined } : {}) }));
       } catch (e) {
         return failed(res, e);
       }

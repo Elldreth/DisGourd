@@ -1,7 +1,7 @@
 // Servers ("spaces"): settings, members, roles, invites, permissions and channels.
 const { withPublicEmbeds } = require('../net/imageProxy');
-const crypto = require('crypto');
 const db = require('../db');
+const { newRegCode } = require('../auth/regCodes');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateSpaceName, normalizeChannelName, validateChannelName } = require('../validate');
@@ -352,7 +352,7 @@ const routes = [
         const maxUses = body.maxUses ?? null;
         if (maxUses !== null && !(Number.isInteger(maxUses) && maxUses >= 1 && maxUses <= 1000)) return sendJson(res, 400, { error: 'maxUses is 1–1000, or left out' });
         const expiresAt = days === null ? null : Date.now() + days * 24 * 60 * 60 * 1000;
-        const code = crypto.randomBytes(6).toString('base64url');
+        const code = newRegCode(); // P14-01: easy to type, like sign-up codes
         db.createInvite(code, space.id, userId, expiresAt, maxUses);
         return sendJson(res, 201, { code, expiresAt, maxUses });
       }

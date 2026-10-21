@@ -57,7 +57,7 @@ test('an empty instance writes a setup code (0600) and says it is needed', async
   expect(code).toMatch(/^[\w-]{12,}$/);
   if (process.platform !== 'win32') expect(fs.statSync(CODE_FILE).mode & 0o777).toBe(0o600);
   const info = await (await fetch(`${base()}/auth-info`)).json();
-  expect(info).toEqual({ registration: 'closed', setup: true, setupCode: true, email: false, emailRequired: false }); // email: P12-02
+  expect(info).toEqual({ registration: 'closed', setup: true, setupCode: true, email: false, emailRequired: false, closedAllowsInvites: false }); // email: P12-02; closedAllowsInvites: P14-01
 });
 
 test('the first account needs the code: none or wrong → 403, right → 201 and site admin', async () => {
@@ -80,7 +80,7 @@ test('after the first account: the file is gone, registration is closed, and a r
   expect((await register('third', { setupCode: code })).status).toBe(403);
   expect(config.ensureSetupCode()).toBeNull(); // what boot does
   expect(fs.existsSync(CODE_FILE)).toBe(false);
-  expect(await (await fetch(`${base()}/auth-info`)).json()).toEqual({ registration: 'closed', setup: false, email: false, emailRequired: false });
+  expect(await (await fetch(`${base()}/auth-info`)).json()).toEqual({ registration: 'closed', setup: false, email: false, emailRequired: false, closedAllowsInvites: false });
 });
 
 test('SITE_ADMINS: a name registered after it was listed is not promoted on restart', async () => {

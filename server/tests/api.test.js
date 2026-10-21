@@ -645,7 +645,7 @@ test('registration gating: code required, closed mode, and account cap', async (
     setMode('code');
     cfg.registrationCode = 'sesame';
     let info = await (await fetch(`${base}/auth-info`)).json();
-    expect(info.registration).toBe('code');
+    expect(info.registration).toBe('invite'); // P14-01: 'code' is the old name, read as 'invite'
     expect(JSON.stringify(info)).not.toContain('sesame');
 
     // Wrong / missing code is rejected; correct code works.
