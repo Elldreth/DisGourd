@@ -1,6 +1,7 @@
 const path = require('path');
 const Database = require('better-sqlite3');
 const { runMigrations } = require('./migrations');
+const { normalizeRegCode } = require('../auth/regCodes');
 require('dotenv').config({ quiet: true });
 
 // Tests must say which database to use (usually ':memory:'). Without this, a
@@ -1982,8 +1983,14 @@ function listRegCodes() {
 }
 // A code is usable if it exists, isn't revoked/expired, and is under its use cap.
 function findUsableRegCode(code) {
-  if (!code) return null;
-  const r = db.prepare('SELECT * FROM reg_codes WHERE code = ?').get(code);
+  // Case, spaces and dashes don't matter (see auth/regCodes.js); an exact
+  // match wins if two codes only differ in case.
+  const norm = normalizeRegCode(code);
+  if (!norm) return null;
+  const r = db.prepare(`
+    SELECT * FROM reg_codes WHERE replace(upper(code), '-', '') = ?
+    ORDER BY (code = ?) DESC, id DESC LIMIT 1
+  `).get(norm, String(code).trim());
   if (!r || r.revoked_at) return null;
   if (r.expires_at && Date.now() > r.expires_at) return null;
   if (r.max_uses != null && r.uses >= r.max_uses) return null;
