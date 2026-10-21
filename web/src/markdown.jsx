@@ -119,7 +119,10 @@ function CodeBlock({ code, lang }) {
           {label}
         </button>
       </div>
-      <pre><code className={tokens ? 'hljs' : undefined}>{tokens || code}</code></pre>
+      {/* Focusable so keyboard users can scroll a long line into view (axe scrollable-region-focusable). */}
+      <pre tabIndex={0} role="group" aria-label={lang ? `${lang} code` : 'Code'}>
+        <code className={tokens ? 'hljs' : undefined}>{tokens || code}</code>
+      </pre>
     </div>
   );
 }
