@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 9
-- **State:** REVIEW
+- **State:** COMPLETE (#197)
 - **Starting baseline:** main at b5afadc (#196 merged)
 - **Effort:** M (no migration)
 - **Depends on:** P3-28 (hires fix), P3-29 / P3-32 (Upscale, tiled mode), P3-31 / P3-33 (face detailer and passes), P3-36a (Variations), P9-04 (styles)

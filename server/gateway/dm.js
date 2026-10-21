@@ -24,6 +24,8 @@ function sendToConversation(conversationId, frame) {
 }
 
 const MAX_GROUP = 10;
+// P9-07a: the same words for both sides, so it doesn't say who blocked whom.
+const BLOCKED_DM = "You can't message this person";
 const MAX_GROUP_NAME = 50;
 // Refuse an op with a code the app can act on.
 function refuse(ws, op, code, error) {
@@ -64,6 +66,8 @@ function peopleToAdd(adderId, names) {
     if (!u) return { code: 'NOT_FOUND', error: `There's no one called ${name}` };
     if (u.id === adderId) continue;
     if (!db.canAddToGroup(adderId, u.id)) return { code: 'NOT_ALLOWED', error: `You can only add people you share a server with or are friends with (not ${u.username})` };
+    // P9-07a: either has blocked the other; it doesn't say which.
+    if (db.eitherBlocked(adderId, u.id)) return { code: 'BLOCKED', error: `You can't add ${u.username}` };
     users.push(u);
   }
   return { users };
@@ -110,11 +114,17 @@ const ops = {
     if (!content && attachments.length === 0) return;
     const from = db.getUserById(userId);
     if (!from) return;
+    // P9-07a: no DMs where either has blocked the other (checked before a new pair is made).
+    if (typeof msg.to === 'string' && msg.conversation == null) {
+      const to = db.getUserByUsername(msg.to);
+      if (to && db.eitherBlocked(userId, to.id)) return refuse(ws, msg.op, 'BLOCKED', BLOCKED_DM);
+    }
     const conversationId = conversationFor(msg, userId, { create: true });
     if (!conversationId) return;
     const conv = db.getConversation(conversationId);
     const partner = conv.kind === 'pair' ? db.pairPartner(conversationId, userId) : null;
     if (conv.kind === 'pair' && !partner) return;
+    if (partner && db.eitherBlocked(userId, partner.id)) return refuse(ws, msg.op, 'BLOCKED', BLOCKED_DM);
     const spoiler = !!msg.spoiler && attachments.length > 0;
     // A reply quotes a message from this same conversation; anything else is ignored.
     const replyId = parseInt(msg.replyTo, 10);
@@ -142,7 +152,7 @@ const ops = {
     // Everyone else with no tab open gets a push (P2-18b), unless they muted it.
     // A group's says which group: "Gourd Club" / "sandy: …".
     for (const p of db.participantsOf(conversationId)) {
-      if (p.userId === userId || p.muted) continue;
+      if (p.userId === userId || p.muted || db.isBlocked(p.userId, userId)) continue; // P9-07a: not from someone they blocked
       const group = conv.kind === 'group';
       const body = push.preview(content, attachments);
       push.notifyIfAway(p.userId, {
@@ -280,6 +290,7 @@ const ops = {
     }
     const frame = JSON.stringify({ type: 'dm_typing', from: from.username, conversation: conversationId });
     for (const id of targets) {
+      if (db.isBlocked(id, userId)) continue; // P9-07a: no typing from someone they blocked
       for (const s of userClients[id] || []) {
         const looking = (conversationId && s.dmConversation === conversationId) || (pair && s.dmFocus === from.username);
         if (s.readyState === WebSocket.OPEN && looking) s.send(frame);

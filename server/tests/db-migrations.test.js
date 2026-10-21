@@ -31,7 +31,7 @@ test('a fresh database ends at the latest version with the hot-path indexes', ()
   const db = bootDb(':memory:');
   expect(LATEST_VERSION).toBe(MIGRATIONS[MIGRATIONS.length - 1].version);
   expect(db.raw.pragma('user_version', { simple: true })).toBe(LATEST_VERSION);
-  expect(indexNames(db.raw).sort()).toEqual(['idx_categories_space', 'idx_dm_conversation', 'idx_dm_pair', 'idx_dm_participants_user', 'idx_imagine_jobs_message', 'idx_imagine_jobs_user', 'idx_member_roles_member', 'idx_mentions_user', 'idx_messages_channel', 'idx_pins_channel', 'idx_push_user', 'idx_roles_space', 'idx_thread_follows_channel', 'idx_threads_parent', 'idx_threads_root']);
+  expect(indexNames(db.raw).sort()).toEqual(['idx_categories_space', 'idx_dm_conversation', 'idx_dm_pair', 'idx_dm_participants_user', 'idx_imagine_jobs_message', 'idx_imagine_jobs_user', 'idx_member_roles_member', 'idx_mentions_user', 'idx_messages_channel', 'idx_pins_channel', 'idx_push_user', 'idx_roles_space', 'idx_thread_follows_channel', 'idx_threads_parent', 'idx_threads_root', 'idx_user_blocks_blocked']);
 });
 
 test('connection pragmas: busy_timeout 5000, synchronous NORMAL, foreign keys on', () => {
@@ -173,7 +173,7 @@ test('P9-06a (v30): each DM pair becomes one conversation with its two people, r
   `).all(u, u, u, u, u, u);
   const before = [a, b, c].map(oldUnread);
 
-  runMigrations(raw);
+  runMigrations(raw, MIGRATIONS.filter((m) => m.version <= 30));
   expect(raw.pragma('user_version', { simple: true })).toBe(30);
   const convs = raw.prepare('SELECT id, kind, pair_key AS pairKey, created_at AS createdAt FROM dm_conversations ORDER BY id').all();
   expect(convs.map((x) => [x.kind, x.pairKey, x.createdAt])).toEqual([['pair', `${a}:${b}`, 100], ['pair', `${a}:${c}`, 150], ['pair', `${b}:${c}`, 400]]);
