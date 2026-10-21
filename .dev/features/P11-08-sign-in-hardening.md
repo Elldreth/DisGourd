@@ -2,9 +2,9 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY
+- **State:** READY (build order 4 in P11-00; start only when the owner says so)
 - **Effort:** S–M
-- **Depends on:** none (soft: P11-05, so the IP used for limits can be trusted)
+- **Depends on:** none. Behind the tunnel, the last X-Forwarded-For hop is Cloudflare's view of the visitor, so the per-IP part works today. P11-05 makes it airtight.
 - **Serialize with:** P11-03 if it changes `auth/rateLimit.js`. Whichever goes second rebases.
 - **Requirement Source:** P11-00 finding M3.
 
@@ -14,6 +14,8 @@
 - The limiter map only drops expired buckets (`server/auth/rateLimit.js:15-17`), so a flood of new keys grows it.
 
 ## Scope
+- **Why it's early in the order:** with registration closed, sign-in is the one thing a stranger on the internet can reach. SWAG's fail2ban is no longer in the path. Until this lands, the Cloudflare rate-limit rule in P11-00 ("Cloudflare settings to do now") is the stopgap.
+- **IPv6 is common through Cloudflare:** `CF-Connecting-IP` is often an IPv6 address, so the /64 keying below matters.
 - **Per account:** count failed logins per username (lower-cased), whatever the IP. After 10 failures in 15 minutes, refuse that username for 15 minutes with the same 429 text as today; a success resets the count. Unknown usernames are counted too, so the answer never reveals whether the account exists.
 - **IPv6:** key rate limits by the /64.
 - **Bounded limiter:** cap the map at, say, 50,000 keys. When full, evict the oldest; never grow past the cap.

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY
+- **State:** READY (build order 3 in P11-00; start only when the owner says so)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** P11-07 and P11-09 (`server/gateway/index.js`, `router.js`, `dm.js`). This goes first.

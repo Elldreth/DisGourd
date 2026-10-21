@@ -2,12 +2,14 @@
 
 - **Unit Type:** Container (security review + child packets)
 - **Phase:** 11 (security)
-- **State:** REVIEW (the findings and plan, for the owner to read; no app code changed)
+- **State:** COMPLETE as a review (merged in #210; the owner agreed with the assessment). Its children are the plan; the build order is in "Plan: the order to build in", updated for the deployment as built.
 - **Effort:** L in total (children S–M each)
 - **Depends on:** main at 92f7178 (after #208)
 - **Requirement Source:** the owner, relayed 2026-10-20: DisGourd is moving from the Unraid box (behind SWAG, closed registration) to a cloud host, "so it must be safe on the open internet". Review first, then a prioritized plan; this unit changes no app code.
 
 ## The short version
+> **Update 2026-10-21:** DisGourd now runs on the Unraid box behind a Cloudflare Tunnel, with no open ports. See "Deployment as built" for what that already covers, and "Plan: the order to build in" for the order, starting with P11-10.
+
 - **Nothing Critical can be used against today's instance.** It already has accounts, and registration is closed.
 - **One thing becomes Critical on move day:** a new, empty instance gives site admin to whoever registers first, even with `REGISTRATION_MODE=closed` (C1). If the cloud box starts empty, fix that first (P11-01), or copy the existing `/config` over before the port opens.
 - **Three High issues** should be fixed before the instance goes public:
@@ -239,38 +241,75 @@ The hosting session is weighing two setups. **A, a VPS:** the existing image, Cl
 - `ports: 3000:3000` stays LAN-only. Never forward it at the router.
 - The uploads share should be its own folder, not a parent of other media.
 
-## Plan: children in priority order
-**Before the instance goes public:** P11-01 to P11-05, plus P11-10 (push endpoints reach the home LAN or tailnet in both setups). **Before inviting anyone outside the current group:** P11-06 to P11-09 and P11-14. The rest soon after.
+## Deployment as built (2026-10-21)
+The owner deployed on the Unraid box, not a VPS (reported by the hosting session after #210 merged). This is the setup the packets now target; the VPS notes above stay for reference.
 
-| ID | Fixes | Title | Size | State |
-|---|---|---|---|---|
-| P11-01 | C1 | First-run setup code; safe `SITE_ADMINS` | S | READY |
-| P11-02 | H1 | Role hierarchy on the legacy member-tier route | S | READY |
-| P11-03 | H2 | Gateway abuse limits: `read` checks, per-user op rate limits, socket cap, search limit | M | READY |
-| P11-04 | H2, M4 | Upload quotas, cleanup with their messages, sandboxed serving | M | READY |
-| P11-05 | H3, L8, L10 | Cloud deployment: trusted proxies, no public app port, proxy sample, container hardening | S–M | READY |
-| P11-06 | M1 | Security headers, CSP and same-origin CORS | S–M | READY |
-| P11-07 | M2 | Session tokens out of URLs (first-frame socket auth) | S–M | PLANNED (after P11-03: both touch `gateway/index.js`) |
-| P11-08 | M3 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common-password list | S–M | READY |
-| P11-09 | M7, M9 | Instance safety: suspend accounts; who can DM me | M | PLANNED (after P11-03 and P11-07: gateway and token checks) |
-| P11-10 | M5, M10 | Outbound requests: ComfyUI metadata block and tunnel docs; push endpoint vetting | S | READY |
-| P11-11 | M8 | Voice: TURN credentials from the server, relay-only option, honour forced mute | M | READY |
-| P11-12 | M6 | Case-insensitive usernames (migration with collision check) | S–M | PLANNED (after P11-01) |
-| P11-13 | L1–L7, L9 | Low-severity sweep | S–M | PLANNED (last: it touches files from several others) |
-| P11-14 | Secrets at rest (Hosting setups) | Secrets from the environment: VAPID env vars, saved kie.ai key warning, backup and restore docs | S | READY |
+- **Front door: a Cloudflare Tunnel.**
+  - `cloudflare/cloudflared:latest` runs on the `proxynet` Docker network (`tunnel run`, `TUNNEL_TOKEN` and `NO_AUTOUPDATE=true` from the environment).
+  - Two public hostnames: `disgourd.<domain>` → `http://disgourd:3000` and an audiobookshelf hostname.
+  - SWAG is no longer in the path, so there's no nginx real-IP module, no proxy body limit and no fail2ban. DisGourd's direct peer is the cloudflared container.
+- **DNS and the router:** only those two proxied CNAMEs exist; the DuckDNS, wildcard, root and Matrix records are gone. Every router port forward is removed except Plex 32400 (kept on purpose). Checked from the LAN: only 32400 answers.
+- **The DisGourd container:**
+  - Built from `/mnt/user/appdata/disgourd-src` (main) with `DOCKER_BUILDKIT=0 docker build`; the compose file is in `/mnt/user/appdata/disgourd-stack/`.
+  - It runs as `99:100` with `cap_drop: [ALL]` and `no-new-privileges`, on `proxynet` only, with **no published ports**.
+  - Environment: `TRUST_PROXY=1`, `SITE_ADMINS=elldreth`, `REGISTRATION_MODE=closed`. `JWT_SECRET` isn't set, so `/config/.jwt-secret` is used; VAPID is in `/config/.vapid.json`.
+  - DB on the cache drive (`/config`), uploads on the array.
+- **Updates:** an Unraid User Script runs `git pull --ff-only`, builds, stops, copies the DB, runs `compose up`, and checks health.
+
+**What this changes, finding by finding:**
+| Finding | Status in this deployment | Still to do |
+|---|---|---|
+| C1 (first account) | **Not reachable.** The DB has accounts. | P11-01 still matters for any fresh install (a rebuild from an empty volume, or a second instance), but it's no longer urgent here. |
+| H3 (public port, spoofable X-Forwarded-For) | **Mostly closed.** No published port, no router forward, origin reachable only through the tunnel. | With `TRUST_PROXY=1`, the app trusts X-Forwarded-For from *any* peer, and every container on `proxynet` (audiobookshelf, SWAG if still running, anything added later) can reach `disgourd:3000` and send any header. Cloudflare appends the visitor's address to X-Forwarded-For, so the last-hop rule probably already sees the right IP through cloudflared. **Check it on the live box** (P11-05 AC). The repo's `docker-compose.yml` still publishes 3000 for other installs. P11-05 narrows the trust to cloudflared. |
+| L8 (container hardening) | **Partly done:** 99:100, `cap_drop: [ALL]`, `no-new-privileges`, no ports, one network, two mounts. | `read_only: true` + tmpfs `/tmp`; pin the `cloudflared` and `node` images to versions; a `DOCKER-USER` rule so the container can't reach the LAN (router, Unraid UI, SMB) except ComfyUI:8188. |
+| Origin lock (Hosting setups) | **Done** by the tunnel: there's no origin port to hit. | Nothing. |
+| Upload limits | No proxy limit now. Cloudflare's free plan still refuses bodies over 100 MB at the edge. | Keep `MAX_UPLOAD_BYTES` (25 MB default) at or under 100 MB (README note in P11-05). |
+| M2 (tokens in URLs) | No SWAG access log now. cloudflared doesn't log request URLs at its default level; Cloudflare terminates TLS, so it sees them either way. | Lower urgency; P11-07 stays, later in the order. |
+| M4 (uploads outlive deletion) | **Worse behind Cloudflare.** Cloudflare caches `.jpg`, `.png`, `.mp4` and similar by default. `/uploads` says `public, max-age=31536000, immutable`, so deleted or private images can be served from Cloudflare's edge for a long time. | P11-04 switches to `private` caching. Until then, a Cloudflare Cache Rule: bypass cache for `/uploads/*` (see "Cloudflare settings to do now"). |
+| M8 (voice IPs) | Unchanged: STUN-only mesh. TURN can't run through the tunnel (it's UDP); it would need router port forwards, which undoes the "no open ports" setup. | P11-11 now recommends a hosted TURN (for example Cloudflare's TURN service) over self-hosted coturn at home. |
+| Secrets (P11-14) | JWT and VAPID live only as files in `/config`, which sits on the cache drive with nightly backups next to it, all on the same box. | P11-14, plus an off-box copy of `/config` (including `.jwt-secret` and `.vapid.json`). |
+
+**Cloudflare settings to do now (dashboard, no code):**
+- **A rate-limiting rule** (the free plan allows one): requests to `/login` or `/register`, more than 10 per minute from one IP → block for 10 minutes. This covers the gap until P11-08 adds per-account limits.
+- **A Cache Rule:** `/uploads/*` → bypass cache (until P11-04 lands, then it can stay).
+- **SSL/TLS:** Always Use HTTPS on; minimum TLS 1.2; HSTS on (max-age 6 months to start, no preload). With no proxy of its own, P11-06 relies on Cloudflare for HSTS.
+- **Leave WebSockets on** (the default; `/gateway` needs it).
+- **Bot Fight Mode:** test it before leaving it on. It can challenge the app's API calls and the socket.
+
+## Plan: the order to build in
+The instance is already public, so this is the order to build in, starting now. **P11-10's push endpoint allowlist is first: it's the go-live blocker** (on the home LAN, it's the one server-side request a member can point at the router, the Unraid UI or SMB). The rest follow in this order, one PR each, starting only when the owner says so.
+
+| Order | ID | Fixes | Title | Size | State |
+|---|---|---|---|---|---|
+| 1 | P11-10 | M10 (High at home), M5 | **Push endpoint allowlist** (go-live blocker); ComfyUI metadata block | S | READY |
+| 2 | P11-02 | H1 | Role hierarchy on the legacy member-tier route | S | READY |
+| 3 | P11-03 | H2 | Gateway abuse limits: `read` checks, per-user op rate limits, socket cap, search limit | M | READY |
+| 4 | P11-08 | M3 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (the one thing reachable without an account) | S–M | READY |
+| 5 | P11-05 | H3 (rest), L8, L10 | Trust only cloudflared; read-only root; LAN egress rule; pinned images; a tunnel compose sample | S–M | READY |
+| 6 | P11-04 | H2, M4 | Upload quotas, cleanup with their messages, private caching (Cloudflare edge) | M | READY |
+| 7 | P11-06 | M1 | Security headers, CSP and same-origin CORS (HSTS from Cloudflare) | S–M | READY |
+| 8 | P11-14 | Secrets | VAPID and other secrets from the environment; off-box backup of `/config` | S | READY |
+| 9 | P11-01 | C1 | First-run setup code; safe `SITE_ADMINS` (for fresh installs) | S | READY |
+| 10 | P11-07 | M2 | Session tokens out of URLs | S–M | PLANNED (after P11-03) |
+| 11 | P11-09 | M7, M9 | Instance safety: suspend accounts; who can DM me | M | PLANNED (after P11-03 and P11-07) |
+| 12 | P11-12 | M6 | Case-insensitive usernames | S–M | PLANNED (after P11-01) |
+| 13 | P11-11 | M8 | Voice: TURN from the server (hosted TURN), relay-only option, honour forced mute | M | READY (owner decision 3) |
+| 14 | P11-13 | L1–L7, L9 | Low-severity sweep | S–M | PLANNED (last) |
+
+"READY" means its dependencies are met. Nothing starts until the owner says so.
 
 ## Serialize
 - P11-03, P11-07 and P11-09 all touch `server/gateway/` (`index.js`, `router.js`, `dm.js`). Do them in that order.
 - P11-01 and P11-12 both touch registration and username lookups. P11-01 goes first.
-- P11-05 and P11-06 both touch the proxy sample. P11-05 writes it, and P11-06 adds the header lines.
+- P11-03 and P11-08 can both change `server/auth/rateLimit.js`. Whichever goes second rebases.
 - P11-14 goes before P11-13 (both touch `backup.js` and the README's backup section).
 - P11-13 goes last.
 
 ## Owner decisions
-1. **Move-day path:** VPS (A) or the Unraid box (B)? For A: copy the existing `/config` (DB, `.jwt-secret`, `.vapid.json`) to the VPS, or start empty? Copying avoids C1 on day one, and push subscriptions keep working only if `.vapid.json` moves too. For B: the data stays, so C1 doesn't apply. The "Hosting setups" section matters more, though (LAN egress, origin lock, real IP).
+1. **Move-day path: decided.** The Unraid box with a Cloudflare Tunnel (see "Deployment as built"). For the record, the question was: VPS (A) or the Unraid box (B)? For A: copy the existing `/config` (DB, `.jwt-secret`, `.vapid.json`) to the VPS, or start empty? Copying avoids C1 on day one, and push subscriptions keep working only if `.vapid.json` moves too. For B: the data stays, so C1 doesn't apply. The "Hosting setups" section matters more, though (LAN egress, origin lock, real IP).
 2. **DM default (P11-09):** recommended "friends and people I share a server with".
-3. **Voice (P11-11):** run coturn on the cloud box (more bandwidth on every call), or keep STUN only and accept IP exposure among people in a call? Recommended: TURN available, relay-only off by default, on for a public instance.
-4. **Registration on the cloud:** recommended `code` (per-person codes with a use limit), never `open`.
+3. **Voice (P11-11):** use a hosted TURN service (nothing opened at home), or keep STUN only and accept IP exposure among people in a call? Self-hosted coturn at home would need router port forwards again. Recommended: hosted TURN, relay-only off by default.
+4. **Registration:** it's `closed` today. If it opens up, use `code` (per-person codes with a use limit), never `open`.
 
 ## Verification Evidence
 | Item | Status | Evidence |

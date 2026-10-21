@@ -1,52 +1,70 @@
-# P11-05 — Cloud deployment: trusted proxies, no public app port, proxy sample, container hardening
+# P11-05 — Behind the Cloudflare Tunnel: trust only cloudflared, read-only root, LAN egress rule, pinned images
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY
+- **State:** READY (build order 5 in P11-00; start only when the owner says so)
 - **Effort:** S–M
-- **Depends on:** none. The host choice (the other session's research) only changes the sample's comments, not the code.
-- **Serialize with:** P11-06 (it adds header lines to the proxy sample written here)
-- **Requirement Source:** P11-00 findings H3, L8, L10.
+- **Depends on:** none
+- **Serialize with:** P11-06 (both touch the deploy docs). P11-08 if it changes `auth/rateLimit.js` first.
+- **Requirement Source:** P11-00 findings H3 (the part left after the tunnel), L8, L10, and "Deployment as built (2026-10-21)".
 
-## Problem
-- `docker-compose.yml:46` publishes `3000:3000` on every interface, and `:30` sets `TRUST_PROXY=1`. On a cloud VM, Docker's port rules skip ufw and firewalld, so `:3000` is open to the internet over plain HTTP.
-- `server/auth/rateLimit.js:29-38` trusts `X-Forwarded-For` from any peer when TRUST_PROXY is on. Sending a new header each time skips the login and registration limits.
-- `server/static.js:38` trusts `X-Forwarded-Host` / `-Proto` without TRUST_PROXY.
+## Where things stand (the live Unraid deployment)
+**Already done by the deployment:**
+- The Cloudflare Tunnel (`cloudflared` on `proxynet`) is the only way in. No published ports, no router forwards for DisGourd, and no DuckDNS. Locking the origin to Cloudflare is done.
+- The container runs as `99:100` with `cap_drop: [ALL]` and `no-new-privileges`, on one network, with two mounts (`/config`, `/uploads`), no `privileged` and no host network.
+
+**Still to do (this packet):**
+1. **Trust only cloudflared.** `TRUST_PROXY=1` makes `clientIp` (`server/auth/rateLimit.js:29-38`) trust `X-Forwarded-For` from *any* peer.
+   - Every container on `proxynet` (audiobookshelf, SWAG if it still runs, anything added later) can reach `disgourd:3000` and send any `X-Forwarded-For` or `CF-Connecting-IP`.
+   - `server/static.js:38` trusts `X-Forwarded-Host` / `-Proto` even without TRUST_PROXY.
+2. **Check the client IP the app sees through the tunnel.** Cloudflare appends the visitor's address to `X-Forwarded-For` and sets `CF-Connecting-IP` to it, so the last-hop rule is probably right today. It hasn't been checked on the live box, though, and it's what every rate limit rests on.
+3. **`read_only: true`** + tmpfs `/tmp` on the DisGourd container.
+4. **A LAN egress rule.** A compromised container can reach the router, the Unraid UI and SMB. Only ComfyUI:8188 (and DNS) should be reachable.
+5. **Pinned images.** `cloudflare/cloudflared:latest` and `node:22-bookworm-slim` move under you; pin versions and update on purpose.
+6. **Repo samples.** The repo's `docker-compose.yml` still publishes `3000:3000` with `TRUST_PROXY=1` (fine on a LAN, wrong anywhere public), and there's no sample of the tunnel setup that's actually running.
 
 ## Scope
-- **`TRUSTED_PROXIES`:** a comma-separated list of CIDRs; `TRUST_PROXY=1` keeps working and means loopback plus the private ranges.
-  - `clientIp` uses `X-Forwarded-For` only when `req.socket.remoteAddress` is in the list. It then walks the hops from the right and takes the first that isn't a trusted proxy.
-  - `originFor` reads `X-Forwarded-*` only from a trusted peer.
-- **`deploy/cloud/`:**
-  - **`docker-compose.yml`:** the app with no `ports:`, or `127.0.0.1:3000:3000` with a comment. Also `read_only: true` with tmpfs `/tmp`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, `restart: unless-stopped`, log rotation (`max-size`), and a reverse proxy service (Caddy recommended for automatic TLS; an nginx variant is fine).
-  - **`Caddyfile`** (or nginx conf):
-    - TLS, HSTS (`max-age=31536000; includeSubDomains`), and WebSocket pass-through.
-    - `client_max_body_size` or `request_body max` matching `MAX_UPLOAD_BYTES`.
-    - A per-IP connection and request limit.
-    - Access logs that drop the query string (`/gateway?token=` until P11-07 lands).
-  - **`README.md`:** a firewall checklist (only 22, 80 and 443 open; SSH by key), how to copy `/config` from the Unraid box (DB, `.jwt-secret`, `.vapid.json`, backups), `REGISTRATION_MODE=code`, `KIEAI_API_KEY` in the environment rather than the app, and ComfyUI over a tunnel (P11-10).
-- **The existing Unraid compose file** (setup B, the home server):
-  - A comment on the `ports:` line: "LAN only; never forward it at the router".
-  - Add `read_only: true` + tmpfs `/tmp`, `cap_drop: [ALL]` and `no-new-privileges`. Keep `user: 99:100`, the two mounts, and the bridge network (no `privileged`, no `network_mode: host`).
-- **Behind Cloudflare** (both setups; see P11-00 "Hosting setups"):
-  - The proxy samples restore the real client IP from `CF-Connecting-IP` only for requests from Cloudflare's published ranges: the nginx real-IP module for SWAG (or linuxserver's `swag-cloudflare-real-ip` mod), and `trusted_proxies cloudflare` + `client_ip_headers CF-Connecting-IP` for Caddy.
-  - The app never reads `CF-Connecting-IP` itself.
-  - The README explains locking the origin: allow 443 only from Cloudflare's ranges at the router or host firewall, or use a Cloudflare Tunnel with no inbound port. It also says that DuckDNS means no Cloudflare in front.
-- **Upload limits line up:** the proxy body limit equals `MAX_UPLOAD_BYTES` (both samples, including the SWAG one, which says `client_max_body_size 0` today). The README says to keep it at or under 100 MB behind Cloudflare's free plan.
-- **LAN egress (setup B):** a README section with a `DOCKER-USER` iptables rule (or a VLAN or custom network) that drops traffic from DisGourd's Docker network to the LAN, except the ComfyUI host:8188 and DNS. So even a compromised container can't reach the router, the Unraid UI or SMB. In setup A, the Tailscale ACL in P11-10 does this job.
-- **Dockerfile:** pin the runtime base by digest, with a comment on how to update it. Add `**/.vapid.json` to `.dockerignore`.
+- **`TRUSTED_PROXIES`:** a comma-separated list of CIDRs. `TRUST_PROXY=1` keeps working (loopback plus the private ranges) but logs a one-time hint to set `TRUSTED_PROXIES`.
+  - `clientIp` reads forwarding headers only when `req.socket.remoteAddress` is in the list.
+  - **`CLIENT_IP_HEADER=cf-connecting-ip`:** when set and the peer is trusted, the address is that header (a single value Cloudflare sets and a visitor can't). Otherwise it's the right-most `X-Forwarded-For` hop that isn't a trusted proxy.
+  - `originFor` reads `X-Forwarded-Host` / `-Proto` only from a trusted peer.
+- **A network only cloudflared shares:**
+  - Put DisGourd on its own Docker network (for example `disgourd-edge`, a fixed subnet such as `172.30.80.0/24`). Only `cloudflared` joins it as well; cloudflared stays on `proxynet` for audiobookshelf.
+  - Set `TRUSTED_PROXIES` to that subnet.
+  - Then no other container can reach `disgourd:3000` at all. In the tunnel's public hostname, `http://disgourd:3000` keeps working, because cloudflared resolves it on the shared network.
+- **A site-admin check:** `GET /admin/client-ip` returns `{ ip, peer, via: 'cf-connecting-ip' | 'x-forwarded-for' | 'socket', trusted }`, for checking the live setup from a phone on mobile data. Site admins only. Add it to `web/devProxy.js`.
+- **`deploy/unraid-tunnel/`** (new; mirrors the live setup, no secrets):
+  - **`docker-compose.yml`:**
+    - `disgourd`: `user: 99:100`, `read_only: true`, `tmpfs: [/tmp]`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, no `ports:`, the `disgourd-edge` network, the two volumes, log rotation (`max-size: 10m`), and the env `TRUSTED_PROXIES` + `CLIENT_IP_HEADER=cf-connecting-ip` + `REGISTRATION_MODE=closed`.
+    - `cloudflared`: a pinned version tag, `tunnel run`, `TUNNEL_TOKEN` from an env file, `NO_AUTOUPDATE=true`, and both networks.
+  - **`README.md`:**
+    - The Cloudflare public hostname (`http://disgourd:3000`) and the dashboard settings from P11-00 ("Cloudflare settings to do now": the login rate-limit rule, the `/uploads/*` cache bypass, HTTPS and HSTS, leaving WebSockets on).
+    - Building with `DOCKER_BUILDKIT=0 docker build` (Unraid's buildx is too old for `compose --build`).
+    - Upload limits: no proxy body limit; Cloudflare refuses bodies over 100 MB on the free plan, so keep `MAX_UPLOAD_BYTES` at or under that (25 MB default).
+    - How to update the pinned images.
+  - **`update.sh`:** the owner's User Script, cleaned up (git pull `--ff-only`, build, stop, copy the DB, up, wait for healthy, roll back to the previous image tag if the check fails). Optional: include it only if the owner shares it.
+- **The LAN egress rule** (in that README, as an Unraid User Script "At Startup of Array"):
+  - `iptables -I DOCKER-USER` rules for traffic from `disgourd-edge`: first `RETURN` for `ESTABLISHED,RELATED`, then `ACCEPT` to the ComfyUI host on tcp/8188 and to the router on 53, then `DROP` to the LAN subnet (for example `192.168.1.0/24`) and the other private ranges outside Docker's own.
+  - Traffic inside the `disgourd-edge` network and out to the internet stays allowed.
+  - The README says how to check it (below) and how to remove it.
+- **The repo's `docker-compose.yml`** (the old SWAG setup): comment it as the LAN/SWAG example, mark `ports:` "LAN only; never forward it at the router", and add `read_only` + tmpfs and `cap_drop`. `deploy/swag/` gets a note that the live setup uses the tunnel.
+- **Dockerfile:** pin the runtime base by digest, with a comment on updating it. `.dockerignore` adds `**/.vapid.json`.
 
 ## Acceptance criteria
-- [ ] AC-1: with `TRUSTED_PROXIES=10.0.0.0/8`, a request from 203.0.113.9 carrying `X-Forwarded-For: 1.2.3.4` is limited as 203.0.113.9; the same request from 10.0.0.2 is limited as 1.2.3.4.
-- [ ] AC-2: `TRUST_PROXY=1` alone still works behind SWAG (the existing tests and the Unraid setup are unchanged).
+- [ ] AC-1 (unit): with `TRUSTED_PROXIES=172.30.80.0/24` and `CLIENT_IP_HEADER=cf-connecting-ip`:
+  - A request from `172.30.80.5` with `CF-Connecting-IP: 198.51.100.7` is limited as 198.51.100.7.
+  - The same headers from `172.18.0.9` (another container) are limited as 172.18.0.9.
+  - Without `CLIENT_IP_HEADER`, the right-most untrusted X-Forwarded-For hop is used.
+- [ ] AC-2: `TRUST_PROXY=1` alone still behaves as today, and the existing tests pass.
 - [ ] AC-3: `X-Forwarded-Host` from an untrusted peer doesn't change the og:image origin.
-- [ ] AC-4: `docker compose -f deploy/cloud/docker-compose.yml config` validates. The container starts with `read_only` (the data folders are volumes, and nothing else is written). `deploy/docker-smoke.sh` passes against the pinned image.
-- [ ] AC-5: both suites pass.
-- [ ] AC-6: the SWAG sample's body limit matches `MAX_UPLOAD_BYTES`, and its real-IP lines trust only Cloudflare's ranges. A request that carries `CF-Connecting-IP` but doesn't come from Cloudflare keeps its own address (checked with `nginx -t` and a curl, or described step by step if no SWAG is at hand).
-- [ ] AC-7: the Unraid compose file still starts on the sandbox setup with `read_only` and `cap_drop` (`deploy/docker-smoke.sh` runs it as 99:100).
+- [ ] AC-4 (live, by the owner or the hosting session): `GET /admin/client-ip` from a phone on mobile data shows the phone's public IP, via `cf-connecting-ip`, `trusted: true`. From another container on `proxynet` (for example `docker exec audiobookshelf wget -qO- http://disgourd:3000/auth-info`), the connection fails once DisGourd is off `proxynet`.
+- [ ] AC-5 (live): DisGourd starts and runs with `read_only: true` (login, upload, a link preview, a backup). Inside the container, `node -e "fetch('http://<router-ip>').then(()=>console.log('open'),()=>console.log('blocked'))"` prints `blocked`, and the same for the ComfyUI host:8188 prints `open`.
+- [ ] AC-6: `docker compose -f deploy/unraid-tunnel/docker-compose.yml config` validates. `deploy/docker-smoke.sh` passes with `read_only` and the pinned image.
+- [ ] AC-7: both suites pass.
 
 ## Expected Areas of Change
-`server/auth/rateLimit.js`, `server/config.js`, `server/static.js`, `deploy/cloud/` (new), `docker-compose.yml` (comment), `Dockerfile`, `.dockerignore`, `README.md`, tests (`server/tests/clientIp.test.js` new, `static.test.js`).
+`server/auth/rateLimit.js`, `server/config.js`, `server/static.js`, `server/routes/admin.js` (client-ip), `web/devProxy.js`, `deploy/unraid-tunnel/` (new), `docker-compose.yml` (comments, hardening), `deploy/swag/` (a note), `Dockerfile`, `.dockerignore`, `README.md`, tests (`server/tests/clientIp.test.js` new, `static.test.js`, admin route test).
 
 ## Not in scope
-Choosing the host or the email provider. Terraform or other provisioning.
+- A VPS setup: the `deploy/cloud/` sample from the first plan is dropped while the tunnel setup is the one in use.
+- fail2ban: per-account limits (P11-08) and the Cloudflare rate-limit rule cover it.
