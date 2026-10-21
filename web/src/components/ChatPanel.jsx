@@ -11,6 +11,7 @@ import { notificationText } from '../notify.js';
 import { cooldownKey, useCooldown } from '../slowmode.js';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
+import NavButton from './NavButton.jsx';
 import EmptyState from './EmptyState.jsx';
 import DropOverlay from './DropOverlay.jsx';
 import { useFileDrop } from '../useFileDrop.js';
@@ -46,6 +47,7 @@ export default function ChatPanel({
   onTyping,
   onOpenSearch,
   onOpenNav,
+  navAlert = null, // P10-07: a dot on the ☰ (phones) when something waits elsewhere
   onOpenMembers,
   membersOpen = false,
   canPin = false,
@@ -160,6 +162,7 @@ export default function ChatPanel({
     return (
       <Empty
         onOpenNav={onOpenNav}
+        navAlert={navAlert}
         art="server"
         title={onAddServer ? 'You’re not in any servers yet' : 'No server selected'}
         body={onAddServer ? 'Create one for your friends, or join one with an invite.' : 'Pick a server on the left, or press + to create one and invite your friends.'}
@@ -189,6 +192,7 @@ export default function ChatPanel({
     return (
       <Empty
         onOpenNav={onOpenNav}
+        navAlert={navAlert}
         art="channel"
         title={`Welcome to ${space}`}
         body="Create a text channel with the + next to “Text channels” to start talking."
@@ -203,10 +207,10 @@ export default function ChatPanel({
     <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700" {...drop.dropProps}>
       {drop.dragging && <DropOverlay target={`#${channel}`} />}
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-xs shadow-black/20 md:px-4">
-        <IconButton
-          icon="menu"
+        <NavButton
           size={20}
           label="Channels"
+          alert={navAlert}
           onClick={onOpenNav}
           className="tap -ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         />
@@ -451,14 +455,14 @@ export default function ChatPanel({
   );
 }
 
-function Empty({ art, title, body, onOpenNav, children }) {
+function Empty({ art, title, body, onOpenNav, navAlert, children }) {
   return (
     <main className="anim-fade relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
       {onOpenNav && (
-        <IconButton
-          icon="menu"
+        <NavButton
           size={22}
           label="Channels"
+          alert={navAlert}
           onClick={onOpenNav}
           className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         />

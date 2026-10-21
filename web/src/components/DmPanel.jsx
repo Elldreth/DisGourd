@@ -7,6 +7,7 @@ import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import Icon from './Icon.jsx';
 import IconButton from './IconButton.jsx';
+import NavButton from './NavButton.jsx';
 import DropOverlay from './DropOverlay.jsx';
 import EmptyState from './EmptyState.jsx';
 import { useFileDrop } from '../useFileDrop.js';
@@ -26,7 +27,7 @@ function groupWho(conversation, myId) {
   return `${all.length < 2 ? all[0] : `${all.slice(0, -1).join(', ')} and ${all[all.length - 1]}`}.`;
 }
 
-export default function DmPanel({ conversationKey = '', conversation = null, title = '', myId = null, onAddPeople, onShowMembers, onMute, username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
+export default function DmPanel({ conversationKey = '', conversation = null, title = '', myId = null, onAddPeople, onShowMembers, onMute, username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage, navAlert = null }) {
   // The message being replied to ({ id, author }), cleared on send, Esc or switching conversation.
   const [replyingTo, setReplyingTo] = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -63,10 +64,10 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
     return (
       <main className="relative flex min-w-0 flex-1 flex-col items-center justify-center bg-ink-700 p-8 text-center">
         {onOpenNav && (
-          <IconButton
-            icon="menu"
+          <NavButton
             size={22}
             label="Conversations"
+            alert={navAlert}
             onClick={onOpenNav}
             className="absolute left-2 top-2 rounded-lg p-2 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
           />
@@ -86,10 +87,10 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
     <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ink-700" {...drop.dropProps}>
       {drop.dragging && <DropOverlay target={group ? name : `@${username}`} />}
       <header className="flex h-12 items-center gap-2 border-b border-ink-900/60 px-3 shadow-xs shadow-black/20 md:px-4">
-        <IconButton
-          icon="menu"
+        <NavButton
           size={20}
           label="Conversations"
+          alert={navAlert}
           onClick={onOpenNav}
           className="-ml-1 rounded-lg p-1.5 text-gray-300 transition hover:bg-ink-600 hover:text-fg md:hidden"
         />
