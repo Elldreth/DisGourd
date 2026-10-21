@@ -188,3 +188,32 @@ test('without an invite there is no link, message or note', async () => {
   expect(screen.queryByText(/never expire/)).toBeNull();
   expect(screen.getByRole('button', { name: 'Open DisGourd' })).toBeTruthy();
 });
+
+// P11-01: an empty server needs its one-time setup code for the first account.
+test('asks for the setup code when the server says so, and sends it', async () => {
+  render(<SetupWizard onAuthed={vi.fn()} needsCode />);
+  expect(screen.getByText(/server's log/i)).toBeTruthy();
+  type('Setup code', '  CODE-123456  ');
+  type('Admin username', 'sandy');
+  type('Email', 'sandy@example.test');
+  type('Password', 'sandbox-pass-123');
+  await submit('Create admin account');
+  expect(api.register).toHaveBeenCalledWith('sandy', 'sandbox-pass-123', 'sandy@example.test', undefined, 'CODE-123456');
+});
+
+test('no setup code field when the server doesn’t need one', () => {
+  render(<SetupWizard onAuthed={vi.fn()} />);
+  expect(screen.queryByLabelText(/^Setup code/)).toBeNull();
+});
+
+test('a wrong setup code shows the server’s message and stays on step 1', async () => {
+  api.register.mockRejectedValueOnce(new Error('This server needs its setup code to create the first account.'));
+  render(<SetupWizard onAuthed={vi.fn()} needsCode />);
+  type('Setup code', 'nope');
+  type('Admin username', 'sandy');
+  type('Email', 'sandy@example.test');
+  type('Password', 'sandbox-pass-123');
+  await submit('Create admin account');
+  expect(screen.getByRole('alert').textContent).toMatch(/setup code/);
+  expect(screen.getByText(/Step 1 of 4/)).toBeTruthy();
+});

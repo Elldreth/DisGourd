@@ -58,6 +58,13 @@ server, a short **setup wizard** appears: create the first account — it become
 the **owner and site admin** — and optionally name your first community. After
 that, everyone else uses the normal sign-in screen.
 
+The wizard asks for a **setup code** first. The server prints it when it
+starts with no accounts (`First run: … Your setup code is …`; with Docker,
+`docker logs disgourd`) and saves it in `.setup-code` next to the database
+(`server/` locally, `/config` in Docker). That way nobody who finds a fresh
+server before you can make themselves its admin. The code is deleted once the
+first account exists. Set `SETUP_CODE` to choose your own.
+
 On first run the server also generates a strong secret key automatically (saved
 to `server/.jwt-secret`), so there's nothing to configure to get going.
 Registration is **open** by default (so you can create that first account); lock
@@ -175,7 +182,8 @@ All settings are optional and provided via environment variables (or
 | `REGISTRATION_MODE`| `open`                   | Initial mode: `open`, `code`, or `closed`. Seeds the setting on first run; after that, site admins change it in-app |
 | `REGISTRATION_CODE`| _(none)_                 | An optional always-valid shared code (in addition to any codes minted in-app) |
 | `MAX_ACCOUNTS`     | `0` (unlimited)          | Cap on the total number of accounts                |
-| `SITE_ADMINS`      | _(none)_                 | Comma-separated usernames to make site admins (e.g. `alice,bob`)   |
+| `SITE_ADMINS`      | _(none)_                 | Comma-separated usernames to make site admins (e.g. `alice,bob`). Each name is applied once: an account that exists then is promoted; a name nobody has yet is never promoted later (make them admin in Settings instead), and someone demoted in the app stays demoted |
+| `SETUP_CODE`       | auto-generated           | The one-time code the setup wizard asks for on an empty server. Generated into `.setup-code` next to the database if not set |
 | `TRUST_PROXY`      | _(off)_                  | Set to `1` behind a reverse proxy so rate limits use the client IP from `X-Forwarded-For` (last hop). Leave off when clients connect directly |
 | `BACKUP_DIR`       | `backups/` next to the database | Where automatic database backups go. Set to `off` to disable them |
 | `BACKUP_INTERVAL_HOURS` | `24`                | How often to take a backup                         |

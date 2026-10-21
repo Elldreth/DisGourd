@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 1, the go-live blocker; the owner said go on 2026-10-21)
+- **State:** COMPLETE (merged in #214)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** none

@@ -12,7 +12,7 @@ if (dataProblem) {
   throw new Error('DisGourd cannot write to its data folders');
 }
 const db = require('./db');
-const { config, registrationMode, isWeakSecret, resolveJwtSecret } = require('./config');
+const { config, registrationMode, isWeakSecret, resolveJwtSecret, ensureSetupCode, SETUP_CODE_FILE } = require('./config');
 const { clientIp } = require('./auth/rateLimit');
 const { MAX_WS_PAYLOAD_BYTES } = require('./http/util');
 const { handleHttp, handleHttpError } = require('./http/handler');
@@ -43,6 +43,12 @@ if (require.main === module) {
     console.log(`  → Open http://localhost:${config.port} in your browser\n`);
     const reg = registrationMode();
     console.log(`  Registration: ${reg}${reg === 'code' ? ' (a code is required — manage them in Settings)' : ''}${config.maxAccounts ? ` · max ${config.maxAccounts} accounts` : ''}`);
+    // P11-01: an empty instance needs this code for its first account.
+    const setupCode = ensureSetupCode();
+    if (setupCode) {
+      console.log(`  First run: no accounts yet. Your setup code is  ${setupCode}`);
+      console.log(`  (the setup screen asks for it; ${process.env.SETUP_CODE ? 'from SETUP_CODE' : `also in ${SETUP_CODE_FILE}`})`);
+    }
     console.log('');
     if (!hasBuild) {
       console.log('  Note: the web client is not built yet. Run `npm run build` (or `npm run dev`');

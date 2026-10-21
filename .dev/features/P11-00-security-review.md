@@ -285,6 +285,7 @@ The owner deployed on the Unraid box, not a VPS (reported by the hosting session
 - Check that `/auth-info` now says `"setup":false`.
 - Remove the temporary port, then start `cloudflared`.
 - Every future reset to an empty volume needs the same step until P11-01 lands.
+- **Once P11-01 is deployed:** the server refuses the first account without its one-time setup code. Step 0 becomes: start the container, read the code from `docker logs disgourd` (or `/config/.setup-code`), open the site, and enter it in the wizard.
 
 Then the code, in this order. **P11-10's push endpoint allowlist is first: it's the go-live blocker** (on the home LAN, it's the one server-side request a member can point at the router, the Unraid UI or SMB). The rest follow in this order, one PR each, starting only when the owner says so.
 

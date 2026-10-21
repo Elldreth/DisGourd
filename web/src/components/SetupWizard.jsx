@@ -29,7 +29,8 @@ const MODES = [
 
 const STEPS = 4;
 
-export default function SetupWizard({ onAuthed }) {
+// `needsCode` (P11-01): the server wants its one-time setup code for the first account.
+export default function SetupWizard({ onAuthed, needsCode = false }) {
   const [step, setStep] = useState(1);
   const [token, setTokenState] = useState('');
   const [reg, setReg] = useState(null); // { mode, envCodeActive } as the server had it
@@ -62,6 +63,7 @@ export default function SetupWizard({ onAuthed }) {
       </p>
       {step === 1 && (
         <AccountStep
+          needsCode={needsCode}
           onDone={async (tok) => {
             setTokenState(tok);
             const r = await api.getAdminRegistration().catch(() => ({ mode: 'open' }));
@@ -125,7 +127,8 @@ function useStepAction() {
   return { busy, error, run };
 }
 
-function AccountStep({ onDone }) {
+function AccountStep({ onDone, needsCode }) {
+  const [setupCode, setSetupCode] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -134,7 +137,9 @@ function AccountStep({ onDone }) {
   function submit(e) {
     e.preventDefault();
     run(async () => {
-      const res = await api.register(username.trim(), password, email.trim());
+      const res = needsCode
+        ? await api.register(username.trim(), password, email.trim(), undefined, setupCode.trim())
+        : await api.register(username.trim(), password, email.trim());
       api.setToken(res.token);
       await onDone(res.token);
     }, 'Could not create the account');
@@ -142,8 +147,18 @@ function AccountStep({ onDone }) {
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      {needsCode && (
+        <div>
+          <Field label="Setup code" hint="From the server">
+            <input autoFocus value={setupCode} onChange={(e) => setSetupCode(e.target.value)} className="input font-mono" autoComplete="off" spellCheck={false} aria-describedby="setup-code-help" />
+          </Field>
+          <p id="setup-code-help" className="mt-1 text-xs text-gray-500">
+            It's printed in the server's log when it starts, and saved in the <code>.setup-code</code> file next to the database.
+          </p>
+        </div>
+      )}
       <Field label="Admin username">
-        <input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} className="input" placeholder="your_name" autoComplete="username" />
+        <input autoFocus={!needsCode} value={username} onChange={(e) => setUsername(e.target.value)} className="input" placeholder="your_name" autoComplete="username" />
       </Field>
       <Field label="Email">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@example.com" autoComplete="email" />

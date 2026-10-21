@@ -545,7 +545,7 @@ export default function App() {
       );
     }
     return authInfo.setup ? (
-      <SetupWizard onAuthed={setToken} />
+      <SetupWizard onAuthed={setToken} needsCode={!!authInfo.setupCode} />
     ) : (
       <Login
         notice={signedOutNote}

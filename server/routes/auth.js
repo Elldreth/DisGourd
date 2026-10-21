@@ -1,6 +1,6 @@
 // Sign-up, sign-in and the current user's profile.
 const db = require('../db');
-const { config, registrationMode } = require('../config');
+const { config, registrationMode, checkSetupCode, clearSetupCode } = require('../config');
 const { generateSalt, hashPassword, verifyPassword } = require('../auth/passwords');
 const { createToken, authUserId, authPayload, TOKEN_TTL_SECONDS } = require('../auth/tokens');
 const { deviceLabel } = require('../auth/device');
@@ -45,7 +45,9 @@ const routes = [
       res.writeHead(200);
       // `setup` is true on a brand-new install (no accounts yet) — the client
       // shows a first-run wizard, and that first account becomes the site admin.
-      return res.end(JSON.stringify({ registration: registrationMode(), setup: db.countUsers() === 0 }));
+      // P11-01: `setupCode` says the wizard must ask for the one-time setup code.
+      const setup = db.countUsers() === 0;
+      return res.end(JSON.stringify({ registration: registrationMode(), setup, ...(setup && config.requireSetupCode ? { setupCode: true } : {}) }));
     },
   },
   {
@@ -56,11 +58,16 @@ const routes = [
           res.writeHead(429);
           return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
         }
-        const { username, password, email, code } = await getJsonBody(req);
+        const { username, password, email, code, setupCode } = await getJsonBody(req);
         // The very first account bootstraps the instance (and becomes site admin),
-        // so it's always allowed. After that, honor the registration mode.
+        // so the registration mode doesn't apply to it, but (P11-01) it needs
+        // the one-time setup code from the server's log or .setup-code file.
+        // After that, honor the registration mode.
         const firstAccount = db.countUsers() === 0;
         let usedCode = null;
+        if (firstAccount && config.requireSetupCode && !checkSetupCode(setupCode)) {
+          return sendJson(res, 403, { error: "This server needs its setup code to create the first account. It's in the server's log, or in the .setup-code file next to the database." });
+        }
         if (!firstAccount) {
           const mode = registrationMode();
           if (mode === 'closed') {
@@ -104,6 +111,7 @@ const routes = [
         if (created.error === 'code') return sendJson(res, 403, { error: 'A valid registration code is required to create an account.' });
         if (created.error === 'exists') return sendJson(res, 409, { error: 'User already exists' });
         const userId = created.userId;
+        if (firstAccount) clearSetupCode(); // P11-01: spent
         const token = signIn(req, userId, username);
         res.writeHead(201);
         return res.end(JSON.stringify({ token }));
