@@ -18,6 +18,7 @@ let signedIn = true;
 let smokeThread = null; // a thread summary on the smoke message, when a test wants one
 let spaces = []; // what getSpaces returns; createSpace adds to it
 vi.mock('./api.js', () => ({
+  getVoiceIce: vi.fn(async () => ({ iceServers: [{ urls: 'stun:stun.example.org' }], relayOnly: false, expiresAt: null })), // P11-11
   getToken: () => (signedIn ? 'token' : ''),
   decodeToken: (t) => (t ? { sub: 1, name: 'tester' } : null),
   setUnauthorizedHandler: () => {},

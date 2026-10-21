@@ -5,7 +5,8 @@ import { createVoiceController } from './voice.js';
 // connections that record what happens to them.
 let pcs;
 class FakePC {
-  constructor() {
+  constructor(config) {
+    this.config = config; // P11-11: ICE servers and transport policy
     this.closed = false;
     this.connectionState = 'new';
     pcs.push(this);
@@ -306,4 +307,75 @@ test('renaming the channel or the server moves the call along', async () => {
   expect(state.participants).toHaveLength(3);
   voice.rejoin();
   expect(sent.find((f) => f.op === 'voice_join')).toMatchObject({ space: 'Studio', channel: 'hangout' });
+});
+
+// ---- P11-11: ICE servers from the server, relay-only, forced mute ----
+const STUN_DEFAULT = [{ urls: 'stun:stun.l.google.com:19302' }];
+const TURN = { urls: ['turn:turn.example.org:3478'], username: 'u', credential: 'c' };
+
+function withIce(loadIce) {
+  voice.leave();
+  voice = createVoiceController({ send: (f) => sent.push(f), myId: 1, onChange: (s) => (state = s), loadIce });
+}
+
+test('with no ICE loader, links use plain STUN and no transport policy (as before)', async () => {
+  await inCallWithBob();
+  expect(pcs[0].config).toEqual({ iceServers: STUN_DEFAULT });
+});
+
+test('the server’s ICE servers are used; relay-only becomes iceTransportPolicy "relay"', async () => {
+  const loadIce = vi.fn(async () => ({ iceServers: [TURN], relayOnly: true, expiresAt: Date.now() + 3600e3 }));
+  withIce(loadIce);
+  await inCallWithBob();
+  expect(loadIce).toHaveBeenCalledTimes(1);
+  expect(pcs[0].config).toEqual({ iceServers: [TURN], iceTransportPolicy: 'relay' });
+});
+
+test('without relay-only, the relay is a fallback (no policy set)', async () => {
+  withIce(async () => ({ iceServers: [TURN], relayOnly: false, expiresAt: Date.now() + 3600e3 }));
+  await inCallWithBob();
+  expect(pcs[0].config).toEqual({ iceServers: [TURN] });
+});
+
+test('the answer is reused until it nearly expires, then fetched again', async () => {
+  const loadIce = vi.fn(async () => ({ iceServers: [TURN], relayOnly: false, expiresAt: Date.now() + 3600e3 }));
+  withIce(loadIce);
+  await voice.join('S', 'lounge');
+  voice.leave();
+  await voice.join('S', 'lounge');
+  expect(loadIce).toHaveBeenCalledTimes(1);
+  vi.advanceTimersByTime(3600e3);
+  voice.leave();
+  await voice.join('S', 'lounge');
+  expect(loadIce).toHaveBeenCalledTimes(2);
+});
+
+test('if the server can’t be asked, calls still work over STUN', async () => {
+  withIce(async () => {
+    throw new Error('offline');
+  });
+  await inCallWithBob();
+  expect(state.status).toBe('connected');
+  expect(pcs[0].config).toEqual({ iceServers: STUN_DEFAULT });
+});
+
+test('a peer the server marks as forced-muted is not played, until the mark clears', async () => {
+  const els = [];
+  vi.stubGlobal('Audio', class {
+    constructor() {
+      this.muted = false;
+      els.push(this);
+    }
+    play() {
+      return Promise.resolve();
+    }
+  });
+  await inCallWithBob();
+  const bobMic = { id: 'bob-mic', getAudioTracks: () => [{}] };
+  pcs[0].ontrack({ streams: [bobMic], track: { kind: 'audio' } });
+  expect(els[0].muted).toBe(false);
+  voice.handleState({ space: 'S', channel: 'lounge', participants: [{ userId: 1 }, { userId: 2, muted: true, forced: true }] });
+  expect(els[0].muted).toBe(true);
+  voice.handleState({ space: 'S', channel: 'lounge', participants: [{ userId: 1 }, { userId: 2, muted: true, forced: false }] });
+  expect(els[0].muted).toBe(false); // an ordinary mute is theirs to keep: nothing to hide
 });

@@ -1,0 +1,48 @@
+# coturn for DisGourd voice (P11-11), for installs that host their own TURN
+# relay (a VPS, say). Behind a Cloudflare Tunnel, use Cloudflare TURN instead
+# (README: "Voice behind TURN"): a tunnel carries HTTP only, and self-hosted
+# TURN needs open UDP ports.
+#
+# Copy to turnserver.conf, change the CHANGE lines, run coturn as its own
+# container on its own network (not on a tailnet), and open: 3478/udp+tcp,
+# 5349/tcp (TLS), and the relay range below (udp). Then set on DisGourd:
+#   TURN_URLS=turn:turn.example.org:3478?transport=udp,turn:turn.example.org:3478?transport=tcp,turns:turn.example.org:5349
+#   TURN_SECRET_FILE=/run/secrets/turn-secret   (the same secret as below)
+
+# CHANGE: your TURN hostname.
+realm=turn.example.org
+# CHANGE: openssl rand -hex 32; DisGourd's TURN_SECRET is the same value.
+static-auth-secret=CHANGE-ME-long-random
+# Short-lived REST credentials, minted by DisGourd.
+use-auth-secret
+
+listening-port=3478
+tls-listening-port=5349
+# CHANGE: your certificate and key for the TLS port.
+cert=/etc/coturn/fullchain.pem
+pkey=/etc/coturn/privkey.pem
+min-port=49160
+max-port=49200
+
+fingerprint
+no-cli
+no-multicast-peers
+no-tlsv1
+no-tlsv1_1
+stale-nonce=600
+user-quota=12
+total-quota=1200
+
+# TURN's own SSRF: never relay into a private network. Without these, anyone
+# with a credential can ask the relay to reach your LAN, the cloud network,
+# the Docker network or a tailnet.
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createVoiceController } from '../voice.js';
+import { getVoiceIce } from '../api.js';
 import { getPttEnabled, getPttKey } from '../audio.js';
 import { unreadKey } from './useChannelMessages.js';
 
@@ -20,7 +21,7 @@ export function useVoiceCall({ send, myId }) {
   // The controller is recreated per session; it tears down its call when the
   // user (or the session) changes.
   useEffect(() => {
-    voiceRef.current = createVoiceController({ send, myId, onChange: setCall });
+    voiceRef.current = createVoiceController({ send, myId, onChange: setCall, loadIce: getVoiceIce }); // P11-11
     return () => voiceRef.current && voiceRef.current.leave();
   }, [myId, send]);
 

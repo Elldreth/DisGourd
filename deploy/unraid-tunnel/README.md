@@ -23,6 +23,7 @@ Keep your real values (domain, token, IPs, container names) in the repo's `local
 | `YOUR_OTHER_CONTAINER` | any other container on your proxy network, for a check | step 4 |
 | `192.168.1.0/24`, `192.168.1.1`, `192.168.1.10`, `192.168.1.20` | your LAN, router, Unraid host, ComfyUI machine (`ip route` on the Unraid box) | `egress.sh`, step 5 |
 | `TUNNEL_TOKEN` | the tunnel's token (Cloudflare Zero Trust → Networks → Tunnels) | a `.env` next to `docker-compose.yml` (chmod 600) |
+| `your-turn-key-id` | the TURN key's Turn Token ID (step 7, optional) | `docker-compose.yml` |
 
 ## Cloudflare settings (dashboard)
 - **Public hostname:** `disgourd.your-domain.example` → `http://disgourd:3000`. The tunnel finds `disgourd` by name on `disgourd-edge`.
@@ -106,6 +107,32 @@ Then run `docker compose up -d`.
 - Use `cloudflare/cloudflared:2026.10.2@sha256:0e56c13c…93b2` (the full value is in `docker-compose.yml`) instead of `:latest`.
 - To update later: check https://github.com/cloudflare/cloudflared/releases, `docker pull cloudflare/cloudflared:<new tag>`, then `docker inspect --format '{{index .RepoDigests 0}}' cloudflare/cloudflared:<new tag>` and paste it in.
 - Undo: back to `:latest`.
+
+**7. A voice relay: Cloudflare TURN** (optional, recommended). Without it, everyone in a call sees everyone else's public IP, and calls between strict networks can fail. Nothing is opened at home: browsers talk to Cloudflare's relay, and DisGourd only asks Cloudflare's API for short-lived credentials.
+1. Cloudflare dashboard → **Realtime → TURN Server** → create a TURN key. Copy the **Turn Token ID** and the **API Token** (it's shown once).
+2. Save the API token as a file next to `docker-compose.yml`, readable only by the container's user:
+   ```bash
+   mkdir -p secrets
+   printf '%s' 'PASTE-THE-API-TOKEN' > secrets/turn-key-token
+   chown 99:100 secrets/turn-key-token && chmod 400 secrets/turn-key-token
+   ```
+   (Then clear it from your shell history, or type it with `read -rs` instead.)
+3. Add to the `disgourd` service, and `docker compose up -d`:
+   ```yaml
+       environment:
+         - TURN_KEY_ID=your-turn-key-id
+         - TURN_KEY_TOKEN_FILE=/run/secrets/turn-key-token
+         # - VOICE_RELAY_ONLY=1   # every call through the relay (hides IPs completely)
+       volumes:
+         - ./secrets/turn-key-token:/run/secrets/turn-key-token:ro
+   ```
+4. Check, in the browser console on the site (signed in):
+   ```js
+   fetch('/voice/ice', { headers: { Authorization: 'Bearer ' + localStorage.getItem('disgourd.token') } }).then((r) => r.json()).then(console.log)
+   ```
+   Expect `turn:turn.cloudflare.com…` URLs with a username and credential. Then, in a call between two devices, `chrome://webrtc-internals` shows `relay` candidates. A wrong key shows only STUN, and the server logs `[voice] Cloudflare TURN credentials failed`.
+- `egress.sh` doesn't block this: Cloudflare's API is on the internet.
+- Undo: remove the three lines and the secret file, then `docker compose up -d`.
 
 ## Backups
 `/config` holds the database, its nightly backups (`/config/backups`), `.jwt-secret` and `.vapid.json`. Copy it off the box regularly.

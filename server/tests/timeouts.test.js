@@ -165,6 +165,8 @@ test('voice: timed out in a call → forced mute, and unmuting is ignored; joini
   expect(last('member', 'voice_forced_mute')).toEqual({ type: 'voice_forced_mute', space: SPACE, on: true });
   const me = (f) => f.participants.find((p) => p.username === 'member');
   expect(me(last('owner', 'voice_state')).muted).toBe(true);
+  // P11-11: everyone else is told it's forced, so their app stops playing that audio.
+  expect(me(last('owner', 'voice_state')).forced).toBe(true);
   m.send({ op: 'voice_mute', muted: false });
   await wait(120);
   expect(me(last('owner', 'voice_state')).muted).toBe(true);
@@ -174,10 +176,12 @@ test('voice: timed out in a call → forced mute, and unmuting is ignored; joini
   await wait(150);
   expect(last('member', 'voice_peers').forcedMute).toBe(true);
   expect(me(last('owner', 'voice_state')).muted).toBe(true);
+  expect(me(last('owner', 'voice_state')).forced).toBe(true);
   // Removing the timeout lets them unmute again.
   await call('admin', 'DELETE', `${S}/members/member/timeout`);
   await wait(120);
   expect(last('member', 'voice_forced_mute')).toEqual({ type: 'voice_forced_mute', space: SPACE, on: false });
+  expect(me(last('owner', 'voice_state')).forced).toBe(false); // the mark clears at once
   m.send({ op: 'voice_mute', muted: false });
   await wait(120);
   expect(me(last('owner', 'voice_state')).muted).toBe(false);

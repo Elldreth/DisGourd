@@ -196,7 +196,7 @@ copy it to `<swag-appdata>/nginx/proxy-confs/disgourd.subdomain.conf`, put the
 DisGourd container on the same Docker network as SWAG, and browse to
 `https://disgourd.<yourdomain>`. (Note: voice audio itself is peer-to-peer WebRTC and
 does **not** flow through the proxy — HTTPS unlocks the mic; a tough NAT may still
-need a TURN server, which you can set via `window.__DISGOURD_ICE__`.)
+need a TURN relay: see [Voice behind TURN](#voice-behind-turn).)
 
 ## Configuration
 
@@ -229,6 +229,10 @@ All settings are optional and provided via environment variables (or
 | `KIEAI_API_KEY`    | _(none)_                 | The kie.ai API key. Wins over a key saved in Settings (which is stored in the database, so it's in every backup). `KIEAI_API_KEY_FILE` reads it from a file |
 | `PUSH_HOSTS_EXTRA` | _(none)_                 | Extra push services to allow, comma-separated (`push.example.org` exact, or `*.example.org` for subdomains). The browsers' own services are always allowed |
 | `ALLOWED_ORIGINS`  | _(none)_                 | Other sites allowed to call the API from a browser (CORS), comma-separated, e.g. `https://app.example.org`. The built-in app is same-origin and needs none |
+| `TURN_KEY_ID`, `TURN_KEY_TOKEN` | _(none)_       | A Cloudflare TURN key, for a voice relay (see [Voice behind TURN](#voice-behind-turn)). `TURN_KEY_TOKEN_FILE` reads the token from a file |
+| `TURN_URLS`, `TURN_SECRET` | _(none)_            | Your own coturn instead: its `turn:`/`turns:` URLs (comma-separated) and its `static-auth-secret`. `TURN_SECRET_FILE` reads it from a file |
+| `STUN_URLS`        | `stun:stun.l.google.com:19302` | STUN servers for calls (comma-separated) |
+| `VOICE_RELAY_ONLY` | _(off)_                  | Set to `1` to send every call through the relay, so nobody in a call sees anyone else's IP address. Only takes effect when a relay is set up |
 
 Example (Linux/macOS):
 
@@ -334,7 +338,7 @@ not in git, not in the image), never in the app's settings.
 | kie.ai key | `KIEAI_API_KEY` (or `KIEAI_API_KEY_FILE`), else the one saved in Settings | Generation with kie.ai stops until a key is added |
 | SMTP password (planned) | the environment only | Email stops |
 | Backup storage keys (R2, for Litestream) | Litestream's own environment, not DisGourd's | Replication stops |
-| TURN credentials (if you run a relay) | the TURN server's own config; browsers get them via `window.__DISGOURD_ICE__` | Calls between strict networks fail to connect |
+| Voice relay key (Cloudflare TURN, or coturn's secret) | `TURN_KEY_TOKEN` (or `TURN_KEY_TOKEN_FILE`), or `TURN_SECRET` (or `TURN_SECRET_FILE`). Browsers only ever get short-lived credentials | Calls fall back to direct connections, and some between strict networks fail |
 
 Every `*_FILE` variable names a file to read the value from, once at start,
 which is how Docker or compose secrets (`/run/secrets/...`) are passed without
@@ -476,9 +480,44 @@ or speaker in Settings **applies immediately** to a call in progress.
 - Requires **HTTPS** in production — browsers only grant microphone access on
   secure origins (localhost is exempt for testing).
 - A public STUN server is used by default for NAT traversal, which works on most
-  home networks. For stricter networks you can add a TURN relay by setting
-  `window.__DISGOURD_ICE__` to an array of `RTCIceServer` objects before the app
-  loads (e.g. via a small inline script), pointing at your own coturn server.
+  home networks. Calls are peer to peer, so everyone in a call learns everyone
+  else's public IP address. A TURN relay fixes calls between strict networks,
+  and with `VOICE_RELAY_ONLY=1` hides those addresses too.
+
+### Voice behind TURN
+
+The app asks the server for its ICE servers (`GET /voice/ice`) when you join a
+call. The server hands out short-lived TURN credentials (12 hours); the key that
+mints them never leaves the server. Calls go direct when they can and use the
+relay when they must, unless `VOICE_RELAY_ONLY=1`.
+
+**Cloudflare TURN** (no ports to open: the right choice behind a Cloudflare
+Tunnel, which carries HTTP only):
+
+1. In the Cloudflare dashboard, open **Realtime → TURN Server** and create a TURN
+   key. Note its **Turn Token ID** and **API Token** (shown once).
+2. Put the API token in a file only the container can read, and give DisGourd
+   `TURN_KEY_ID=<Turn Token ID>` and `TURN_KEY_TOKEN_FILE=<that file>` (or
+   `TURN_KEY_TOKEN` directly). The Unraid recipe has the exact lines:
+   [`deploy/unraid-tunnel/README.md`](deploy/unraid-tunnel/README.md).
+3. Restart, join a call, and check `chrome://webrtc-internals`: with
+   `VOICE_RELAY_ONLY=1` every candidate pair is `relay`.
+
+Cloudflare's first 1,000 GB a month is free, then $0.05/GB. Relayed voice is
+roughly 15–30 MB an hour per person (video much more), and only calls that need
+the relay use it. If Cloudflare can't be reached, calls carry on with STUN only
+and the server logs it.
+
+**Your own coturn** (a VPS, where you can open UDP ports): start from
+[`deploy/coturn/turnserver.conf.sample`](deploy/coturn/turnserver.conf.sample)
+and set `TURN_URLS` and `TURN_SECRET` (or `TURN_SECRET_FILE`). Run coturn as
+its own container with its own network, never on a tailnet, and open 3478
+UDP/TCP, 5349 TCP (TLS) and the relay range. Keep the sample's
+`denied-peer-ip` lines: without them, anyone with a credential can use the relay
+to reach your LAN, your cloud or Docker network, or a tailnet. They cover 0/8,
+10/8, 100.64/10 (CGNAT and Tailscale), 127/8, 169.254/16, 172.16/12,
+192.168/16, ::1, fc00::/7 (Tailscale's fd7a:115c:a1e0::/48 too) and fe80::/10.
+Don't self-host coturn at home behind a tunnel: it needs router port forwards.
 
 ## Roadmap
 
