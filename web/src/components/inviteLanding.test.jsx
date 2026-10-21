@@ -18,6 +18,7 @@ vi.mock('../api.js', () => ({
   createRegCode: vi.fn(),
   revokeRegCode: vi.fn(),
   setSiteAdmin: vi.fn(),
+  emailInvite: vi.fn(), // P14-03
 }));
 const api = await import('../api.js');
 const { default: Login } = await import('./Login.jsx');
@@ -96,4 +97,25 @@ test('the invite dialog says whether its link can create accounts', async () => 
   expect(await screen.findByText('New people can create an account with this link.')).toBeTruthy();
   rerender(<InviteDialog space="Den" code="CCCCC-DDDDD" onClose={() => {}} />);
   expect(await screen.findByText('Only people who already have an account can use this link.')).toBeTruthy();
+});
+
+test('P14-03: "Email this invite" sends the link to an address, and is hidden while email is off', async () => {
+  api.getInvitePreview.mockResolvedValue({ space: 'Den', signUp: true });
+  api.getAuthInfo.mockResolvedValue({ registration: 'invite', email: true });
+  api.emailInvite.mockResolvedValueOnce({ sent: true, to: 'friend@example.org' }).mockRejectedValueOnce(new Error('That’s 10 invites by email this hour. Try again later, or copy the link instead.'));
+  render(<InviteDialog space="Den" code="AAAAA-BBBBB" onClose={() => {}} />);
+  const box = await screen.findByLabelText('Email this invite');
+  fireEvent.change(box, { target: { value: ' friend@example.org ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect((await screen.findByRole('status')).textContent).toBe('Sent to friend@example.org.');
+  expect(api.emailInvite).toHaveBeenCalledWith('Den', 'AAAAA-BBBBB', 'friend@example.org');
+  fireEvent.change(screen.getByLabelText('Email this invite'), { target: { value: 'next@example.org' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect((await screen.findByRole('alert')).textContent).toBe('That’s 10 invites by email this hour. Try again later, or copy the link instead.');
+  expect(unnamed()).toEqual([]);
+  cleanup();
+  api.getAuthInfo.mockResolvedValue({ registration: 'invite', email: false });
+  render(<InviteDialog space="Den" code="AAAAA-BBBBB" onClose={() => {}} />);
+  await screen.findByText('New people can create an account with this link.');
+  expect(screen.queryByLabelText('Email this invite')).toBeNull();
 });

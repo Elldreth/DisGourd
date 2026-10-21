@@ -311,5 +311,5 @@ Container: `P14-00-invites.md`. The owner's decisions (2026-10-21): one invite l
 |---|---|---|---|---|---|---|
 | P14-00 | One invite link: sign up and join in one step (Container) | 14 | PLANNED | M–L | P12-02, P13-01 | see children |
 | P14-01 | Server: sign up with an invite and auto-join, modes and "who can bring in new people", public invite preview, easy invite codes | 14 | COMPLETE | M | P12-02 | routes/auth.js, routes/invites.js, routes/spaces.js, routes/admin.js, config.js, auth/invitePolicy.js (new) |
-| P14-02 | App: invite landing page with sign-up, land in the server, Site admin › General settings, invite dialog line | 14 | REVIEW | M | P14-01 | InviteLanding.jsx (new), App.jsx, inviteLink.js, RegistrationAdmin.jsx, InviteDialog.jsx |
-| P14-03 | "Email this invite" | 14 | PLANNED | S | P14-01, P12-01 | routes/spaces.js, mail/templates.js, InviteDialog.jsx |
+| P14-02 | App: invite landing page with sign-up, land in the server, Site admin › General settings, invite dialog line | 14 | COMPLETE | M | P14-01 | InviteLanding.jsx (new), App.jsx, inviteLink.js, RegistrationAdmin.jsx, InviteDialog.jsx |
+| P14-03 | "Email this invite" | 14 | REVIEW | S | P14-01, P12-01 | routes/spaces.js, mail/templates.js, InviteDialog.jsx |

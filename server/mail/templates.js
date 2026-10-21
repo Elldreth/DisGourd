@@ -64,4 +64,26 @@ function confirmEmail({ serverName, publicUrl, username, link }) {
   return { subject: `Confirm your email for ${serverName}`, text, html };
 }
 
-module.exports = { layout, testEmail, confirmEmail, esc };
+// P14-03: "Email this invite". No text from the sender goes in, so the server
+// can't be used to send arbitrary messages to any address.
+function serverInvite({ serverName, publicUrl, inviter, space, link, expiresAt, newAccounts }) {
+  const until = expiresAt
+    ? `This invite expires on ${new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}.`
+    : 'This invite doesn’t expire.';
+  const { text, html } = layout({
+    serverName,
+    publicUrl,
+    heading: `${inviter} invited you to ${space}`,
+    paragraphs: [
+      newAccounts
+        ? `${inviter} would like you to join ${space} on ${serverName}. If you don’t have an account yet, the link lets you create one; you’ll land in ${space} when you’re done.`
+        : `${inviter} would like you to join ${space} on ${serverName}. Sign in with your account, and the link adds you to ${space}.`,
+      until,
+    ],
+    button: { label: `Join ${space}`, url: link },
+    footer: `You’re getting this because ${inviter} sent you an invite from ${serverName}. If you don’t know them, you can ignore it.`,
+  });
+  return { subject: `${inviter} invited you to ${space} on ${serverName}`, text, html };
+}
+
+module.exports = { layout, testEmail, confirmEmail, serverInvite, esc };
