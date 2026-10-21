@@ -53,14 +53,19 @@ export default function GroupMembersDialog({ conversation, title, myId, onAdd, o
             </li>
           ))}
         </ul>
-        <button
-          type="button"
-          onClick={onAdd}
-          disabled={members.length >= MAX_GROUP}
-          className="mb-4 self-start rounded-md px-2 py-1 text-sm font-medium text-brand-hi hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Add people
-        </button>
+        {/* P10-04: a real button with a +; at the limit it says why it's off. */}
+        <div className="mb-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={members.length >= MAX_GROUP}
+            className="flex items-center gap-1.5 rounded-lg bg-ink-600 px-3 py-1.5 text-sm font-medium text-fg hover:bg-ink-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Icon name="plus" size={16} />
+            Add people
+          </button>
+          {members.length >= MAX_GROUP && <span className="text-xs text-gray-400">Groups hold up to {MAX_GROUP} people.</span>}
+        </div>
 
         <form
           className="mb-4"
@@ -90,7 +95,7 @@ export default function GroupMembersDialog({ conversation, title, myId, onAdd, o
           <button type="button" onClick={() => setLeaving(true)} className="rounded-lg px-3 py-2 text-sm font-medium text-danger hover:bg-ink-700">
             Leave group
           </button>
-          <button type="button" onClick={onClose} className="rounded-lg bg-ink-600 px-4 py-2 text-sm font-medium text-fg hover:bg-ink-500">
+          <button type="button" onClick={onClose} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">
             Done
           </button>
         </div>

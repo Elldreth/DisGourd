@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P10-00)
 - **Phase:** 10
-- **State:** REVIEW
+- **State:** COMPLETE (merged #204)
 - **Effort:** M
 - **Depends on:** P9-07
 - **Serialize with:** P10-01 (message menu), P10-04 (`MessageList.jsx`, `DmPanel.jsx`)

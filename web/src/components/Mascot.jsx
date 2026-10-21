@@ -6,6 +6,11 @@ export function MascotParts({ pose = 'wave' }) {
   return poseParts(pose).map(drawWith('var(--color-brand-logo)', 'var(--color-lime)'));
 }
 
+// The group scene's shapes alone (P10-04), for an empty-state scene.
+export function GroupParts() {
+  return groupParts().map(drawWith('var(--color-brand-logo)', 'var(--color-lime)'));
+}
+
 function drawWith(violet, lime) {
   const paint = (v) => (v === 'V' ? violet : v === 'L' ? lime : v);
   const draw = ([Tag, attrs, kids], i) => {

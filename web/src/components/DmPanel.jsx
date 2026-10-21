@@ -19,6 +19,13 @@ import { ActionMenu } from './MessageActions.jsx';
 // (`onAddPeople`, a new group); a group's, Members (`onShowMembers`).
 // P10-03: a pair's Add people, Mute (`onMute(muted)`) and Block sit in one ⋯
 // menu, so a bare block icon isn't the first thing in the header.
+// Who's in a group, for its welcome (P10-04): "You, bob and cara."
+function groupWho(conversation, myId) {
+  const others = (conversation?.members || []).filter((m) => m.id !== myId).map((m) => m.username);
+  const all = ['You', ...others];
+  return `${all.length < 2 ? all[0] : `${all.slice(0, -1).join(', ')} and ${all[all.length - 1]}`}.`;
+}
+
 export default function DmPanel({ conversationKey = '', conversation = null, title = '', myId = null, onAddPeople, onShowMembers, onMute, username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
   // The message being replied to ({ id, author }), cleared on send, Esc or switching conversation.
   const [replyingTo, setReplyingTo] = useState(null);
@@ -144,7 +151,8 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
         onReply={(m) => setReplyingTo({ id: m.id, author: m.author })}
         simple
         emptyHeading={group ? `This is the beginning of ${name}` : `This is the beginning of your conversation with ${username}`}
-        emptyBody="Say hi! 👋"
+        emptyArt={group ? 'group' : undefined}
+        emptyBody={group ? `${groupWho(conversation, myId)} Say hi! 👋` : 'Say hi! 👋'}
         onEditDone={() => composerRef.current?.focus()}
       />
       <TypingIndicator names={typing} />

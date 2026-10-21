@@ -7,6 +7,13 @@ import { unreadLabel } from '../util.js';
 
 // The second column when in Direct Messages mode: a list of conversations,
 // each with its `key` (P9-06b: `c:<id>`, or `@name` while being started).
+// P10-04: a group's preview names who said it ("bob: …", "You: …"); a
+// notice ("bob started the group") already does.
+export function groupPreview(c, myId, preview) {
+  if (!preview || c.lastKind === 'system' || c.lastAuthorId == null) return preview;
+  const who = c.lastAuthorId === myId ? 'You' : (c.members || []).find((m) => m.id === c.lastAuthorId)?.username;
+  return who ? `${who}: ${preview}` : preview;
+}
 export default function DmSidebar({
   conversations,
   currentDm,
@@ -77,7 +84,7 @@ export default function DmSidebar({
                   {name}
                 </div>
                 {group ? (
-                  <div className="truncate text-xs text-gray-500">{preview || `${c.members?.length || 0} members`}</div>
+                  <div className="truncate text-xs text-gray-500">{groupPreview(c, myId, preview) || `${c.members?.length || 0} members`}</div>
                 ) : (
                   preview && <div className="truncate text-xs text-gray-500">{preview}</div>
                 )}
