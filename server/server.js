@@ -43,6 +43,11 @@ if (require.main === module) {
     console.log(`  → Open http://localhost:${config.port} in your browser\n`);
     const reg = registrationMode();
     console.log(`  Registration: ${reg}${reg === 'code' ? ' (a code is required — manage them in Settings)' : ''}${config.maxAccounts ? ` · max ${config.maxAccounts} accounts` : ''}`);
+    // P11-05: TRUST_PROXY alone trusts forwarding headers from any private address.
+    if (config.trustProxy && !process.env.TRUSTED_PROXIES) {
+      console.log('  Proxy: trusting X-Forwarded-For from any private address. Set TRUSTED_PROXIES to');
+      console.log("  your proxy's network (e.g. the Docker network only cloudflared shares) to narrow it.");
+    }
     // P11-01: an empty instance needs this code for its first account.
     const setupCode = ensureSetupCode();
     if (setupCode) {

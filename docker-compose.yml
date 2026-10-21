@@ -1,6 +1,8 @@
 # DisGourd on Unraid, proxied by SWAG. Clone this repo somewhere on the server
 # and run:  docker compose up -d --build
 #
+# Behind a Cloudflare Tunnel instead (no open ports)? See deploy/unraid-tunnel/.
+#
 # Storage is split on purpose:
 #   • DB  -> the SSD/cache (small, and SQLite wants fast, non-FUSE storage)
 #   • uploads -> the array (that's where the images/videos pile up)
@@ -17,6 +19,15 @@ services:
     # see "Upgrading to the non-root image" in the README). Remove this line to
     # use the image's own non-root user (1000:1000) instead.
     user: "99:100"
+    # Hardening (P11-05): a read-only root (it only writes /config, /uploads
+    # and /tmp), no Linux capabilities, no privilege escalation.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     environment:
       - PORT=3000
       - DB_PATH=/config/disgourd.db
@@ -42,6 +53,7 @@ services:
       - /mnt/user/bigboi/media/images:/uploads
     # Optional: expose on the LAN for direct testing. SWAG reaches it over the
     # shared Docker network below, so this isn't required for the proxy.
+    # LAN only: never forward this port at the router (it's plain HTTP).
     ports:
       - "3000:3000"
     networks:

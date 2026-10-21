@@ -23,7 +23,10 @@ step() { echo; echo "== $*"; }
 fail() { echo "FAIL: $*"; docker logs "$NAME" 2>&1 | tail -40 || true; exit 1; }
 
 start() { # name, config dir, uploads dir, port
+  # P11-05: run it the hardened way (read-only root, no capabilities), as the
+  # Unraid compose does, so a write outside /config, /uploads or /tmp fails here.
   docker run -d --name "$1" --user 99:100 \
+    --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
     -e JWT_SECRET="$SECRET" -e REGISTRATION_MODE=open \
     -v "$2:/config" -v "$3:/uploads" -p "$4:3000" "$IMAGE" >/dev/null
 }

@@ -27,3 +27,5 @@ deploy
 **/*.db
 **/*.db-*
 **/.jwt-secret
+**/.vapid.json
+**/.setup-code
