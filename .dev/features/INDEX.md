@@ -283,7 +283,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-10 | **Push endpoint allowlist (go-live blocker, build order 1)**; ComfyUI metadata block (M10, M5) | 11 | COMPLETE | S | none | routes/push.js, push.js, db/index.js, net/safeFetch.js, engines/comfyui.js, README |
 | P11-11 | Voice: TURN credentials from the server (hosted TURN for the tunnel setup), relay-only option, honour forced mute (M8) | 11 | COMPLETE | M | none (which TURN: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
 | P11-12 | Case-insensitive usernames and emails (M6) | 11 | COMPLETE | S–M | P11-01 | migrations, db/index.js, routes/auth.js, config.js |
-| P11-13 | Low-severity sweep (L1–L7, L9) | 11 | REVIEW | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
+| P11-13 | Low-severity sweep (L1–L7, L9) | 11 | COMPLETE | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
 | P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning; off-box copy of `/config` | 11 | COMPLETE | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |
 
 ## Email (P12)
@@ -302,4 +302,4 @@ Container: `P12-00-email.md`. The owner's decisions (2026-10-21): Resend over SM
 |---|---|---|---|---|---|---|
 | P13-01 | Registration codes that survive a phone keyboard: easy-to-type codes, matching ignores case, spaces and dashes, no autocorrect | 13 | COMPLETE | S | none | auth/regCodes.js (new), db/index.js, routes/admin.js, routes/auth.js, Login.jsx, SetupWizard.jsx |
 | P13-02 | kie.ai failures in plain words (kie.ai's side vs DisGourd's limit), one retry when nothing was charged, failed jobs logged | 13 | COMPLETE | S | none | imagine/engines/kie.js, imagine/runner.js, tests |
-| P13-03 | kie.ai safety blocks said plainly ("unsafe" and the like), advice by model and channel, no doubled full stop | 13 | REVIEW | S | P13-02 | imagine/engines/kie.js, imagine/runner.js, tests |
+| P13-03 | kie.ai safety blocks said plainly ("unsafe" and the like), advice by model and channel, no doubled full stop | 13 | COMPLETE | S | P13-02 | imagine/engines/kie.js, imagine/runner.js, tests |

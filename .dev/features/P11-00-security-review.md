@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (security review + child packets)
 - **Phase:** 11 (security)
-- **State:** COMPLETE as a review (merged in #210; the owner agreed with the assessment). Its children are the plan; the build order is in "Plan: the order to build in", updated for the deployment as built.
+- **State:** COMPLETE (2026-10-21). The review merged in #210, and all 14 children were built, merged and deployed (#214–#231). See "Closing note" at the end.
 - **Effort:** L in total (children S–M each)
 - **Depends on:** main at 92f7178 (after #208)
 - **Requirement Source:** the owner, relayed 2026-10-20: DisGourd is moving from the Unraid box (behind SWAG, closed registration) to a cloud host, "so it must be safe on the open internet". Review first, then a prioritized plan; this unit changes no app code.
@@ -291,22 +291,22 @@ Then the code, in this order. **P11-10's push endpoint allowlist is first: it's 
 
 | Order | ID | Fixes | Title | Size | State |
 |---|---|---|---|---|---|
-| 1 | P11-10 | M10 (High at home), M5 | **Push endpoint allowlist** (go-live blocker); ComfyUI metadata block | S | READY |
-| 2 | P11-01 | C1 (live) | **First-run setup code**; safe `SITE_ADMINS`. The live DB was empty, so this is the code fix behind Step 0 | S | READY |
-| 3 | P11-02 | H1 | Role hierarchy on the legacy member-tier route | S | READY |
-| 4 | P11-03 | H2 | Gateway abuse limits: `read` checks, per-user op rate limits, socket cap, search limit | M | READY |
-| 5 | P11-08 | M3 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (the one thing reachable without an account) | S–M | READY |
-| 6 | P11-05 | H3 (rest), L8, L10 | Trust only cloudflared; read-only root; LAN egress rule; pinned images; a tunnel compose sample | S–M | READY |
-| 7 | P11-04 | H2, M4 | Upload quotas, cleanup with their messages, private caching (Cloudflare edge) | M | READY |
-| 8 | P11-06 | M1 | Security headers, CSP and same-origin CORS (HSTS from Cloudflare) | S–M | READY |
-| 9 | P11-14 | Secrets | VAPID and other secrets from the environment; off-box backup of `/config` | S | READY |
-| 10 | P11-07 | M2 | Session tokens out of URLs | S–M | PLANNED (after P11-03) |
-| 11 | P11-09 | M7, M9 | Instance safety: suspend accounts; who can DM me | M | PLANNED (after P11-03 and P11-07) |
-| 12 | P11-12 | M6 | Case-insensitive usernames | S–M | PLANNED (after P11-01) |
-| 13 | P11-11 | M8 | Voice: TURN from the server (hosted TURN), relay-only option, honour forced mute | M | READY (owner decision 3) |
-| 14 | P11-13 | L1–L7, L9 | Low-severity sweep | S–M | PLANNED (last) |
+| 1 | P11-10 | M10 (High at home), M5 | **Push endpoint allowlist** (go-live blocker); ComfyUI metadata block | S | COMPLETE (#214) |
+| 2 | P11-01 | C1 (live) | **First-run setup code**; safe `SITE_ADMINS`. The live DB was empty, so this is the code fix behind Step 0 | S | COMPLETE (#215) |
+| 3 | P11-02 | H1 | Role hierarchy on the legacy member-tier route | S | COMPLETE (#216) |
+| 4 | P11-03 | H2 | Gateway abuse limits: `read` checks, per-user op rate limits, socket cap, search limit | M | COMPLETE (#217) |
+| 5 | P11-08 | M3 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (the one thing reachable without an account) | S–M | COMPLETE (#218) |
+| 6 | P11-05 | H3 (rest), L8, L10 | Trust only cloudflared; read-only root; LAN egress rule; pinned images; a tunnel compose sample | S–M | COMPLETE (#219) |
+| 7 | P11-04 | H2, M4 | Upload quotas, cleanup with their messages, private caching (Cloudflare edge) | M | COMPLETE (#220) |
+| 8 | P11-06 | M1 | Security headers, CSP and same-origin CORS (HSTS from Cloudflare) | S–M | COMPLETE (#222) |
+| 9 | P11-14 | Secrets | VAPID and other secrets from the environment; off-box backup of `/config` | S | COMPLETE (#223) |
+| 10 | P11-07 | M2 | Session tokens out of URLs | S–M | COMPLETE (#225) |
+| 11 | P11-09 | M7, M9 | Instance safety: suspend accounts; who can DM me | M | COMPLETE (#226) |
+| 12 | P11-12 | M6 | Case-insensitive usernames | S–M | COMPLETE (#228) |
+| 13 | P11-11 | M8 | Voice: TURN from the server (hosted TURN), relay-only option, honour forced mute | M | COMPLETE (#229) |
+| 14 | P11-13 | L1–L7, L9 | Low-severity sweep | S–M | COMPLETE (#231) |
 
-"READY" means its dependencies are met. Nothing starts until the owner says so.
+All built in this order, one PR each, each after the owner merged the one before.
 
 ## Serialize
 - P11-03, P11-07 and P11-09 all touch `server/gateway/` (`index.js`, `router.js`, `dm.js`). Do them in that order.
@@ -336,3 +336,50 @@ Then the code, in this order. **P11-10's push endpoint allowlist is first: it's 
 - Signed, expiring upload URLs, or a separate origin for user content.
 - An SFU for voice (real server-side mute, no peer IPs, better for large calls).
 - `url.parse()` deprecation (DEP0169) in `http/handler.js` and `gateway/index.js`. Move to the WHATWG URL parser; it's not a vulnerability here, since paths are re-checked.
+
+## Closing note (2026-10-21)
+**Done.** Every finding has a fix merged and deployed on the owner's Unraid box behind the Cloudflare Tunnel.
+
+| ID | PR | What it fixed |
+|---|---|---|
+| Step 0 / C1 (live) | #213 | The empty live database was claimed by the owner by hand before the tunnel opened |
+| P11-10 | #214 | Push endpoints only to the browsers' push services; ComfyUI can't be pointed at link-local or cloud metadata (M10, M5) |
+| P11-01 | #215 | First-run setup code; `SITE_ADMINS` applied once (C1) |
+| P11-02 | #216 | The legacy member-tier route that skipped the role hierarchy is gone (H1) |
+| P11-03 | #217 | Gateway limits: `read` checks, per-person op limits, a socket cap, search limits (H2) |
+| P11-08 | #218 | Sign-in: per-account limit, IPv6 /64, a bounded limiter, easy passwords refused (M3) |
+| P11-05 | #219 | Trust only cloudflared's headers; read-only container; the LAN egress rule; pinned images (H3, L8, L10) |
+| P11-04 | #220 | Upload quotas; files removed with their messages; private, sandboxed serving (H2, M4) |
+| P11-06 | #222 | Security headers, a strict CSP, CORS only for listed origins (M1) |
+| P11-14 | #223 | Secrets from the environment or files; the saved kie.ai key warning; "Secrets and backups" |
+| P11-07 | #225 | Session tokens out of URLs (the socket signs in with its first message); the Origin check (M2, L5) |
+| P11-09 | #226 | Suspend accounts; who can DM me, friends + shared servers by default (M7, M9; decision 2) |
+| P11-12 | #228 | Usernames and emails unique whatever the case (M6) |
+| P11-11 | #229 | Voice relay: Cloudflare TURN credentials from the server, relay-only option, forced mute honoured (M8; decision 3) |
+| P11-13 | #231 | Low-severity sweep (L1–L4, L6, L7, L9) |
+
+Two small owner-facing fixes ran alongside, from the live server: P13-01 registration codes (#224), and P13-02/P13-03 kie.ai messages (#227, #230).
+
+**Live state (from the owner, 2026-10-21):** everything is deployed. Cloudflare TURN is set up: `/voice/ice` returns `turn.cloudflare.com` credentials with `relayOnly: false` (relay only when needed, as decided).
+
+### The owner's live checks still open
+- [ ] **A real cross-network call through the relay.** Two devices on different networks (one on mobile data, say). In `chrome://webrtc-internals`, the selected candidate pair shows `relay` when a direct path fails. To force it once: set `VOICE_RELAY_ONLY=1`, check that every pair is `relay`, then remove it (P11-11; nothing here could test a real relay).
+- [ ] **The socket through the tunnel** connects after an update, so messages arrive live. If it ever got 403, the Origin check is refusing it; `ALLOWED_ORIGINS=https://<your address>` is the fallback (P11-07).
+- [ ] **Push on a real phone** after P11-10's allowlist (a mention while the app is closed). It's been open since P2-18.
+- [ ] **The setup code** on the next empty volume (a test restore, say): the wizard asks for the code from `docker logs disgourd` (P11-01).
+- [ ] **A restore drill** from the nightly backups into a scratch copy, with the secrets from the store (README, "Secrets and backups").
+
+### Left as Discovered Work (not planned; pick up only if wanted)
+- **From this review:** TOTP for site admins; email verification and password reset (P12, once email is set up); signed, expiring upload URLs or a separate origin for user content; an SFU for voice; `url.parse()` (DEP0169) → WHATWG URL; stripping EXIF location from photos.
+- **Sessions:** HttpOnly cookie sessions instead of a `localStorage` token (P11-06; the CSP contains the XSS → token path for now). Remove the deprecated `?token=` socket sign-in once no old tabs are left, and move the 41 server tests to the auth-frame helper with it (P11-07).
+- **Moderation:** an instance-wide log for suspensions, which only go to the console (P11-09). A "Manage invites" page to list and revoke invites (P11-13). A sweep that clears a voice member's forced-mute mark when a timeout runs out by itself (P11-11).
+- **Sign-in:** the 15-minute lockout can be triggered by anyone who knows a username (P11-08); revisit if it becomes a nuisance. Limiter buckets and locks live in memory and reset on restart (P11-03, P11-08).
+- **Smaller:**
+  - TURN credentials aren't renewed in calls over 12 hours (P11-11).
+  - Two people only in a group DM can't start a 1-to-1 under the default (P11-09, as decided).
+  - No account-created date (P11-09).
+  - DNS rebinding between the ComfyUI check and its fetch, accepted since admins set the address (P11-10).
+  - A Tailscale ACL sample if a VPS setup returns (P11-10).
+  - Some sites give no link-preview card (P11-06).
+  - The Jest-only `sprintf-js` moderate audit chain, to recheck on the next Jest release (P11-13).
+- **Resolved since recorded:** `SITE_ADMINS` case-sensitivity (P11-01 → P11-12), and the README's inline-script TURN advice blocked by the CSP (P11-14 → P11-11).
