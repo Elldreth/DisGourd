@@ -44,6 +44,7 @@
 
   It's used by `validateRegistration` (sign-up) and `/me/password`.
 - **Web:** no change. The sign-up form and the change-password dialog already show the server's message (checked in the sandbox).
+- **Docker smoke test:** it used `smoke-pass-123` for user `smoke`. The username rule refused that, and the CI Docker job failed at its `register` step (run 39553258055). It now uses `amber-lantern-orbit-58`, which the checker accepts for both `smoke` and `nocode`. `.dev/security/p11-00-proof.js` moved off `password123` too, and now shows the fixed behaviour (setup code required, legacy route 404, 0 junk read rows).
 - **Tests:** 49 server test files used `password123` (and one `password456`). They now use `gourd-test-pass-1` / `-2`. In `api.test.js`, the 0.4 per-address test uses a new name per attempt, so the new per-account lock doesn't trip it.
 
 **Deviation from the scope:** the scope asked for the top ~1,000 common passwords as a file. Fetching such a list means downloading from outside, which wasn't approved. So the list is curated by hand (8+ characters only, since shorter ones are already refused) and backed by the pattern checks. A bigger list can be dropped into `COMMON` later.

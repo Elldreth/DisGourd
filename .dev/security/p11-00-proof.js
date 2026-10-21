@@ -1,6 +1,9 @@
 // Run from anywhere (it never touches the real DB or :3000):
 //   NODE_PATH=<repo>/server/node_modules node .dev/security/p11-00-proof.js <repo>/server
-// Each finding becomes a regression test in its child packet (P11-01, P11-02, P11-03).
+// Each finding became a regression test in its child packet (P11-01, P11-02, P11-03).
+// Since those landed, this shows the fixed behaviour: the first sign-up needs
+// the setup code (403 without it), the old role route is gone (404), and
+// junk read markers are refused (0 rows). P11-08: the password must not be an easy one.
 // Proof-of-concept for three P11-00 findings. In-memory DB, random port.
 const os = require('os');
 const path = require('path');
@@ -10,6 +13,8 @@ process.env.JWT_SECRET = 'disgourd-proof-secret-0123456789abcdef';
 process.env.DB_PATH = ':memory:';
 process.env.UPLOADS_DIR = path.join(os.tmpdir(), `disgourd-proof-${process.pid}`);
 process.env.REGISTRATION_MODE = 'closed';
+process.env.REQUIRE_SETUP_CODE = '1'; // P11-01: as in production
+process.env.SETUP_CODE = 'proof-setup-code-0123';
 const srv = require(path.join(process.argv[2], 'server.js'));
 const WebSocket = require('ws');
 const db = srv.db;
@@ -20,18 +25,19 @@ srv.httpServer.listen(0, async () => {
     const r = await fetch(base + p, { method, headers: { 'content-type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body && JSON.stringify(body) });
     return { status: r.status, body: await r.json().catch(() => null) };
   };
-  const reg = (u) => call(null, 'POST', '/register', { username: u, password: 'password123', email: `${u}@example.com` });
+  const reg = (u, extra = {}) => call(null, 'POST', '/register', { username: u, password: 'gourd-test-pass-1', email: `${u}@example.com`, ...extra });
 
   // C1: registration is "closed", yet the first stranger gets in as site admin.
   console.log('auth-info:', (await call(null, 'GET', '/auth-info')).body);
   const m = await reg('mallory');
-  const me = await call(m.body.token, 'GET', '/me');
-  console.log('C1 first register while closed ->', m.status, 'siteAdmin =', me.body.siteAdmin);
-  console.log('C1 second register ->', (await reg('someone')).status);
+  console.log('C1 first register while closed, no setup code ->', m.status, m.body && m.body.error);
+  const first = await reg('owner', { setupCode: process.env.SETUP_CODE });
+  console.log('C1 the operator, with the setup code ->', first.status, 'siteAdmin =', (await call(first.body.token, 'GET', '/me')).body.siteAdmin);
+  console.log('C1 second register (closed) ->', (await reg('someone')).status);
 
   // H1: a "Mods" member holding manage_roles promotes themself to Admin via the legacy route.
   db.setSetting('registration_mode', 'open');
-  const owner = (await reg('owner')).body.token;
+  const owner = first.body.token;
   const mod = (await reg('moddy')).body.token;
   await call(owner, 'POST', '/spaces', { name: 'Guild' });
   const sid = db.getSpaceByName('Guild').id;
