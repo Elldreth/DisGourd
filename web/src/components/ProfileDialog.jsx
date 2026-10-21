@@ -17,6 +17,7 @@ import ImagineTry from './admin/imagine/TryPage.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import ChangePasswordDialog from './ChangePasswordDialog.jsx';
 import DevicesSection from './settings/DevicesSection.jsx';
+import EmailSection from './settings/EmailSection.jsx';
 import BlockedSection from './settings/BlockedSection.jsx';
 import DmPolicySection from './settings/DmPolicySection.jsx';
 import PeopleAdmin from './PeopleAdmin.jsx';
@@ -198,6 +199,8 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
               )}
             </div>
           </div>
+
+          {onPasswordChanged && <EmailSection profile={profile} onUpdated={(fields) => onUpdated?.({ ...profile, ...fields })} />}
 
           {onPasswordChanged && (
             <div className="rounded-xl bg-ink-900/60 p-4">

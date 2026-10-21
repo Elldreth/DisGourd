@@ -1,6 +1,7 @@
 const url = require('url');
 const db = require('../db');
 const { verifyToken } = require('../auth/tokens');
+const { gated } = require('../auth/emailGate');
 const { userClients, broadcastPresence, sendToUser } = require('./delivery');
 const { voiceLeave, voiceStatesFor } = require('./voice');
 const { handleGatewayMessage } = require('./router');
@@ -213,6 +214,11 @@ function awaitAuth(ws, ip) {
 
 // A signed-in socket: register it, send the connect frames, route its frames.
 function admit(ws, payload, token) {
+  // P12-02: no live connection until a required email is confirmed.
+  if (gated(payload.sub)) {
+    ws.close(4003, 'Confirm your email');
+    return;
+  }
   ws.token = token; // re-checked every gatewayAuth.reverifyMs (P11-13, L4)
   ws.userId = payload.sub;
   ws.tokenVersion = payload.ver || 0;

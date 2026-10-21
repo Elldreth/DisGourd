@@ -160,7 +160,7 @@ function AccountStep({ onDone, needsCode }) {
       <Field label="Admin username">
         <input autoFocus={!needsCode} value={username} onChange={(e) => setUsername(e.target.value)} className="input" placeholder="your_name" autoComplete="username" />
       </Field>
-      <Field label="Email">
+      <Field label="Email (optional, for password reset)">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="you@example.com" autoComplete="email" />
       </Field>
       <Field label="Password" hint="At least 8 characters">

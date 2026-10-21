@@ -2,6 +2,8 @@ const url = require('url');
 const { safeDecode } = require('./util');
 const { dispatch } = require('../routes');
 const { serveWebApp } = require('../static');
+const { gated, allowedWhileGated } = require('../auth/emailGate');
+const { authUserId } = require('../auth/tokens');
 
 // ALLOWED_ORIGINS: comma-separated origins (scheme://host[:port]) that may call
 // the API from another site. Read per request, so it can change without code.
@@ -30,6 +32,13 @@ async function handleHttp(req, res) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     return res.end();
+  }
+
+  // P12-02: with "Require a confirmed email" on, a signed-in account without
+  // one can only reach what it needs to confirm it.
+  if (req.headers.authorization && !allowedWhileGated(parsedUrl.pathname) && gated(authUserId(req, parsedUrl))) {
+    res.writeHead(403);
+    return res.end(JSON.stringify({ error: 'Confirm your email address first', code: 'EMAIL_UNCONFIRMED' }));
   }
 
   if (await dispatch({ req, res, parsedUrl, pathSegments })) return;

@@ -873,6 +873,46 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 35,
+    name: 'optional, confirmed email addresses',
+    // The users table is rebuilt, which needs foreign keys off for the
+    // duration (they can't be switched inside a transaction); the runner
+    // checks every foreign key before committing.
+    foreignKeysOff: true,
+    up(db) {
+      // P12-02: an email becomes optional (owner decision 4) and can be
+      // confirmed. SQLite can't drop NOT NULL in place, so the table is
+      // rebuilt from its own CREATE statement with that one change, keeping
+      // every column (and every row) as it is. Old databases whose email
+      // column was added later are already nullable and aren't rebuilt.
+      const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get().sql;
+      const notNull = /(\bemail\s+TEXT\b[^,]*?)\s+NOT\s+NULL/i;
+      if (notNull.test(table)) {
+        const extras = db.prepare("SELECT sql FROM sqlite_master WHERE tbl_name = 'users' AND type IN ('index', 'trigger') AND sql IS NOT NULL").all().map((r) => r.sql);
+        const rebuilt = table.replace(notNull, '$1').replace(/^CREATE TABLE\s+("?)users\1/i, 'CREATE TABLE users_new');
+        db.exec(rebuilt);
+        db.exec('INSERT INTO users_new SELECT * FROM users');
+        db.exec('DROP TABLE users');
+        db.exec('ALTER TABLE users_new RENAME TO users');
+        for (const sql of extras) db.exec(sql);
+      }
+      db.exec(`
+        ALTER TABLE users ADD COLUMN email_verified_at INTEGER;
+        CREATE TABLE email_tokens (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          purpose TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          email TEXT,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          used_at INTEGER
+        );
+        CREATE INDEX email_tokens_user ON email_tokens(user_id, purpose);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
@@ -883,15 +923,25 @@ function runMigrations(db, migrations = MIGRATIONS) {
   const current = db.pragma('user_version', { simple: true });
   for (const m of migrations) {
     if (m.version <= current) continue;
+    // A migration that rebuilds a table runs with foreign keys off (they
+    // can't be switched inside a transaction) and must leave none broken.
+    const fkWasOn = m.foreignKeysOff && db.pragma('foreign_keys', { simple: true }) === 1;
+    if (fkWasOn) db.pragma('foreign_keys = OFF');
     try {
       db.transaction(() => {
         m.up(db);
+        if (m.foreignKeysOff) {
+          const broken = db.pragma('foreign_key_check');
+          if (broken.length) throw new Error(`${broken.length} broken foreign key(s), e.g. ${JSON.stringify(broken[0])}`);
+        }
         db.pragma(`user_version = ${m.version}`);
       })();
     } catch (err) {
       const wrapped = new Error(`Database migration ${m.version} (${m.name}) failed: ${err.message}`);
       wrapped.cause = err;
       throw wrapped;
+    } finally {
+      if (fkWasOn) db.pragma('foreign_keys = ON');
     }
   }
 }

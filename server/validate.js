@@ -41,7 +41,7 @@ function normalizeAttachments(msg) {
     .slice(0, MAX_ATTACHMENTS);
 }
 
-function validateRegistration({ username, password, email }) {
+function validateRegistration({ username, password, email }, { requireEmail = false } = {}) {
   if (typeof username !== 'string' || !/^[A-Za-z0-9_.-]{3,32}$/.test(username)) {
     return 'Username must be 3-32 characters using letters, numbers, or _ . -';
   }
@@ -50,8 +50,10 @@ function validateRegistration({ username, password, email }) {
   }
   const easy = passwordProblem(password, username); // P11-08
   if (easy) return easy;
-  if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return 'A valid email address is required';
+  // P12-02: optional (owner decision 4), unless the server requires a confirmed one.
+  if (email == null || email === '') return requireEmail ? 'An email address is required on this server' : null;
+  if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return 'Enter a valid email address, or leave it empty';
   }
   return null;
 }

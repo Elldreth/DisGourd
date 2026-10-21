@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P12-00)
 - **Phase:** 12
-- **State:** REVIEW (AC-8 waits on the owner's Resend setup)
+- **State:** COMPLETE (merged in #233; AC-8 checked live on 2026-10-21)
 - **Starting baseline:** main after #232
 - **Effort:** S–M
 - **Depends on:** P11-14 (soft: the `_FILE` helper for secrets; if it hasn't landed, add the same small helper here)
@@ -90,7 +90,7 @@ The server can't send email. Everything else in P12 needs a reliable way to send
 - [x] AC-5: the daily cap and the per-recipient limit hold, and the admin page shows the counts.
 - [x] AC-6: non-admins get 403 from both routes.
 - [x] AC-7: port 587 refuses to send without STARTTLS (`requireTLS`).
-- [ ] AC-8: live check in the sandbox with the owner's Resend key: a test email arrives in the owner's inbox. Note whether it landed in spam, and check SPF/DKIM/DMARC "pass" in the message headers.
+- [x] AC-8: live check in the sandbox with the owner's Resend key: a test email arrives in the owner's inbox. Note whether it landed in spam, and check SPF/DKIM/DMARC "pass" in the message headers.
 
 ## Expected Areas of Change
 `server/mail/index.js` and `server/mail/templates.js` (new), `server/config.js`, `server/routes/admin.js`, `server/package.json`, a new `web/src/components/admin/EmailPage.jsx`, `ProfileDialog.jsx` (the page list), `web/src/api.js`, README, tests (`server/tests/mail.test.js`, `EmailPage.test.jsx`).
@@ -111,4 +111,4 @@ Any email besides the test (P12-02 … P12-04). A persistent queue. Provider HTT
 | Templates | Values are escaped in the HTML (name, link `&amp;`, quotes); no `<img>` or `<script>`; the text version is plain |
 | Suites | Server 634 tests (2 skipped are the Linux-only backup tests), web 865 tests; `vite build` clean. `SiteAdminPages.test.jsx` tab order now includes Email |
 | Sandbox | A throwaway copy of the sandbox DB on :3011, with SMTP pointed at a closed port (127.0.0.1:2599). Settings › Site admin › Email showed "Email is set up", the From, `127.0.0.1:2599 (STARTTLS)` and the link base. Send test email → "Queued for sandy@example.test…" → 3 attempts (logged with `…@example.test` only, no password) → Failed 1, and "Last error … connect ECONNREFUSED 127.0.0.1:2599". This walk led to changing the result wording from "Sent to" to "Queued for". The temporary entry and DB were removed |
-| AC-8 | **Open: the owner's live check.** Set up Resend (domain, DNS, sending-only key) and the env on Unraid, then Send test email; check inbox vs spam, and `spf=pass` / `dkim=pass` / `dmarc=pass` in the headers |
+| AC-8 | **Live, on the owner's Unraid server (2026-10-21).**<br>• Setup: Resend with a sending subdomain (`mail.<domain>`), its records in Cloudflare DNS only, a sending-only key as a secret file (`SMTP_PASS_FILE`), and port 587.<br>• **First test:** arrived in the Gmail **Inbox**, with `dkim=pass` (`header.i=@mail.<domain>`, selector `resend`) and `spf=pass`. TLS 1.3 to Gmail. Text and HTML parts, `Auto-Submitted`, Reply-To and the link as built. Resend replaced the `Message-ID` with its own (harmless).<br>• **DMARC:** there was no record at first, so no result. After `_dmarc` (`p=none`) was added, the next test reported **DMARC pass** |

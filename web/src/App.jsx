@@ -39,6 +39,9 @@ import { useShortcuts, stepChannel } from './shortcuts.js';
 import ShortcutsSheet from './components/ShortcutsSheet.jsx';
 import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
+import { captureConfirmToken } from './emailLink.js';
+import ConfirmEmailLink from './components/ConfirmEmailLink.jsx';
+import ConfirmEmailGate from './components/ConfirmEmailGate.jsx';
 import { registerServiceWorker, onOpenRequest } from './pwa.js';
 import { cooldownKey, startCooldown, renameCooldowns } from './slowmode.js';
 import { rateLimitNotice } from './rateLimit.js';
@@ -101,6 +104,8 @@ export default function App() {
   const [authInfo, setAuthInfo] = useState(null); // { registration, setup } for the logged-out screen
   // An invite link's code; it waits through sign-in, then ServerRail opens Join with it.
   const [pendingInvite, setPendingInvite] = useState(capturePendingInvite);
+  // P12-02: a confirmation link opened this tab (#confirm-email=…).
+  const [confirmToken, setConfirmToken] = useState(captureConfirmToken);
 
   // When logged out, find out whether this is a brand-new install (show setup).
   useEffect(() => {
@@ -115,6 +120,12 @@ export default function App() {
     return () => api.setUnauthorizedHandler(null);
   }, []);
 
+  // P12-02: the server started requiring a confirmed email: show the confirm step.
+  useEffect(() => {
+    api.setEmailUnconfirmedHandler(() => api.getMe().then(setProfile).catch(() => {}));
+    return () => api.setEmailUnconfirmedHandler(null);
+  }, []);
+
   useEffect(() => {
     if (token) api.getMe().then(setProfile).catch(() => {});
   }, [token]);
@@ -122,7 +133,9 @@ export default function App() {
   // ---- Gateway (one connection for the whole app) and feature hooks ----
   // Order matters: each hook may use the ones above it.
   const gatewayTable = useHandlerTable();
-  const { status, send, reconnects } = useGateway({ token, handlers: gatewayTable.handlers });
+  // No live connection while a required email isn't confirmed (P12-02).
+  const gated = !!profile?.emailConfirmRequired;
+  const { status, send, reconnects } = useGateway({ token: gated ? '' : token, handlers: gatewayTable.handlers });
   const voice = useVoiceCall({ send, myId });
   const notifier = useNotifications();
   const dm = useDms({
@@ -545,6 +558,19 @@ export default function App() {
     else startDm(it.username);
   }
 
+  if (confirmToken) {
+    return (
+      <ConfirmEmailLink
+        token={confirmToken}
+        signedIn={!!token}
+        onDone={() => {
+          setConfirmToken('');
+          if (token) api.getMe().then(setProfile).catch(() => {});
+        }}
+      />
+    );
+  }
+
   if (!token) {
     if (!authInfo) {
       return (
@@ -564,6 +590,10 @@ export default function App() {
         }}
       />
     );
+  }
+
+  if (gated) {
+    return <ConfirmEmailGate profile={profile} onUpdated={setProfile} onSignOut={logout} />;
   }
 
   // P10-03: the pickers show blocked people who match a search, with Unblock.

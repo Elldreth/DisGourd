@@ -16,6 +16,7 @@ export const apiPaths = [
   '/dms',
   '/friends',
   '/blocks', // P9-07a
+  '/email', // P12-02: the confirm link's POST
   '/invites',
   '/search',
   '/admin',

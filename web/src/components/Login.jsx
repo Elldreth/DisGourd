@@ -9,11 +9,15 @@ export default function Login({ onAuthed, notice = '' }) {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [regMode, setRegMode] = useState('open'); // 'open' | 'code' | 'closed'
+  const [emailRequired, setEmailRequired] = useState(false); // P12-02: the server requires a confirmed email
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.getAuthInfo().then((r) => setRegMode(r.registration || 'open')).catch(() => {});
+    api.getAuthInfo().then((r) => {
+      setRegMode(r.registration || 'open');
+      setEmailRequired(!!r.emailRequired);
+    }).catch(() => {});
   }, []);
 
   const isRegister = mode === 'register';
@@ -57,7 +61,7 @@ export default function Login({ onAuthed, notice = '' }) {
           </Field>
 
           {isRegister && (
-            <Field label="Email">
+            <Field label={emailRequired ? 'Email' : 'Email (optional, for password reset)'} hint={emailRequired ? 'You’ll get a link to confirm it' : undefined}>
               <input
                 type="email"
                 value={email}
@@ -65,6 +69,7 @@ export default function Login({ onAuthed, notice = '' }) {
                 className="input"
                 placeholder="you@example.com"
                 autoComplete="email"
+                required={emailRequired}
               />
             </Field>
           )}

@@ -22,6 +22,7 @@ vi.mock('./api.js', () => ({
   getToken: () => (signedIn ? 'token' : ''),
   decodeToken: (t) => (t ? { sub: 1, name: 'tester' } : null),
   setUnauthorizedHandler: () => {},
+  setEmailUnconfirmedHandler: () => {}, // P12-02
   clearToken: () => {},
   getAuthInfo: () => Promise.resolve({ registration: 'open', setup: false }),
   getSpaces: () => Promise.resolve(spaces),

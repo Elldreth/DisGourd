@@ -3,6 +3,7 @@
 // web-client / 404 handling in http/handler.js.
 const modules = [
   require('./auth'),
+  require('./email'), // P12-02
   require('./admin'),
   require('./social'),
   require('./spaces'),

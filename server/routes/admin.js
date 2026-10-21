@@ -27,7 +27,16 @@ const routes = [
       if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can manage email' });
       const me = db.getUserById(userId);
       if (pathSegments.length === 2 && req.method === 'GET') {
-        return sendJson(res, 200, { ...mail.status(), yourAddress: me.email || null });
+        return sendJson(res, 200, { ...mail.status(), yourAddress: me.email || null, requireConfirmed: db.emailConfirmRequired() });
+      }
+      // PUT /admin/email { requireConfirmed } (P12-02): only turned on while email works.
+      if (pathSegments.length === 2 && req.method === 'PUT') {
+        const { requireConfirmed } = await getJsonBody(req);
+        if (typeof requireConfirmed !== 'boolean') return sendJson(res, 400, { error: 'requireConfirmed must be true or false' });
+        if (requireConfirmed && !mail.enabled()) return sendJson(res, 409, { error: 'Set up email first: nobody could confirm an address while it’s off.' });
+        db.setSetting('require_confirmed_email', requireConfirmed ? '1' : '0');
+        console.warn(`[admin] ${me.username} turned ${requireConfirmed ? 'on' : 'off'} "Require a confirmed email"`);
+        return sendJson(res, 200, { ...mail.status(), yourAddress: me.email || null, requireConfirmed: db.emailConfirmRequired() });
       }
       if (pathSegments[2] === 'test' && pathSegments.length === 3 && req.method === 'POST') {
         const s = mail.settings();

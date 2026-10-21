@@ -2029,6 +2029,61 @@ function setSetting(key, value) {
     .run(key, String(value));
 }
 
+// ---- Email addresses and their links (P12-02) ----
+// A link's token is random and stored only as its SHA-256 hash; it works
+// once, before it expires, and only for the purpose it was made for.
+const tokenHash = (raw) => require('crypto').createHash('sha256').update(String(raw)).digest('hex');
+function createEmailToken(userId, purpose, email, ttlMs) {
+  const raw = require('crypto').randomBytes(32).toString('base64url');
+  const now = Date.now();
+  db.transaction(() => {
+    // A new link replaces any earlier one for the same purpose.
+    db.prepare('UPDATE email_tokens SET used_at = ? WHERE user_id = ? AND purpose = ? AND used_at IS NULL').run(now, userId, purpose);
+    db.prepare('INSERT INTO email_tokens(user_id, purpose, token_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(userId, purpose, tokenHash(raw), email || null, now, now + ttlMs);
+  })();
+  return raw;
+}
+// Spend a token: { userId, email } if it was valid, else null. One use only.
+function useEmailToken(raw, purpose) {
+  if (typeof raw !== 'string' || raw.length < 20 || raw.length > 100) return null;
+  const now = Date.now();
+  const row = db.prepare(`
+    UPDATE email_tokens SET used_at = ?
+    WHERE token_hash = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?
+    RETURNING user_id AS userId, email
+  `).get(now, tokenHash(raw), purpose, now);
+  return row || null;
+}
+// The address a confirmation link is waiting on, if any.
+function pendingEmail(userId) {
+  const row = db.prepare(`
+    SELECT email FROM email_tokens
+    WHERE user_id = ? AND purpose = 'confirm' AND used_at IS NULL AND expires_at > ?
+    ORDER BY id DESC LIMIT 1
+  `).get(userId, Date.now());
+  return row ? row.email : null;
+}
+// Whether another account has already confirmed this address.
+function emailConfirmedElsewhere(email, userId) {
+  return !!db.prepare('SELECT 1 FROM users WHERE email = ? COLLATE NOCASE AND email_verified_at IS NOT NULL AND id != ?').get(email, userId);
+}
+// Confirm `email` for the account. Someone else's *unconfirmed* claim on the
+// same address gives way (a confirmed one wins). 'taken' if it can't.
+const confirmEmailTx = db.transaction((userId, email) => {
+  if (emailConfirmedElsewhere(email, userId)) return 'taken';
+  db.prepare('UPDATE users SET email = NULL WHERE email = ? COLLATE NOCASE AND id != ? AND email_verified_at IS NULL').run(email, userId);
+  db.prepare('UPDATE users SET email = ?, email_verified_at = ? WHERE id = ?').run(email, Date.now(), userId);
+  return 'ok';
+});
+const confirmUserEmail = (userId, email) => confirmEmailTx(userId, email);
+// Set (unconfirmed) or clear the address directly: sign-up, removing it, or
+// adding one while the server can't send email.
+function setUserEmail(userId, email) {
+  db.prepare('UPDATE users SET email = ?, email_verified_at = NULL WHERE id = ?').run(email || null, userId);
+}
+const emailConfirmRequired = () => getSetting('require_confirmed_email') === '1';
+
 // ---- Registration invite codes ----
 function addRegCode(code, createdBy, expiresAt = null, maxUses = null) {
   db.prepare('INSERT INTO reg_codes(code, created_by, created_at, expires_at, max_uses, uses) VALUES (?, ?, ?, ?, ?, 0)')
@@ -2507,6 +2562,13 @@ function getUnfinishedImagineJobs() {
 if (versionBefore > 0 && versionBefore < 12) seedAllSpaceRoles();
 
 module.exports = {
+  createEmailToken,
+  useEmailToken,
+  pendingEmail,
+  emailConfirmedElsewhere,
+  confirmUserEmail,
+  setUserEmail,
+  emailConfirmRequired,
   createSpace,
   createChannel,
   getCategories,
