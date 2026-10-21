@@ -85,8 +85,13 @@ export default function Login({ onAuthed, notice = '' }) {
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                className="input"
+                className="input font-mono"
                 placeholder="Enter the code you were given"
+                // Phone keyboards mustn't capitalise or "correct" the code.
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
               />
             </Field>
           )}

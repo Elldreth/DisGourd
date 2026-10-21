@@ -5,6 +5,7 @@ const { generateSalt, hashPassword, verifyPassword } = require('../auth/password
 const { createToken, authUserId, authPayload, TOKEN_TTL_SECONDS } = require('../auth/tokens');
 const { deviceLabel } = require('../auth/device');
 const { rateLimitOk, safeEqual, limitKey, accountLocked, accountFailed, accountSucceeded, ACCOUNT_MAX_FAILURES } = require('../auth/rateLimit');
+const { normalizeRegCode } = require('../auth/regCodes');
 const { passwordProblem } = require('../auth/commonPasswords');
 const { sendJson, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateRegistration, parseReactionEmoji } = require('../validate');
@@ -76,8 +77,9 @@ const routes = [
             return res.end(JSON.stringify({ error: 'Registration is closed on this server.' }));
           }
           if (mode === 'code') {
-            const provided = code || '';
-            const envOk = config.registrationCode && safeEqual(provided, config.registrationCode);
+            // Case, spaces and dashes don't matter (phone keyboards; auth/regCodes.js).
+            const provided = typeof code === 'string' ? code : '';
+            const envOk = !!config.registrationCode && safeEqual(normalizeRegCode(provided), normalizeRegCode(config.registrationCode));
             usedCode = envOk ? null : db.findUsableRegCode(provided);
             if (!envOk && !usedCode) {
               res.writeHead(403);

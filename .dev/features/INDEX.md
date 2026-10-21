@@ -296,3 +296,8 @@ Container: `P12-00-email.md`. The owner's decisions (2026-10-21): Resend over SM
 | P12-02 | Email addresses: optional, confirm by link, change with password, "require confirmed email" switch (migration: users rebuild, email_tokens) | 12 | PLANNED | M | P12-01, P11-12 | migrations, db/index.js, routes/auth.js, Login.jsx, EmailSection.jsx, ConfirmEmailGate.jsx |
 | P12-03 | Password reset: "Forgot password?", one-time link, admin reset link, console tool | 12 | PLANNED | M | P12-02; P11-08 (soft) | routes/auth.js, tools/reset-link.js, ResetPassword.jsx, Login.jsx |
 | P12-04 | Security notices: password changed, email changed, new device | 12 | PLANNED | S | P12-02 | routes/auth.js, mail/templates.js, Notifications settings |
+
+## Small fixes from the live server (P13)
+| ID | Title | Phase | State | Effort | Depends on | Main files |
+|---|---|---|---|---|---|---|
+| P13-01 | Registration codes that survive a phone keyboard: easy-to-type codes, matching ignores case, spaces and dashes, no autocorrect | 13 | REVIEW | S | none | auth/regCodes.js (new), db/index.js, routes/admin.js, routes/auth.js, Login.jsx, SetupWizard.jsx |

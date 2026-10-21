@@ -150,7 +150,7 @@ function AccountStep({ onDone, needsCode }) {
       {needsCode && (
         <div>
           <Field label="Setup code" hint="From the server">
-            <input autoFocus value={setupCode} onChange={(e) => setSetupCode(e.target.value)} className="input font-mono" autoComplete="off" spellCheck={false} aria-describedby="setup-code-help" />
+            <input autoFocus value={setupCode} onChange={(e) => setSetupCode(e.target.value)} className="input font-mono" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-describedby="setup-code-help" />
           </Field>
           <p id="setup-code-help" className="mt-1 text-xs text-gray-500">
             It's printed in the server's log when it starts, and saved in the <code>.setup-code</code> file next to the database.

@@ -1,5 +1,4 @@
 // Instance admin: registration management (site admins only).
-const crypto = require('crypto');
 const db = require('../db');
 const { config, registrationMode } = require('../config');
 const { authUserId } = require('../auth/tokens');
@@ -7,6 +6,7 @@ const { sendJson, readJsonBody } = require('../http/util');
 const linkPreviews = require('../linkPreviews');
 const imagine = require('../imagine');
 const { clientIpVia, proxyTrust } = require('../net/clientIp');
+const { newRegCode } = require('../auth/regCodes');
 
 const getJsonBody = readJsonBody;
 
@@ -145,7 +145,7 @@ const routes = [
         const maxUses = parseInt(body.maxUses, 10) > 0 ? parseInt(body.maxUses, 10) : null;
         const days = parseInt(body.expiresInDays, 10);
         const expiresAt = days > 0 ? Date.now() + days * 86400000 : null;
-        const code = crypto.randomBytes(6).toString('base64url');
+        const code = newRegCode(); // easy to type on a phone (auth/regCodes.js)
         db.addRegCode(code, userId, expiresAt, maxUses);
         return sendJson(res, 201, { code });
       }

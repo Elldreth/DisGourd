@@ -661,6 +661,20 @@ test('registration gating: code required, closed mode, and account cap', async (
     // ...but only once (maxUses = 1).
     expect((await reg({ username: 'gate-e', email: 'gate-e@example.com', password: 'gourd-test-pass-1', code: minted })).status).toBe(403);
 
+    // New codes are easy to type (no 0/O/1/I/L), and a phone keyboard's
+    // capitals, lower case, spaces or a missing dash don't break them.
+    expect(minted).toMatch(/^[A-HJKMNP-Z2-9]{5}-[A-HJKMNP-Z2-9]{5}$/);
+    const phoneRes = await fetch(`${base}/admin/registration/codes`, {
+      method: 'POST', headers: { ...JSON_HEADERS, ...auth(gateAToken) }, body: JSON.stringify({ maxUses: 3 }),
+    });
+    const phoneCode = (await phoneRes.json()).code;
+    const typed = [` ${phoneCode.toLowerCase()} `, phoneCode.replace('-', ''), phoneCode.charAt(0) + phoneCode.slice(1).toLowerCase().replace('-', ' ')];
+    for (const [i, code] of typed.entries()) {
+      expect((await reg({ username: `gate-p${i}`, email: `gate-p${i}@example.com`, password: 'gourd-test-pass-1', code })).status).toBe(201);
+    }
+    // The server-wide code from the environment is matched the same way.
+    expect((await reg({ username: 'gate-f', email: 'gate-f@example.com', password: 'gourd-test-pass-1', code: ' Sesame' })).status).toBe(201);
+
     // Closed mode blocks everyone, even with a code.
     setMode('closed');
     expect((await reg({ username: 'gate-b', email: 'gate-b@example.com', password: 'gourd-test-pass-1', code: 'sesame' })).status).toBe(403);
