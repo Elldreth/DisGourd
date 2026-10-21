@@ -1,0 +1,243 @@
+# P11-00 — Security review for the public cloud (Container)
+
+- **Unit Type:** Container (security review + child packets)
+- **Phase:** 11 (security)
+- **State:** REVIEW (the findings and plan, for the owner to read; no app code changed)
+- **Effort:** L in total (children S–M each)
+- **Depends on:** main at 92f7178 (after #208)
+- **Requirement Source:** the owner, relayed 2026-10-20: DisGourd is moving from the Unraid box (behind SWAG, closed registration) to a cloud host, "so it must be safe on the open internet". Review first, then a prioritized plan; this unit changes no app code.
+
+## The short version
+- **Nothing Critical can be used against today's instance.** It already has accounts, and registration is closed.
+- **One thing becomes Critical on move day:** a new, empty instance gives site admin to whoever registers first, even with `REGISTRATION_MODE=closed` (C1). If the cloud box starts empty, fix that first (P11-01), or copy the existing `/config` over before the port opens.
+- **Three High issues** should be fixed before the instance goes public:
+  - A role holding `manage_roles` can promote itself to Admin (H1).
+  - Any signed-in member can fill the disk (H2).
+  - The sample deployment publishes port 3000 and trusts `X-Forwarded-For`, so anyone can bypass the login rate limits (H3).
+- The code is in good shape. Link previews and the image proxy have solid SSRF rules. SQL is parameterised everywhere. The markdown renderer never uses innerHTML. Uploads can't traverse paths, and HTML/SVG uploads are served as downloads. The JWT secret strength is enforced, and sessions can be revoked. The production dependencies have 0 known vulnerabilities.
+
+## Threat model
+- **Who:** strangers on the internet (no account), anyone with an account (registration code, invite, or open sign-up), a member with some moderator permissions, and a site admin whose password leaks.
+- **What matters:** taking over accounts or the instance, reading private channels or DMs, the owner's kie.ai credits and key, the cloud VM itself (metadata credentials, disk, bill), and participants' IP addresses.
+- **What changes in the cloud:**
+  - There's no LAN firewall any more.
+  - Docker-published ports skip host firewalls like ufw.
+  - Proxy and load-balancer logs may be kept by a third party.
+  - Disk and bandwidth cost money.
+  - The ComfyUI box stays at home and has to be reached over a tunnel.
+
+## Findings
+Severity measures how bad it is on a public cloud instance with registration by code or invite. Each finding gives file:line, how it's exploited, and the fix (with the child packet that does it).
+
+### Critical
+**C1. First account on an empty instance becomes site admin, whatever the registration mode** — P11-01
+- Where:
+  - `server/routes/auth.js:62` — `firstAccount` skips the mode and code checks.
+  - `server/db/index.js:1926-1930` — `createUser` makes the first account site admin.
+  - `server/routes/auth.js:48` — `/auth-info` says `setup: true` to anyone.
+- Exploit: the owner starts a fresh cloud instance (new volume, or a test deploy) and opens the port. Scanners that hit `/auth-info` see `{"registration":"closed","setup":true}`. `POST /register` gets them in, and they're site admin. From there they can switch registration to open, read the instance settings, use the saved kie.ai key through /imagine and the "try" endpoint, and promote friends.
+  - Confirmed with the proof script, REGISTRATION_MODE=closed: `auth-info: { registration: 'closed', setup: true }` → `C1 first register while closed -> 201 siteAdmin = true`.
+- Fix: on an empty instance, require a one-time setup code. Generate it at boot when there are no users, print it to the log, and keep it in `/config/.setup-code` (0600). The first `/register` must carry it, and the wizard asks for it. Also:
+  - `SITE_ADMINS` (`server/config.js:47`) promotes by name on every boot. Only promote accounts that already exist, warn when a listed name isn't registered, and don't re-promote someone a site admin demoted. Otherwise a stranger can register a listed-but-unused name (a typo, or a fresh instance with open sign-up) and become admin on the next restart.
+- Today: not exploitable. The Unraid instance has accounts.
+
+### High
+**H1. The legacy tier route skips the role hierarchy, so `manage_roles` can mint Admins** — P11-02
+- Where: `server/routes/spaces.js:179-188`. `PATCH /spaces/:s/members/:u { role: 'admin' }` checks only `manage_roles`. Through `applyTierMember` (`server/db/index.js:336-342`) it gives or removes the seeded Admin role. There's no position check, no "role below yours" check, and no rule against targeting yourself.
+- Exploit: an owner makes a "Mods" role with `manage_roles` (a normal thing to do; the roles screen promises Mods can only manage roles below their own). A Mod sends that PATCH to themself and becomes Admin: edit server, ban, kick, delete channels. Or they PATCH a real Admin to `member` and take away their Admin role.
+  - Confirmed: the roles API refuses (`403 You can only give or take roles below your own`), but the legacy PATCH answers 200, and the Mod gains `edit_server` and `ban_members`.
+- Fix: apply the same rules as `routes/roles.js:132-149` (role below yours, target below you or yourself, never above), or remove the route. The app gives roles through `/members/:u/roles/:id`; check the web client for callers first.
+- Today: exploitable only if a non-owner role has been given `manage_roles` (by default only the owner has it).
+
+**H2. Any signed-in member can fill the disk or flood the gateway** — P11-03, P11-04
+- Where:
+  - `server/gateway/chat.js:72-76`. The `read` op stores `(space, channel)` strings with no membership or existence check (`server/db/index.js:1275`), and a frame can be 256 KB (`server/http/util.js:51`). Confirmed: 20 frames left 20 rows and 4.7 MB. A script makes gigabytes a minute.
+  - No per-user rate limit on `message`, `dm`, `react`, `typing` or any other op (`server/gateway/router.js:18-51`, `chat.js:78`, `dm.js:109`). Slow mode is opt-in per channel. Each message also fans out to every viewer, @mention pushes, and link-preview work.
+  - No cap on sockets per user (`server/gateway/index.js:99-100`).
+  - Uploads: 25 MB each, as many as you like, no per-user quota (`server/routes/uploads.js:79-147`). Files are never deleted, even when their message is.
+  - `GET /search` runs `LIKE '%q%'` over every visible message with no rate limit (`server/routes/social.js:83-90`). Cheap to call, expensive on a big database.
+- Exploit: one invite or registration-code holder runs a loop. The volume fills, SQLite starts failing writes, and the chat goes down for everyone. On a pay-per-GB volume, the bill grows too.
+- Fix:
+  - P11-03 (gateway): validate `read` against the user's real channels; a token bucket per user and per op (for example 10 messages per 10 s, 30 frames per second overall, typing at most once a second); at most 10 sockets per user; close abusive sockets with code 1008.
+  - P11-04 (uploads): a per-user daily byte quota and a total-storage cap (`MAX_UPLOAD_BYTES_PER_DAY`, `UPLOADS_MAX_TOTAL_BYTES`); delete files with their message; a sweep for orphaned upload folders.
+  - The search rate limit goes in P11-03.
+
+**H3. The sample deployment publishes port 3000 and trusts X-Forwarded-For, so the rate limits are spoofable** — P11-05
+- Where:
+  - `docker-compose.yml:46` publishes `3000:3000` on every interface, and `docker-compose.yml:30` sets `TRUST_PROXY=1`.
+  - `server/auth/rateLimit.js:29-38` then trusts the last `X-Forwarded-For` hop from any peer.
+  - `server/static.js:38` trusts `X-Forwarded-Host` / `-Proto` even without TRUST_PROXY.
+- Exploit: copy the compose file to a cloud VM and port 3000 is open to the internet. Docker's iptables rules skip ufw and firewalld. An attacker talks straight to `:3000` over plain HTTP and sends a new `X-Forwarded-For: 1.2.3.<n>` with each request. Every attempt lands in a fresh bucket, so the 15-per-15-minutes login limit and the 5-per-15-minutes registration limit stop working. That leaves unlimited password guessing against the site admin. Plain HTTP on :3000 also carries tokens unencrypted.
+- Fix: `TRUSTED_PROXIES` (CIDRs, default loopback and the Docker bridge). Use X-Forwarded-For only when the socket peer is in that list, and then take the right-most hop that isn't itself a trusted proxy. Ship a cloud compose and proxy sample:
+  - Nothing published except 80 and 443 on the proxy, or `127.0.0.1:3000:3000`.
+  - Container hardening (`read_only`, `cap_drop: [ALL]`, `no-new-privileges`, a pinned image).
+  - A proxy config that sets HSTS and keeps `token=` out of access logs (see M2).
+
+### Medium
+**M1. No security headers: CSP, frame-ancestors, HSTS, nosniff on the app; CORS `*`** — P11-06
+- Where: `server/http/handler.js:12-15` sets only CORS `*`. `server/static.js:79` serves the app shell with no CSP, X-Frame-Options, Referrer-Policy or Permissions-Policy. The SWAG sample (`deploy/swag/disgourd.subdomain.conf.sample`) adds none either.
+- Exploit: the session token sits in `localStorage` (`web/src/api.js:5-15`) for 7 days (`server/auth/tokens.js:5`). No XSS was found, but if one ever turns up (a dependency, a future renderer change), there's no CSP to stop it, and one script reads the token. Separately, any site can frame DisGourd and overlay buttons (clickjacking: Leave server, Transfer…, Delete message). CORS `*` lets any origin read API answers if it has a token. That doesn't help an attacker today, but it removes a layer.
+- Fix:
+  - A strict CSP on the shell: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:` (plus `https:` only when `LINK_PREVIEW_IMAGES=direct`); `media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'`. The client loads no third-party scripts, and `theme-init.js` is a file, not inline.
+  - `X-Content-Type-Options: nosniff` everywhere, `Referrer-Policy: same-origin`, a `Permissions-Policy` that allows only camera, microphone and display-capture on self, and HSTS at the proxy.
+  - CORS: same-origin by default, with an `ALLOWED_ORIGINS` env for the Vite dev proxy.
+
+**M2. Session tokens travel in URLs and end up in logs** — P11-07
+- Where: `web/src/useSocket.js:37` opens `/gateway?token=…`. `server/gateway/index.js:83` reads it. `server/auth/tokens.js:60` also accepts `?token=` on every HTTP route.
+- Exploit: SWAG/nginx, a cloud load balancer, a CDN, or a log shipper records the request line, `GET /gateway?token=eyJ…`. That's a working 7-day credential for anyone who can read the logs: the hosting provider, a log service, or a later breach of the box.
+- Fix: authenticate the socket in its first frame (`{ op: 'auth', token }` within 5 s, or close) or through `Sec-WebSocket-Protocol`. Stop accepting `?token=` on HTTP; the app already sends `Authorization: Bearer`. Until then, the P11-05 proxy sample strips the query from access logs.
+
+**M3. Sign-in can be brute-forced from many addresses; the limiter itself can grow** — P11-08
+- Where:
+  - `server/routes/auth.js:120` limits per IP only (15 per 15 minutes); there's no per-account limit. IPv6 clients rotate through a /64 for free.
+  - `server/validate.js:45` asks only for 8 or more characters.
+  - `server/auth/rateLimit.js:15-17` cleans up only expired buckets, so a flood of new keys grows the map without bound.
+  - Site admins have no second factor.
+- Exploit: usernames are public (member lists, mentions). A botnet or an IPv6 /64 sprays common passwords at the owner's account, 15 tries per address. (Before P11-05 it doesn't even need many addresses; see H3.)
+- Fix:
+  - A per-account limit (for example 10 failures per 15 minutes, then a growing delay), counted whichever IP the attempt comes from.
+  - Key IPv6 by /64.
+  - Cap the limiter map (LRU).
+  - Refuse the most common passwords at sign-up and on password change (a small built-in list).
+  - TOTP for site admins is recorded as a follow-up (bigger).
+
+**M4. Uploads stay public and outlive their messages** — P11-04
+- Where: `server/routes/uploads.js:151-196` serves `/uploads/<token>/<name>` to anyone, with no login, and `Cache-Control: public, max-age=31536000, immutable`. Deleting a message or DM (`server/db/index.js:1787-1793`, `1588`) leaves the file.
+- Exploit: a photo shared in a private channel or a DM, then deleted, is still served to anyone who has the link (someone it was forwarded to, a browser history, a scraped log), and caches keep it for a year. The 72-bit token stops guessing, not sharing.
+- Fix: delete an upload's folder when the last message that references it is deleted (P11-04). Add `Content-Security-Policy: default-src 'none'; sandbox` and `Cross-Origin-Resource-Policy: same-origin` to `/uploads`. Cache privately for a short time (`private, max-age=86400`). Optional and recorded only: signed, expiring upload URLs, which would need the app to request them.
+
+**M5. Admin-set ComfyUI URL can reach the cloud metadata service; ComfyUI itself must not be exposed** — P11-10
+- Where: `server/imagine/engines/comfyui.js:428-437` fetches any http(s) URL the admin saved (`:825-830`), with redirects followed by `fetch`. `/admin/imagine/comfyui/test` (`server/routes/admin.js:80-87`) echoes the parsed answer.
+- Exploit: a stolen site-admin login points ComfyUI at `http://169.254.169.254/…` (or the provider's metadata hostname) and reads instance credentials back through the error and list replies. Separately, the obvious way to reach the home ComfyUI from the cloud, port-forwarding it to the internet, exposes an unauthenticated service that runs arbitrary workflows (custom nodes run code).
+- Fix: refuse link-local addresses (169.254.0.0/16, fe80::/10) and the metadata hostnames for the ComfyUI URL, before the request and on each redirect (`redirect: 'manual'`). LAN and tailnet ranges stay allowed, because ComfyUI legitimately lives there. Document reaching ComfyUI over Tailscale or WireGuard, never a public port. Use IMDSv2 on hosts that have it.
+
+**M6. Usernames are case-sensitive, so "Elldreth" and "elldreth" can both exist** — P11-12
+- Where: `server/db/migrations.js:43` (`username TEXT UNIQUE`, no NOCASE) and `server/db/index.js` (`getUserByUsername` is an exact match).
+- Exploit: someone registers `Elldreth` next to the owner's `elldreth`, DMs members as "the admin", and is @mentioned by mistake. `SITE_ADMINS` matching (C1) is exact too.
+- Fix: a migration adding a case-insensitive unique index. It lists any existing collisions first and stops with a clear message. Lookups become case-insensitive.
+
+**M7. Anyone on the instance can DM anyone** — P11-09
+- Where: `server/gateway/dm.js:109-123`. A first DM makes a pair conversation with any username. Friend requests (`server/routes/social.js:134-147`) aren't limited either.
+- Exploit: on a public instance, a stranger with an account DMs or friend-requests every user. Blocking works only after the fact.
+- Fix: a per-user "Who can DM me" setting: friends and people I share a server with (default), or everyone. Rate limit new conversations and friend requests per user.
+
+**M8. Voice calls show every participant's IP address to everyone in the call; the forced mute is only advisory** — P11-11
+- Where: `web/src/voice.js:20-23` (STUN only, mesh, and `window.__DISGOURD_ICE__` is never set by the server). `server/gateway/voice.js:88,124`: a timed-out member is "muted" in the room state, but their audio goes peer to peer.
+- Exploit: anyone who can join a voice channel collects the public IP of everyone in it from the ICE candidates (`chrome://webrtc-internals`, or a modified client). A timed-out member's modified client keeps sending audio.
+- Fix: serve ICE servers from the server (`ICE_SERVERS` / `TURN_URL` + `TURN_SECRET` with time-limited coturn credentials). Add an instance option `VOICE_RELAY_ONLY` (`iceTransportPolicy: 'relay'`) so peers only ever see the TURN server. Honest clients drop the audio track from a peer the server marks force-muted; full enforcement needs an SFU and is recorded, not planned.
+
+**M9. Site admins can't suspend an account** — P11-09
+- Where: there's no instance-level user moderation. `server/routes/admin.js` only manages registration, codes and admins. Bans are per server.
+- Exploit: an abusive account (a leaked registration code) can be banned from each server, but it keeps signing in, DMing people (M7), uploading (H2) and joining servers through invites.
+- Fix: `PUT /admin/users/:username { suspended }`. It sets a flag, bumps `token_version` (closing sockets), and makes login and `verifyToken` refuse. Plus a minimal list in the site-admin settings.
+
+**M10. Push subscriptions can point anywhere: a blind POST from the server** — P11-10
+- Where: `server/routes/push.js:8-10` accepts any `https://` endpoint, and `server/push.js:69` POSTs to it when the user is mentioned.
+- Exploit: a member registers `https://10.0.0.5/…` or an internal https service as their "push endpoint", then gets themself @mentioned. The server sends encrypted POSTs into the cloud network. It's blind (the body is ciphertext), but it can still poke internal services, and it can be used to make the server hammer a third party.
+- Fix: accept only the known push services' hosts (FCM, Mozilla autopush, Windows WNS, Apple web push), or vet the endpoint with `isBlockedAddress` from `server/net/safeFetch.js`. Cap subscriptions per user (for example 10).
+
+### Low
+These go to one sweep packet, P11-13, unless noted.
+- **L1.** Error texts are echoed. `server/routes/auth.js:112,144` return `e.message` from any throw in register and login. Return a fixed message and log the rest.
+- **L2.** Backups and secrets at rest:
+  - `VACUUM INTO` (`server/backup.js:48`) writes unencrypted copies with the default umask, on the same volume as the database.
+  - The copies include password hashes, every DM, and the kie.ai key if it was saved in the app (`server/imagine/engines/kie.js:238`).
+  - Fix: chmod 0600, document an off-site encrypted copy (restic or rclone to object storage), and prefer `KIEAI_API_KEY` in the environment on the cloud host (already supported, `kie.js:64`).
+- **L3.** Moderators can see excerpts from channels they can't view.
+  - Report lists (`server/routes/spaces.js:247`) and the moderation log (`:151-161`) include excerpts from channels the moderator can't view. Filter them by `canViewChannel`.
+  - `DELETE /spaces/:s/channels/:c` (`:654-658`) works on a private channel the actor can't see. Require view.
+- **L4.** Tokens without a session id are still accepted. Tokens from before P9-03 have no `sid` and run until they expire (`server/auth/tokens.js:44-49`); stop accepting them. Sockets are never re-checked after a token expires; re-verify on the heartbeat.
+- **L5.** No Origin check on the `/gateway` upgrade (`server/gateway/index.js:77-88`). The token is the real gate, but checking against `ALLOWED_ORIGINS` is cheap defence in depth.
+- **L6.** Registration leaks which usernames and emails exist: `/register` answers 409 "User already exists" for either (`server/routes/auth.js:89-91`). Usernames are public anyway; emails shouldn't be. Use one message.
+- **L7.** Invites never expire by default (`server/routes/spaces.js:361`). Default to 7 days and offer "never".
+- **L8.** Container (P11-05):
+  - No `read_only` filesystem, `cap_drop` or `no-new-privileges` in the compose file.
+  - The base image is a moving tag (`node:22-bookworm-slim`).
+  - `.dockerignore` doesn't list `**/.vapid.json` (it's gitignored, but a local one would be baked into the image).
+- **L9.** Dependencies:
+  - `npm audit --omit=dev` finds 0 in both server/ and web/.
+  - The full audit finds dev-only issues: server/ has 3 high and 3 moderate in the Jest toolchain (brace-expansion, js-yaml, browserslist, sprintf-js). web/ has 1 high, Vite 8.3.0–8.3.2's `launch-editor` (the dev server on Windows).
+  - Fix: `npm audit fix` and a Vite bump. Neither ships in the image.
+- **L10.** The HTTP server keeps Node's default timeouts, and the WS upgrade has no IP-level connection cap. The proxy should cap connections per IP (in the P11-05 sample).
+
+### Checked and fine (no action)
+- **SSRF in link previews and the image proxy** (`server/net/safeFetch.js`):
+  - http(s) on ports 80/443 only.
+  - Every resolved address is checked: private, loopback, link-local, NAT64, 6to4 and Teredo are refused.
+  - The connection is pinned to the checked address, so DNS rebinding can't swap one in.
+  - Each redirect is re-checked, with a deadline and a byte cap.
+  - `allowLoopback` works only under `NODE_ENV=test`, which also covers the kie.ai result download (`kie.js:198`).
+  - The image proxy fetches only URLs it signed (HMAC), sniffs the real image type (no SVG), and serves with `default-src 'none'` and nosniff.
+- **SQL:** every statement is a prepared statement with `?`. Interpolated pieces are fixed table names or `?` lists (`inList`).
+- **XSS in the client:**
+  - `web/src/markdown.jsx` builds React elements and autolinks only http(s), with `rel="noopener noreferrer nofollow"`.
+  - Embeds accept only http(s) or our proxy paths and hex colours (`web/src/components/Embed.jsx:7-9`).
+  - The only `dangerouslySetInnerHTML` is the built-in server glyph tiles (constants).
+  - Avatars, icons and attachments must be `/uploads/` paths.
+- **Uploads:**
+  - Path traversal is guarded on both write and read.
+  - Executables are refused.
+  - SVG, HTML, JSON and the like are served as `attachment` with nosniff, and only plain media is shown inline.
+  - The server emoji and /imagine readers re-check the path shape.
+- **Auth:**
+  - HS256 with a fixed algorithm and a timing-safe compare.
+  - Weak and placeholder secrets are refused, and generated ones are stored 0600.
+  - Passwords use async scrypt (N=16384), with a dummy hash for unknown users.
+  - A password change and "sign out other devices" bump the token version and close sockets.
+  - The kie.ai key is never sent back (`keyHint` shows the last 4 characters).
+  - The ComfyUI URL never reaches members (`decorateSpaces` sends only style names).
+- **Authorization:**
+  - Every route under `/spaces/:s` checks membership first.
+  - Channel reads, pins, threads and versions check `canViewChannel`.
+  - Kick, ban, timeout and roles use rank checks (apart from H1).
+  - DMs check that you're in the conversation; edit and delete are author-only in SQL.
+  - Group DM add and remove follow the owner and shared-server rules, and blocks apply to DMs, groups, typing and pushes.
+- **Limits:** JSON bodies are capped at 64 KB, WebSocket frames at 256 KB, messages at 4,000 characters, and /imagine has daily per-user limits plus a monthly kie.ai credit cap.
+- **Container:** a non-root user, root-owned app files, a healthcheck, and a clear message when the volumes have the wrong owner.
+
+## Plan: children in priority order
+**Before the instance goes public:** P11-01 to P11-05. **Before inviting anyone outside the current group:** P11-06 to P11-09. The rest soon after.
+
+| ID | Fixes | Title | Size | State |
+|---|---|---|---|---|
+| P11-01 | C1 | First-run setup code; safe `SITE_ADMINS` | S | READY |
+| P11-02 | H1 | Role hierarchy on the legacy member-tier route | S | READY |
+| P11-03 | H2 | Gateway abuse limits: `read` checks, per-user op rate limits, socket cap, search limit | M | READY |
+| P11-04 | H2, M4 | Upload quotas, cleanup with their messages, sandboxed serving | M | READY |
+| P11-05 | H3, L8, L10 | Cloud deployment: trusted proxies, no public app port, proxy sample, container hardening | S–M | READY |
+| P11-06 | M1 | Security headers, CSP and same-origin CORS | S–M | READY |
+| P11-07 | M2 | Session tokens out of URLs (first-frame socket auth) | S–M | PLANNED (after P11-03: both touch `gateway/index.js`) |
+| P11-08 | M3 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common-password list | S–M | READY |
+| P11-09 | M7, M9 | Instance safety: suspend accounts; who can DM me | M | PLANNED (after P11-03 and P11-07: gateway and token checks) |
+| P11-10 | M5, M10 | Outbound requests: ComfyUI metadata block and tunnel docs; push endpoint vetting | S | READY |
+| P11-11 | M8 | Voice: TURN credentials from the server, relay-only option, honour forced mute | M | READY |
+| P11-12 | M6 | Case-insensitive usernames (migration with collision check) | S–M | PLANNED (after P11-01) |
+| P11-13 | L1–L7, L9 | Low-severity sweep | S–M | PLANNED (last: it touches files from several others) |
+
+## Serialize
+- P11-03, P11-07 and P11-09 all touch `server/gateway/` (`index.js`, `router.js`, `dm.js`). Do them in that order.
+- P11-01 and P11-12 both touch registration and username lookups. P11-01 goes first.
+- P11-05 and P11-06 both touch the proxy sample. P11-05 writes it, and P11-06 adds the header lines.
+- P11-13 goes last.
+
+## Owner decisions
+1. **Move-day path:** copy the existing `/config` (DB, `.jwt-secret`, `.vapid.json`) to the cloud box, or start empty? Copying avoids C1 on day one, and push subscriptions keep working only if `.vapid.json` moves too.
+2. **DM default (P11-09):** recommended "friends and people I share a server with".
+3. **Voice (P11-11):** run coturn on the cloud box (more bandwidth on every call), or keep STUN only and accept IP exposure among people in a call? Recommended: TURN available, relay-only off by default, on for a public instance.
+4. **Registration on the cloud:** recommended `code` (per-person codes with a use limit), never `open`.
+
+## Verification Evidence
+| Item | Status | Evidence |
+|---|---|---|
+| Code read | Done | `server/` (all routes, gateway ops, auth, net, imagine engines, db access paths), `web/src` (markdown, embeds, api/token, socket, voice, sw.js), Dockerfile, docker-compose.yml, `deploy/` |
+| C1, H1, H2 reproduced | Done | `.dev/security/p11-00-proof.js` against an in-memory DB (NODE_ENV=test, random port; not the real DB, not :3000). Output: `C1 first register while closed -> 201 siteAdmin = true`; `H1 roles API (should refuse) -> 403` then `H1 legacy PATCH -> 200 \| after: edit_server = true ban = true`; `H2 read_state after 20 frames: 20 rows, 4.7 MB`. |
+| npm audit | Done | server/: 0 in production, 6 in dev (3 high, 3 moderate, the Jest chain). web/: 0 in production, 1 dev (vite / launch-editor). |
+| App code changed | None | Packets and the proof script only |
+| kie.ai spend | 0 | Nothing was generated |
+
+## Discovered Work (recorded, not planned)
+- TOTP two-factor for site admins (and optionally everyone).
+- Email verification and a secure password reset, once the email provider is chosen (the other session's research). Today email isn't verified, and there's no reset.
+- Signed, expiring upload URLs, or a separate origin for user content.
+- An SFU for voice (real server-side mute, no peer IPs, better for large calls).
+- `url.parse()` deprecation (DEP0169) in `http/handler.js` and `gateway/index.js`. Move to the WHATWG URL parser; it's not a vulnerability here, since paths are re-checked.
