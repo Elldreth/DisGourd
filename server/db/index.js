@@ -1599,6 +1599,7 @@ function getDmConversations(userId, { only = null } = {}) {
   const rows = db.prepare(`
     SELECT c.id, c.kind, c.name, c.owner_id AS ownerId, me.muted,
            last.content AS lastContent, last.attachment_url AS lastAttachment, last.created_at AS lastTimestamp,
+           last.author_id AS lastAuthorId, last.kind AS lastKind,
            (SELECT COUNT(*) FROM dm_messages um WHERE um.conversation_id = c.id AND um.author_id != me.user_id AND um.id > me.last_read_id) AS unread
     FROM dm_participants me
     JOIN dm_conversations c ON c.id = me.conversation_id
@@ -1617,6 +1618,8 @@ function getDmConversations(userId, { only = null } = {}) {
       id: r.id, kind: r.kind, name: r.name || null, ownerId: r.ownerId ?? null, muted: !!r.muted, members: list,
       ...(other ? { username: other.username, avatar: other.avatar, blocked: eitherBlocked(userId, other.id) } : {}), // P9-07a
       lastContent: r.lastContent, lastAttachment: r.lastAttachment, lastTimestamp: r.lastTimestamp, unread: r.unread,
+      // P10-04: who sent the last message (a group's preview names them), and whether it was a notice.
+      lastAuthorId: r.lastAuthorId ?? null, lastKind: r.lastKind || null,
     };
   }).filter((c) => c.kind !== 'pair' || c.username); // a pair whose other person is gone
 }

@@ -18,8 +18,8 @@ test('renders the art, a heading, a line of body text and an optional action', (
   expect(onClick).toHaveBeenCalled();
 });
 
-test('the seven illustrations exist, draw with theme colours only, and stay small', () => {
-  expect(Object.keys(ART).sort()).toEqual(['channel', 'clear', 'dms', 'imagine', 'privacy', 'search', 'server']); // imagine: P5-06; clear: P10-01; privacy: P10-02
+test('the eight illustrations exist, draw with theme colours only, and stay small', () => {
+  expect(Object.keys(ART).sort()).toEqual(['channel', 'clear', 'dms', 'group', 'imagine', 'privacy', 'search', 'server']); // imagine: P5-06; clear: P10-01; privacy: P10-02; group: P10-04
   for (const name of Object.keys(ART)) {
     cleanup();
     const { container } = render(<EmptyState art={name} title="t" />);

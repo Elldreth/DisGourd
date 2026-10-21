@@ -1,7 +1,7 @@
 import Gourd from './Gourd.jsx';
 import Icon from './Icon.jsx';
-import { MascotParts } from './Mascot.jsx';
-import { MASCOT_VIEWBOX } from '../mascotParts.js';
+import { MascotParts, GroupParts } from './Mascot.jsx';
+import { MASCOT_VIEWBOX, GROUP_VIEWBOX } from '../mascotParts.js';
 
 // One look for every empty state (P4-03): a flat spot illustration (or, in
 // small panels, an icon), a heading, one line and an optional action. The
@@ -74,6 +74,15 @@ export const ART = {
       <Ground x={40} w={120} />
       <svg x="41" y="4" width="118" height="118" viewBox={MASCOT_VIEWBOX}>
         <MascotParts pose="privacy" />
+      </svg>
+    </>
+  ),
+  // A new group (P10-04): three gourds together, the middle one chatting.
+  group: (
+    <>
+      <Ground x={18} w={164} y={120} />
+      <svg x="10" y="6" width="180" height="114" viewBox={GROUP_VIEWBOX}>
+        <GroupParts />
       </svg>
     </>
   ),

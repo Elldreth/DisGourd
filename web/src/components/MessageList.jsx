@@ -493,7 +493,7 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
           ) : row.kind === 'system' ? (
             <p key={row.key} data-msg-id={row.m.id} role="note" className="my-2 text-center text-xs text-gray-500">
               {row.m.content}
-              <span className="ml-2 text-gray-600">{formatTime(row.m.timestamp)}</span>
+              <span className="ml-2 text-gray-500">{formatTime(row.m.timestamp)}</span>
             </p>
           ) : row.kind === 'divider' ? (
             <div key={row.key} className="my-3 flex items-center gap-3 text-xs text-gray-500">

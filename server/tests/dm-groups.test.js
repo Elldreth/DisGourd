@@ -93,7 +93,7 @@ test('create: 3–10 people, only people you share a server with or friends; the
   }
   expect(gws.dot.of('dm_conversation')).toHaveLength(0);
   // GET /dms lists it from the start; history shows the notice with its kind.
-  expect((await get('ben', '/dms')).body.find((c) => c.id === conv)).toMatchObject({ kind: 'group', name: 'Gourd Club', lastContent: 'ann started the group' });
+  expect((await get('ben', '/dms')).body.find((c) => c.id === conv)).toMatchObject({ kind: 'group', name: 'Gourd Club', lastContent: 'ann started the group', lastAuthorId: users.ann.id, lastKind: 'system' });
   expect((await get('ben', `/dms/c/${conv}/messages`)).body).toEqual([expect.objectContaining({ content: 'ann started the group', kind: 'system', author: 'ann' })]);
   expect((await get('dot', `/dms/c/${conv}/messages`)).status).toBe(404);
 });
@@ -108,6 +108,8 @@ test('messages, typing and edits reach current members only; notices can’t be 
   gws.ann.send({ op: 'dm', conversation: conv, content: 'hello group' });
   gws.ann.send({ op: 'dm_typing', conversation: conv });
   await wait(150);
+  // P10-04: the list knows who said the last thing (a plain message, not a notice).
+  expect(db.getDmConversations(users.ben.id).find((c) => c.id === conv)).toMatchObject({ lastContent: 'hello group', lastAuthorId: users.ann.id, lastKind: null });
   for (const n of ['ann', 'ben', 'cyd']) expect(gws[n].of('dm').at(-1)).toMatchObject({ conversation: conv, from: 'ann', content: 'hello group', to: null });
   expect(gws.dot.of('dm').filter((f) => f.conversation === conv)).toHaveLength(0);
   expect(gws.ben.of('dm_typing').at(-1)).toEqual({ type: 'dm_typing', from: 'ann', conversation: conv });
