@@ -74,9 +74,8 @@ const routes = [
       }
       if (!mail.enabled()) {
         // Nothing can be confirmed while email is off: keep it, unconfirmed.
-        // Someone else's unconfirmed claim on it means it can't be stored yet.
-        const other = db.getUserByEmail(email);
-        if (other && other.id !== userId) return sendJson(res, 400, { error: CANT_USE });
+        // P13-04: someone else's unconfirmed claim on it gives way.
+        db.releaseUnconfirmedEmail(email, userId);
         db.setUserEmail(userId, email);
         return sendJson(res, 200, { ...emailView(db.getUserById(userId)), sent: false });
       }

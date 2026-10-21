@@ -190,3 +190,28 @@ test('"Require a confirmed email": only with email on; unconfirmed members reach
   mailOn();
   await call(owner, 'PUT', '/admin/email', { requireConfirmed: false });
 });
+
+test('P13-04: at sign-up, an address another account never confirmed gives way; a confirmed one still refuses with the same words', async () => {
+  mailOff();
+  // squat registered an address it never confirmed.
+  await register('squat', 'owner2@example.com');
+  expect(db.getUserByUsername('squat').email).toBe('owner2@example.com');
+  const real = await register('realowner', 'OWNER2@example.com'); // any case
+  expect(real.status).toBe(201);
+  expect(db.getUserByUsername('realowner').email).toBe('OWNER2@example.com');
+  expect(db.getUserByUsername('squat').email).toBeNull(); // taken off the unconfirmed claim
+  // A confirmed address is still protected, and the refusal doesn't say why.
+  db.raw.prepare('UPDATE users SET email_verified_at = ? WHERE username = ?').run(Date.now(), 'realowner');
+  expect(await register('third', 'owner2@example.com')).toEqual({ status: 409, body: { error: 'That username or email can’t be used' } });
+  expect(db.getUserByUsername('third')).toBeUndefined();
+  expect(db.getUserByUsername('realowner').email).toBe('OWNER2@example.com');
+});
+
+test('P13-04: adding an address while email is off takes it from an account that never confirmed it', async () => {
+  mailOff();
+  await register('holder', 'held@example.com');
+  const t = (await register('taker')).body.token;
+  const r = await json(await call(t, 'POST', '/me/email', { email: 'held@example.com', password: PASS }));
+  expect(r).toMatchObject({ status: 200, body: { email: 'held@example.com', emailVerified: false } });
+  expect(db.getUserByUsername('holder').email).toBeNull();
+});

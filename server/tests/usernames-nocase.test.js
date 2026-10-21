@@ -36,6 +36,8 @@ const me = async (token) => (await fetch(`${base()}/me`, { headers: { Authorizat
 
 test('registering Sandy next to sandy, or her email in other capitals, is refused', async () => {
   expect((await register('sandy')).status).toBe(201);
+  // P13-04: only a confirmed address blocks a sign-up, so sandy's is confirmed.
+  db.raw.prepare('UPDATE users SET email_verified_at = ? WHERE username = ?').run(Date.now(), 'sandy');
   expect(await register('Sandy', 'other@example.com')).toEqual({ status: 409, body: { error: 'That username or email can’t be used' } });
   expect((await register('sandra', 'SANDY@Example.com')).status).toBe(409);
 });
