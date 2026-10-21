@@ -276,7 +276,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-03 | Gateway abuse limits: `read` checks, per-user op limits, socket cap, search limit (H2) | 11 | COMPLETE | M | none | gateway/router.js, gateway/chat.js, gateway/index.js, routes/social.js, composer notice |
 | P11-04 | Upload quotas, cleanup with their messages, sandboxed serving (H2, M4) | 11 | COMPLETE | M | none | routes/uploads.js, migrations, db/index.js, uploadsGc.js (new) |
 | P11-05 | Behind the Cloudflare Tunnel: trust only cloudflared, read-only root, LAN egress rule, pinned images (H3 rest, L8, L10) | 11 | COMPLETE | S–M | none | auth/rateLimit.js, static.js, routes/admin.js, deploy/unraid-tunnel/ (new), docker-compose.yml, Dockerfile, README |
-| P11-06 | Security headers, CSP and same-origin CORS (M1) | 11 | READY | S–M | none (soft P11-05) | http/handler.js, static.js, proxy samples |
+| P11-06 | Security headers, CSP and same-origin CORS (M1) | 11 | REVIEW | S–M | none (soft P11-05) | http/handler.js, static.js, proxy samples |
 | P11-07 | Session tokens out of URLs: first-frame socket auth, Origin check (M2, L5) | 11 | PLANNED | S–M | P11-03 | gateway/index.js, auth/tokens.js, useSocket.js |
 | P11-08 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (M3) | 11 | COMPLETE | S–M | none (soft P11-05) | auth/rateLimit.js, routes/auth.js, validate.js |
 | P11-09 | Instance safety: suspend accounts; who can DM me (M7, M9) | 11 | PLANNED | M | P11-03, P11-07; owner decision 2 | migrations, routes/admin.js, auth/tokens.js, gateway/dm.js, site-admin settings, PrivacySection |

@@ -64,7 +64,7 @@ function serveWebApp(pathname, res, req) {
             'DisGourd API is running. Build the web client with `npm run build` to serve the UI here.'
           );
         }
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...pageHeaders(req) });
         res.end(withOrigin(html, req));
       });
       return;
@@ -79,9 +79,45 @@ function serveWebApp(pathname, res, req) {
     } else if (['index.html', 'sw.js', 'manifest.json'].includes(safe)) {
       headers['Cache-Control'] = 'no-cache';
     }
-    res.writeHead(200, headers);
+    res.writeHead(200, ext === '.html' ? { ...headers, ...pageHeaders(req) } : headers);
     res.end(ext === '.html' ? withOrigin(content, req) : content);
   });
+}
+
+// P11-06: what an HTML page of the app may load and do. Everything it needs
+// is on this origin: its own scripts (no inline ones; theme-init.js is a
+// file), styles (inline style attributes, from React), images (uploads, the
+// link-preview proxy, data: glyph tiles, blob: crops), fonts, the service
+// worker, and the live socket. Card images come from other sites only with
+// LINK_PREVIEW_IMAGES=direct. WebRTC streams (srcObject) aren't governed by
+// media-src. HSTS isn't sent here: Node can't tell whether TLS is in front,
+// so it's the proxy's or Cloudflare's job.
+function contentSecurityPolicy(req) {
+  const origin = originFor(req);
+  const socket = origin ? origin.replace(/^http/, 'ws') : '';
+  const direct = String(process.env.LINK_PREVIEW_IMAGES || '').toLowerCase() === 'direct';
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob:${direct ? ' https:' : ''}`,
+    "media-src 'self' blob:",
+    "font-src 'self' data:",
+    `connect-src 'self'${socket ? ` ${socket}` : ''}`,
+    "worker-src 'self'",
+    "manifest-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join('; ');
+}
+function pageHeaders(req) {
+  return {
+    'Content-Security-Policy': contentSecurityPolicy(req),
+    'X-Frame-Options': 'DENY', // for browsers without frame-ancestors
+    'Permissions-Policy': 'camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()',
+  };
 }
 
 // index.html with __DG_ORIGIN__ replaced by this server's address.
@@ -89,4 +125,4 @@ function withOrigin(html, req) {
   return Buffer.from(String(html).split('__DG_ORIGIN__').join(originFor(req)));
 }
 
-module.exports = { serveWebApp, WEB_DIST, originFor };
+module.exports = { serveWebApp, WEB_DIST, originFor, contentSecurityPolicy };
