@@ -13,6 +13,28 @@ import { useEffect, useRef } from 'react';
 const KEY = 'dgOverlay';
 const phone = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;
 
+// history.back() is asynchronous. If one overlay closes as another opens
+// (the nav drawer closing as Server settings opens on a phone, P10-01), the
+// new overlay's pushState must wait for that back() to land, or the back
+// would pop the new entry instead and close what just opened.
+let backPending = false;
+const waiting = new Set();
+function takeEntryBack(win) {
+  backPending = true;
+  const done = () => {
+    win.removeEventListener('popstate', done);
+    clearTimeout(timer);
+    if (!backPending) return;
+    backPending = false;
+    const ready = [...waiting];
+    waiting.clear();
+    ready.forEach((fn) => fn());
+  };
+  const timer = setTimeout(done, 400); // in case no popstate ever comes
+  win.addEventListener('popstate', done);
+  win.history.back();
+}
+
 export function useOverlayHistory(id, open, onClose, { win = typeof window !== 'undefined' ? window : null, enabled = phone } = {}) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -22,8 +44,6 @@ export function useOverlayHistory(id, open, onClose, { win = typeof window !== '
     if (!win) return;
     if (open) {
       if (!enabled()) return;
-      win.history.pushState({ [KEY]: id }, '');
-      pushed.current = true;
       const onPop = () => {
         // Our entry was popped (by the back button) and no other overlay's
         // entry sits above it: close.
@@ -31,14 +51,21 @@ export function useOverlayHistory(id, open, onClose, { win = typeof window !== '
         pushed.current = false;
         closeRef.current?.();
       };
-      win.addEventListener('popstate', onPop);
+      const start = () => {
+        win.history.pushState({ [KEY]: id }, '');
+        pushed.current = true;
+        win.addEventListener('popstate', onPop);
+      };
+      if (backPending) waiting.add(start);
+      else start();
       return () => {
+        waiting.delete(start);
         win.removeEventListener('popstate', onPop);
         // Closed by its own UI (or unmounted) while our entry is still on top:
         // take the entry out without re-closing.
         if (pushed.current && win.history.state?.[KEY] === id) {
           pushed.current = false;
-          win.history.back();
+          takeEntryBack(win);
         }
       };
     }

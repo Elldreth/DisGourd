@@ -6,8 +6,10 @@ import EmojiPicker from './EmojiPicker.jsx';
 // Actions on a single message. Every surface — the hover/focus toolbar, the
 // "…" menu, the right-click menu and the touch bottom sheet — renders the same
 // `actions` list, so a feature adds its item once (Reply, Pin, …):
-//   { id, label, icon, onSelect, danger?, quick? }
-// `quick` items also get a one-click button in the toolbar.
+//   { id, label, icon, onSelect, danger?, quick?, group? }
+// `quick` items also get a one-click button in the toolbar. In the menu, a
+// divider separates items whose `group` differs (P10-01: everyday actions,
+// then Report / Block, then Delete).
 
 export const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉', '😮', '😢', '🔥', '✅'];
 
@@ -90,7 +92,10 @@ export function ActionMenu({ actions, sheet, above, onClose, label }) {
     moveFocus(ref.current, e, false);
   };
 
-  const items = actions.map((a) => (
+  const items = actions.flatMap((a, i) => [
+    i > 0 && (a.group || '') !== (actions[i - 1].group || '') && (
+      <div key={`sep-${a.id}`} role="separator" className={`my-1 border-t border-ink-500/50 ${sheet ? 'mx-2' : 'mx-1'}`} />
+    ),
     <button
       key={a.id}
       type="button"
@@ -103,8 +108,8 @@ export function ActionMenu({ actions, sheet, above, onClose, label }) {
     >
       <Icon name={a.icon} size={sheet ? 20 : 16} />
       {a.label}
-    </button>
-  ));
+    </button>,
+  ]);
 
   if (sheet) {
     return (

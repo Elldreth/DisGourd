@@ -4,7 +4,8 @@ import Modal from './Modal.jsx';
 // Message menu → Report… (P9-01): flag a message for the server's moderators,
 // with a reason and an optional note. `onReport({ reason, note })` resolves
 // (or throws with the server's message). The person reported never sees who
-// reported them; moderators do.
+// reported them; moderators do. `excerpt` (P10-01): the message's text, quoted
+// so you can see which one you're reporting.
 export const REPORT_REASONS = [
   ['spam', 'Spam'],
   ['harassment', 'Harassment'],
@@ -12,7 +13,7 @@ export const REPORT_REASONS = [
   ['other', 'Something else'],
 ];
 
-export default function ReportDialog({ author, onReport, onClose }) {
+export default function ReportDialog({ author, excerpt = '', onReport, onClose }) {
   const firstRef = useRef(null);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
@@ -51,16 +52,21 @@ export default function ReportDialog({ author, onReport, onClose }) {
         <form onSubmit={submit}>
           <div className="border-b border-ink-500/40 px-6 py-4">
             <Modal.Title>Report @{author}’s message?</Modal.Title>
-            <p className="mt-1 text-sm text-gray-400">The server’s moderators will see it, and who sent the report. @{author} won’t.</p>
+            {excerpt && (
+              <blockquote data-testid="report-excerpt" className="mt-3 line-clamp-2 border-l-2 border-ink-500 pl-2 text-sm break-words text-gray-200">
+                {excerpt}
+              </blockquote>
+            )}
+            <p className="mt-2 text-sm text-gray-400">The server’s moderators will see it, and who sent the report. @{author} won’t.</p>
           </div>
           <div className="space-y-4 p-6">
             <fieldset>
               <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Why?</legend>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {REPORT_REASONS.map(([value, label], i) => (
                   <label
                     key={value}
-                    className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm ring-1 ${reason === value ? 'bg-brand/20 text-brand-hi ring-brand' : 'text-gray-300 ring-ink-500 hover:bg-ink-700'}`}
+                    className={`cursor-pointer rounded-lg px-3 py-1.5 text-center text-sm ring-1 ${reason === value ? 'bg-brand/20 text-brand-hi ring-brand' : 'text-gray-300 ring-ink-500 hover:bg-ink-700'}`}
                   >
                     <input
                       ref={i === 0 ? firstRef : undefined}

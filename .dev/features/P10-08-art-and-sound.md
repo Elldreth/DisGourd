@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P10-00)
 - **Phase:** 10
-- **State:** REVIEW
+- **State:** COMPLETE (merged #201)
 - **Effort:** S–M
 - **Depends on:** P8-01
 - **Serialize with:** P10-01 and P10-04 use its poses

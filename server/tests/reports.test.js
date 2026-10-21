@@ -125,6 +125,10 @@ test('dismissing closes every open report on that message and is logged', async 
   await report('admin', 'general', id, { reason: 'other' });
   const open = (await queue('owner')).body.reports.filter((r) => r.messageId === id);
   expect(open).toHaveLength(2);
+  // P10-01: the count is of messages, so two reports on one message count once.
+  const all = (await queue('owner')).body.reports;
+  expect(db.countOpenReports(spaceId())).toBe(new Set(all.map((r) => r.messageId)).size);
+  expect(db.countOpenReports(spaceId())).toBeLessThan(all.length);
   const res = await resolve('owner', open[0].id, { action: 'dismiss' });
   expect(res.body).toEqual({ closed: 2 });
   expect((await queue('owner')).body.reports.some((r) => r.messageId === id)).toBe(false);

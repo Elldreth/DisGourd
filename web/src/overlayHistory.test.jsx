@@ -96,3 +96,30 @@ test('a back press that pops someone else\'s entry does not close this overlay',
   act(() => win.history.back());
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+// P10-01: on a real phone history.back() lands later. When one overlay
+// closes as another opens (the nav drawer closing as Server settings opens),
+// the new entry must wait for that back, or the back pops it instead.
+test('an overlay that opens while another one’s back() is still on its way keeps its entry', async () => {
+  vi.useFakeTimers();
+  const win = fakeWindow();
+  const syncBack = win.history.back;
+  win.history.back = () => setTimeout(syncBack, 10); // asynchronous, like a browser
+  const closeDrawer = vi.fn();
+  const closePage = vi.fn();
+  function Two({ drawer, page }) {
+    useOverlayHistory('nav', drawer, closeDrawer, { win, enabled: () => true });
+    useOverlayHistory('settings-page', page, closePage, { win, enabled: () => true });
+    return null;
+  }
+  const { rerender } = render(<Two drawer page={false} />);
+  expect(win.history.state).toEqual({ dgOverlay: 'nav' });
+  rerender(<Two drawer={false} page />); // one render: the drawer closes, the page opens
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(50);
+  });
+  expect(closePage).not.toHaveBeenCalled();
+  expect(win.history.state).toEqual({ dgOverlay: 'settings-page' });
+  expect(win.history.length).toBe(2);
+  vi.useRealTimers();
+});

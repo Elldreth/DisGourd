@@ -708,24 +708,25 @@ function MessageRow({ m, grouped, mine, currentUser, onEdit, onDelete, canDelete
         onOpenThread(m.thread, m, rowRef.current);
       },
     },
-    // P9-07b: block the author (just for me), beside Report.
-    !mine && !m.bot && !m.kind && m.author && blocks.requestBlock && !blocks.isBlocked(m.author) && {
-      id: 'block', label: `Block ${m.author}…`, icon: 'ban',
-      onSelect: () => {
-        closePopup();
-        blocks.requestBlock(m.author);
-      },
-    },
     // Others' messages (not the bot's): flag them for the moderators (P9-01).
+    // Report and Block sit together, after a divider (P10-01).
     onReport && {
-      id: 'report', label: 'Report…', icon: 'flag',
+      id: 'report', label: 'Report…', icon: 'flag', group: 'safety',
       onSelect: () => {
         closePopup();
         onReport();
       },
     },
+    // P9-07b: block the author (just for me), beside Report.
+    !mine && !m.bot && !m.kind && m.author && blocks.requestBlock && !blocks.isBlocked(m.author) && {
+      id: 'block', label: `Block ${m.author}…`, icon: 'ban', group: 'safety',
+      onSelect: () => {
+        closePopup();
+        blocks.requestBlock(m.author);
+      },
+    },
     // Your own messages, or others' when you can moderate them.
-    canDelete && { id: 'delete', label: 'Delete message', icon: 'trash', danger: true, quick: true, onSelect: confirmDelete },
+    canDelete && { id: 'delete', label: 'Delete message', icon: 'trash', danger: true, quick: true, group: 'delete', onSelect: confirmDelete },
   ].filter(Boolean);
 
   function onEditKeyDown(e) {
