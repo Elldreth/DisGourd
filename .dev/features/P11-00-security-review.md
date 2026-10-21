@@ -131,9 +131,9 @@ Severity measures how bad it is on a public cloud instance with registration by 
 - Exploit: an abusive account (a leaked registration code) can be banned from each server, but it keeps signing in, DMing people (M7), uploading (H2) and joining servers through invites.
 - Fix: `PUT /admin/users/:username { suspended }`. It sets a flag, bumps `token_version` (closing sockets), and makes login and `verifyToken` refuse. Plus a minimal list in the site-admin settings.
 
-**M10. Push subscriptions can point anywhere: a blind POST from the server** — P11-10
-- Where: `server/routes/push.js:8-10` accepts any `https://` endpoint, and `server/push.js:69` POSTs to it when the user is mentioned.
-- Exploit: a member registers `https://10.0.0.5/…` or an internal https service as their "push endpoint", then gets themself @mentioned. The server sends encrypted POSTs into the cloud network. It's blind (the body is ciphertext), but it can still poke internal services, and it can be used to make the server hammer a third party.
+**M10. Push subscriptions can point anywhere: a blind POST from the server** — P11-10. **High when the server sits on the home LAN or a tailnet** (see "Hosting setups").
+- Where: `server/routes/push.js:8-10` accepts any `https://` endpoint, and `server/push.js:69` POSTs to it when the user is mentioned. It's the one server-side request that doesn't go through `safeFetch`.
+- Exploit: a member registers `https://192.168.1.1/…` (the router), `https://<unraid>/…`, `https://100.x.y.z/…` (a tailnet host) or any internal https service as their "push endpoint", then gets themself @mentioned. The server sends POSTs there. It's blind (the body is ciphertext), but it reaches the LAN, and it can be used to make the server hammer a third party.
 - Fix: accept only the known push services' hosts (FCM, Mozilla autopush, Windows WNS, Apple web push), or vet the endpoint with `isBlockedAddress` from `server/net/safeFetch.js`. Cap subscriptions per user (for example 10).
 
 ### Low
@@ -195,8 +195,52 @@ These go to one sweep packet, P11-13, unless noted.
 - **Limits:** JSON bodies are capped at 64 KB, WebSocket frames at 256 KB, messages at 4,000 characters, and /imagine has daily per-user limits plus a monthly kie.ai credit cap.
 - **Container:** a non-root user, root-owned app files, a healthcheck, and a clear message when the volumes have the wrong owner.
 
+## Hosting setups (added 2026-10-20, from the hosting research)
+The hosting session is weighing two setups. **A, a VPS:** the existing image, Cloudflare and/or Caddy for TLS, Tailscale back to the home PC for ComfyUI (:8188), Litestream backing the database up to Cloudflare R2, maybe a TURN relay, and email over SMTP. **B, the Unraid box at home:** Docker, SWAG, Cloudflare (or DuckDNS), and ComfyUI on the LAN. Both put the server one hop from the owner's home network (B directly, A over the tailnet), so a server-side request that can be steered is the top concern.
+
+**Server-side requests, checked one by one:**
+| Request | Guard | Home LAN, tailnet and metadata |
+|---|---|---|
+| Link previews (`integrations/unfurl.js`) | `safeFetch` | Blocked. After DNS resolution it refuses loopback, 10/8, 172.16/12, 192.168/16, 169.254/16, 100.64/10 (CGNAT, which covers Tailscale's 100.x), fc00::/7 (which covers Tailscale's fd7a:115c:a1e0::/48), fe80::/10, and IPv4-mapped forms. The connection is pinned to the checked address, and every redirect is checked again. Spot-checked: `100.101.102.103`, `fd7a:115c:a1e0::1`, `192.168.1.20`, `::ffff:100.100.1.1` → blocked; `8.8.8.8` → allowed. |
+| Preview images (`net/imageProxy.js`) | `safeFetch` | Blocked (same rules). |
+| kie.ai result downloads (`engines/kie.js:198`) | `safeFetch` | Blocked. Its `allowLoopback` works only under `NODE_ENV=test`. |
+| kie.ai API calls | none needed | The host is fixed in code (`api.kie.ai`), not taken from users. |
+| **Push endpoints** (`push.js:69`) | **none** | **Not blocked: M10. In a home or tailnet setup this is the gap to close first (P11-10).** |
+| ComfyUI (`engines/comfyui.js:432`) | none, on purpose | The one deliberate exception: a site admin points it at the home ComfyUI. P11-10 adds a metadata/link-local block. The real control is the network: in A, a Tailscale ACL that lets the VPS reach only `home-pc:8188`; in B, a firewall rule (below). |
+| Webhooks or other integrations | none exist | `server/integrations/` holds only the unfurler. Any future webhook must use `safeFetch`. |
+| TURN relay (if added) | coturn's own rules | A TURN server relays to any address a client names, unless told not to. P11-11's coturn config must deny private, CGNAT/tailnet and ULA peers (`denied-peer-ip` for 10/8, 172.16/12, 192.168/16, 100.64/10, 169.254/16, 127/8, fc00::/7, fe80::/10). |
+
+**Container egress (B especially):** if the app were ever compromised (RCE), the container can reach the whole LAN. On Unraid, a `DOCKER-USER` iptables rule (or a VLAN or custom network) can drop traffic from the DisGourd network to the LAN, except the ComfyUI host:8188 and the router's DNS. In A, Tailscale ACLs do the same: the VPS gets a tag that may reach only `home-pc:8188`, doesn't accept subnet routes, and isn't an exit node. Documented in P11-05 and P11-10.
+
+**Client IP behind Cloudflare** (H3, P11-05):
+- **Without real-IP setup at the proxy:** when Cloudflare proxies, the TCP peer SWAG or Caddy sees is a Cloudflare edge address. SWAG's `proxy.conf` appends `$remote_addr` to X-Forwarded-For, and the app takes the last hop. So every visitor coming through one edge shares a rate-limit bucket: one attacker's bad passwords lock everyone out (and vice versa). It's not a bypass, but it's a lockout DoS.
+- **The fix at the proxy:** For SWAG, use nginx's real-IP module with Cloudflare's published ranges: `set_real_ip_from <each Cloudflare range>` plus `real_ip_header CF-Connecting-IP` (linuxserver's `swag-cloudflare-real-ip` mod keeps the list current); Caddy has `trusted_proxies cloudflare` and `client_ip_headers CF-Connecting-IP`. The proxy rewrites the client address only for requests that really come from Cloudflare's ranges, and the app keeps trusting only the proxy (P11-05's `TRUSTED_PROXIES` = the Docker network). The app shouldn't read `CF-Connecting-IP` itself: any direct visitor can send that header.
+- **Origin reachable directly** (the home IP on 443, or the VPS IP): a visitor who skips Cloudflare still can't spoof the IP, as long as the real-IP rule above trusts only Cloudflare's ranges. But they skip Cloudflare's WAF and limits. Lock the origin: allow 443 only from Cloudflare's IP ranges (router or host firewall), or better, use a Cloudflare Tunnel (`cloudflared`), so no inbound port is open at all. DuckDNS can't be proxied by Cloudflare, so with DuckDNS the home IP is public and the origin is the edge. In that case P11-05's limits and P11-08 carry all the weight.
+
+**Upload size limits must line up:** Cloudflare's free plan refuses request bodies over 100 MB (with a 413 from Cloudflare that the app never sees). Keep `MAX_UPLOAD_BYTES` (default 25 MB) at or under 100 MB, and set the proxy's `client_max_body_size` to the same value instead of `0` (`deploy/swag/disgourd.subdomain.conf.sample:28`). Then an oversized upload is refused early, by the proxy, with the app's own message rule (P11-05).
+
+**Secrets at rest** (new packet P11-14):
+- **JWT secret:** `JWT_SECRET` is read from the environment (`config.js:23`). Otherwise the server generates `/config/.jwt-secret`.
+- **VAPID keys:** only a file (`push.js:11`, `/config/.vapid.json`), with no environment option.
+- **kie.ai key:** `KIEAI_API_KEY` from the environment wins (`kie.js:64`). A key typed into the app is stored in plain text in `site_settings` in the database.
+- **Not in the image:** the `.dockerignore` keeps `.jwt-secret`, `.env` and `config.json` out, but not `.vapid.json` (L8).
+- **What backups carry:**
+  - Nightly `VACUUM INTO` copies and Litestream replicas hold the whole database: password hashes, every DM, and any kie.ai key saved in the app. A Litestream copy sends all of it to R2.
+  - They don't hold `.jwt-secret` or `.vapid.json`. Restoring from R2 alone signs everyone out and breaks every push subscription unless those two are backed up separately or come from the environment.
+- **Fix (P11-14):**
+  - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` from the environment.
+  - A start-up warning when a kie.ai key is stored in the database while `KIEAI_API_KEY` is set (with a one-click "forget the saved key" in Settings).
+  - Docs: every secret (JWT, VAPID, kie.ai, and the future SMTP password and R2 keys) comes from the host's environment or a secrets file mounted read-only. The R2 bucket is private, with a token scoped to that bucket. And the restore drill.
+  - The SMTP and R2 credentials never go into `site_settings`. That's a rule for the email packet when it's written.
+
+**Container hardening on Unraid** (P11-05, L8):
+- Already right: the compose file runs as `99:100`, mounts only `/config` and `/uploads`, and uses a bridge network (`proxynet`), with no `privileged` and no `network_mode: host`.
+- To add: `read_only: true` with a tmpfs `/tmp` (the app writes only to the two volumes), `cap_drop: [ALL]` and `no-new-privileges`.
+- `ports: 3000:3000` stays LAN-only. Never forward it at the router.
+- The uploads share should be its own folder, not a parent of other media.
+
 ## Plan: children in priority order
-**Before the instance goes public:** P11-01 to P11-05. **Before inviting anyone outside the current group:** P11-06 to P11-09. The rest soon after.
+**Before the instance goes public:** P11-01 to P11-05, plus P11-10 (push endpoints reach the home LAN or tailnet in both setups). **Before inviting anyone outside the current group:** P11-06 to P11-09 and P11-14. The rest soon after.
 
 | ID | Fixes | Title | Size | State |
 |---|---|---|---|---|
@@ -213,15 +257,17 @@ These go to one sweep packet, P11-13, unless noted.
 | P11-11 | M8 | Voice: TURN credentials from the server, relay-only option, honour forced mute | M | READY |
 | P11-12 | M6 | Case-insensitive usernames (migration with collision check) | S–M | PLANNED (after P11-01) |
 | P11-13 | L1–L7, L9 | Low-severity sweep | S–M | PLANNED (last: it touches files from several others) |
+| P11-14 | Secrets at rest (Hosting setups) | Secrets from the environment: VAPID env vars, saved kie.ai key warning, backup and restore docs | S | READY |
 
 ## Serialize
 - P11-03, P11-07 and P11-09 all touch `server/gateway/` (`index.js`, `router.js`, `dm.js`). Do them in that order.
 - P11-01 and P11-12 both touch registration and username lookups. P11-01 goes first.
 - P11-05 and P11-06 both touch the proxy sample. P11-05 writes it, and P11-06 adds the header lines.
+- P11-14 goes before P11-13 (both touch `backup.js` and the README's backup section).
 - P11-13 goes last.
 
 ## Owner decisions
-1. **Move-day path:** copy the existing `/config` (DB, `.jwt-secret`, `.vapid.json`) to the cloud box, or start empty? Copying avoids C1 on day one, and push subscriptions keep working only if `.vapid.json` moves too.
+1. **Move-day path:** VPS (A) or the Unraid box (B)? For A: copy the existing `/config` (DB, `.jwt-secret`, `.vapid.json`) to the VPS, or start empty? Copying avoids C1 on day one, and push subscriptions keep working only if `.vapid.json` moves too. For B: the data stays, so C1 doesn't apply. The "Hosting setups" section matters more, though (LAN egress, origin lock, real IP).
 2. **DM default (P11-09):** recommended "friends and people I share a server with".
 3. **Voice (P11-11):** run coturn on the cloud box (more bandwidth on every call), or keep STUN only and accept IP exposure among people in a call? Recommended: TURN available, relay-only off by default, on for a public instance.
 4. **Registration on the cloud:** recommended `code` (per-person codes with a use limit), never `open`.

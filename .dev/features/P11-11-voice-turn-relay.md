@@ -21,7 +21,7 @@
   - Add the route to `web/devProxy.js`.
 - **Client:** fetch `/voice/ice` when joining a call (cached until it expires). Use `iceTransportPolicy: 'relay'` when `relayOnly`. Fall back to today's STUN when the request fails.
 - **Forced mute:** when a peer is marked force-muted in `voice_state`, honest clients stop playing that peer's audio track (they mute the `<audio>` element) until the mark clears. Unlike today, a modified client can't be heard by anyone running the real app.
-- **Docs:** README "Voice behind TURN": a coturn container in the cloud compose (P11-05's `deploy/cloud/`, behind a profile), its ports (3478 UDP/TCP, 5349 TLS, a relay port range), `use-auth-secret`, `static-auth-secret`, `no-multicast-peers`, and `denied-peer-ip` for the private ranges (so TURN can't be used to reach the cloud network: that's TURN's own SSRF).
+- **Docs:** README "Voice behind TURN": a coturn container in the cloud compose (P11-05's `deploy/cloud/`, behind a profile), its ports (3478 UDP/TCP, 5349 TLS, a relay port range), `use-auth-secret`, `static-auth-secret`, `no-multicast-peers`, and `denied-peer-ip` for every private range: 10/8, 172.16/12, 192.168/16, 100.64/10 (CGNAT and Tailscale), 169.254/16, 127/8, 0/8, fc00::/7 (which covers Tailscale's fd7a:115c:a1e0::/48), fe80::/10 and ::1. Otherwise a client can ask TURN to relay into the cloud network, the tailnet or (on Unraid) the home LAN. That's TURN's own SSRF. Run coturn as its own container with its own network, and don't put it on the tailnet.
 
 ## Acceptance criteria
 - [ ] AC-1: `/voice/ice` without a token → 401. With `TURN_*` set it returns a TURN entry whose credential verifies against the secret, and the expiry is in the future.
@@ -29,6 +29,7 @@
 - [ ] AC-3: a force-muted peer's audio element is muted on the other clients, and unmuted when the timeout is lifted.
 - [ ] AC-4: with nothing set, behaviour is as today (STUN only).
 - [ ] AC-5: both suites pass. Manual: two sandbox users in a call through a local coturn, with only `relay` candidates in `webrtc-internals`.
+- [ ] AC-6: the sample coturn config denies every range listed above. With a local coturn, a TURN allocation that asks for a peer at 192.168.x.x or 100.64.x.x is refused (manual, written up).
 
 ## Expected Areas of Change
 A new `server/routes/voice.js` (registered in `routes/index.js`), `web/devProxy.js`, `web/src/voice.js`, `web/src/state/useVoiceCall.js`, `deploy/cloud/` (coturn, optional), the README, tests.

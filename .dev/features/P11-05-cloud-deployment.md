@@ -25,7 +25,15 @@
     - A per-IP connection and request limit.
     - Access logs that drop the query string (`/gateway?token=` until P11-07 lands).
   - **`README.md`:** a firewall checklist (only 22, 80 and 443 open; SSH by key), how to copy `/config` from the Unraid box (DB, `.jwt-secret`, `.vapid.json`, backups), `REGISTRATION_MODE=code`, `KIEAI_API_KEY` in the environment rather than the app, and ComfyUI over a tunnel (P11-10).
-- **The existing Unraid compose file:** a comment on the `ports:` line, "LAN only; remove on a public host".
+- **The existing Unraid compose file** (setup B, the home server):
+  - A comment on the `ports:` line: "LAN only; never forward it at the router".
+  - Add `read_only: true` + tmpfs `/tmp`, `cap_drop: [ALL]` and `no-new-privileges`. Keep `user: 99:100`, the two mounts, and the bridge network (no `privileged`, no `network_mode: host`).
+- **Behind Cloudflare** (both setups; see P11-00 "Hosting setups"):
+  - The proxy samples restore the real client IP from `CF-Connecting-IP` only for requests from Cloudflare's published ranges: the nginx real-IP module for SWAG (or linuxserver's `swag-cloudflare-real-ip` mod), and `trusted_proxies cloudflare` + `client_ip_headers CF-Connecting-IP` for Caddy.
+  - The app never reads `CF-Connecting-IP` itself.
+  - The README explains locking the origin: allow 443 only from Cloudflare's ranges at the router or host firewall, or use a Cloudflare Tunnel with no inbound port. It also says that DuckDNS means no Cloudflare in front.
+- **Upload limits line up:** the proxy body limit equals `MAX_UPLOAD_BYTES` (both samples, including the SWAG one, which says `client_max_body_size 0` today). The README says to keep it at or under 100 MB behind Cloudflare's free plan.
+- **LAN egress (setup B):** a README section with a `DOCKER-USER` iptables rule (or a VLAN or custom network) that drops traffic from DisGourd's Docker network to the LAN, except the ComfyUI host:8188 and DNS. So even a compromised container can't reach the router, the Unraid UI or SMB. In setup A, the Tailscale ACL in P11-10 does this job.
 - **Dockerfile:** pin the runtime base by digest, with a comment on how to update it. Add `**/.vapid.json` to `.dockerignore`.
 
 ## Acceptance criteria
@@ -34,6 +42,8 @@
 - [ ] AC-3: `X-Forwarded-Host` from an untrusted peer doesn't change the og:image origin.
 - [ ] AC-4: `docker compose -f deploy/cloud/docker-compose.yml config` validates. The container starts with `read_only` (the data folders are volumes, and nothing else is written). `deploy/docker-smoke.sh` passes against the pinned image.
 - [ ] AC-5: both suites pass.
+- [ ] AC-6: the SWAG sample's body limit matches `MAX_UPLOAD_BYTES`, and its real-IP lines trust only Cloudflare's ranges. A request that carries `CF-Connecting-IP` but doesn't come from Cloudflare keeps its own address (checked with `nginx -t` and a curl, or described step by step if no SWAG is at hand).
+- [ ] AC-7: the Unraid compose file still starts on the sandbox setup with `read_only` and `cap_drop` (`deploy/docker-smoke.sh` runs it as 99:100).
 
 ## Expected Areas of Change
 `server/auth/rateLimit.js`, `server/config.js`, `server/static.js`, `deploy/cloud/` (new), `docker-compose.yml` (comment), `Dockerfile`, `.dockerignore`, `README.md`, tests (`server/tests/clientIp.test.js` new, `static.test.js`).

@@ -266,7 +266,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P10-09 | Code blocks in messages can be reached by keyboard (axe scrollable-region-focusable) | 10 | REVIEW | S | none | markdown.jsx, index.css, markdown.test.jsx |
 
 ## Security for the public cloud (P11)
-Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **P11-01 to P11-05 should land before the instance is public.**
+Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **P11-01 to P11-05 and P11-10 should land before the instance is public** (cloud VPS or the Unraid box; see the review's "Hosting setups").
 
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
@@ -284,3 +284,4 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-11 | Voice: TURN credentials from the server, relay-only option, honour forced mute (M8) | 11 | READY | M | none (coturn: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
 | P11-12 | Case-insensitive usernames and emails (M6) | 11 | PLANNED | S–M | P11-01 | migrations, db/index.js, routes/auth.js, config.js |
 | P11-13 | Low-severity sweep (L1–L7, L9) | 11 | PLANNED | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
+| P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning, what backups carry | 11 | READY | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |
