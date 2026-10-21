@@ -18,6 +18,8 @@ export const dmKeyOf = (frame) => (frame.conversation != null ? `c:${frame.conve
 // when it's yours or you're looking right at it (window focused, that
 // channel or DM open).
 export function attentionKind(frame, ctx) {
+  // P9-07b: no notifications or sounds from someone I've blocked.
+  if (ctx.blocked?.(frame.kind === 'dm' ? frame.from : frame.author)) return null;
   if (frame.kind === 'dm') {
     if (frame.from === ctx.me) return null;
     if (ctx.dmMuted?.(dmKeyOf(frame))) return null; // P9-06d: a muted conversation

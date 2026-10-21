@@ -467,6 +467,17 @@ export function updateMe(patch) {
   return request('/me', { method: 'PATCH', body: patch });
 }
 
+// ---- Blocking (P9-07b) ----
+export function getBlocks() {
+  return request('/blocks');
+}
+export function blockUser(username) {
+  return request(`/blocks/${encodeURIComponent(username)}`, { method: 'PUT' });
+}
+export function unblockUser(username) {
+  return request(`/blocks/${encodeURIComponent(username)}`, { method: 'DELETE' });
+}
+
 // ---- Friends ----
 export function getFriends() {
   return request('/friends');

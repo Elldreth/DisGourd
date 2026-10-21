@@ -10,6 +10,7 @@ import IconButton from './IconButton.jsx';
 import DropOverlay from './DropOverlay.jsx';
 import EmptyState from './EmptyState.jsx';
 import { useFileDrop } from '../useFileDrop.js';
+import { useBlocked } from '../state/useBlocks.js';
 
 // The conversation view in Direct Messages mode. `conversation` (P9-06d) is
 // the open one ({ kind, members, … }); `title` what it's called (a group's
@@ -24,6 +25,10 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
   const listRef = useRef(null);
   const group = conversation?.kind === 'group';
   const name = group ? title : username;
+  // P9-07b: a 1-to-1 where I've blocked them, or (the server says) they've blocked me.
+  const blocks = useBlocked();
+  const iBlocked = !group && blocks.isBlocked(username);
+  const blocked = !group && (iBlocked || !!conversation?.blocked);
   const drop = useFileDrop({ enabled: !!name, onFiles: (files) => composerRef.current?.addFiles(files) });
 
   if (!name) {
@@ -78,7 +83,17 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
             className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
           />
         )}
-        {!group && onAddPeople && (
+        {!group && blocks.requestBlock && !iBlocked && (
+          <IconButton
+            icon="ban"
+            size={18}
+            label={`Block ${username}`}
+            title={`Block ${username}`}
+            onClick={() => blocks.requestBlock(username)}
+            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+          />
+        )}
+        {!group && onAddPeople && !blocked && (
           <IconButton
             icon="plus"
             size={18}
@@ -117,20 +132,31 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
         onEditDone={() => composerRef.current?.focus()}
       />
       <TypingIndicator names={typing} />
-      <Composer
-        ref={composerRef}
-        onEditLast={() => listRef.current?.startEditLast() ?? false}
-        channel={conversationKey}
-        disabled={false}
-        onSend={(content, attachments, spoiler) => {
-          onSend(content, attachments, spoiler, replyingTo ? replyingTo.id : undefined);
-          setReplyingTo(null);
-        }}
-        replyingTo={replyingTo}
-        onCancelReply={() => setReplyingTo(null)}
-        onTyping={onTyping}
-        placeholder={group ? `Message ${name}` : `Message @${username}`}
-      />
+      {blocked ? (
+        <div role="status" className="m-3 flex items-center justify-between gap-3 rounded-xl bg-ink-800 px-4 py-3 text-sm text-gray-300 ring-1 ring-ink-500/40">
+          <span>{iBlocked ? `You’ve blocked ${username}. Unblock to message them.` : 'You can’t message this person.'}</span>
+          {iBlocked && blocks.unblock && (
+            <button type="button" onClick={() => blocks.unblock(username)} className="shrink-0 rounded-lg bg-ink-600 px-3 py-1.5 text-sm font-medium text-fg hover:bg-ink-500">
+              Unblock
+            </button>
+          )}
+        </div>
+      ) : (
+        <Composer
+          ref={composerRef}
+          onEditLast={() => listRef.current?.startEditLast() ?? false}
+          channel={conversationKey}
+          disabled={false}
+          onSend={(content, attachments, spoiler) => {
+            onSend(content, attachments, spoiler, replyingTo ? replyingTo.id : undefined);
+            setReplyingTo(null);
+          }}
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
+          onTyping={onTyping}
+          placeholder={group ? `Message ${name}` : `Message @${username}`}
+        />
+      )}
     </main>
   );
 }

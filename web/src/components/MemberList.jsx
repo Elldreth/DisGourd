@@ -8,6 +8,7 @@ import TimeoutDialog from './TimeoutDialog.jsx';
 import { timeoutEnd } from './TimedOutNotice.jsx';
 import MemberRolesDialog from './MemberRolesDialog.jsx';
 import RoleName from './RoleName.jsx';
+import { useBlocked } from '../state/useBlocks.js';
 
 // Right-hand roster grouped by online status. Clicking a member opens a menu:
 // message them, and (with permission) change their roles or remove them.
@@ -25,6 +26,7 @@ const HEADER_STATUS = { online: 'Online', idle: 'Idle', dnd: 'Do Not Disturb', o
 // "Roles…", whose changes go through onToggleRole(username, roleId, on).
 export default function MemberList({ space, members, currentUser, myRole, roles = [], canKickMembers = false, canBanMembers = false, canTimeoutMembers = false, canManageRoles = false, myPosition = 0, onMessageUser, onToggleRole, onKick, onBan, onTimeout, onRemoveTimeout, open = false, onClose }) {
   const panelRef = useRef(null);
+  const blocks = useBlocked(); // P9-07b
   const [banning, setBanning] = useState(null); // username in the Ban dialog (P3-26b)
   const [timingOut, setTimingOut] = useState(null); // username in the Time out dialog (P3-26c)
   const [kicking, setKicking] = useState(null); // username awaiting "are you sure?"
@@ -144,6 +146,14 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
           setBanning(m.username);
         },
       });
+    }
+    // Blocking (P9-07b): just for me, asks first; unblocking doesn't.
+    if (!self && blocks.requestBlock) {
+      acts.push(
+        blocks.isBlocked(m.username)
+          ? { label: 'Unblock', onClick: () => blocks.unblock(m.username) }
+          : { label: 'Block…', caution: true, onClick: () => blocks.requestBlock(m.username) }
+      );
     }
     return acts;
   }
