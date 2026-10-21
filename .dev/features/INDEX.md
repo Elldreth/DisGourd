@@ -281,9 +281,9 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-08 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (M3) | 11 | COMPLETE | S–M | none (soft P11-05) | auth/rateLimit.js, routes/auth.js, validate.js |
 | P11-09 | Instance safety: suspend accounts; who can DM me (M7, M9) | 11 | COMPLETE | M | P11-03, P11-07; owner decision 2 | migrations, routes/admin.js, auth/tokens.js, gateway/dm.js, site-admin settings, PrivacySection |
 | P11-10 | **Push endpoint allowlist (go-live blocker, build order 1)**; ComfyUI metadata block (M10, M5) | 11 | COMPLETE | S | none | routes/push.js, push.js, db/index.js, net/safeFetch.js, engines/comfyui.js, README |
-| P11-11 | Voice: TURN credentials from the server (hosted TURN for the tunnel setup), relay-only option, honour forced mute (M8) | 11 | REVIEW | M | none (which TURN: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
+| P11-11 | Voice: TURN credentials from the server (hosted TURN for the tunnel setup), relay-only option, honour forced mute (M8) | 11 | COMPLETE | M | none (which TURN: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
 | P11-12 | Case-insensitive usernames and emails (M6) | 11 | COMPLETE | S–M | P11-01 | migrations, db/index.js, routes/auth.js, config.js |
-| P11-13 | Low-severity sweep (L1–L7, L9) | 11 | PLANNED | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
+| P11-13 | Low-severity sweep (L1–L7, L9) | 11 | REVIEW | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
 | P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning; off-box copy of `/config` | 11 | COMPLETE | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |
 
 ## Email (P12)

@@ -36,7 +36,7 @@ const me = async (token) => (await fetch(`${base()}/me`, { headers: { Authorizat
 
 test('registering Sandy next to sandy, or her email in other capitals, is refused', async () => {
   expect((await register('sandy')).status).toBe(201);
-  expect(await register('Sandy', 'other@example.com')).toEqual({ status: 409, body: { error: 'User already exists' } });
+  expect(await register('Sandy', 'other@example.com')).toEqual({ status: 409, body: { error: 'That username or email can’t be used' } });
   expect((await register('sandra', 'SANDY@Example.com')).status).toBe(409);
 });
 

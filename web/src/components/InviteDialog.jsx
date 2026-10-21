@@ -1,11 +1,22 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { copyText } from '../util.js';
 import { inviteLink } from '../inviteLink.js';
 import Modal from './Modal.jsx';
 
+// P11-13 (L7): how long a new invite works. 7 days unless you pick otherwise.
+const EXPIRY_CHOICES = [
+  { value: '1', days: 1, label: '1 day' },
+  { value: '7', days: 7, label: '7 days' },
+  { value: '30', days: 30, label: '30 days' },
+  { value: 'never', days: null, label: 'Never' },
+];
+
 // Shows a freshly minted invite as a link and as a code, each with a copy button.
-export default function InviteDialog({ space, code, onClose }) {
+// Picking another expiry asks for a new invite (`onExpiry(days)`, null = never).
+export default function InviteDialog({ space, code, expiresInDays = 7, onExpiry, onClose }) {
   const link = inviteLink(code);
+  const expiryId = useId();
+  const current = EXPIRY_CHOICES.find((c) => c.days === expiresInDays) || EXPIRY_CHOICES[1];
   return (
     <Modal onClose={onClose} panelClassName="w-full max-w-md rounded-xl bg-ink-800 p-6 shadow-2xl ring-1 ring-ink-500/50">
       <Modal.Title>Invite people to {space}</Modal.Title>
@@ -15,6 +26,26 @@ export default function InviteDialog({ space, code, onClose }) {
       </p>
       <CopyRow label="Invite link" value={link} buttonLabel="Copy link" className="mt-4" />
       <CopyRow label="Invite code" value={code} buttonLabel="Copy code" className="mt-3" />
+      {onExpiry && (
+        <div className="mt-4 flex items-center gap-3">
+          <label htmlFor={expiryId} className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Expires after
+          </label>
+          <select
+            id={expiryId}
+            value={current.value}
+            onChange={(e) => onExpiry(EXPIRY_CHOICES.find((c) => c.value === e.target.value).days)}
+            className="input w-auto"
+          >
+            {EXPIRY_CHOICES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-gray-400">Changing it makes a new invite.</span>
+        </div>
+      )}
       <div className="mt-5 text-right">
         <button onClick={onClose} className="text-sm text-gray-400 hover:text-fg">
           Close

@@ -341,8 +341,9 @@ export function deleteChannel(space, channel) {
 export function getMembers(space) {
   return request(`/spaces/${encodeURIComponent(space)}/members`);
 }
-export function createInvite(space) {
-  return request(`/spaces/${encodeURIComponent(space)}/invites`, { method: 'POST' });
+// P11-13 (L7): { expiresInDays: 1 | 7 | 30 | null } (7 when left out).
+export function createInvite(space, opts) {
+  return request(`/spaces/${encodeURIComponent(space)}/invites`, { method: 'POST', ...(opts ? { body: opts } : {}) });
 }
 // P3-26a: a page of the moderation log (newest first).
 export function getModLog(space, { before, action, user } = {}) {

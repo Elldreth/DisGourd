@@ -44,10 +44,10 @@ const login = (username, password) => post('/login', { username, password });
 const change = (token, currentPassword, newPassword) => post('/me/password', { currentPassword, newPassword }, token);
 
 // A token signed like the server's, without a version: what clients hold from before v25.
-function legacyToken(userId, username) {
+function legacyToken(userId, username, sid) {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
-  const data = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: userId, name: username, iat: now, exp: now + 3600 })}`;
+  const data = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: userId, name: username, ...(sid ? { sid } : {}), iat: now, exp: now + 3600 })}`;
   return `${data}.${crypto.createHmac('sha256', SECRET).update(data).digest('base64url')}`;
 }
 
@@ -65,15 +65,17 @@ function gateway(token) {
   return gw;
 }
 
-test('v25 adds the token version; tokens from before it (no version) still work', async () => {
+test('v25 adds the token version; a token without one counts as version 0 (with a session; P11-13 refuses none)', async () => {
   const { db } = serverModule;
   expect(db.raw.pragma('user_version', { simple: true })).toBeGreaterThanOrEqual(25);
   await register('olduser');
   const id = db.getUserByUsername('olduser').id;
   expect(db.getTokenVersion(id)).toBe(0);
-  expect(await get('/me', legacyToken(id, 'olduser'))).toBe(200);
-  const gw = gateway(legacyToken(id, 'olduser'));
+  const sid = db.createSession(id, 'test');
+  expect(await get('/me', legacyToken(id, 'olduser', sid))).toBe(200);
+  const gw = gateway(legacyToken(id, 'olduser', sid));
   expect(await gw.ready).toBe(true);
+  expect(await get('/me', legacyToken(id, 'olduser'))).toBe(401); // no session at all (L4)
 });
 
 test('refusals: no token, wrong current password, bad new passwords', async () => {

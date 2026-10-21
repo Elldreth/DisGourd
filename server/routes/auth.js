@@ -38,6 +38,16 @@ const MAX_PASSWORD = 200;
 const getJsonBody = readJsonBody;
 
 // Tried in order; the first match handles the request.
+// P11-13 (L6): sign-up never says which of the two is taken.
+const ACCOUNT_TAKEN = 'That username or email can’t be used';
+// P11-13 (L1): our own refusals (a bad or too-large body) keep their words;
+// anything unexpected is logged and answered with a fixed text, never its message.
+function failed(res, e) {
+  if (e && e.status >= 400 && e.status < 500) return sendJson(res, e.status, { error: e.message });
+  console.error('[auth]', e);
+  return sendJson(res, 500, { error: 'Something went wrong. Please try again.' });
+}
+
 const routes = [
   {
     // Public: lets the login screen know whether to show a registration-code field
@@ -96,10 +106,8 @@ const routes = [
           res.writeHead(400);
           return res.end(JSON.stringify({ error: invalid }));
         }
-        if (db.getUserByUsername(username) || db.getUserByEmail(email)) {
-          res.writeHead(409);
-          return res.end(JSON.stringify({ error: 'User already exists' }));
-        }
+        // P11-13 (L6): the same answer whether the name or the email is taken.
+        if (db.getUserByUsername(username) || db.getUserByEmail(email)) return sendJson(res, 409, { error: ACCOUNT_TAKEN });
         const salt = generateSalt();
         const hash = await hashPassword(password, salt);
         // The checks above ran before the (slow, async) hash. Re-check the account
@@ -112,15 +120,14 @@ const routes = [
         });
         if (created.error === 'limit') return sendJson(res, 403, { error: 'This server has reached its account limit.' });
         if (created.error === 'code') return sendJson(res, 403, { error: 'A valid registration code is required to create an account.' });
-        if (created.error === 'exists') return sendJson(res, 409, { error: 'User already exists' });
+        if (created.error === 'exists') return sendJson(res, 409, { error: ACCOUNT_TAKEN });
         const userId = created.userId;
         if (firstAccount) clearSetupCode(); // P11-01: spent
         const token = signIn(req, userId, username);
         res.writeHead(201);
         return res.end(JSON.stringify({ token }));
       } catch (e) {
-        res.writeHead(400);
-        return res.end(JSON.stringify({ error: e.message }));
+        return failed(res, e);
       }
     },
   },
@@ -159,8 +166,7 @@ const routes = [
         res.writeHead(200);
         return res.end(JSON.stringify({ token }));
       } catch (e) {
-        res.writeHead(400);
-        return res.end(JSON.stringify({ error: e.message }));
+        return failed(res, e);
       }
     },
   },

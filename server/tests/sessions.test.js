@@ -107,7 +107,7 @@ test('sign out all others: a fresh token for this device; every other token stop
   const a = await login(UA.chromeWin);
   const b = await login(UA.safariPhone);
   const older = createToken(serverModule.db.getUserByUsername('dana').id, 'dana'); // no session: from before this change
-  expect(await works(older)).toBe(true);
+  expect(await works(older)).toBe(false); // P11-13 (L4): refused outright now
   const gwB = gateway(b);
   await gwB.ready;
   await wait(100);

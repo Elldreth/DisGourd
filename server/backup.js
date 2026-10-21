@@ -43,9 +43,19 @@ function backupSettings(env = process.env) {
 // Write one backup, then prune. Resolves { file } or { error }.
 async function runBackup({ db, dir, keep = 7, logger = console, now = new Date() }) {
   try {
-    fs.mkdirSync(dir, { recursive: true });
+    // P11-13 (L2): copies hold password hashes, DMs and any saved kie.ai key,
+    // so only the server's own user can read them.
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const file = path.join(dir, backupName(now));
     db.prepare('VACUUM INTO ?').run(file);
+    fs.chmodSync(file, 0o600);
+    // A folder and copies made before this version keep their old modes: tighten them too.
+    try {
+      fs.chmodSync(dir, 0o700);
+      for (const old of listBackups(dir)) fs.chmodSync(path.join(dir, old), 0o600);
+    } catch {
+      /* not ours to change (a shared folder): the new copy is still 0600 */
+    }
     const all = listBackups(dir);
     for (const old of all.slice(0, Math.max(0, all.length - keep))) {
       fs.rmSync(path.join(dir, old), { force: true });

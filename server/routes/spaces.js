@@ -28,11 +28,13 @@ const MAX_REASON = 200;
 // Reports (P9-01): the reasons someone can pick.
 const REPORT_REASONS = ['spam', 'harassment', 'inappropriate', 'other'];
 // Tell the server's moderators how many reports are open now.
+// Each counts only what they can see (P11-13, L3).
 function tellModerators(space, spaceName) {
-  const frame = JSON.stringify({ type: 'reports_changed', space: spaceName, open: db.countOpenReports(space.id) });
   for (const m of db.getSpaceMembers(space.id)) {
     const a = db.resolveAccess(space.id, m.userId);
-    if (a && (a.owner || a.actions.has('delete_others_messages'))) sendToUser(m.userId, frame);
+    if (!a || !(a.owner || a.actions.has('delete_others_messages'))) continue;
+    const open = db.countOpenReports(space.id, db.hiddenChannelNames(space.id, m.userId));
+    sendToUser(m.userId, JSON.stringify({ type: 'reports_changed', space: spaceName, open }));
   }
 }
 
@@ -158,7 +160,7 @@ const routes = [
           if (!u) return sendJson(res, 200, { entries: [], more: false });
           filterUser = u.id;
         }
-        return sendJson(res, 200, db.getModLog(space.id, { before, action, userId: filterUser }));
+        return sendJson(res, 200, db.getModLog(space.id, { before, action, userId: filterUser, hidden: db.hiddenChannelNames(space.id, userId) }));
       }
 
       // GET /spaces/:name/members
@@ -230,7 +232,7 @@ const routes = [
         if (!(access.owner || access.actions.has('delete_others_messages'))) return sendJson(res, 403, { error: 'Only moderators can see reports' });
         if (pathSegments.length === 3 && req.method === 'GET') {
           const q = parsedUrl.query || {};
-          const out = db.listReports(space.id, { status: q.status === 'closed' ? 'closed' : 'open', before: parseInt(q.before, 10) || null });
+          const out = db.listReports(space.id, { status: q.status === 'closed' ? 'closed' : 'open', before: parseInt(q.before, 10) || null, hidden: db.hiddenChannelNames(space.id, userId) });
           // A report from a thread says which, so the app can open it.
           out.reports = out.reports.map((r) => {
             const t = db.isThreadChannel(r.channel) ? db.getThread(spaceName, r.channel) : null;
@@ -240,7 +242,7 @@ const routes = [
         }
         if (pathSegments.length === 5 && pathSegments[4] === 'resolve' && req.method === 'POST') {
           const report = db.getReport(space.id, parseInt(pathSegments[3], 10) || 0);
-          if (!report) return sendJson(res, 404, { error: 'Report not found' });
+          if (!report || db.hiddenChannelNames(space.id, userId).includes(report.channel)) return sendJson(res, 404, { error: 'Report not found' });
           if (report.status !== 'open') return sendJson(res, 409, { error: 'That report is already closed' });
           const body = await getJsonBody(req);
           if (!['dismiss', 'resolved', 'delete'].includes(body.action)) return sendJson(res, 400, { error: 'action is dismiss, resolved or delete' });
@@ -343,9 +345,16 @@ const routes = [
       // POST /spaces/:name/invites — gated by the "invite" threshold
       if (pathSegments[2] === 'invites' && pathSegments.length === 3 && req.method === 'POST') {
         if (!access.actions.has('invite')) return sendJson(res, 403, { error: 'You are not allowed to invite people here' });
+        // P11-13 (L7): 7 days unless asked for 1, 30 or never (null); an optional use limit.
+        const body = await getJsonBody(req);
+        const days = 'expiresInDays' in body ? body.expiresInDays : 7;
+        if (![1, 7, 30, null].includes(days)) return sendJson(res, 400, { error: 'expiresInDays is 1, 7, 30 or null (never)' });
+        const maxUses = body.maxUses ?? null;
+        if (maxUses !== null && !(Number.isInteger(maxUses) && maxUses >= 1 && maxUses <= 1000)) return sendJson(res, 400, { error: 'maxUses is 1–1000, or left out' });
+        const expiresAt = days === null ? null : Date.now() + days * 24 * 60 * 60 * 1000;
         const code = crypto.randomBytes(6).toString('base64url');
-        db.createInvite(code, space.id, userId, null, null);
-        return sendJson(res, 201, { code });
+        db.createInvite(code, space.id, userId, expiresAt, maxUses);
+        return sendJson(res, 201, { code, expiresAt, maxUses });
       }
 
       // GET /spaces/:name/permissions — server action thresholds (managers can view)
@@ -639,6 +648,8 @@ const routes = [
         // DELETE channel — gated by the "delete_channel" threshold
         if (channelName && pathSegments.length === 4 && req.method === 'DELETE') {
           if (!access.actions.has('delete_channel')) return sendJson(res, 403, { error: 'You are not allowed to delete channels here' });
+          // P11-13 (L3): not one you can't see (as if it weren't there).
+          if (!canViewChannel(spaceName, channelName, userId)) return sendJson(res, 404, { error: 'Channel not found' });
           deliverToChannelViewers(spaceName, channelName, JSON.stringify({ type: 'channel_deleted', space: spaceName, channel: channelName }));
           db.deleteChannel(spaceName, channelName);
           return sendJson(res, 200, { ok: true });

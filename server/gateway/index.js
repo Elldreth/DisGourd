@@ -70,10 +70,13 @@ function attachGateway(httpServer, wss) {
   const threadTimer = setInterval(sweepQuietThreads, 60 * 60 * 1000);
   threadTimer.unref();
   setImmediate(sweepQuietThreads); // catch up after a restart
+  const reverifyTimer = setInterval(() => reverifySockets(wss), gatewayAuth.reverifyMs);
+  reverifyTimer.unref();
   wss.on('close', () => {
     clearInterval(heartbeatTimer);
     clearInterval(statusTimer);
     clearInterval(threadTimer);
+    clearInterval(reverifyTimer);
   });
 
   httpServer.on('upgrade', (request, socket, head) => {
@@ -101,7 +104,7 @@ function attachGateway(httpServer, wss) {
         return;
       }
       warnLegacy();
-      wss.handleUpgrade(request, socket, head, (ws) => admit(ws, payload));
+      wss.handleUpgrade(request, socket, head, (ws) => admit(ws, payload, legacyToken));
       return;
     }
     // P11-07: no token yet. The first frame must be { op: 'auth', token }
@@ -116,8 +119,22 @@ function attachGateway(httpServer, wss) {
   });
 }
 
+// P11-13 (L4): a signed-in socket stays open only while its token still
+// verifies (not expired, not signed out, not suspended). Exported for tests.
+function reverifySockets(wss) {
+  wss.clients.forEach((ws) => {
+    if (!ws.userId || !ws.token || verifyToken(ws.token)) return;
+    try {
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'signed_out', reason: 'expired' }));
+      ws.close(4001, 'Sign in again');
+    } catch {
+      /* already closing */
+    }
+  });
+}
+
 // ---- Signing in (P11-07) ----
-const gatewayAuth = { timeoutMs: 5000, maxPendingPerIp: 20 }; // tests lower these
+const gatewayAuth = { timeoutMs: 5000, maxPendingPerIp: 20, reverifyMs: 30 * 60 * 1000 }; // tests lower these
 const pending = new Map(); // address -> sockets waiting for their auth frame
 
 const openFor = (userId) => (userClients[userId] ? userClients[userId].size : 0);
@@ -189,13 +206,14 @@ function awaitAuth(ws, ip) {
       ws.close(1008, 'Too many connections');
       return;
     }
-    admit(ws, payload);
+    admit(ws, payload, msg.token);
   };
   ws.on('message', onFirst);
 }
 
 // A signed-in socket: register it, send the connect frames, route its frames.
-function admit(ws, payload) {
+function admit(ws, payload, token) {
+  ws.token = token; // re-checked every gatewayAuth.reverifyMs (P11-13, L4)
   ws.userId = payload.sub;
   ws.tokenVersion = payload.ver || 0;
   ws.sid = payload.sid || null; // P9-03: which signed-in device
@@ -234,4 +252,4 @@ function admit(ws, payload) {
   ws.on('error', () => detachGateway(ws));
 }
 
-module.exports = { attachGateway, sweepExpiredStatuses, sweepQuietThreads, gatewayAuth };
+module.exports = { attachGateway, sweepExpiredStatuses, sweepQuietThreads, gatewayAuth, reverifySockets };
