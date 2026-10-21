@@ -286,6 +286,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
       const next = await loadSpaces();
       const s = next.find((x) => x.name === res.name);
       goTo(res.name, next, s && s.channels[0] ? s.channels[0] : 'general');
+      return res.name;
     },
     createChannel: attempt('Could not create channel', async (name, type = 'text', category) => {
       if (!currentSpace) return;

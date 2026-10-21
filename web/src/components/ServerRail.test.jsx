@@ -14,19 +14,9 @@ function renderRail(props = {}) {
   return handlers;
 }
 
-test('a pending invite opens Add a server on Join, prefilled, and reports it was opened', async () => {
-  const { onInviteOpened } = renderRail({ pendingInvite: 'abc123' });
-  expect(screen.getByRole('dialog', { name: 'Add a server' })).toBeTruthy();
-  expect(screen.getByRole('tab', { name: 'Join' }).getAttribute('aria-selected')).toBe('true');
-  expect(screen.getByRole('textbox', { name: 'Invite code or link' }).value).toBe('abc123');
-  expect(onInviteOpened).toHaveBeenCalledTimes(1);
-  await waitFor(() => expect(screen.getByText('Tx Check')).toBeTruthy());
-});
-
-test('no pending invite: no dialog', () => {
-  const { onInviteOpened } = renderRail();
+test('the rail opens no dialog by itself (an invite link joins directly since P14-02)', () => {
+  renderRail();
   expect(screen.queryByRole('dialog')).toBeNull();
-  expect(onInviteOpened).not.toHaveBeenCalled();
 });
 
 test('the mention badge sits on top of the icon, outside its rounded mask; none on the open server', () => {

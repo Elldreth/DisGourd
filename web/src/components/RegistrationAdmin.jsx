@@ -10,6 +10,12 @@ const MODES = [
   { v: 'invite', label: 'Invite only — with an invite link or a sign-up code' }, // 'code' before P14-01
   { v: 'closed', label: 'Closed — no new accounts' },
 ];
+// P14-02: whose server invites can also create an account.
+const WHO = [
+  { v: 'site_admins', label: 'Site admins only', hint: 'Only invites made by a site admin bring in new people. Everyone else’s invites work for people who already have an account.' },
+  { v: 'server_admins', label: 'Server owners and admins', hint: 'Invites made by the owner or an admin of that server bring in new people.' },
+  { v: 'inviters', label: 'Anyone who can invite', hint: 'Any invite a server’s roles allow brings in new people. Pair it with “Require a confirmed email” (Site admin › Email).' },
+];
 
 function codeStatus(c) {
   if (c.revokedAt) return { label: 'revoked', cls: 'text-danger' };
@@ -54,6 +60,17 @@ export default function RegistrationAdmin() {
       await api.setRegistrationMode(mode);
     } catch (err) {
       setError(err.message || 'Could not change mode');
+      load();
+    }
+  }
+
+  // P14-02: the Closed switch and "who can bring in new people".
+  async function changeSetting(patch) {
+    setData((d) => ({ ...d, ...patch }));
+    try {
+      await api.setRegistrationSettings(patch);
+    } catch (err) {
+      setError(err.message || 'Could not change that');
       load();
     }
   }
@@ -123,9 +140,45 @@ export default function RegistrationAdmin() {
         </select>
       </label>
 
+      {data.mode === 'closed' && (
+        <SettingRow
+          className="rounded-lg bg-ink-900/60 px-3"
+          label="Invite links still let people sign up"
+          description="Closed then means “no sign-up without an invite link”. Sign-up codes and open sign-up stay off."
+        >
+          <Switch label="Invite links still let people sign up" checked={!!data.closedAllowsInvites} onChange={(on) => changeSetting({ closedAllowsInvites: on })} />
+        </SettingRow>
+      )}
+
+      {(data.mode !== 'closed' || data.closedAllowsInvites) && (
+        <div>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Who can bring in new people with their invites
+            </span>
+            <select
+              value={data.invitesCreateAccounts || 'site_admins'}
+              onChange={(e) => changeSetting({ invitesCreateAccounts: e.target.value })}
+              aria-describedby="who-invites-hint"
+              className="input"
+            >
+              {WHO.map((w) => (
+                <option key={w.v} value={w.v}>{w.label}</option>
+              ))}
+            </select>
+          </label>
+          <p id="who-invites-hint" className="mt-1 text-xs text-gray-500">
+            {data.mode === 'open'
+              ? 'Sign-up is open to anyone, so this only matters if you switch to Invite only or Closed.'
+              : (WHO.find((w) => w.v === (data.invitesCreateAccounts || 'site_admins')) || WHO[0]).hint}
+          </p>
+        </div>
+      )}
+
       {data.mode === 'invite' && (
         <div className="rounded-lg bg-ink-900/60 p-3">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Invite codes</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Sign-up codes</div>
+          <p className="mb-2 text-xs text-gray-500">For someone without a server invite: they type it when creating an account.</p>
           {data.envCodeActive && (
             <p className="mb-2 text-xs text-gray-500">A shared code from the server config is also accepted.</p>
           )}

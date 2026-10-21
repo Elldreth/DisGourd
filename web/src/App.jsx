@@ -314,6 +314,24 @@ export default function App() {
   // Deleting a message: hidden at once with an Undo toast, sent after 5s.
   const toast = useToasts();
   toastRef.current = toast;
+
+  // P14-02: an invite link, once signed in (and past any "Confirm your email"
+  // step): join its server and open it. After signing up from the link the
+  // server already joined us, and joining again just opens it.
+  useEffect(() => {
+    if (!token || !pendingInvite || !profile || gated) return;
+    const code = pendingInvite;
+    clearPendingInvite();
+    setPendingInvite('');
+    sp.joinServer(code)
+      .then((name) => {
+        setView('server');
+        toast.show({ id: `joined-${code}`, message: name ? `Welcome to ${name}` : 'Joined the server', duration: 5000 });
+      })
+      .catch((err) => toast.show({ id: `invite-${code}`, message: err.message || 'That invite didn’t work', duration: 8000, dismissible: true }));
+    // sp and toast are fresh each render; only the sign-in state and the code matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, pendingInvite, profile, gated]);
   // The installable shell (production builds): when a new version has been
   // installed behind this one, offer to reload into it. Shown at the top so it
   // never covers the composer or the panels that open above it.
@@ -584,6 +602,11 @@ export default function App() {
     ) : (
       <Login
         notice={signedOutNote}
+        inviteCode={pendingInvite}
+        onInviteGone={() => {
+          clearPendingInvite();
+          setPendingInvite('');
+        }}
         onAuthed={(t) => {
           setSignedOutNote('');
           setToken(t);
@@ -631,12 +654,7 @@ export default function App() {
           onCreate={createServerAndShow}
           onJoin={joinServerAndShow}
           onReorder={sp.reorder}
-          pendingInvite={pendingInvite}
           openRequest={addServerRequest}
-          onInviteOpened={() => {
-            clearPendingInvite();
-            setPendingInvite('');
-          }}
         />
         {view === 'dm' ? (
           <DmSidebar
