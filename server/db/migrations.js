@@ -789,6 +789,39 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 32,
+    name: 'upload quotas and cleanup',
+    up(db) {
+      // P11-04: who uploaded what and when (the daily quota), and the
+      // attachments of deleted messages, queued for uploadsGc to remove once
+      // nothing else uses them. Triggers catch every delete, including the
+      // cascades when a channel, server or conversation goes.
+      db.exec(`
+        CREATE TABLE uploads (
+          token TEXT PRIMARY KEY,
+          user_id INTEGER,
+          bytes INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_uploads_user_time ON uploads(user_id, created_at);
+        CREATE TABLE upload_gc_queue (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          urls TEXT NOT NULL
+        );
+        CREATE TRIGGER trg_messages_upload_gc AFTER DELETE ON messages
+          WHEN (OLD.attachments IS NOT NULL AND OLD.attachments != '[]') OR OLD.attachment_url IS NOT NULL
+          BEGIN
+            INSERT INTO upload_gc_queue(urls) VALUES (COALESCE(OLD.attachments, '') || ' ' || COALESCE(OLD.attachment_url, ''));
+          END;
+        CREATE TRIGGER trg_dm_messages_upload_gc AFTER DELETE ON dm_messages
+          WHEN (OLD.attachments IS NOT NULL AND OLD.attachments != '[]') OR OLD.attachment_url IS NOT NULL
+          BEGIN
+            INSERT INTO upload_gc_queue(urls) VALUES (COALESCE(OLD.attachments, '') || ' ' || COALESCE(OLD.attachment_url, ''));
+          END;
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

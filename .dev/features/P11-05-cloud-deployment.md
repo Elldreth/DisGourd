@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 6 in P11-00). AC-4 and AC-5 are live checks for the owner after the Unraid steps in deploy/unraid-tunnel/README.md.
+- **State:** COMPLETE (merged in #219; the owner is applying the Unraid steps from deploy/unraid-tunnel/README.md, which cover AC-4 and AC-5)
 - **Effort:** S–M
 - **Depends on:** none
 - **Serialize with:** P11-06 (both touch the deploy docs). P11-08 if it changes `auth/rateLimit.js` first.

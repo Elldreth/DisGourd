@@ -4,6 +4,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { authUserId } = require('../auth/tokens');
 const { intParam } = require('../http/util');
+const db = require('../db');
+const uploadsGc = require('../uploadsGc');
 
 // ---- File uploads ----
 const UPLOADS_DIR = process.env.UPLOADS_DIR
@@ -99,6 +101,20 @@ const routes = [
         res.writeHead(413);
         return res.end(JSON.stringify({ error: uploadTooLargeError() }));
       }
+      // P11-04: the server's total cap, and each person's daily quota (site
+      // admins exempt), checked up front and again while the body arrives.
+      const maxTotal = uploadsGc.maxTotalBytes();
+      if (maxTotal && uploadsGc.totalBytes() + declared >= maxTotal) {
+        res.writeHead(507);
+        return res.end(JSON.stringify({ error: "The server's upload space is full. Ask the admin to free some up." }));
+      }
+      const quota = db.isSiteAdmin(userId) ? Infinity : uploadsGc.quotaBytes();
+      const usedBefore = Number.isFinite(quota) ? uploadsGc.usedToday(userId) : 0;
+      const quotaError = () => `You've uploaded ${Math.round(quota / (1024 * 1024)) || 1} MB today, the most for one day. Try again tomorrow.`;
+      if (usedBefore + declared > quota) {
+        res.writeHead(429);
+        return res.end(JSON.stringify({ error: quotaError() }));
+      }
 
       // Each upload lands in its own random subdirectory so identical filenames
       // never overwrite one another, while the original name is preserved for a
@@ -127,12 +143,16 @@ const routes = [
         if (received > MAX_UPLOAD_BYTES) {
           failWith(413, uploadTooLargeError());
           req.destroy();
+        } else if (usedBefore + received > quota) {
+          failWith(429, quotaError());
+          req.destroy();
         }
       });
       req.on('error', () => failWith(400, 'Upload failed'));
       writeStream.on('error', () => failWith(500, 'Could not save file'));
       writeStream.on('finish', () => {
         if (aborted) return;
+        uploadsGc.recordUpload(token, userId, received); // P11-04: counts toward the quota
         const url = `/uploads/${token}/${encodeURIComponent(safeName)}`;
         res.writeHead(201);
         res.end(JSON.stringify({
@@ -184,9 +204,15 @@ const routes = [
         res.writeHead(200, {
           'Content-Type': contentType,
           'X-Content-Type-Options': 'nosniff',
+          // P11-04: never runs as a page on our origin (images, video and
+          // audio in <img>/<video> are unaffected), and isn't for other sites.
+          'Content-Security-Policy': "default-src 'none'; sandbox",
+          'Cross-Origin-Resource-Policy': 'same-origin',
           'Content-Disposition':
             `${inline ? 'inline' : 'attachment'}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
-          'Cache-Control': 'public, max-age=31536000, immutable',
+          // P11-04: private (no shared caches such as Cloudflare's edge) and a
+          // day, so a deleted file stops being served soon after.
+          'Cache-Control': 'private, max-age=86400',
         });
         res.end(content);
       });
