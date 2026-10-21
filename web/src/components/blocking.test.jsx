@@ -60,7 +60,11 @@ test('member list: Block… asks (for someone not blocked), Unblock acts at once
     { username: 'cara', online: true, role: 'member' },
   ];
   const { value } = withBlocks(<MemberList members={members} currentUser="sandy" myRole="member" myPosition={0} onMessageUser={() => {}} onClose={() => {}} />);
+  // P10-03: bob (blocked) is marked in the list; Block… is plain, not the moderators' amber.
+  expect(within(screen.getByTitle('bob')).getByRole('img', { name: 'Blocked' })).toBeTruthy();
+  expect(within(screen.getByTitle('cara')).queryByRole('img', { name: 'Blocked' })).toBeNull();
   fireEvent.click(screen.getByTitle('cara'));
+  expect(within(screen.getByRole('group', { name: 'Actions for cara' })).getByRole('button', { name: 'Block…' }).className).not.toMatch(/text-idle/);
   fireEvent.click(within(screen.getByRole('group', { name: 'Actions for cara' })).getByRole('button', { name: 'Block…' }));
   expect(value.requestBlock).toHaveBeenCalledWith('cara');
   fireEvent.click(screen.getByTitle('bob'));
@@ -78,8 +82,14 @@ test('messages: a run of blocked ones is one "Blocked message · Show" row; Show
   ];
   const { value, container } = withBlocks(<MessageList messages={msgs} channel="general" currentUser="sandy" />);
   expect(screen.queryByText('one')).toBeNull();
-  expect(screen.getByText('2 blocked messages')).toBeTruthy();
-  expect(screen.getAllByText('Blocked message')).toHaveLength(2); // the single one after cara's, and cara's reply quote
+  // P10-03: a full row with its own spacing, plain (not italic) words.
+  expect(screen.getByText('2 messages from someone you blocked')).toBeTruthy();
+  expect(screen.getByText('A message from someone you blocked')).toBeTruthy(); // the single one after cara's
+  expect(screen.getAllByText('Blocked message')).toHaveLength(1); // cara's reply quote
+  for (const row of container.querySelectorAll('[data-blocked-row]')) {
+    expect(row.className).toMatch(/\bmt-3\b/);
+    expect(row.className).not.toMatch(/italic/);
+  }
   expect(screen.getAllByRole('button', { name: 'Show' })).toHaveLength(2);
   expect(container.querySelector('[data-msg-id="3"]').textContent).toMatch(/@bobBlocked message/); // cara's reply quote
   fireEvent.click(screen.getAllByRole('button', { name: 'Show' })[0]);
@@ -103,18 +113,20 @@ test('typing lines and notifications leave blocked people out', () => {
   expect(attentionKind({ kind: 'message', author: 'cara', space: 'S', channel: 'general', mentions: ['sandy'] }, ctx)).toBe('mention');
 });
 
-test('a 1-to-1: Block in the header; a bar instead of the composer when blocked, either way', () => {
+test('a 1-to-1: Block in the header’s ⋯ menu; a bar instead of the composer when blocked, either way', () => {
   const base = { messages: [], currentUser: 'sandy', typing: [], onOpenNav: () => {}, onOpenSearch: () => {}, onSend: () => {} };
-  // Not blocked: the header's Block button.
+  // Not blocked: Block in the header's ⋯ menu (P10-03), not a bare icon.
   const first = withBlocks(<DmPanel {...base} conversationKey="c:2" conversation={{ key: 'c:2', kind: 'pair', username: 'cara' }} username="cara" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Block cara' }));
+  expect(screen.queryByRole('button', { name: 'Block cara' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'More for cara' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Block cara…' }));
   expect(first.value.requestBlock).toHaveBeenCalledWith('cara');
   expect(screen.getByPlaceholderText('Message @cara')).toBeTruthy();
   cleanup();
   // I blocked bob: the bar with Unblock, no composer, no Block button.
   const mine = withBlocks(<DmPanel {...base} conversationKey="c:1" conversation={{ key: 'c:1', kind: 'pair', username: 'bob', blocked: true }} username="bob" />);
   expect(screen.queryByPlaceholderText('Message @bob')).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Block bob' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'More for bob' })).toBeNull(); // nothing left in it
   expect(screen.getByRole('status').textContent).toMatch(/You’ve blocked bob\. Unblock to message them\./);
   fireEvent.click(within(screen.getByRole('status')).getByRole('button', { name: 'Unblock' }));
   expect(mine.value.unblock).toHaveBeenCalledWith('bob');
@@ -135,4 +147,24 @@ test('Settings › Blocked people: the list with Unblock, or a note when empty',
   withBlocks(<BlockedSection />, []);
   expect(screen.getByText('You haven’t blocked anyone.')).toBeTruthy();
   expect(document.querySelector('svg[data-art="privacy"]')).toBeTruthy(); // P10-02: the shield mascot
+});
+
+test('P10-03: searching New message or the group picker for someone I blocked shows them, greyed, with Unblock', async () => {
+  const { default: QuickSwitcher } = await import('./QuickSwitcher.jsx');
+  const { default: PeoplePicker } = await import('./PeoplePicker.jsx');
+  const onUnblock = vi.fn();
+  render(<QuickSwitcher mode="people" items={[{ kind: 'person', username: 'bob' }]} recent={[]} onPick={() => {}} onClose={() => {}} blocked={['dee']} onUnblock={onUnblock} />);
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'de' } });
+  const list = screen.getByRole('list', { name: 'People you’ve blocked' });
+  expect(list.textContent).toContain('dee· You blocked them');
+  expect(screen.queryByText(/No one by that name/)).toBeNull();
+  fireEvent.click(within(list).getByRole('button', { name: 'Unblock' }));
+  expect(onUnblock).toHaveBeenCalledWith('dee');
+  expect(document.activeElement).toBe(screen.getByRole('combobox')); // focus stays in the picker
+  cleanup();
+  render(<PeoplePicker title="Start a group" people={[{ username: 'bob' }]} blocked={['dee']} onUnblock={onUnblock} onConfirm={() => {}} onClose={() => {}} />);
+  expect(screen.queryByRole('list', { name: 'People you’ve blocked' })).toBeNull(); // only when searching
+  fireEvent.change(screen.getByLabelText('Find people'), { target: { value: 'dee' } });
+  expect(screen.getByRole('list', { name: 'People you’ve blocked' })).toBeTruthy();
+  expect(screen.queryByText(/No one by that name/)).toBeNull();
 });

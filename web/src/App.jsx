@@ -554,6 +554,8 @@ export default function App() {
     );
   }
 
+  // P10-03: the pickers show blocked people who match a search, with Unblock.
+  const blockedNames = blocks.list.map((u) => u.username);
   // What the app's screens read about blocking (P9-07b).
   const blocksValue = {
     list: blocks.list,
@@ -719,6 +721,7 @@ export default function App() {
           myId={myId}
           onAddPeople={() => openGroupPicker({ mode: 'pair', with: dm.currentConversation?.username })}
           onShowMembers={() => setGroupMembersOpen(true)}
+          onMute={(muted) => dm.currentConversation?.id && dm.setMuted(dm.currentConversation.id, muted)} // P10-03: a 1-to-1 too
           username={dm.currentConversation?.username || ''}
           messages={shownDmMessages}
           currentUser={user}
@@ -899,6 +902,8 @@ export default function App() {
           onPick={goToPicked}
           onClose={() => setSwitcher(null)}
           onNewGroup={() => openGroupPicker({ mode: 'new' })}
+          blocked={blockedNames}
+          onUnblock={blocksValue.unblock}
         />
       )}
       {groupPicker && (() => {
@@ -909,6 +914,8 @@ export default function App() {
           <PeoplePicker
             title={groupPicker.mode === 'add' ? `Add people to ${dm.title(conv)}` : groupPicker.mode === 'pair' ? `Start a group with ${groupPicker.with}` : 'Start a group'}
             people={pickable.filter((p) => !inGroup.has(p.username))}
+            blocked={blockedNames}
+            onUnblock={blocksValue.unblock}
             locked={groupPicker.mode === 'pair' ? [groupPicker.with] : []}
             min={groupPicker.mode === 'add' ? 1 : 2}
             max={room}
@@ -975,7 +982,8 @@ export default function App() {
             setBlockAsk(null);
             blocks.block(who).then(() => {
               dm.loadConversations();
-              toast.show({ id: `block-${who}`, message: `Blocked ${who}` });
+              // P10-03: Undo, as deleting a message has.
+              toast.show({ id: `block-${who}`, message: `Blocked ${who}`, actionLabel: 'Undo', onAction: () => blocksValue.unblock(who) });
             }).catch((err) => toast.show({ id: 'block-error', message: err.message || 'Could not block', tone: 'error' }));
           }}
           onCancel={() => setBlockAsk(null)}

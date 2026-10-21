@@ -474,16 +474,22 @@ const MessageList = forwardRef(function MessageList({ messages, channel, current
               <span>New</span>
             </div>
           ) : row.kind === 'blocked' ? (
-            <p key={row.key} data-msg-id={row.ids[0]} className="my-1 flex items-center gap-2 pl-14 text-xs italic text-gray-500">
-              {row.ids.length === 1 ? 'Blocked message' : `${row.ids.length} blocked messages`}
+            // P10-03: its own full-width row (eye-off in the avatar column),
+            // spaced like a new author, so it never reads as part of the
+            // previous person's messages.
+            <div key={row.key} data-msg-id={row.ids[0]} data-blocked-row className="mt-3 flex items-center gap-3 px-2 py-1 text-sm text-gray-400">
+              <span className="flex w-10 shrink-0 justify-center text-gray-500" aria-hidden="true">
+                <Icon name="eyeOff" size={18} />
+              </span>
+              <span>{row.ids.length === 1 ? 'A message from someone you blocked' : `${row.ids.length} messages from someone you blocked`}</span>
               <button
                 type="button"
                 onClick={() => setRevealed((prev) => new Set([...prev, ...row.ids]))}
-                className="rounded px-1.5 py-0.5 not-italic font-medium text-brand-hi hover:bg-ink-600"
+                className="rounded px-1.5 py-0.5 font-medium text-brand-hi hover:bg-ink-600"
               >
                 Show
               </button>
-            </p>
+            </div>
           ) : row.kind === 'system' ? (
             <p key={row.key} data-msg-id={row.m.id} role="note" className="my-2 text-center text-xs text-gray-500">
               {row.m.content}

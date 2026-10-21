@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Modal from './Modal.jsx';
 import Mascot from './Mascot.jsx';
+import BlockedMatches, { blockedMatching } from './BlockedMatches.jsx';
 
 // Ctrl+K "go anywhere": channels in every server, the servers themselves and
 // your DMs. Items:
@@ -91,7 +92,9 @@ export function rankItems(items, query, recent) {
 const MAX_SHOWN = 50;
 
 // `onNewGroup` (people mode, P9-06d): a "Start a group" button.
-export default function QuickSwitcher({ items, recent, onPick, onClose, mode = 'go', onNewGroup }) {
+// `blocked` / `onUnblock` (P10-03, people mode): blocked people matching the
+// search show greyed under the results, with Unblock.
+export default function QuickSwitcher({ items, recent, onPick, onClose, mode = 'go', onNewGroup, blocked = [], onUnblock }) {
   const people = mode === 'people';
   const prompt = people ? 'Message who?' : 'Where do you want to go?';
   const [query, setQuery] = useState('');
@@ -176,7 +179,8 @@ export default function QuickSwitcher({ items, recent, onPick, onClose, mode = '
           </li>
         ))}
       </ul>
-      {results.length === 0 && (
+      {people && <BlockedMatches query={query} blocked={blocked} onUnblock={onUnblock} returnFocusTo={inputRef} />}
+      {results.length === 0 && !(people && blockedMatching(blocked, query).length) && (
         <p className="flex flex-col items-center gap-2 p-4 text-center text-sm text-gray-500">
           <Mascot pose="confused" size={48} />
           {people ? 'No one by that name in your servers. People you share a server with show up here.' : 'No matches. Try another name.'}

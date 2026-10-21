@@ -147,12 +147,14 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
         },
       });
     }
-    // Blocking (P9-07b): just for me, asks first; unblocking doesn't.
+    // Blocking (P9-07b): just for me, asks first; unblocking doesn't. It's a
+    // personal action, so it sits with Message and Roles in plain text, not in
+    // the moderators' amber (P10-03).
     if (!self && blocks.requestBlock) {
       acts.push(
         blocks.isBlocked(m.username)
           ? { label: 'Unblock', onClick: () => blocks.unblock(m.username) }
-          : { label: 'Block…', caution: true, onClick: () => blocks.requestBlock(m.username) }
+          : { label: 'Block…', onClick: () => blocks.requestBlock(m.username) }
       );
     }
     return acts;
@@ -193,6 +195,12 @@ export default function MemberList({ space, members, currentUser, myRole, roles 
                     </span>
                   )}
                 </span>
+                {blocks.isBlocked(m.username) && (
+                  // P10-03: who I've blocked, at a glance.
+                  <span role="img" aria-label="Blocked" title="You blocked them" className="shrink-0 text-gray-500">
+                    <Icon name="ban" size={14} />
+                  </span>
+                )}
                 {timedOut(m) && (
                   <span role="img" aria-label={`Timed out until ${timeoutEnd(m.timedOutUntil)}`} title={`Timed out until ${timeoutEnd(m.timedOutUntil)}`} className="shrink-0 text-danger">
                     <Icon name="clock" size={14} />

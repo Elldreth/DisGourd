@@ -11,15 +11,22 @@ import DropOverlay from './DropOverlay.jsx';
 import EmptyState from './EmptyState.jsx';
 import { useFileDrop } from '../useFileDrop.js';
 import { useBlocked } from '../state/useBlocks.js';
+import { ActionMenu } from './MessageActions.jsx';
 
 // The conversation view in Direct Messages mode. `conversation` (P9-06d) is
 // the open one ({ kind, members, … }); `title` what it's called (a group's
 // name or members, else the other person). A pair's header offers Add people
 // (`onAddPeople`, a new group); a group's, Members (`onShowMembers`).
-export default function DmPanel({ conversationKey = '', conversation = null, title = '', myId = null, onAddPeople, onShowMembers, username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
+// P10-03: a pair's Add people, Mute (`onMute(muted)`) and Block sit in one ⋯
+// menu, so a bare block icon isn't the first thing in the header.
+export default function DmPanel({ conversationKey = '', conversation = null, title = '', myId = null, onAddPeople, onShowMembers, onMute, username, messages, currentUser, newMessages = null, typing = [], onSend, onEdit, onDelete, hasMore, loadingOlder, onLoadOlder, history, onTyping, onOpenSearch, onOpenNav, onNewMessage }) {
   // The message being replied to ({ id, author }), cleared on send, Esc or switching conversation.
   const [replyingTo, setReplyingTo] = useState(null);
-  useEffect(() => setReplyingTo(null), [conversationKey]);
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    setReplyingTo(null);
+    setMoreOpen(false);
+  }, [conversationKey]);
   // Files dropped anywhere on the conversation go to the composer.
   const composerRef = useRef(null);
   const listRef = useRef(null);
@@ -29,6 +36,20 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
   const blocks = useBlocked();
   const iBlocked = !group && blocks.isBlocked(username);
   const blocked = !group && (iBlocked || !!conversation?.blocked);
+  const close = (fn) => () => {
+    setMoreOpen(false);
+    fn();
+  };
+  const pairActions = group
+    ? []
+    : [
+        onAddPeople && !blocked && { id: 'add', label: 'Add people…', icon: 'plus', onSelect: close(onAddPeople) },
+        onMute && conversation?.id && {
+          id: 'mute', label: conversation.muted ? 'Unmute' : 'Mute', icon: conversation.muted ? 'volume' : 'volumeOff',
+          onSelect: close(() => onMute(!conversation.muted)),
+        },
+        blocks.requestBlock && !iBlocked && { id: 'block', label: `Block ${username}…`, icon: 'ban', group: 'safety', onSelect: close(() => blocks.requestBlock(username)) },
+      ].filter(Boolean);
   const drop = useFileDrop({ enabled: !!name, onFiles: (files) => composerRef.current?.addFiles(files) });
 
   if (!name) {
@@ -83,26 +104,6 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
             className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
           />
         )}
-        {!group && blocks.requestBlock && !iBlocked && (
-          <IconButton
-            icon="ban"
-            size={18}
-            label={`Block ${username}`}
-            title={`Block ${username}`}
-            onClick={() => blocks.requestBlock(username)}
-            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
-          />
-        )}
-        {!group && onAddPeople && !blocked && (
-          <IconButton
-            icon="plus"
-            size={18}
-            label="Add people"
-            title={`Start a group with ${username}`}
-            onClick={onAddPeople}
-            className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
-          />
-        )}
         <IconButton
           icon="search"
           size={18}
@@ -110,6 +111,21 @@ export default function DmPanel({ conversationKey = '', conversation = null, tit
           onClick={onOpenSearch}
           className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
         />
+        {pairActions.length > 0 && (
+          <div className="relative">
+            <IconButton
+              icon="more"
+              size={18}
+              label={`More for ${username}`}
+              title="More"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((o) => !o)}
+              className="rounded-lg p-1.5 text-gray-400 transition hover:bg-ink-600 hover:text-fg"
+            />
+            {moreOpen && <ActionMenu actions={pairActions} label={`More for ${username}`} onClose={() => setMoreOpen(false)} />}
+          </div>
+        )}
       </header>
 
       <MessageList

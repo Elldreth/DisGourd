@@ -3,6 +3,8 @@ import Modal from './Modal.jsx';
 import Avatar from './Avatar.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import Switch from './settings/Switch.jsx';
+import Icon from './Icon.jsx';
+import { useBlocked } from '../state/useBlocks.js';
 import { MAX_GROUP } from '../state/useDms.js';
 
 // A group DM's members and settings (P9-06d): the list (owner marked), Add
@@ -10,6 +12,7 @@ import { MAX_GROUP } from '../state/useDms.js';
 // Mute, and Leave group (asks; the owner is told who takes over).
 export default function GroupMembersDialog({ conversation, title, myId, onAdd, onRemove, onRename, onMute, onLeave, onClose }) {
   const members = conversation.members || [];
+  const blocks = useBlocked(); // P10-03: mark people I've blocked
   const owner = conversation.ownerId === myId;
   const [name, setName] = useState(conversation.name || '');
   const [removing, setRemoving] = useState(null);
@@ -36,6 +39,11 @@ export default function GroupMembersDialog({ conversation, title, myId, onAdd, o
                 {m.username}
                 {m.id === myId && <span className="text-gray-500"> (you)</span>}
               </span>
+              {blocks.isBlocked(m.username) && (
+                <span role="img" aria-label="Blocked" title="You blocked them" className="shrink-0 text-gray-500">
+                  <Icon name="ban" size={14} />
+                </span>
+              )}
               {m.id === conversation.ownerId && <span className="rounded bg-brand/20 px-1.5 py-0.5 text-[11px] font-semibold text-brand-hi">Owner</span>}
               {owner && m.id !== myId && (
                 <button type="button" onClick={() => setRemoving(m)} className="rounded-md px-2 py-0.5 text-xs font-medium text-danger hover:bg-ink-700">
