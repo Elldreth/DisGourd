@@ -18,11 +18,21 @@ For SDXL-family checkpoints (SDXL, Illustrious, Pony, Noob). Other families keep
 4. **The hires fix (High only):**
    - Enlarge with the upscale model, then resize to **3K on the long edge** (portrait 2048×3072, about 2× each side).
    - Then **15 steps at denoise 0.45**, the same sampler, CFG and seed.
-5. **The face detailer (Standard and High):**
-   - Find faces (bbox detector).
-   - Each face's crop (twice the face) is scaled to exactly **1024 px**: `guide_size_for` the crop region, guide and max size both 1024, for any face size.
-   - Repaint at **denoise 0.3**. Each pass feeds its result into the next (FaceDetailer's `cycle` re-samples the previous pass's output), so the face changes a bit more each pass. Passes come from Settings (1–5; the owner uses 3).
-   - The finished crop goes back into the image. The detailer runs last; nothing repaints after it.
+5. **The face detailer (Standard and High)**, matching the owner's own ComfyUI setup (screenshot, 2026-10-20):
+   - **Finding faces:**
+     - `UltralyticsDetectorProvider` with the detector from Settings, suggesting **`bbox/face_yolov8m.pt`** when present.
+     - Plus **`SAMLoader`** (`sam_vit_b_01ec64.pth`, device AUTO) into FaceDetailer's `sam_model_opt`, so the mask follows the face's outline instead of a box.
+   - **FaceDetailer:**
+     - guide_size **1024**, guide_size_for **bbox**, max_size **1024**;
+     - steps **30**, CFG **5**, sampler **ddim**, scheduler **simple**;
+     - denoise **0.30**, feather 5, noise_mask and force_inpaint on;
+     - bbox_threshold 0.5, bbox_dilation 10, bbox_crop_factor **3.0**;
+     - sam_detection_hint center-1, sam_dilation 0, sam_threshold 0.93, sam_bbox_expansion 0, sam_mask_hint_threshold 0.7, sam_mask_hint_use_negative False;
+     - drop_size 10;
+     - **cycle** = passes from Settings. Each cycle re-samples the previous one's result, which is the owner's "feed the face back in" loop.
+   - **Color Match** (KJNodes `ColorMatch`, method **hm-mvgd-hm**, multithread on) afterwards. `image_ref` is the image before the detailer and `image_target` the detailer's output, so the repainted face keeps the image's colors.
+   - **When something's missing** on a host's ComfyUI (SAM loader or model, KJNodes), the detailer runs without that piece, and the server log notes it, as it already does for other optional nodes.
+   - The detailer runs last; nothing repaints after it.
 6. **Save.**
 
 ### Qualities
@@ -45,6 +55,7 @@ They cap the hires size:
 - **New settings:**
   - per style, **CLIP skip** (Advanced) and **Hires steps** (Advanced, beside the step counts);
   - shared, **Hires strength** (Quality, beside the hires fix switch; default 0.45).
+- **The detailer's own sampling** (30 steps, CFG 5, ddim / simple, crop factor 3) is built in, separate from the style's. Strength and passes stay in Settings.
 
 ## Out of scope (recorded)
 - **The Upscale button's tiled mode** repaints the whole image at 0.3 after the detailer, softening faces again. A follow-up could re-run the detailer after tiled upscaling.
