@@ -3,6 +3,7 @@
 import { ImagineSettingsProvider, ImagineSaveBar } from './ImagineSettings.jsx';
 import OverviewPage from './OverviewPage.jsx';
 import ComfyPage from './ComfyPage.jsx';
+import StylesPage from './StylesPage.jsx';
 import QualityPage from './QualityPage.jsx';
 import VariationsPage from './VariationsPage.jsx';
 import KiePage from './KiePage.jsx';
@@ -13,6 +14,7 @@ export default function ImagineAllPages(props) {
     <ImagineSettingsProvider {...props}>
       <OverviewPage />
       <ComfyPage />
+      <StylesPage />
       <QualityPage />
       <VariationsPage />
       <KiePage />

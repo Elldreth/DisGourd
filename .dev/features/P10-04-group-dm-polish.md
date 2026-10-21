@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P10-00)
 - **Phase:** 10
-- **State:** REVIEW
+- **State:** COMPLETE (merged #205)
 - **Effort:** S–M
 - **Depends on:** P9-06; P10-08 for the group scene (optional)
 - **Serialize with:** P10-03 (`MessageList.jsx`, `DmPanel.jsx`)

@@ -49,10 +49,10 @@ async function open(props = {}) {
 const panelFor = (name) => document.getElementById(screen.getByRole('tab', { name }).getAttribute('aria-controls'));
 const bars = () => screen.queryAllByRole('region', { name: 'Unsaved changes' });
 
-test('Site admin lists General, Image generation and its five pages, the pages indented', async () => {
+test('Site admin lists General, Image generation and its six pages, the pages indented', async () => {
   await open();
   const tabs = within(screen.getByRole('tablist')).getAllByRole('tab').map((t) => t.textContent);
-  expect(tabs.slice(5)).toEqual(['General', 'Image generation', 'ComfyUI', 'Quality', 'Variations', 'kie.ai', 'Try it']);
+  expect(tabs.slice(5)).toEqual(['General', 'Image generation', 'ComfyUI', 'Styles', 'Quality', 'Variations', 'kie.ai', 'Try it']); // Styles: P10-05
   expect(screen.getByRole('tab', { name: 'Quality' }).className).toMatch(/\bpl-6\b/);
   // Link previews lives on General now.
   expect(within(panelFor('General')).getByText(/Link previews/)).toBeTruthy();
