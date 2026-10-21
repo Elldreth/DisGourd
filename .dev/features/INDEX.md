@@ -292,7 +292,7 @@ Container: `P12-00-email.md`. The owner's decisions (2026-10-21): Resend over SM
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
 | P12-00 | Email: password reset and security notices (Container) | 12 | PLANNED | L | P11-01, P11-12 | see children |
-| P12-01 | Sending email: SMTP from the environment, mailer with queue and caps, Site admin › Email with "Send test email", Resend and DNS docs | 12 | PLANNED | S–M | P11-14 (soft) | mail/ (new), config.js, routes/admin.js, EmailPage.jsx, README |
+| P12-01 | Sending email: SMTP from the environment, mailer with queue and caps, Site admin › Email with "Send test email", Resend and DNS docs | 12 | REVIEW | S–M | P11-14 (soft) | mail/ (new), config.js, routes/admin.js, EmailPage.jsx, README |
 | P12-02 | Email addresses: optional, confirm by link, change with password, "require confirmed email" switch (migration: users rebuild, email_tokens) | 12 | PLANNED | M | P12-01, P11-12 | migrations, db/index.js, routes/auth.js, Login.jsx, EmailSection.jsx, ConfirmEmailGate.jsx |
 | P12-03 | Password reset: "Forgot password?", one-time link, admin reset link, console tool | 12 | PLANNED | M | P12-02; P11-08 (soft) | routes/auth.js, tools/reset-link.js, ResetPassword.jsx, Login.jsx |
 | P12-04 | Security notices: password changed, email changed, new device | 12 | PLANNED | S | P12-02 | routes/auth.js, mail/templates.js, Notifications settings |

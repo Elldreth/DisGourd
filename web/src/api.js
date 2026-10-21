@@ -164,6 +164,13 @@ export function searchUsers(q) {
 export function setSuspended(username, suspended, reason) {
   return request(`/admin/users/${encodeURIComponent(username)}`, { method: 'PUT', body: { suspended, ...(reason ? { reason } : {}) } });
 }
+// ---- Instance admin: email (P12-01) ----
+export function getEmailStatus() {
+  return request('/admin/email');
+}
+export function sendTestEmail(to) {
+  return request('/admin/email/test', { method: 'POST', body: to ? { to } : {} });
+}
 export function setSiteAdmin(username, admin) {
   return request(`/admin/registration/admins/${encodeURIComponent(username)}`, { method: 'PUT', body: { admin } });
 }

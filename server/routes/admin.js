@@ -8,11 +8,47 @@ const imagine = require('../imagine');
 const { clientIpVia, proxyTrust } = require('../net/clientIp');
 const { newRegCode } = require('../auth/regCodes');
 const { endStaleSessions } = require('../gateway/delivery');
+const mail = require('../mail');
+const templates = require('../mail/templates');
+const { rateLimitOk } = require('../auth/rateLimit');
 
 const getJsonBody = readJsonBody;
 
 // Tried in order; the first match handles the request.
 const routes = [
+  {
+    // Site admin › Email (P12-01): GET /admin/email is the status (never the
+    // password); POST /admin/email/test { to? } queues a test email to `to`, or
+    // to your own account's address.
+    match: ({ pathSegments }) => pathSegments[0] === 'admin' && pathSegments[1] === 'email',
+    run: async ({ req, res, parsedUrl, pathSegments }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can manage email' });
+      const me = db.getUserById(userId);
+      if (pathSegments.length === 2 && req.method === 'GET') {
+        return sendJson(res, 200, { ...mail.status(), yourAddress: me.email || null });
+      }
+      if (pathSegments[2] === 'test' && pathSegments.length === 3 && req.method === 'POST') {
+        const s = mail.settings();
+        if (s.missing.length) return sendJson(res, 409, { error: `Email is off. Set ${s.missing.join(', ')} on the server first.` });
+        const body = await getJsonBody(req);
+        const to = typeof body.to === 'string' && body.to.trim() ? body.to.trim() : me.email;
+        if (!mail.looksLikeEmail(to)) return sendJson(res, 400, { error: 'Enter an email address to send the test to' });
+        if (!rateLimitOk('mail-test:' + userId, 5, 60 * 60 * 1000)) {
+          return sendJson(res, 429, { error: 'That’s 5 test emails this hour. Try again later.' });
+        }
+        const sent = mail.send({ to, ...templates.testEmail({ serverName: s.serverName, publicUrl: s.publicUrl, by: me.username }) });
+        if (!sent.queued) {
+          const why = { cap: `Today’s limit of ${s.dailyLimit} emails is reached.`, recipient: 'That address has had 5 emails this hour.', address: 'That isn’t a valid email address.' };
+          return sendJson(res, sent.reason === 'address' ? 400 : 429, { error: why[sent.reason] || 'The email wasn’t sent.' });
+        }
+        console.warn(`[admin] ${me.username} sent a test email`);
+        return sendJson(res, 202, { queued: true, to });
+      }
+      return sendJson(res, 405, { error: 'Method not allowed' });
+    },
+  },
   {
     // GET /admin/client-ip (P11-05): the address this server sees for you, and
     // how it got it, for checking a proxy or tunnel setup from a phone.
