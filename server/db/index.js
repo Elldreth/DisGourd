@@ -1871,8 +1871,12 @@ function listReports(spaceId, { status = 'open', before = null } = {}) {
 function getReport(spaceId, id) {
   return shapeReport(db.prepare(`${REPORT_SELECT} WHERE space_id = ? AND id = ?`).get(spaceId, id));
 }
+// Open reports, counted by message (P10-01): three reports on one message
+// are one thing to look at. A deleted message's reports count by author and
+// excerpt, the way the queue groups them.
 function countOpenReports(spaceId) {
-  return db.prepare("SELECT COUNT(*) AS n FROM reports WHERE space_id = ? AND status = 'open'").get(spaceId).n;
+  return db.prepare(`SELECT COUNT(DISTINCT CASE WHEN message_id IS NOT NULL THEN 'm' || message_id ELSE 'x' || author_id || ':' || excerpt END) AS n
+    FROM reports WHERE space_id = ? AND status = 'open'`).get(spaceId).n;
 }
 // Close a report and every other open report on the same message.
 function closeReports(spaceId, report, status, byId, resolution = null) {

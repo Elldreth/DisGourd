@@ -43,14 +43,19 @@ test('Report… is offered on other people’s messages only, not your own or th
   expect(screen.queryByRole('menuitem', { name: 'Report…' })).toBeNull();
   fireEvent.keyDown(document, { key: 'Escape' });
   fireEvent.contextMenu(row(1));
+  // P10-01: Report and Block sit together between dividers, Delete after.
+  const menu = screen.getByRole('menuitem', { name: 'Report…' }).closest('[role="menu"]');
+  const order = [...menu.children].map((el) => (el.getAttribute('role') === 'separator' ? '—' : el.textContent));
+  expect(order.slice(order.indexOf('—'))).toEqual(['—', 'Report…']); // no Block here (no blocking provider), no Delete (not mine)
   fireEvent.click(screen.getByRole('menuitem', { name: 'Report…' }));
   expect(onReport).toHaveBeenCalledWith(msgs[0]);
 });
 
 test('the report dialog needs a reason, sends it with the note, then thanks you', async () => {
   const onReport = vi.fn(async () => ({}));
-  render(<ReportDialog author="cara" onReport={onReport} onClose={() => {}} />);
+  render(<ReportDialog author="cara" excerpt="buy cheap gourds" onReport={onReport} onClose={() => {}} />);
   expect(screen.getByRole('dialog', { name: 'Report @cara’s message?' })).toBeTruthy();
+  expect(screen.getByTestId('report-excerpt').textContent).toBe('buy cheap gourds'); // P10-01: which message
   expect(screen.getByRole('button', { name: 'Report' }).disabled).toBe(true);
   fireEvent.click(screen.getByRole('radio', { name: 'Harassment' }));
   fireEvent.change(screen.getByLabelText('Anything to add? (optional)'), { target: { value: '  third time  ' } });
@@ -76,38 +81,70 @@ function section(props = {}) {
   return render(<ReportsSection space="Tx" members={members} myPosition={2} abilities={['delete_others_messages', 'timeout_members']} openCount={1} {...props} />);
 }
 
-test('an open report shows the message, reason, note and reporter, with the actions my rank allows', async () => {
+// The "Act on" menu's items, opened from a card.
+function actOn(item, name) {
+  fireEvent.click(within(item).getByRole('button', { name: `Act on ${name}` }));
+  return screen.getByRole('menu', { name: `Act on ${name}` });
+}
+
+test('an open report shows the message, reason, note and reporter; Mark handled leads, the rest is in Act on', async () => {
   const onJump = vi.fn();
   api.getReports.mockResolvedValue({ reports: [open()], more: false });
   section({ onJump });
   const item = await screen.findByRole('listitem');
   expect(api.getReports).toHaveBeenCalledWith('Tx', { status: 'open' });
   expect(item.textContent).toContain('cara in #general');
-  expect(item.textContent).toContain('buy gourds');
-  expect(item.textContent).toContain('Spam reported by bob · “third time”');
+  expect(item.textContent).toContain('Spam');
+  expect(item.textContent).toContain('reported by bob (“third time”)');
   const buttons = within(item).getAllByRole('button').map((b) => b.textContent);
-  expect(buttons).toEqual(['Jump to message', 'Delete message', 'Time out…', 'Mark handled', 'Dismiss']); // no Ban: no permission
-  fireEvent.click(within(item).getByRole('button', { name: 'Jump to message' }));
+  expect(buttons).toEqual(['buy gourds', 'Mark handled', 'Dismiss', 'Act on cara']);
+  fireEvent.click(within(item).getByRole('button', { name: 'Open the message: buy gourds' }));
   expect(onJump).toHaveBeenCalledWith(open());
-  fireEvent.click(within(item).getByRole('button', { name: 'Delete message' }));
+  const menu = actOn(item, 'cara');
+  expect(within(menu).getAllByRole('menuitem').map((b) => b.textContent)).toEqual(['Delete message', 'Time out…']); // no Ban: no permission
+  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Delete message' }));
   await waitFor(() => expect(api.resolveReport).toHaveBeenCalledWith('Tx', 5, { action: 'delete', resolution: undefined }));
 });
 
-test('a higher-ranked author or a deleted message limits the actions; Dismiss closes it', async () => {
-  api.getReports.mockResolvedValue({ reports: [open({ author: 'sandy' }), open({ id: 6, messageExists: false, messageId: null, excerpt: 'gone' })], more: false });
+test('reports on the same message are one card, with every reason and reporter (P10-01)', async () => {
+  api.getReports.mockResolvedValue({
+    reports: [open({ id: 9, reporter: 'dee', note: '' }), open({ id: 8, reporter: 'ada', reason: 'harassment', note: 'rude' }), open()],
+    more: false,
+  });
+  section();
+  const [item] = await screen.findAllByRole('listitem');
+  expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  expect(item.textContent).toContain('Spam ×2Harassment');
+  expect(item.textContent).toContain('reported by dee, ada (“rude”) and bob (“third time”)');
+  fireEvent.click(within(item).getByRole('button', { name: 'Mark handled' }));
+  // One call closes them all on the server.
+  await waitFor(() => expect(api.resolveReport).toHaveBeenCalledTimes(1));
+  expect(api.resolveReport).toHaveBeenCalledWith('Tx', 9, { action: 'resolved', resolution: undefined });
+});
+
+test('a higher-ranked author or a deleted message limits the actions; Dismiss closes each report on a deleted message', async () => {
+  api.getReports.mockResolvedValue({
+    reports: [open({ author: 'sandy' }), open({ id: 6, messageExists: false, messageId: null, excerpt: 'gone' }), open({ id: 7, messageExists: false, messageId: null, excerpt: 'gone', reporter: 'dee' })],
+    more: false,
+  });
   section();
   const [higher, gone] = await screen.findAllByRole('listitem');
   expect(within(higher).getAllByRole('button').map((b) => b.textContent)).toEqual(['Mark handled', 'Dismiss']);
   expect(gone.textContent).toContain('This message was deleted');
-  expect(within(gone).queryByRole('button', { name: 'Delete message' })).toBeNull();
+  expect(gone.textContent).toContain('reported by bob (“third time”) and dee');
+  // Nothing to delete any more, but cara can still be timed out.
+  expect(within(actOn(gone, 'cara')).getAllByRole('menuitem').map((b) => b.textContent)).toEqual(['Time out…']);
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
   fireEvent.click(within(gone).getByRole('button', { name: 'Dismiss' }));
-  await waitFor(() => expect(api.resolveReport).toHaveBeenCalledWith('Tx', 6, { action: 'dismiss', resolution: undefined }));
+  await waitFor(() => expect(api.resolveReport).toHaveBeenCalledTimes(2));
+  expect(api.resolveReport).toHaveBeenCalledWith('Tx', 6, { action: 'dismiss', resolution: undefined });
+  expect(api.resolveReport).toHaveBeenCalledWith('Tx', 7, { action: 'dismiss', resolution: undefined });
 });
 
 test('Time out… from a report times them out, then marks it handled', async () => {
   api.getReports.mockResolvedValue({ reports: [open()], more: false });
   section();
-  fireEvent.click(within(await screen.findByRole('listitem')).getByRole('button', { name: 'Time out…' }));
+  fireEvent.click(within(actOn(await screen.findByRole('listitem'), 'cara')).getByRole('menuitem', { name: 'Time out…' }));
   fireEvent.click(screen.getByRole('radio', { name: '1 day' }));
   fireEvent.click(screen.getByRole('button', { name: 'Time out' }));
   await waitFor(() => expect(api.timeoutMember).toHaveBeenCalledWith('Tx', 'cara', { minutes: 1440, reason: '' }));
@@ -118,10 +155,11 @@ test('Closed shows how each report ended; an empty queue says so', async () => {
   api.getReports.mockImplementation(async (space, { status }) =>
     status === 'open'
       ? { reports: [], more: false }
-      : { reports: [open({ status: 'resolved', resolution: 'deleted', resolvedBy: 'ada', messageExists: false }), open({ id: 7, status: 'dismissed', resolvedBy: 'sandy' })], more: false }
+      : { reports: [open({ status: 'resolved', resolution: 'deleted', resolvedBy: 'ada', messageExists: false }), open({ id: 7, messageId: 42, status: 'dismissed', resolvedBy: 'sandy' })], more: false }
   );
   section({ openCount: 0 });
   expect(await screen.findByText('No open reports. All quiet.')).toBeTruthy();
+  expect(document.querySelector('svg[data-art="clear"]')).toBeTruthy(); // P10-01: the "all clear" mascot
   fireEvent.click(screen.getByRole('button', { name: 'Closed' }));
   const items = await screen.findAllByRole('listitem');
   expect(items[0].textContent).toContain('Handled (message deleted) by ada');
@@ -157,7 +195,8 @@ test('the server menu shows Reports only while some are open; it opens Server se
   fireEvent.click(screen.getByRole('button', { name: 'Tx' }));
   fireEvent.click(screen.getByRole('button', { name: /^Reports/ }));
   const dialog = await screen.findByRole('dialog', { name: 'Server settings' });
-  expect(within(dialog).getByRole('tab', { name: 'Reports' }).getAttribute('aria-selected')).toBe('true');
+  // P10-01: the list shows the open count beside Reports.
+  expect(within(dialog).getByRole('tab', { name: /^Reports\s*2 open$/ }).getAttribute('aria-selected')).toBe('true');
   await waitFor(() => expect(api.getReports).toHaveBeenCalledWith('Tx', { status: 'open' }));
 });
 

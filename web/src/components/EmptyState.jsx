@@ -59,6 +59,15 @@ export const ART = {
       </svg>
     </>
   ),
+  // Nothing left to do (P10-01): the mascot with a check, sparkles around.
+  clear: (
+    <>
+      <Ground x={40} w={120} />
+      <svg x="41" y="4" width="118" height="118" viewBox={MASCOT_VIEWBOX}>
+        <MascotParts pose="clear" />
+      </svg>
+    </>
+  ),
   // Image generation not set up (P5-06): a gourd beside an easel with a blank
   // canvas and a lime-tipped brush, waiting to paint.
   imagine: (

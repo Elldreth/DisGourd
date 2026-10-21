@@ -16,20 +16,20 @@ import ReportsSection from './ReportsSection.jsx';
 //   overview (edit the server, or the owner), emoji, roles, imagine,
 //   reports, modLog, bans
 // Unsaved changes in Overview or Image generation make Close ask first.
-export function serverSettingsSections(can) {
+export function serverSettingsSections(can, { openReports = 0 } = {}) {
   return [
     can.overview && { id: 'overview', label: 'Overview' },
     can.emoji && { id: 'emoji', label: 'Emoji' },
     can.roles && { id: 'roles', label: 'Roles' },
     can.imagine && { id: 'imagine', label: 'Image generation' },
-    can.reports && { id: 'reports', label: 'Reports', group: 'Moderation' },
+    can.reports && { id: 'reports', label: 'Reports', group: 'Moderation', badge: { count: openReports, label: `${openReports} open` } },
     can.modLog && { id: 'modlog', label: 'Moderation log', group: 'Moderation' },
     can.bans && { id: 'bans', label: 'Bans', group: 'Moderation' },
   ].filter(Boolean);
 }
 
 export default function ServerSettingsDialog({ space, can, initialSection, onClose, overview, emoji, roles, imagine, modLog, reports }) {
-  const sections = serverSettingsSections(can);
+  const sections = serverSettingsSections(can, { openReports: reports?.openCount || 0 });
   const ids = sections.map((s) => s.id);
   const [section, setSectionState] = useState(ids.includes(initialSection) ? initialSection : ids[0]);
   // Lists that load from the server (emoji, log, bans) load on their first visit,

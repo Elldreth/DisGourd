@@ -5,6 +5,7 @@ import Composer from './Composer.jsx';
 import TypingIndicator from './TypingIndicator.jsx';
 import TimedOutNotice from './TimedOutNotice.jsx';
 import ReportDialog from './ReportDialog.jsx';
+import { notificationText } from '../notify.js';
 import { cooldownKey, useCooldown } from '../slowmode.js';
 import RoleName from './RoleName.jsx';
 import Avatar from './Avatar.jsx';
@@ -221,7 +222,7 @@ export default function ThreadPanel({
         </div>
       )}
       {reportFor && (
-        <ReportDialog author={reportFor.author} onReport={(r) => api.reportMessage(space, thread.channel, reportFor.id, r)} onClose={() => setReportFor(null)} />
+        <ReportDialog author={reportFor.author} excerpt={notificationText(reportFor.content, reportFor.attachments || [])} onReport={(r) => api.reportMessage(space, thread.channel, reportFor.id, r)} onClose={() => setReportFor(null)} />
       )}
     </aside>
   );

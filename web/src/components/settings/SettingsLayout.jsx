@@ -15,8 +15,9 @@ import { useOverlayHistory } from '../../overlayHistory.js';
 // another. The list is a tablist: arrows move and select, Home/End jump,
 // Enter or Space opens the section and puts focus in it.
 //
-//   sections       [{ id, label, group?, indent? }]; `group` starts a labelled
-//                  group at its first item, `indent` marks a sub-page
+//   sections       [{ id, label, group?, indent?, badge? }]; `group` starts a
+//                  labelled group at its first item, `indent` marks a sub-page,
+//                  `badge` ({ count, label }) shows an amber count (P10-01)
 //   section        the chosen id; onSection(id) changes it
 //   renderSection  (id) => the section's content (the layout adds its heading)
 //   startOnPage    phones open on the chosen page instead of the list
@@ -108,6 +109,11 @@ export default function SettingsLayout({ label, sections, section, onSection, re
               }`}
             >
               {s.label}
+              {s.badge?.count > 0 && (
+                <span className="ml-2 rounded-full bg-idle px-1.5 text-xs font-bold text-ink-900" aria-label={s.badge.label}>
+                  {s.badge.count > 99 ? '99+' : s.badge.count}
+                </span>
+              )}
               <Icon name="chevronLeft" size={16} className="ml-auto rotate-180 text-gray-500 md:hidden" />
             </button>,
           ];
