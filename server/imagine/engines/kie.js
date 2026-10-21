@@ -131,7 +131,7 @@ function apiError(code, msg) {
   if (code === 429) return fail('UNAVAILABLE', 'kie.ai is limiting requests; try again in a moment');
   return fail('ENGINE', msg ? `kie.ai: ${msg}` : `kie.ai answered ${code}`);
 }
-const REFUSAL = /nsfw|safety|sensitive|policy|moderat|inappropriate|prohibit|violat/i;
+const REFUSAL = /nsfw|safety|unsafe|sensitive|policy|moderat|inappropriate|prohibit|violat|explicit|harmful/i;
 
 const sleep = (ms, signal) =>
   new Promise((resolve, reject) => {
@@ -179,16 +179,17 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
     imageUrl = await uploadPicture(request.init, key, signal);
   }
   const body = buildInput(request, cfg, { permissive, imageUrl });
-  const name = (specFor(cfg) || {}).name || body.model;
+  const spec = specFor(cfg) || {};
+  const ctx = { name: spec.name || body.model, filterable: !!spec.safety, permissive };
   // P13-02: when kie.ai's model times out or errors on its side and charged
   // nothing, try once more before giving up.
   try {
-    return await runTask(body, key, signal, name);
+    return await runTask(body, key, signal, ctx);
   } catch (err) {
     if (!err.retryable || signal?.aborted) throw err;
     console.warn(`[imagine] kie.ai: ${err.message}; trying once more`);
     try {
-      return await runTask(body, key, signal, name);
+      return await runTask(body, key, signal, ctx);
     } catch (again) {
       if (again.retryable) again.message += ' (tried twice)';
       throw again;
@@ -200,12 +201,21 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
 // kie.ai's side: our request was accepted, and the task failed there.
 const SIDE_TIMEOUT = /time ?out|timed out/i;
 const SIDE_ERROR = /internal|server error|service (is )?(busy|unavailable)|overload|try again/i;
-function taskFailed(data, name, taskId) {
-  const msg = (data && data.failMsg) || 'the task failed';
+function taskFailed(data, { name, filterable, permissive }, taskId) {
+  // kie.ai's text often ends with its own full stop: drop it, so ours isn't doubled.
+  const msg = ((data && data.failMsg) || 'the task failed').trim().replace(/[\s.!。]+$/, '');
   const free = data && data.creditsConsumed === 0;
   const tail = free ? '. No credits were used' : '';
   console.warn(`[imagine] kie.ai task ${taskId} (${name}) failed: ${data && data.failCode ? `${data.failCode} ` : ''}${msg}`);
-  if (REFUSAL.test(msg)) return fail('REFUSED', msg);
+  // P13-03: a safety block says so, and what can be done about it.
+  if (REFUSAL.test(msg)) {
+    const advice = !filterable
+      ? `${name}’s filter can’t be turned off; try rewording, or another model`
+      : permissive
+        ? 'This happened with the filter already off for this 18+ channel; try rewording'
+        : 'Try rewording, or post in an 18+ channel, where DisGourd turns this model’s filter off';
+    return fail('REFUSED', `kie.ai’s safety filter blocked this one on ${name} ("${msg}"). ${advice}${tail}`);
+  }
   if (SIDE_TIMEOUT.test(msg)) {
     return Object.assign(fail('ENGINE', `kie.ai’s ${name} ran out of time on kie.ai’s own servers ("${msg}"). The request was fine; try again, or a lower quality${tail}`), { retryable: free });
   }
@@ -216,7 +226,7 @@ function taskFailed(data, name, taskId) {
 }
 
 // One kie.ai task: start it, wait for it, download the result.
-async function runTask(body, key, signal, name) {
+async function runTask(body, key, signal, ctx) {
   const created = await kie('/api/v1/jobs/createTask', { method: 'POST', body, key, signal });
   const taskId = created && created.taskId;
   if (!taskId) throw fail('ENGINE', 'kie.ai did not start the task');
@@ -225,7 +235,7 @@ async function runTask(body, key, signal, name) {
     await sleep(pollMs, signal); // on abort this throws; kie.ai has no cancel, so the task may still finish
     const data = await kie(`/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { key, signal });
     const state = data && data.state;
-    if (state === 'fail') throw taskFailed(data, name, taskId);
+    if (state === 'fail') throw taskFailed(data, ctx, taskId);
     if (state !== 'success') continue;
     let urls = [];
     try {
