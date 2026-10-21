@@ -5,14 +5,18 @@ const { config } = require('../config');
 // ---- Rate limiting & validation for auth endpoints ----
 // Fixed windows per key. P11-08: the map is capped at MAX_KEYS, so a flood of
 // new keys (spoofed or rotating addresses) can't grow it without bound:
-// expired windows go first, then the oldest keys.
+// expired windows go first, then the oldest keys. A trim goes down to
+// TRIM_TO, not just under the cap, so the full pass runs once per
+// MAX_KEYS - TRIM_TO new keys rather than on every one (that would be
+// quadratic, and block the event loop for seconds under a flood).
 const MAX_KEYS = 50000;
+const TRIM_TO = 45000;
 const rateBuckets = new Map();
 function trim(now) {
   if (rateBuckets.size <= MAX_KEYS) return;
   for (const [k, v] of rateBuckets) if (now > v.reset) rateBuckets.delete(k);
   for (const k of rateBuckets.keys()) {
-    if (rateBuckets.size <= MAX_KEYS) break;
+    if (rateBuckets.size <= TRIM_TO) break;
     rateBuckets.delete(k); // insertion order: the oldest first
   }
 }

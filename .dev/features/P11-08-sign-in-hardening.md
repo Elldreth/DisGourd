@@ -56,7 +56,7 @@
 | AC-1 | Verified | Jest `sign-in-limits.test.js` + sandbox | 10 wrong from 10 addresses, then the right password → 429, with the log line. After the window → 200. 9 failures still allow the right password, and a success resets the count. Mixed case counts as one name. Sandbox: 10 wrong for `Cara` → the right password → 429 "Too many attempts…", and the log said `[auth] 10 failed sign-ins for Cara…`. A sandbox restart cleared it (cara → 200) |
 | AC-2 | Verified | Jest | `nobody-here`: 10 × 401, then 429 |
 | AC-3 | Verified | Jest | `addressKey` puts `2001:db8:1:2:aaaa::1` and `…:ffff:ffff:ffff:ffff` together, and keeps another /64 apart. 15 failures from one /64 → 429; another /64 → 401 |
-| AC-4 | Verified | Jest | 100,000 keys → size ≤ 50,000 |
+| AC-4 | Verified | Jest + timing | 100,000 keys → size ≤ 50,000, in under 1.5 s (32 ms measured). The first version trimmed one key at a time once full, which was quadratic: 8.4 s for 100,000 keys. That stalled the event loop past the 5 s keep-alive timeout and reset a kept-alive socket in CI (run 39552647540, `fetch failed / ECONNRESET`). A trim now goes down to 45,000, so the full pass runs once per 5,000 new keys |
 | AC-5 | Verified | Jest + sandbox + app | 9 easy passwords refused at sign-up (including `password123`, `Password1`, `aaaaaaaa`, `disgourd2024`, `walrus-walrus` for user walrus); a long random one accepted; a change to `letmein123` refused. Sandbox: sign-up with `password123` → 400; cara changing to `letmein123` → 400. App: the Change password dialog shows "That password is too easy to guess". Test passwords were updated across 49 files |
 | AC-6 | Verified | Jest, Vitest | Server 58 suites / 529 tests; web 107 files / 844 tests |
 

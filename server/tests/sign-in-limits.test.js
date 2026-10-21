@@ -92,9 +92,14 @@ describe('addresses', () => {
   });
 });
 
-test('the limiter map stays under its cap', () => {
+test('the limiter map stays under its cap, cheaply (no long event-loop stall)', () => {
+  const started = Date.now();
   for (let i = 0; i < 100000; i += 1) rateLimit.rateLimitOk(`flood:${i}`, 5, 60000);
   expect(rateLimit._size()).toBeLessThanOrEqual(rateLimit.MAX_KEYS);
+  // Trimming one key at a time made this take ~8 s, long enough for kept-alive
+  // test sockets to be reset (CI run 39552647540). Amortised, it's well under 1 s.
+  expect(Date.now() - started).toBeLessThan(1500);
+  rateLimit._reset();
 });
 
 describe('easy passwords', () => {
