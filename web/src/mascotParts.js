@@ -40,6 +40,12 @@ function star(cx, cy, outer, inner) {
   return ['polygon', { points: pts.join(' '), fill: 'L' }];
 }
 
+// A four-point sparkle centred on (cx, cy).
+const sparkle = (cx, cy, r, color = 'L') => [
+  'path',
+  { d: `M${cx} ${cy - r} Q${cx} ${cy} ${cx + r} ${cy} Q${cx} ${cy} ${cx} ${cy + r} Q${cx} ${cy} ${cx - r} ${cy} Q${cx} ${cy} ${cx} ${cy - r} Z`, fill: color },
+];
+
 const body = [
   ['path', { d: `${BODY_OUTER} ${BODY_INNER}`, fill: 'V', fillRule: 'evenodd' }],
   line(STEM, 'L', 2.8),
@@ -127,6 +133,17 @@ export const POSES = {
       line('M73 58 L89 30', 'V', 3),
     ],
   },
+  // P10-08 (from kie.ai reference sketches, design/design-review-p10/refs).
+  // Nothing left to do: a check in the bubble, sparkles around.
+  clear: {
+    label: 'all clear',
+    front: [line('M42.5 72 L47.5 77 L57.5 66', 'L', 3.4), sparkle(80, 30, 6), sparkle(22, 40, 4), sparkle(86, 50, 3, 'V')],
+  },
+  // Privacy and safety: a small shield in the bubble.
+  privacy: {
+    label: 'with a shield',
+    front: [['path', { d: 'M50 62.2 L58.5 65.2 V70.8 C58.5 76 55 79.6 50 81.4 C45 79.6 41.5 76 41.5 70.8 V65.2 Z', fill: 'L' }]],
+  },
 };
 
 export const POSE_NAMES = Object.keys(POSES);
@@ -141,8 +158,33 @@ export function poseParts(name) {
 // The viewBox with room for the props around the mark.
 export const MASCOT_VIEWBOX = '-12 -4 120 108';
 
-// A pose as an SVG string (for static pages like offline.html).
-export function mascotSvg(name, { violet = '#9466FF', lime = '#B8F34A', size = 96, title } = {}) {
+// A little group (P10-08): three gourds standing together, the middle one
+// "chatting" (three dots), the two smaller ones turned in towards it.
+// Draw with GROUP_VIEWBOX; same 'V' / 'L' colour codes as the poses.
+export const GROUP_VIEWBOX = '-28 4 156 96';
+const sideGourd = (dx, mirror) => [
+  'g',
+  { transform: `translate(${50 + dx} 92) scale(${mirror ? -0.74 : 0.74} 0.74) translate(-50 -92)` },
+  [...body, ...leaf],
+];
+export function groupParts() {
+  return [
+    sideGourd(-53, true),
+    sideGourd(53, false),
+    ...body,
+    ...leaf,
+    dot(42.5, 72, 2.4),
+    dot(50, 72, 2.4),
+    dot(57.5, 72, 2.4),
+    dot(22, 42, 1.8),
+    dot(78, 42, 1.8),
+    dot(18, 34, 1.3, 'V'),
+    dot(82, 32, 1.3, 'V'),
+  ];
+}
+
+// Parts as an SVG string (for static pages like offline.html).
+function partsSvg(parts, viewBox, { violet = '#9466FF', lime = '#B8F34A', size = 96, title } = {}) {
   const color = (v) => (v === 'V' ? violet : v === 'L' ? lime : v);
   const attr = (k) => k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
   const draw = ([tag, attrs, kids]) => {
@@ -152,5 +194,10 @@ export function mascotSvg(name, { violet = '#9466FF', lime = '#B8F34A', size = 9
     return kids ? `<${tag} ${a}>${kids.map(draw).join('')}</${tag}>` : `<${tag} ${a}/>`;
   };
   const label = title ? ` role="img" aria-label="${title}"` : ' aria-hidden="true"';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${MASCOT_VIEWBOX}"${label}>${poseParts(name).map(draw).join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${viewBox}"${label}>${parts.map(draw).join('')}</svg>`;
 }
+
+// A pose as an SVG string.
+export const mascotSvg = (name, opts) => partsSvg(poseParts(name), MASCOT_VIEWBOX, opts);
+// The group scene as an SVG string.
+export const groupSvg = (opts) => partsSvg(groupParts(), GROUP_VIEWBOX, opts);

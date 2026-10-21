@@ -3,7 +3,7 @@
 // incoming gateway frames, the settings in audio.js, and the browser API.
 import { useEffect, useRef } from 'react';
 import { getNotifyLevel, getMessageSounds } from './audio.js';
-import { playMessage, playMention } from './sounds.js';
+import { playMessage, playMention, playReport, playGroup } from './sounds.js';
 
 // A frame is { kind: 'message', author, space, channel, mentions, thread? }
 // (thread: { name, parentChannel } for a reply in a thread) or
@@ -76,6 +76,14 @@ export function notificationPlace(frame) {
   return `${where} · ${frame.space}`;
 }
 
+// P10-08: did any server's open-report count go up since `prev`
+// ({ [space]: count }, null before the first look)? Servers seen for the
+// first time don't count, so signing in doesn't chime.
+export function reportsRose(prev, spaces) {
+  if (!prev) return false;
+  return spaces.some((s) => s.name in prev && (s.openReports || 0) > prev[s.name]);
+}
+
 const canNotify = () => typeof Notification !== 'undefined' && Notification.permission === 'granted';
 
 // Hook: returns onIncoming(frame) for the channel and DM hooks to call with
@@ -99,6 +107,17 @@ export function useNotifications() {
     window.addEventListener('focus', clear);
     return () => window.removeEventListener('focus', clear);
   }, []);
+
+  // P10-08: the quieter cues, at the message-sounds setting, never in DND.
+  const cueOk = () => getMessageSounds() && !where.current.dnd;
+  const reportCounts = useRef(null);
+  function onSpaces(spaces) {
+    if (reportsRose(reportCounts.current, spaces) && cueOk()) playReport();
+    reportCounts.current = Object.fromEntries(spaces.map((s) => [s.name, s.openReports || 0]));
+  }
+  function onAddedToGroup(conversation) {
+    if (cueOk() && !conversation.muted) playGroup();
+  }
 
   function onIncoming(frame) {
     const w = where.current;
@@ -138,5 +157,5 @@ export function useNotifications() {
     }
   }
 
-  return { onIncoming, update };
+  return { onIncoming, update, onSpaces, onAddedToGroup };
 }

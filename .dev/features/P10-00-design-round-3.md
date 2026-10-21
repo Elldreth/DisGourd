@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (design review + child packets)
 - **Phase:** 10 (design)
-- **State:** REVIEW (the review is written; children wait for the owner's decisions)
+- **State:** COMPLETE (review merged in #200; the owner agreed with the plan and its recommendations, 2026-10-21)
 - **Effort:** L in total (children S–M each)
 - **Depends on:** P9-01 … P9-08 (main after #199)
 - **Requirement Source:** the owner, relayed 2026-10-20: "I'd like to have the UX/UI Designer have another pass over the application since we've made changes to the ui", with permission to use kie.ai for "any new graphics, video, sound, or otherwise".
@@ -23,6 +23,16 @@
 | P10-06 | /imagine panel: labelled groups, steady height | S–M | none |
 | P10-07 | Small things: transfer button/list, ☰ badge dot, light amber badge | S | none |
 | P10-08 | New art and sound (kie.ai references → SVG; two sounds) | S–M | decision 5 (video) only for the optional clip |
+
+## Owner decisions (2026-10-21)
+"I agree and have merged the PR with the plan" (relayed by the coordinating session). Read as the review's recommendations:
+1. Styles page: yes.
+2. Privacy & safety: yes.
+3. Report counts: by message.
+4. The optional server fields: no recommendation was made, so they stay out, unless the owner asks.
+5. Motion: CSS/SVG in the app; no video.
+
+**Build order:** P10-08 first (its poses feed P10-01 and P10-04), then P10-01 … P10-07.
 
 ## Serialize
 - P10-03 and P10-04 share `MessageList.jsx` and `DmPanel.jsx`.

@@ -19,6 +19,9 @@ PROMPTS = {
     'peer-leave': 'A single very soft wooden pop with a slight downward pitch, subtle UI blip when someone leaves a call. Dry, very short, quiet.',
     'mention': 'Bright pleasant two-note bell ding, warm notification sound for a direct message or mention. Short, clear, not harsh, no music.',
     'message': 'A tiny soft bubble pop, quiet UI tick for a new chat message. Extremely short, dry, gentle.',
+    # P10-08
+    'report': 'Soft low two-note wooden knock, a calm heads-up for a moderator that something needs a look. Short, warm, not alarming, no music, no drums.',
+    'group': 'Short cheerful rising three-note pluck, light and bubbly, UI sound for being added to a group chat. Dry, under one second, no music, no drums.',
 }
 
 

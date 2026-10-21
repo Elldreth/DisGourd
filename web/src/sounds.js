@@ -109,5 +109,10 @@ export const playPeerLeave = () => playSound('peer-leave', [[587.33, 0.07], [440
 export const playTestTone = () => playSound('join', [[440, 0.16], [660, 0.18]], { volume: 0.7, fallbackVolume: 0.2 });
 // New message elsewhere (only at the "all messages" level): one soft pop.
 export const playMessage = () => playSound('message', [[880, 0.06]], { volume: 0.35, fallbackVolume: 0.08 }); // A5
+// P10-08, both at the message-sounds setting:
+// a new report for a moderator: a soft two-knock heads-up;
+export const playReport = () => playSound('report', [[392.0, 0.07], [329.63, 0.1]], { volume: 0.45, fallbackVolume: 0.1 }); // G4 → E4
+// someone added you to a group: a light rising pluck.
+export const playGroup = () => playSound('group', [[523.25, 0.06], [659.25, 0.06], [783.99, 0.1]], { volume: 0.45, fallbackVolume: 0.1 }); // C5 E5 G5
 // A mention or DM: a brighter two-note chime.
 export const playMention = () => playSound('mention', [[659.25, 0.07], [987.77, 0.12]], { volume: 0.5, fallbackVolume: 0.12 }); // E5 → B5

@@ -11,10 +11,10 @@ RAW, OUT = sys.argv[1], sys.argv[2]
 os.makedirs(OUT, exist_ok=True)
 SR = 48000
 FRAME = SR // 100  # 10 ms
-CAP = {'join': 1.0, 'leave': 1.0, 'mention': 1.0, 'message': 0.4, 'peer-join': 0.45, 'peer-leave': 0.45}
+CAP = {'join': 1.0, 'leave': 1.0, 'mention': 1.0, 'message': 0.4, 'peer-join': 0.45, 'peer-leave': 0.45, 'report': 0.8, 'group': 0.9}
 # Peak targets in dBFS (loudness normalisation misbehaves on clips this short):
 # chimes -6, the small pops -9. The app's playback gain sets the final level.
-PEAK = {'join': -6, 'leave': -6, 'mention': -6, 'message': -9, 'peer-join': -9, 'peer-leave': -9}
+PEAK = {'join': -6, 'leave': -6, 'mention': -6, 'message': -9, 'peer-join': -9, 'peer-leave': -9, 'report': -6, 'group': -6}
 
 
 def pcm(path):
