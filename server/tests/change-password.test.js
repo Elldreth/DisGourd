@@ -38,7 +38,7 @@ const post = async (p, body, token) => {
   return { status: res.status, body: await res.json().catch(() => null) };
 };
 const get = async (p, token) => (await fetch(`http://localhost:${port}${p}`, { headers: { Authorization: `Bearer ${token}` } })).status;
-const register = async (username, password = 'password123') =>
+const register = async (username, password = 'gourd-test-pass-1') =>
   (await post('/register', { username, password, email: `${username}@example.com` })).body.token;
 const login = (username, password) => post('/login', { username, password });
 const change = (token, currentPassword, newPassword) => post('/me/password', { currentPassword, newPassword }, token);
@@ -78,25 +78,25 @@ test('v25 adds the token version; tokens from before it (no version) still work'
 
 test('refusals: no token, wrong current password, bad new passwords', async () => {
   const token = await register('refuser');
-  expect((await post('/me/password', { currentPassword: 'password123', newPassword: 'whatever123' })).status).toBe(401);
+  expect((await post('/me/password', { currentPassword: 'gourd-test-pass-1', newPassword: 'whatever123' })).status).toBe(401);
   const wrong = await change(token, 'not-my-password', 'brand-new-pass');
   expect(wrong.status).toBe(403);
   expect(wrong.body.error).toMatch(/current password is incorrect/i);
-  expect((await change(token, 'password123', 'short')).status).toBe(400);
-  expect((await change(token, 'password123', 'x'.repeat(201))).status).toBe(400);
-  expect((await change(token, 'password123', 12345678)).status).toBe(400);
-  const same = await change(token, 'password123', 'password123');
+  expect((await change(token, 'gourd-test-pass-1', 'short')).status).toBe(400);
+  expect((await change(token, 'gourd-test-pass-1', 'x'.repeat(201))).status).toBe(400);
+  expect((await change(token, 'gourd-test-pass-1', 12345678)).status).toBe(400);
+  const same = await change(token, 'gourd-test-pass-1', 'gourd-test-pass-1');
   expect(same.status).toBe(400);
   expect(same.body.error).toMatch(/different/i);
   // Nothing changed: the old password still signs in, the token still works.
-  expect((await login('refuser', 'password123')).status).toBe(200);
+  expect((await login('refuser', 'gourd-test-pass-1')).status).toBe(200);
   expect(await get('/me', token)).toBe(200);
 });
 
 test('a change: new password signs in, old does not; other devices are signed out; the returned token works', async () => {
   const { db } = serverModule;
   const tokenA = await register('changer'); // this device
-  const tokenB = (await login('changer', 'password123')).body.token; // another device
+  const tokenB = (await login('changer', 'gourd-test-pass-1')).body.token; // another device
   const id = db.getUserByUsername('changer').id;
   const legacy = legacyToken(id, 'changer');
   const gwA = gateway(tokenA);
@@ -104,7 +104,7 @@ test('a change: new password signs in, old does not; other devices are signed ou
   await gwA.ready;
   await gwB.ready;
 
-  const res = await change(tokenA, 'password123', 'a-better-password');
+  const res = await change(tokenA, 'gourd-test-pass-1', 'a-better-password');
   expect(res.status).toBe(200);
   expect(typeof res.body.token).toBe('string');
   expect(db.getTokenVersion(id)).toBe(1);
@@ -112,7 +112,7 @@ test('a change: new password signs in, old does not; other devices are signed ou
 
   // Passwords.
   expect((await login('changer', 'a-better-password')).status).toBe(200);
-  expect((await login('changer', 'password123')).status).toBe(401);
+  expect((await login('changer', 'gourd-test-pass-1')).status).toBe(401);
 
   // Every older token is refused on HTTP; the new one works.
   for (const old of [tokenA, tokenB, legacy]) expect(await get('/me', old)).toBe(401);
@@ -131,7 +131,7 @@ test('a change: new password signs in, old does not; other devices are signed ou
 
 test('a second change keeps the newest token working and stops the one before it', async () => {
   const first = await register('twice');
-  const t1 = (await change(first, 'password123', 'second-password')).body.token;
+  const t1 = (await change(first, 'gourd-test-pass-1', 'second-password')).body.token;
   const gw = gateway(t1);
   expect(await gw.ready).toBe(true);
   const t2 = (await change(t1, 'second-password', 'third-password')).body.token;
@@ -147,7 +147,7 @@ test('the 11th try within 15 minutes is refused with 429', async () => {
   config.rateLimit = true;
   try {
     for (let i = 0; i < 10; i += 1) expect((await change(token, `guess-${i}-wrong`, 'new-password-1')).status).toBe(403);
-    expect((await change(token, 'password123', 'new-password-1')).status).toBe(429);
+    expect((await change(token, 'gourd-test-pass-1', 'new-password-1')).status).toBe(429);
   } finally {
     config.rateLimit = false;
   }

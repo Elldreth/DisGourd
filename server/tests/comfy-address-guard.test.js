@@ -29,7 +29,7 @@ beforeAll(async () => {
   const res = await fetch(`http://localhost:${port}/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'password123', email: 'admin@example.com' }),
+    body: JSON.stringify({ username: 'admin', password: 'gourd-test-pass-1', email: 'admin@example.com' }),
   });
   token = (await res.json()).token; // the first account is the site admin
 });

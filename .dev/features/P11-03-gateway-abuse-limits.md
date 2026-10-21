@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 4 in P11-00)
+- **State:** COMPLETE (merged in #217)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** P11-07 and P11-09 (`server/gateway/index.js`, `router.js`, `dm.js`). This goes first.

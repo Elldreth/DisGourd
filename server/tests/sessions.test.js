@@ -41,7 +41,7 @@ const call = async (token, method, p) => {
   const res = await fetch(`http://localhost:${port}${p}`, { method, headers: { Authorization: `Bearer ${token}` } });
   return { status: res.status, body: await res.json().catch(() => null) };
 };
-const login = async (ua) => (await post('/login', { username: 'dana', password: 'password123' }, { ua })).body.token;
+const login = async (ua) => (await post('/login', { username: 'dana', password: 'gourd-test-pass-1' }, { ua })).body.token;
 const sessions = async (token) => (await call(token, 'GET', '/me/sessions')).body;
 const works = async (token) => (await call(token, 'GET', '/me')).status === 200;
 function gateway(token) {
@@ -56,7 +56,7 @@ function gateway(token) {
 
 let first; // the registration's token (Chrome on Windows)
 beforeAll(async () => {
-  first = (await post('/register', { username: 'dana', password: 'password123', email: 'dana@example.com' }, { ua: UA.chromeWin })).body.token;
+  first = (await post('/register', { username: 'dana', password: 'gourd-test-pass-1', email: 'dana@example.com' }, { ua: UA.chromeWin })).body.token;
 });
 
 test('device labels come from the User-Agent', () => {
@@ -96,7 +96,7 @@ test('signing out another device ends its token and closes its sockets; not your
   expect(await works(laptop)).toBe(false);
   expect(await works(phone)).toBe(true);
   // Another account can't sign out dana's devices.
-  const other = (await post('/register', { username: 'eli', password: 'password123', email: 'eli@example.com' })).body.token;
+  const other = (await post('/register', { username: 'eli', password: 'gourd-test-pass-1', email: 'eli@example.com' })).body.token;
   const phoneId = (await sessions(phone)).sessions.find((s) => s.current).id;
   expect((await call(other, 'DELETE', `/me/sessions/${phoneId}`)).status).toBe(404);
   expect(await works(phone)).toBe(true);
@@ -150,7 +150,7 @@ test('last seen updates at most every few minutes', async () => {
 test('changing the password keeps this device and ends the others’ sessions', async () => {
   const keep = await login(UA.chromeWin);
   await login(UA.safariPhone);
-  const res = await post('/me/password', { currentPassword: 'password123', newPassword: 'password456' }, { token: keep });
+  const res = await post('/me/password', { currentPassword: 'gourd-test-pass-1', newPassword: 'gourd-test-pass-2' }, { token: keep });
   expect(res.status).toBe(200);
   const list = await sessions(res.body.token);
   expect(list.sessions).toHaveLength(1);
@@ -159,7 +159,7 @@ test('changing the password keeps this device and ends the others’ sessions', 
 
 test('your open windows are told when a device signs in or out, so the list can reload', async () => {
   // dana's password changed in the test above.
-  const login = async (ua) => (await post('/login', { username: 'dana', password: 'password456' }, { ua })).body.token;
+  const login = async (ua) => (await post('/login', { username: 'dana', password: 'gourd-test-pass-2' }, { ua })).body.token;
   const t = await login(UA.chromeWin);
   const gw = gateway(t);
   await gw.ready;

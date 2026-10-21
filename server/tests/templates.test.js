@@ -17,7 +17,7 @@ beforeAll(async () => {
   const res = await fetch(`http://localhost:${port}/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'maker', password: 'password123', email: 'maker@example.com' }),
+    body: JSON.stringify({ username: 'maker', password: 'gourd-test-pass-1', email: 'maker@example.com' }),
   });
   token = (await res.json()).token;
 });

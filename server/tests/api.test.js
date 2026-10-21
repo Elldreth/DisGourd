@@ -33,7 +33,7 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function register(username, password = 'password123') {
+async function register(username, password = 'gourd-test-pass-1') {
   const res = await fetch(`${baseUrl()}/register`, {
     method: 'POST',
     headers: JSON_HEADERS,
@@ -78,13 +78,13 @@ test('register, login, create a server and store messages', async () => {
   const base = baseUrl();
   let res = await fetch(`${base}/register`, {
     method: 'POST', headers: JSON_HEADERS,
-    body: JSON.stringify({ username: 'alice', password: 'password123', email: 'a@b.c' })
+    body: JSON.stringify({ username: 'alice', password: 'gourd-test-pass-1', email: 'a@b.c' })
   });
   expect(res.status).toBe(201);
 
   res = await fetch(`${base}/login`, {
     method: 'POST', headers: JSON_HEADERS,
-    body: JSON.stringify({ username: 'alice', password: 'password123' })
+    body: JSON.stringify({ username: 'alice', password: 'gourd-test-pass-1' })
   });
   expect(res.status).toBe(200);
   const { token } = await res.json();
@@ -113,7 +113,7 @@ test('rejects weak passwords and invalid emails', async () => {
 
   res = await fetch(`${base}/register`, {
     method: 'POST', headers: JSON_HEADERS,
-    body: JSON.stringify({ username: 'bob', password: 'password123', email: 'not-an-email' })
+    body: JSON.stringify({ username: 'bob', password: 'gourd-test-pass-1', email: 'not-an-email' })
   });
   expect(res.status).toBe(400);
 });
@@ -645,9 +645,9 @@ test('registration gating: code required, closed mode, and account cap', async (
     expect(JSON.stringify(info)).not.toContain('sesame');
 
     // Wrong / missing code is rejected; correct code works.
-    expect((await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'password123' })).status).toBe(403);
-    expect((await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'password123', code: 'nope' })).status).toBe(403);
-    const gateA = await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'password123', code: 'sesame' });
+    expect((await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'gourd-test-pass-1' })).status).toBe(403);
+    expect((await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'gourd-test-pass-1', code: 'nope' })).status).toBe(403);
+    const gateA = await reg({ username: 'gate-a', email: 'gate-a@example.com', password: 'gourd-test-pass-1', code: 'sesame' });
     expect(gateA.status).toBe(201);
     const gateAToken = (await gateA.json()).token;
 
@@ -657,18 +657,18 @@ test('registration gating: code required, closed mode, and account cap', async (
       method: 'POST', headers: { ...JSON_HEADERS, ...auth(gateAToken) }, body: JSON.stringify({ maxUses: 1 }),
     });
     const minted = (await mintRes.json()).code;
-    expect((await reg({ username: 'gate-d', email: 'gate-d@example.com', password: 'password123', code: minted })).status).toBe(201);
+    expect((await reg({ username: 'gate-d', email: 'gate-d@example.com', password: 'gourd-test-pass-1', code: minted })).status).toBe(201);
     // ...but only once (maxUses = 1).
-    expect((await reg({ username: 'gate-e', email: 'gate-e@example.com', password: 'password123', code: minted })).status).toBe(403);
+    expect((await reg({ username: 'gate-e', email: 'gate-e@example.com', password: 'gourd-test-pass-1', code: minted })).status).toBe(403);
 
     // Closed mode blocks everyone, even with a code.
     setMode('closed');
-    expect((await reg({ username: 'gate-b', email: 'gate-b@example.com', password: 'password123', code: 'sesame' })).status).toBe(403);
+    expect((await reg({ username: 'gate-b', email: 'gate-b@example.com', password: 'gourd-test-pass-1', code: 'sesame' })).status).toBe(403);
 
     // Account cap blocks once reached.
     setMode('open');
     cfg.maxAccounts = 1; // already well over 1 account exists from earlier tests
-    expect((await reg({ username: 'gate-c', email: 'gate-c@example.com', password: 'password123' })).status).toBe(403);
+    expect((await reg({ username: 'gate-c', email: 'gate-c@example.com', password: 'gourd-test-pass-1' })).status).toBe(403);
   } finally {
     setMode(orig.mode || 'open');
     cfg.registrationCode = orig.code;
@@ -842,7 +842,8 @@ test('0.4 X-Forwarded-For only counts behind a trusted proxy, and only its last 
       const res = await fetch(`${baseUrl()}/login`, {
         method: 'POST',
         headers: { ...JSON_HEADERS, 'X-Forwarded-For': `198.51.100.${i}` },
-        body: JSON.stringify({ username: 'nobody-here', password: 'password123' }),
+        // A new name each time, so only the per-address limit counts (P11-08 adds a per-account one).
+        body: JSON.stringify({ username: `nobody-${i}`, password: 'gourd-test-pass-1' }),
       });
       statuses.push(res.status);
     }
@@ -859,7 +860,7 @@ test('0.4 password hashing does not block the event loop', async () => {
   let timerDelay = null;
   const timer = new Promise((r) => setTimeout(() => { timerDelay = Date.now() - start; r(); }, 1));
   const login = fetch(`${baseUrl()}/login`, {
-    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ username: 'carol', password: 'password123' }),
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ username: 'carol', password: 'gourd-test-pass-1' }),
   });
   await Promise.all([timer, login]);
   expect((await login).status).toBe(200);

@@ -31,7 +31,7 @@ const tokens = {};
 async function register(username) {
   const res = await fetch(`http://localhost:${port}/register`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password: 'password123', email: `${username}@example.com` }),
+    body: JSON.stringify({ username, password: 'gourd-test-pass-1', email: `${username}@example.com` }),
   });
   tokens[username] = (await res.json()).token;
   return db.getUserByUsername(username).id;

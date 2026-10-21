@@ -278,7 +278,7 @@ describe('admin routes and the chat path', () => {
     for (const name of ['admin', 'pat']) {
       const res = await fetch(`http://localhost:${port}/register`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: name, password: 'password123', email: `${name}@example.com` }),
+        body: JSON.stringify({ username: name, password: 'gourd-test-pass-1', email: `${name}@example.com` }),
       });
       users[name] = { token: (await res.json()).token, id: db.getUserByUsername(name).id };
     }

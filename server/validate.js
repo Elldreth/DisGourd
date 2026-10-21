@@ -1,3 +1,5 @@
+const { passwordProblem } = require('./auth/commonPasswords');
+
 const MAX_MESSAGE_LENGTH = 4000;
 
 function validateSpaceName(name) {
@@ -45,6 +47,8 @@ function validateRegistration({ username, password, email }) {
   if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
     return 'Password must be between 8 and 200 characters';
   }
+  const easy = passwordProblem(password, username); // P11-08
+  if (easy) return easy;
   if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return 'A valid email address is required';
   }

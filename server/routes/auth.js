@@ -4,7 +4,8 @@ const { config, registrationMode, checkSetupCode, clearSetupCode } = require('..
 const { generateSalt, hashPassword, verifyPassword } = require('../auth/passwords');
 const { createToken, authUserId, authPayload, TOKEN_TTL_SECONDS } = require('../auth/tokens');
 const { deviceLabel } = require('../auth/device');
-const { rateLimitOk, safeEqual, clientIp } = require('../auth/rateLimit');
+const { rateLimitOk, safeEqual, limitKey, accountLocked, accountFailed, accountSucceeded, ACCOUNT_MAX_FAILURES } = require('../auth/rateLimit');
+const { passwordProblem } = require('../auth/commonPasswords');
 const { sendJson, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateRegistration, parseReactionEmoji } = require('../validate');
 
@@ -54,7 +55,7 @@ const routes = [
     match: ({ req, parsedUrl }) => parsedUrl.pathname === '/register' && req.method === 'POST',
     run: async ({ req, res }) => {
       try {
-        if (!rateLimitOk('register:' + clientIp(req), 5, 15 * 60 * 1000)) {
+        if (!rateLimitOk('register:' + limitKey(req), 5, 15 * 60 * 1000)) {
           res.writeHead(429);
           return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
         }
@@ -125,21 +126,27 @@ const routes = [
     match: ({ req, parsedUrl }) => parsedUrl.pathname === '/login' && req.method === 'POST',
     run: async ({ req, res }) => {
       try {
-        if (!rateLimitOk('login:' + clientIp(req), 15, 15 * 60 * 1000)) {
-          res.writeHead(429);
-          return res.end(JSON.stringify({ error: 'Too many attempts. Please try again later.' }));
-        }
+        const tooMany = () => sendJson(res, 429, { error: 'Too many attempts. Please try again later.' });
+        const ip = limitKey(req);
+        if (!rateLimitOk('login:' + ip, 15, 15 * 60 * 1000)) return tooMany();
         const { username, password } = await getJsonBody(req);
         if (typeof username !== 'string' || typeof password !== 'string' || password.length > 200) {
           return sendJson(res, 401, { error: 'Invalid credentials' });
         }
+        // P11-08: per account too, from any address (same answer either way).
+        if (accountLocked(username)) return tooMany();
         const user = db.getUserByUsername(username);
         const check = await verifyPassword(password, user);
         // Bot accounts (the /imagine bot) never sign in.
         if (!user || user.is_bot || !check.ok) {
+          if (accountFailed(username) === ACCOUNT_MAX_FAILURES) {
+            const name = username.replace(/[^\w.-]/g, '?').slice(0, 32);
+            console.warn(`[auth] ${ACCOUNT_MAX_FAILURES} failed sign-ins for ${name} (latest from ${ip}); it's locked for 15 minutes`);
+          }
           res.writeHead(401);
           return res.end(JSON.stringify({ error: 'Invalid credentials' }));
         }
+        accountSucceeded(username);
         if (check.needsUpgrade) {
           const newSalt = generateSalt();
           db.setUserPassword(user.id, await hashPassword(password, newSalt), newSalt);
@@ -170,6 +177,8 @@ const routes = [
         return sendJson(res, 400, { error: `Your new password must be ${MIN_PASSWORD}-${MAX_PASSWORD} characters` });
       }
       const user = db.getUserById(userId);
+      const easy = passwordProblem(newPassword, user && user.username); // P11-08
+      if (easy) return sendJson(res, 400, { error: easy });
       const check = typeof currentPassword === 'string' && currentPassword.length <= MAX_PASSWORD
         ? await verifyPassword(currentPassword, user)
         : { ok: false };

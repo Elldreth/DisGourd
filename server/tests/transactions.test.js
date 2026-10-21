@@ -29,7 +29,7 @@ function register(username, extra = {}) {
   return fetch(`${base()}/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password: 'password123', email: `${username}@example.com`, ...extra }),
+    body: JSON.stringify({ username, password: 'gourd-test-pass-1', email: `${username}@example.com`, ...extra }),
   });
 }
 
