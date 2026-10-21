@@ -20,6 +20,7 @@ import DevicesSection from './settings/DevicesSection.jsx';
 import BlockedSection from './settings/BlockedSection.jsx';
 import DmPolicySection from './settings/DmPolicySection.jsx';
 import PeopleAdmin from './PeopleAdmin.jsx';
+import EmailAdmin from './EmailAdmin.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Modal from './Modal.jsx';
 import SettingsLayout from './settings/SettingsLayout.jsx';
@@ -42,6 +43,7 @@ const SECTIONS = [
 const ADMIN_SECTIONS = [
   { id: 'admin', label: 'General', group: 'Site admin' },
   { id: 'admin-people', label: 'People', group: 'Site admin' }, // P11-09
+  { id: 'admin-email', label: 'Email', group: 'Site admin' }, // P12-01
   { id: 'imagine', label: 'Image generation', group: 'Site admin' },
   { id: 'imagine-comfy', label: 'ComfyUI', group: 'Site admin', indent: true },
   { id: 'imagine-styles', label: 'Styles', group: 'Site admin', indent: true }, // P10-05
@@ -247,6 +249,7 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
     if (id === 'notifications') return <NotificationSettings />;
     if (id === 'admin') return <RegistrationAdmin />;
     if (id === 'admin-people') return <PeopleAdmin me={profile?.username} />;
+    if (id === 'admin-email') return <EmailAdmin />;
     const Page = IMAGINE_PAGES[id];
     if (Page)
       return (

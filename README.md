@@ -233,12 +233,81 @@ All settings are optional and provided via environment variables (or
 | `TURN_URLS`, `TURN_SECRET` | _(none)_            | Your own coturn instead: its `turn:`/`turns:` URLs (comma-separated) and its `static-auth-secret`. `TURN_SECRET_FILE` reads it from a file |
 | `STUN_URLS`        | `stun:stun.l.google.com:19302` | STUN servers for calls (comma-separated) |
 | `VOICE_RELAY_ONLY` | _(off)_                  | Set to `1` to send every call through the relay, so nobody in a call sees anyone else's IP address. Only takes effect when a relay is set up |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | _(none)_, `587` | Sending email (see [Email](#email)). Port 587 requires STARTTLS; 465 is TLS from the start. `SMTP_PASS_FILE` reads the password from a file |
+| `MAIL_FROM`, `MAIL_REPLY_TO` | _(none)_       | The sender, e.g. `DisGourd <no-reply@example.com>` (on a domain your provider has verified), and an optional reply address |
+| `PUBLIC_URL`       | _(none)_                 | The site's address, e.g. `https://disgourd.example.com`, for links in emails. Email is off without it |
+| `MAIL_DAILY_LIMIT` | `90`                     | Emails per day before the server stops sending (Resend's free plan allows 100) |
+| `MAIL_SERVER_NAME` | `DisGourd`               | The name emails use for this server |
 
 Example (Linux/macOS):
 
 ```bash
 PORT=8080 JWT_SECRET="$(openssl rand -hex 48)" npm start
 ```
+
+## Email
+
+DisGourd can send email through any provider that offers SMTP. It never
+sends mail from your own connection, which home and most cloud IPs can't do
+reliably. Settings come from the server's environment only, and **Settings ›
+Site admin › Email** shows whether it's set up, what was sent today, and a
+**Send test email** button. The password is never shown there.
+
+What uses it: nothing yet besides the test. Password reset and security
+notices come next (P12-02 to P12-04).
+
+**With Resend** (free for 3,000 emails a month, 100 a day):
+
+1. **Add your domain** at resend.com › Domains, and choose a sending subdomain
+   if you like.
+2. **Add the DNS records Resend shows you.** With Cloudflare that's
+   DNS › Records › Add record, with each record set to **DNS only** (grey
+   cloud):
+   - the **MX** and **SPF** (TXT) records on the `send` subdomain, which
+     handle bounces;
+   - the **DKIM** record (`resend._domainkey`), a TXT record;
+   - **DMARC**, a TXT record on `_dmarc`. Start with
+     `v=DMARC1; p=none; rua=mailto:you@example.com`, then move to
+     `p=quarantine` once mail is arriving fine.
+
+   Click **Verify** in Resend once they're in. It can take a few minutes.
+3. **Create an API key** at resend.com › API Keys, with **Sending access**
+   only and limited to that domain. It's the SMTP password.
+4. **Put the key in a secret file**, next to your compose file:
+   ```bash
+   mkdir -p secrets
+   read -rs -p "Paste the Resend API key, then Enter: " K && printf '%s' "$K" > secrets/smtp-pass && unset K && echo
+   chown 99:100 secrets/smtp-pass && chmod 400 secrets/smtp-pass   # the user the app runs as
+   ```
+5. **Add the settings to the `disgourd` service:**
+   ```yaml
+       environment:
+         - SMTP_HOST=smtp.resend.com
+         - SMTP_PORT=587
+         - SMTP_USER=resend
+         - SMTP_PASS_FILE=/run/secrets/smtp-pass
+         - MAIL_FROM=DisGourd <no-reply@example.com>
+         - PUBLIC_URL=https://disgourd.example.com
+       volumes:
+         - ./secrets/smtp-pass:/run/secrets/smtp-pass:ro
+   ```
+   Then run `docker compose up -d`, and use **Send test email**. Check the
+   message's headers ("Show original" in Gmail) for `spf=pass`, `dkim=pass`
+   and `dmarc=pass`.
+
+**If port 587 is blocked** by your internet provider or host, use `2587`
+(Resend's other STARTTLS port), or `465` (TLS from the start).
+
+**Replies:** emails come from a no-reply address. To get replies, set
+`MAIL_REPLY_TO` to an address you read. With Cloudflare, **Email Routing**
+can forward something like `admin@example.com` to your own mailbox for free.
+
+**Limits:**
+- **Per day:** at most `MAIL_DAILY_LIMIT` emails (90 by default).
+- **Per recipient:** at most 5 emails an hour to one address.
+- **Failed sends** are retried twice (after 1 and 5 minutes).
+
+Mail waiting to be sent is lost when the server restarts.
 
 ## Keeping randoms out
 
@@ -338,7 +407,7 @@ not in git, not in the image), never in the app's settings.
 | JWT secret | `JWT_SECRET`, else `.jwt-secret` next to the database (or `JWT_SECRET_FILE`) | Everyone is signed out and signs in again |
 | Push keys (VAPID) | `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` (or `VAPID_PRIVATE_KEY_FILE`), else `.vapid.json` next to the database | Every push subscription stops working; people turn notifications on again |
 | kie.ai key | `KIEAI_API_KEY` (or `KIEAI_API_KEY_FILE`), else the one saved in Settings | Generation with kie.ai stops until a key is added |
-| SMTP password (planned) | the environment only | Email stops |
+| SMTP password | `SMTP_PASS` (or `SMTP_PASS_FILE`); never stored in the app or shown on its admin page | Email stops until it's set again |
 | Backup storage keys (R2, for Litestream) | Litestream's own environment, not DisGourd's | Replication stops |
 | Voice relay key (Cloudflare TURN, or coturn's secret) | `TURN_KEY_TOKEN` (or `TURN_KEY_TOKEN_FILE`), or `TURN_SECRET` (or `TURN_SECRET_FILE`). Browsers only ever get short-lived credentials | Calls fall back to direct connections, and some between strict networks fail |
 
