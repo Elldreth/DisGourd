@@ -22,12 +22,15 @@ try {
 config.port = parseInt(process.env.PORT, 10) || config.port;
 config.jwtSecret = process.env.JWT_SECRET || config.jwtSecret;
 
-// Registration gating. Modes: 'open' (anyone), 'code' (a shared secret is
-// required), 'closed' (no new accounts). Setting a REGISTRATION_CODE implies
-// 'code' unless a mode is given explicitly. MAX_ACCOUNTS caps total accounts.
+// Registration gating. Modes: 'open' (anyone), 'invite' (an invite link or a
+// sign-up code is required; called 'code' before P14-01, still accepted),
+// 'closed' (no new accounts, unless "Invite links still let people sign up").
+// Setting a REGISTRATION_CODE implies 'invite' unless a mode is given
+// explicitly. MAX_ACCOUNTS caps total accounts.
 config.registrationCode = process.env.REGISTRATION_CODE || config.registrationCode || '';
-let regMode = (process.env.REGISTRATION_MODE || config.registrationMode || '').toLowerCase();
-if (!['open', 'code', 'closed'].includes(regMode)) regMode = config.registrationCode ? 'code' : 'open';
+const normalizeMode = (m) => (m === 'code' ? 'invite' : m);
+let regMode = normalizeMode((process.env.REGISTRATION_MODE || config.registrationMode || '').toLowerCase());
+if (!['open', 'invite', 'closed'].includes(regMode)) regMode = config.registrationCode ? 'invite' : 'open';
 config.registrationMode = regMode;
 config.maxAccounts = parseInt(process.env.MAX_ACCOUNTS, 10) || parseInt(config.maxAccounts, 10) || 0;
 // Threads with no new reply for this many days are archived (reopened by a post).
@@ -85,7 +88,7 @@ function applySiteAdmins(names) {
 }
 applySiteAdmins(config.siteAdmins);
 function registrationMode() {
-  return db.getSetting('registration_mode') || config.registrationMode || 'open';
+  return normalizeMode(db.getSetting('registration_mode') || config.registrationMode || 'open');
 }
 
 // Security: never sign tokens with a guessable secret. Anything shorter than

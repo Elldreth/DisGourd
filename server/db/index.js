@@ -684,6 +684,10 @@ function getSpaceByName(name) {
 function getSpaceById(id) {
   return db.prepare('SELECT id, name, owner_id FROM spaces WHERE id = ?').get(id);
 }
+// The server's name and icon, for an invite's public preview (P14-01).
+function getSpaceCard(id) {
+  return db.prepare('SELECT id, name, icon_url AS icon FROM spaces WHERE id = ?').get(id);
+}
 
 // Create a space owned by ownerId and enrol them as its owner. Returns the new
 // space id, or null if the name is already taken.
@@ -834,8 +838,15 @@ function createInvite(code, spaceId, createdBy, expiresAt = null, maxUses = null
   `).run(code, spaceId, createdBy, Date.now(), expiresAt, maxUses);
 }
 
+// P14-01: case, spaces and dashes don't matter (the P13-01 rule); an exact
+// match wins if two codes only differ in case.
 function getInvite(code) {
-  return db.prepare('SELECT * FROM invites WHERE code = ?').get(code);
+  const norm = normalizeRegCode(code);
+  if (!norm) return undefined;
+  return db.prepare(`
+    SELECT * FROM invites WHERE replace(upper(code), '-', '') = ?
+    ORDER BY (code = ?) DESC, rowid DESC LIMIT 1
+  `).get(norm, String(code).trim());
 }
 
 function incrementInviteUses(code) {
@@ -2371,7 +2382,7 @@ const redeemInvite = db.transaction((code, userId) => {
   if (isMember(invite.space_id, userId)) return 'already';
   const claimed = db.prepare(
     'UPDATE invites SET uses = uses + 1 WHERE code = ? AND (max_uses IS NULL OR uses < max_uses)'
-  ).run(code).changes;
+  ).run(invite.code).changes;
   if (!claimed) return 'exhausted';
   addMember(invite.space_id, userId, 'member');
   const space = getSpaceById(invite.space_id);
@@ -2390,7 +2401,7 @@ class RegistrationRefused extends Error {
 // registration code (if any) in the same transaction, so concurrent sign-ups
 // can't overrun either limit. The password must already be hashed.
 // Returns { userId } or { error: 'limit' | 'code' | 'exists' }.
-const insertUserTx = db.transaction(({ username, email, passwordHash, salt, regCodeId, maxAccounts }) => {
+const insertUserTx = db.transaction(({ username, email, passwordHash, salt, regCodeId, maxAccounts, inviteCode = null }) => {
   if (maxAccounts > 0 && countUsers() >= maxAccounts) throw new RegistrationRefused('limit');
   if (regCodeId != null) {
     const claimed = db.prepare(`
@@ -2401,7 +2412,14 @@ const insertUserTx = db.transaction(({ username, email, passwordHash, salt, regC
     `).run(regCodeId, Date.now()).changes;
     if (!claimed) throw new RegistrationRefused('code');
   }
-  return createUser(username, email, passwordHash, salt);
+  const userId = createUser(username, email, passwordHash, salt);
+  // P14-01: signing up from an invite joins its server in the same step;
+  // if it can't be redeemed (used up meanwhile), no account is made either.
+  if (inviteCode) {
+    const result = redeemInvite(inviteCode, userId);
+    if (result !== 'joined') throw new RegistrationRefused(`invite-${result}`);
+  }
+  return userId;
 });
 function createUserRedeemingCode(fields) {
   try {
@@ -2562,6 +2580,7 @@ function getUnfinishedImagineJobs() {
 if (versionBefore > 0 && versionBefore < 12) seedAllSpaceRoles();
 
 module.exports = {
+  getSpaceCard,
   createEmailToken,
   useEmailToken,
   pendingEmail,

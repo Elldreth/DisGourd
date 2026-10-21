@@ -7,6 +7,7 @@ const linkPreviews = require('../linkPreviews');
 const imagine = require('../imagine');
 const { clientIpVia, proxyTrust } = require('../net/clientIp');
 const { newRegCode } = require('../auth/regCodes');
+const invitePolicy = require('../auth/invitePolicy');
 const { endStaleSessions } = require('../gateway/delivery');
 const mail = require('../mail');
 const templates = require('../mail/templates');
@@ -176,14 +177,25 @@ const routes = [
           codes: db.listRegCodes(),
           admins: db.listSiteAdmins(),
           linkPreviews: linkPreviews.enabled(),
+          // P14-01: one invite link signs people up too.
+          closedAllowsInvites: invitePolicy.closedAllowsInvites(),
+          invitesCreateAccounts: invitePolicy.whoCanBringIn(),
         });
       }
-      // PUT /admin/registration — change the mode
+      // PUT /admin/registration { mode?, closedAllowsInvites?, invitesCreateAccounts? }
+      // mode: open | invite | closed ('code' is the old name for 'invite').
       if (pathSegments.length === 2 && req.method === 'PUT') {
-        const { mode } = await getJsonBody(req);
-        if (!['open', 'code', 'closed'].includes(mode)) return sendJson(res, 400, { error: 'Invalid mode' });
-        db.setSetting('registration_mode', mode);
-        return sendJson(res, 200, { mode });
+        const body = await getJsonBody(req);
+        const mode = body.mode === 'code' ? 'invite' : body.mode;
+        if (mode !== undefined && !['open', 'invite', 'closed'].includes(mode)) return sendJson(res, 400, { error: 'Invalid mode' });
+        if ('closedAllowsInvites' in body && typeof body.closedAllowsInvites !== 'boolean') return sendJson(res, 400, { error: 'closedAllowsInvites must be true or false' });
+        if ('invitesCreateAccounts' in body && !invitePolicy.WHO.includes(body.invitesCreateAccounts)) {
+          return sendJson(res, 400, { error: `invitesCreateAccounts is one of ${invitePolicy.WHO.join(', ')}` });
+        }
+        if (mode !== undefined) db.setSetting('registration_mode', mode);
+        if ('closedAllowsInvites' in body) db.setSetting('closed_allows_invites', body.closedAllowsInvites ? '1' : '0');
+        if ('invitesCreateAccounts' in body) db.setSetting('invites_create_accounts', body.invitesCreateAccounts);
+        return sendJson(res, 200, { mode: registrationMode(), closedAllowsInvites: invitePolicy.closedAllowsInvites(), invitesCreateAccounts: invitePolicy.whoCanBringIn() });
       }
       // POST /admin/registration/codes — mint a code
       if (pathSegments[2] === 'codes' && pathSegments.length === 3 && req.method === 'POST') {

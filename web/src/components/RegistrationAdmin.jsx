@@ -7,7 +7,7 @@ import { copyText } from '../util.js';
 
 const MODES = [
   { v: 'open', label: 'Open — anyone can sign up' },
-  { v: 'code', label: 'Code required — only with an invite code' },
+  { v: 'invite', label: 'Invite only — with an invite link or a sign-up code' }, // 'code' before P14-01
   { v: 'closed', label: 'Closed — no new accounts' },
 ];
 
@@ -123,7 +123,7 @@ export default function RegistrationAdmin() {
         </select>
       </label>
 
-      {data.mode === 'code' && (
+      {data.mode === 'invite' && (
         <div className="rounded-lg bg-ink-900/60 p-3">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Invite codes</div>
           {data.envCodeActive && (
