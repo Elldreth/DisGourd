@@ -1,6 +1,6 @@
 // The /imagine options above the message box (P2-20d): shape, quality, the
 // engine (only when there's a choice) and how many are left today — or why
-// /imagine can't be used here. The chips keep focus in the message box (so
+// /imagine can't be used here. Each group is labelled (P10-06). The chips keep focus in the message box (so
 // Enter still generates); they're still reachable with Tab.
 export const SHAPES = [
   { v: 'square', label: 'Square' },
@@ -14,9 +14,9 @@ export const QUALITIES = [
   { v: 'high', label: 'High' },
 ];
 
-function Chips({ label, options, value, onChange, disabled }) {
+function Chips({ label, labelledBy, options, value, onChange, disabled }) {
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1">
+    <div role="group" aria-label={labelledBy ? undefined : label} aria-labelledby={labelledBy} className="flex flex-wrap gap-1">
       {options.map((o) => (
         <button
           key={o.v}
@@ -32,6 +32,26 @@ function Chips({ label, options, value, onChange, disabled }) {
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+// One labelled group of chips (P10-06): a small label, then the chips, or,
+// when the group doesn't apply right now, why ("ComfyUI only"). It keeps its
+// place either way, so the panel doesn't jump as you change things.
+function Option({ id, label, off, ...chips }) {
+  return (
+    <div className="flex min-h-6 min-w-0 items-center gap-2" data-option={id}>
+      <span id={`imagine-opt-${id}`} className="w-14 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        {label}
+      </span>
+      {off ? (
+        <span className="text-xs italic text-gray-500" aria-describedby={`imagine-opt-${id}`}>
+          {off}
+        </span>
+      ) : (
+        <Chips label={label} labelledBy={`imagine-opt-${id}`} {...chips} />
+      )}
     </div>
   );
 }
@@ -66,21 +86,29 @@ export default function ImaginePanel({
         )}
       </div>
       {imagine.available ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          {!picture && <Chips label="Shape" options={SHAPES} value={shape} onChange={onShape} disabled={busy} />}
-          <Chips label="Quality" options={QUALITIES} value={quality} onChange={onQuality} disabled={busy} />
+        <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+          <Option id="shape" label="Shape" off={picture ? 'follows the picture' : null} options={SHAPES} value={shape} onChange={onShape} disabled={busy} />
+          <Option id="quality" label="Quality" options={QUALITIES} value={quality} onChange={onQuality} disabled={busy} />
           {imagine.engines.length > 1 && (
-            <Chips label="Engine" options={imagine.engines.map((e) => ({ v: e.id, label: e.name }))} value={engine} onChange={onEngine} disabled={busy} />
+            <Option id="engine" label="Engine" options={imagine.engines.map((e) => ({ v: e.id, label: e.name }))} value={engine} onChange={onEngine} disabled={busy} />
           )}
-          {showStyles(imagine, engine) && (
-            <Chips label="Style" options={imagine.styles.map((s) => ({ v: s.id, label: s.name }))} value={style} onChange={onStyle} disabled={busy} />
+          {hasStyles(imagine) && (
+            <Option
+              id="style"
+              label="Style"
+              off={showStyles(imagine, engine) ? null : 'ComfyUI only'}
+              options={imagine.styles.map((s) => ({ v: s.id, label: s.name }))}
+              value={style}
+              onChange={onStyle}
+              disabled={busy}
+            />
           )}
         </div>
       ) : (
         <p className="text-sm text-gray-400">{imagine.reason}</p>
       )}
       {imagine.available && pic && onPickPicture && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-ink-600/60 pt-2" role="group" aria-label="Start from a picture">
+        <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-ink-600/60 pt-2" role="group" aria-label="Start from a picture">
           {picture ? (
             <>
               <img src={picture.url} alt="" className="h-9 w-9 shrink-0 rounded object-cover ring-1 ring-ink-500" />
@@ -98,10 +126,8 @@ export default function ImaginePanel({
                 ✕
               </button>
               {pic.strength ? (
-                <>
-                  <Chips label="Strength" options={STRENGTHS} value={strength} onChange={onStrength} disabled={busy} />
-                  <span className="text-xs text-gray-500">The shape follows the picture.</span>
-                </>
+                // The Shape row above already says the shape follows the picture (P10-06).
+                <Chips label="Strength" options={STRENGTHS} value={strength} onChange={onStrength} disabled={busy} />
               ) : (
                 <span className="text-xs text-gray-500">The picture guides the image; your prompt says what to change.</span>
               )}
@@ -143,6 +169,9 @@ const engineName = (imagine, id) => imagine.engines.find((e) => e.id === id)?.na
 export function showStyles(imagine, engine) {
   return engine === 'comfyui' && imagine.styles.length > 1;
 }
+// Whether the Style row is there at all (P10-06): ComfyUI has a choice of
+// styles. With another engine chosen it stays, saying "ComfyUI only".
+const hasStyles = (imagine) => imagine.styles.length > 1 && imagine.engines.some((e) => e.id === 'comfyui');
 
 // The style to preselect: the one this device last used, if it's still there, else the default.
 const STYLE_KEY = 'disgourd.imagineStyle';
