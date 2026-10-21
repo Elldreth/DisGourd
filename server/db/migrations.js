@@ -822,6 +822,20 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 33,
+    name: 'suspended accounts and who can DM me',
+    up(db) {
+      // P11-09: a site admin can suspend an account (it can't sign in until
+      // lifted); each person chooses who can start a DM with them. The
+      // default (owner decision 2): friends and people who share a server.
+      db.exec(`
+        ALTER TABLE users ADD COLUMN suspended_at INTEGER;
+        ALTER TABLE users ADD COLUMN suspended_reason TEXT;
+        ALTER TABLE users ADD COLUMN dm_policy TEXT NOT NULL DEFAULT 'friends_and_servers';
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

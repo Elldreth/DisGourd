@@ -310,6 +310,8 @@ test('direct messages deliver to both users, with unread tracking', async () => 
   const base = baseUrl();
   const mia = (await register('mia')).token;
   const noah = (await register('noah')).token;
+  // P11-09: they share nothing, so noah lets anyone start a DM.
+  await fetch(`${base}/me`, { method: 'PATCH', headers: { ...auth(noah), 'content-type': 'application/json' }, body: JSON.stringify({ dmPolicy: 'everyone' }) });
 
   const ng = gateway(noah);
   await ng.ready;
@@ -479,6 +481,8 @@ test('search finds channel and direct messages, respecting membership', async ()
   const oscar = (await register('oscar')).token;
   const pete = (await register('pete')).token;
   await createServer(oscar, 'srch');
+  // P11-09: pete isn't in srch, so he lets anyone start a DM.
+  await fetch(`${base}/me`, { method: 'PATCH', headers: { ...auth(pete), 'content-type': 'application/json' }, body: JSON.stringify({ dmPolicy: 'everyone' }) });
 
   const gw = gateway(oscar);
   await gw.ready;

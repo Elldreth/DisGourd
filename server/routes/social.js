@@ -144,6 +144,10 @@ const routes = [
       if (to.id === fromId) return sendJson(res, 400, { error: "You can't send a friend request to yourself" });
       // P9-07a: not between people where either has blocked the other (it doesn't say which).
       if (db.eitherBlocked(fromId, to.id)) return sendJson(res, 403, { error: "You can't send this person a friend request" });
+      // P11-09: at most 20 a day from one person.
+      if (!rateLimitOk(`friend-request:${fromId}`, 20, 24 * 60 * 60 * 1000)) {
+        return sendJson(res, 429, { error: 'You’ve sent a lot of friend requests today. Try again tomorrow.' });
+      }
       db.createFriendRequest(fromId, to.id);
       res.writeHead(201);
       return res.end(JSON.stringify({ message: 'Request sent' }));

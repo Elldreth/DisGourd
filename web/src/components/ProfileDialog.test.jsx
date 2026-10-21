@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 // phones), My account with status and Log out, switches for on/off settings.
 
 vi.mock('../api.js', () => ({
+  getMe: vi.fn(async () => ({ dmPolicy: 'friends_and_servers' })), // P11-09: Privacy & safety
   getAdminRegistration: vi.fn(async () => ({ mode: 'open', maxAccounts: 0, envCodeActive: false, codes: [], admins: ['sandy'], linkPreviews: true })),
   setLinkPreviews: vi.fn(async () => ({})),
   setRegistrationMode: vi.fn(),

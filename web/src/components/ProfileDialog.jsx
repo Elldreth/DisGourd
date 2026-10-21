@@ -18,6 +18,8 @@ import ConfirmDialog from './ConfirmDialog.jsx';
 import ChangePasswordDialog from './ChangePasswordDialog.jsx';
 import DevicesSection from './settings/DevicesSection.jsx';
 import BlockedSection from './settings/BlockedSection.jsx';
+import DmPolicySection from './settings/DmPolicySection.jsx';
+import PeopleAdmin from './PeopleAdmin.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Modal from './Modal.jsx';
 import SettingsLayout from './settings/SettingsLayout.jsx';
@@ -34,10 +36,12 @@ const SECTIONS = [
   { id: 'notifications', label: 'Notifications' },
   { id: 'appearance', label: 'Appearance' },
 ];
-// Site admin: General (sign-up, site admins, link previews), then Image
+// Site admin: General (sign-up, site admins, link previews), People
+// (suspend accounts, P11-09), then Image
 // generation as an overview and six short pages (P5-03; Styles: P10-05).
 const ADMIN_SECTIONS = [
   { id: 'admin', label: 'General', group: 'Site admin' },
+  { id: 'admin-people', label: 'People', group: 'Site admin' }, // P11-09
   { id: 'imagine', label: 'Image generation', group: 'Site admin' },
   { id: 'imagine-comfy', label: 'ComfyUI', group: 'Site admin', indent: true },
   { id: 'imagine-styles', label: 'Styles', group: 'Site admin', indent: true }, // P10-05
@@ -234,6 +238,7 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
       return (
         <div className="space-y-6">
           {onPasswordChanged && <DevicesSection onToken={onPasswordChanged} />}
+          <DmPolicySection />
           <BlockedSection />
         </div>
       );
@@ -241,6 +246,7 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
     if (id === 'appearance') return <AppearanceSettings />;
     if (id === 'notifications') return <NotificationSettings />;
     if (id === 'admin') return <RegistrationAdmin />;
+    if (id === 'admin-people') return <PeopleAdmin me={profile?.username} />;
     const Page = IMAGINE_PAGES[id];
     if (Page)
       return (

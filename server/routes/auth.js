@@ -149,6 +149,8 @@ const routes = [
           return res.end(JSON.stringify({ error: 'Invalid credentials' }));
         }
         accountSucceeded(username);
+        // P11-09: only said after the right password, so it doesn't tell a guesser anything.
+        if (user.suspended_at) return sendJson(res, 403, { error: 'This account is suspended' });
         if (check.needsUpgrade) {
           const newSalt = generateSalt();
           db.setUserPassword(user.id, await hashPassword(password, newSalt), newSalt);
@@ -275,6 +277,11 @@ const routes = [
           }
           db.setUserAvatar(userId, avatar || null, avatarOriginal || null, sanitizeCrop(avatarCrop));
         }
+        // P11-09: who can start a DM with me.
+        if ('dmPolicy' in body) {
+          if (!db.DM_POLICIES.includes(body.dmPolicy)) return sendJson(res, 400, { error: 'Who can message you must be friends_and_servers or everyone' });
+          db.setDmPolicy(userId, body.dmPolicy);
+        }
       }
       const u = db.getUserById(userId);
       if (!u) return sendJson(res, 404, { error: 'User not found' });
@@ -287,6 +294,7 @@ const routes = [
         avatarCrop: u.avatar_crop ? JSON.parse(u.avatar_crop) : null,
         siteAdmin: !!u.site_admin,
         presence: db.getUserPresence(userId),
+        dmPolicy: db.getDmPolicy(userId),
         ...db.getUserStatus(userId),
       });
     },

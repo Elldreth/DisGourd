@@ -157,6 +157,13 @@ export function createRegCode(opts) {
 export function revokeRegCode(id) {
   return request(`/admin/registration/codes/${id}`, { method: 'DELETE' });
 }
+// People (P11-09): find accounts; suspend or lift.
+export function searchUsers(q) {
+  return request(`/admin/users?q=${encodeURIComponent(q)}`);
+}
+export function setSuspended(username, suspended, reason) {
+  return request(`/admin/users/${encodeURIComponent(username)}`, { method: 'PUT', body: { suspended, ...(reason ? { reason } : {}) } });
+}
 export function setSiteAdmin(username, admin) {
   return request(`/admin/registration/admins/${encodeURIComponent(username)}`, { method: 'PUT', body: { admin } });
 }

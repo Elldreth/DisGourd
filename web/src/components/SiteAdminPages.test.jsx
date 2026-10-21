@@ -12,6 +12,7 @@ const view = (comfy = {}, extra = {}) => ({
   ...extra,
 });
 vi.mock('../api.js', () => ({
+  getMe: vi.fn(async () => ({ dmPolicy: 'friends_and_servers' })), // P11-09: Privacy & safety
   getAdminRegistration: vi.fn(async () => ({ mode: 'open', maxAccounts: 0, envCodeActive: false, codes: [], admins: ['sandy'], linkPreviews: true })),
   setLinkPreviews: vi.fn(async () => ({})),
   setRegistrationMode: vi.fn(),
@@ -52,7 +53,7 @@ const bars = () => screen.queryAllByRole('region', { name: 'Unsaved changes' });
 test('Site admin lists General, Image generation and its six pages, the pages indented', async () => {
   await open();
   const tabs = within(screen.getByRole('tablist')).getAllByRole('tab').map((t) => t.textContent);
-  expect(tabs.slice(5)).toEqual(['General', 'Image generation', 'ComfyUI', 'Styles', 'Quality', 'Variations', 'kie.ai', 'Try it']); // Styles: P10-05
+  expect(tabs.slice(5)).toEqual(['General', 'People', 'Image generation', 'ComfyUI', 'Styles', 'Quality', 'Variations', 'kie.ai', 'Try it']); // Styles: P10-05; People: P11-09
   expect(screen.getByRole('tab', { name: 'Quality' }).className).toMatch(/\bpl-6\b/);
   // Link previews lives on General now.
   expect(within(panelFor('General')).getByText(/Link previews/)).toBeTruthy();

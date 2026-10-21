@@ -1634,6 +1634,20 @@ function getDmConversations(userId, { only = null } = {}) {
 
 // ---- Group DMs (P9-06c) ----
 // Who may be added: someone you share a server with, or a friend.
+// ---- Who can DM me (P11-09) ----
+const DM_POLICIES = ['friends_and_servers', 'everyone'];
+function getDmPolicy(userId) {
+  const row = db.prepare('SELECT dm_policy FROM users WHERE id = ?').get(userId);
+  return row && DM_POLICIES.includes(row.dm_policy) ? row.dm_policy : 'friends_and_servers';
+}
+function setDmPolicy(userId, policy) {
+  db.prepare('UPDATE users SET dm_policy = ? WHERE id = ?').run(policy, userId);
+}
+// May `fromId` start a conversation with `toId`, or add them to a group?
+// Friends and people sharing a server always; anyone if `toId` allows it.
+function canStartDm(fromId, toId) {
+  return canAddToGroup(fromId, toId) || getDmPolicy(toId) === 'everyone';
+}
 function canAddToGroup(adderId, userId) {
   return !!db.prepare(`
     SELECT 1 FROM space_members a JOIN space_members b ON a.space_id = b.space_id WHERE a.user_id = ? AND b.user_id = ?
@@ -1958,6 +1972,42 @@ function listSiteAdmins() {
   return db.prepare('SELECT username FROM users WHERE site_admin = 1 ORDER BY username COLLATE NOCASE').all().map((r) => r.username);
 }
 
+// ---- Suspended accounts (P11-09) ----
+// Site admins who can still sign in.
+function countActiveSiteAdmins() {
+  return db.prepare('SELECT COUNT(*) AS n FROM users WHERE site_admin = 1 AND suspended_at IS NULL').get().n;
+}
+// Suspend (every session goes and the token version moves on, so every
+// sign-in ends) or lift. Returns the new token version.
+const setSuspended = db.transaction((userId, on, reason = null) => {
+  if (on) {
+    db.prepare('UPDATE users SET suspended_at = ?, suspended_reason = ?, token_version = token_version + 1 WHERE id = ?').run(Date.now(), reason || null, userId);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  } else {
+    db.prepare('UPDATE users SET suspended_at = NULL, suspended_reason = NULL WHERE id = ?').run(userId);
+  }
+  const row = db.prepare('SELECT token_version FROM users WHERE id = ?').get(userId);
+  return row ? row.token_version : null;
+});
+// A site admin's view of one account.
+function adminUserView(u) {
+  const seen = db.prepare('SELECT MAX(last_seen_at) AS t FROM sessions WHERE user_id = ?').get(u.id);
+  return {
+    username: u.username,
+    siteAdmin: !!u.site_admin,
+    suspended: !!u.suspended_at,
+    suspendedAt: u.suspended_at || null,
+    suspendedReason: u.suspended_reason || null,
+    lastSeenAt: (seen && seen.t) || null,
+  };
+}
+// People whose name contains `q` (any case), bots left out, at most `limit`.
+function searchUsersForAdmin(q, limit = 25) {
+  const like = `%${String(q || '').replace(/[!%_]/g, (c) => `!${c}`)}%`;
+  return db.prepare("SELECT * FROM users WHERE is_bot = 0 AND username LIKE ? ESCAPE '!' ORDER BY username COLLATE NOCASE LIMIT ?")
+    .all(like, limit).map(adminUserView);
+}
+
 // ---- Instance settings (key/value) ----
 function getSetting(key) {
   const row = db.prepare('SELECT value FROM site_settings WHERE key = ?').get(key);
@@ -2056,8 +2106,9 @@ const endOtherSessions = db.transaction((userId, keepId, bump = true) => {
   return getTokenVersion(userId);
 });
 
+// null for an unknown or suspended account (P11-09), so its tokens stop working.
 function getTokenVersion(userId) {
-  const row = db.prepare('SELECT token_version FROM users WHERE id = ?').get(userId);
+  const row = db.prepare('SELECT token_version FROM users WHERE id = ? AND suspended_at IS NULL').get(userId);
   return row ? row.token_version : null;
 }
 
@@ -2590,6 +2641,10 @@ module.exports = {
   markConversationRead,
   // P9-06c: groups
   canAddToGroup,
+  canStartDm,
+  getDmPolicy,
+  setDmPolicy,
+  DM_POLICIES,
   createGroup,
   addParticipants,
   leaveConversation,
@@ -2631,6 +2686,10 @@ module.exports = {
   setSiteAdmin,
   setSiteAdminByUsername,
   listSiteAdmins,
+  countActiveSiteAdmins,
+  setSuspended,
+  adminUserView,
+  searchUsersForAdmin,
   getSetting,
   pinMessage,
   unpinMessage,

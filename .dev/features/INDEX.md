@@ -279,7 +279,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-06 | Security headers, CSP and same-origin CORS (M1) | 11 | COMPLETE | S–M | none (soft P11-05) | http/handler.js, static.js, proxy samples |
 | P11-07 | Session tokens out of URLs: first-frame socket auth, Origin check (M2, L5) | 11 | COMPLETE | S–M | P11-03 | gateway/index.js, auth/tokens.js, useSocket.js |
 | P11-08 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (M3) | 11 | COMPLETE | S–M | none (soft P11-05) | auth/rateLimit.js, routes/auth.js, validate.js |
-| P11-09 | Instance safety: suspend accounts; who can DM me (M7, M9) | 11 | ACTIVE | M | P11-03, P11-07; owner decision 2 | migrations, routes/admin.js, auth/tokens.js, gateway/dm.js, site-admin settings, PrivacySection |
+| P11-09 | Instance safety: suspend accounts; who can DM me (M7, M9) | 11 | REVIEW | M | P11-03, P11-07; owner decision 2 | migrations, routes/admin.js, auth/tokens.js, gateway/dm.js, site-admin settings, PrivacySection |
 | P11-10 | **Push endpoint allowlist (go-live blocker, build order 1)**; ComfyUI metadata block (M10, M5) | 11 | COMPLETE | S | none | routes/push.js, push.js, db/index.js, net/safeFetch.js, engines/comfyui.js, README |
 | P11-11 | Voice: TURN credentials from the server (hosted TURN for the tunnel setup), relay-only option, honour forced mute (M8) | 11 | READY | M | none (which TURN: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
 | P11-12 | Case-insensitive usernames and emails (M6) | 11 | PLANNED | S–M | P11-01 | migrations, db/index.js, routes/auth.js, config.js |

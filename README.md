@@ -374,6 +374,12 @@ out, the backup and the secrets match.
   tailnet), so private addresses are allowed there, but link-local and cloud
   metadata addresses are refused. Keep ComfyUI itself off the internet: never
   port-forward or publicly tunnel it (anyone who reaches it can run workflows).
+- Site admins can **suspend** an account in Settings › People: it's signed out
+  everywhere and can't sign in until the suspension is lifted. Its messages
+  stay.
+- By default, only friends and people who share a server can start a DM with
+  someone or add them to a group. Each person can allow everyone instead
+  (Settings › Privacy & safety). Friend requests are limited to 20 a day each.
 - Keep `server/.jwt-secret` (and any `JWT_SECRET` you set) private — anyone with
   it can forge logins. It is gitignored by default.
 

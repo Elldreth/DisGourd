@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 vi.mock('../api.js', () => ({
+  getMe: vi.fn(async () => ({ dmPolicy: 'friends_and_servers' })), // P11-09: Privacy & safety
   changePassword: vi.fn(),
   getAdminRegistration: vi.fn(async () => ({ codes: [], admins: [] })),
   updateMe: vi.fn(),

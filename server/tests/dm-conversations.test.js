@@ -55,6 +55,8 @@ test('pairs become conversations; ids and usernames both work; frames carry the 
   const alice = await register('alice');
   const bob = await register('bob');
   await register('cara');
+  // P11-09: alice and bob share a server, so they can start a DM; cara is a stranger.
+  db.addMember(db.createSpaceWithDefaults('Pairs', alice), bob, 'member');
   const ag = gateway('alice');
   const bg = gateway('bob');
   const cg = gateway('cara');
