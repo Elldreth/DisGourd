@@ -109,3 +109,14 @@
 ## Not in scope
 - A VPS setup: the `deploy/cloud/` sample from the first plan is dropped while the tunnel setup is the one in use.
 - fail2ban: per-account limits (P11-08) and the Cloudflare rate-limit rule cover it.
+
+## Follow-up after the live setup (2026-10-21)
+The owner applied the steps on Unraid. Everything checked out:
+- `/admin/client-ip` showed the real IPv6, peer `172.30.80.2`, via `cf-connecting-ip`, `trusted: true`.
+- The `audiobookshelf` wget got "bad address".
+- From DisGourd, the router and the Unraid UI were blocked; ComfyUI and api.kie.ai were open.
+
+Running it surfaced three gaps, now fixed in `deploy/unraid-tunnel/egress.sh` and its README:
+- **The host itself:** traffic from the container to the Unraid host goes through `INPUT`, not `DOCKER-USER`, so the host UI stayed reachable. `egress.sh` now also drops new connections from `disgourd-edge` in `INPUT` (and `remove` deletes that rule). The README checks include the host's own IP.
+- **Start order:** Unraid can run the User Script before Docker has made `DOCKER-USER`, so the script waits up to 60 × 2 s for it.
+- **The tunnel's name:** the tunnel container's name is a variable (`TUNNEL`; the owner's template calls it `Unraid-Cloudflared-Tunnel`). The script re-runs `docker network connect disgourd-edge "$TUNNEL"` each time, so a re-created template container gets its network back.

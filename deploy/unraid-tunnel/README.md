@@ -24,7 +24,8 @@ These are already set on the live zone (2026-10-21):
 The steps assume:
 - the source is at `/mnt/user/appdata/disgourd-src`;
 - your compose file is in `/mnt/user/appdata/disgourd-stack/`;
-- the LAN is `192.168.1.0/24`, with ComfyUI at `192.168.1.20:8188`. Check yours with `ip route` and adjust `egress.sh`.
+- the LAN is `192.168.1.0/24`, with ComfyUI at `192.168.1.20:8188` and the Unraid host at `192.168.1.10`. Check yours with `ip route` and adjust `egress.sh`;
+- the tunnel container is called `cloudflared`. An Unraid template may name it differently (for example `Unraid-Cloudflared-Tunnel`): use that name in the commands below and in `TUNNEL` at the top of `egress.sh`.
 
 **1. Deploy the new image first** (your update script: pull, build, restart). The new settings below are only understood by this version. Nothing changes until step 3, because `TRUST_PROXY=1` still behaves as before.
 
@@ -33,7 +34,7 @@ The steps assume:
 docker network create --subnet 172.30.80.0/24 disgourd-edge
 docker network connect disgourd-edge cloudflared
 ```
-- If cloudflared is an Unraid template container, a template edit or update recreates it and drops this connection. Either add the `connect` line to the User Script in step 5 (it's harmless to repeat), or move cloudflared into the stack (the `cloudflared:` service in `docker-compose.yml`, with `TUNNEL_TOKEN` in a `.env` file, chmod 600) and remove the template container.
+- If cloudflared is an Unraid template container, a template edit or update recreates it and drops this connection. `egress.sh` (step 5) reconnects it every time it runs, so set `TUNNEL` there. Or move cloudflared into the stack (the `cloudflared:` service in `docker-compose.yml`, with `TUNNEL_TOKEN` in a `.env` file, chmod 600) and remove the template container.
 - Undo: `docker network disconnect disgourd-edge cloudflared && docker network rm disgourd-edge` (after step 3's undo).
 
 **3. Change the DisGourd service in your stack's compose file** to match `docker-compose.yml` here:
@@ -79,16 +80,20 @@ Then, from the stack folder, run `docker compose up -d`.
 - **The site,** sign-in, an upload and a link preview all work as before.
 
 **5. The LAN egress rule.**
-- Copy `egress.sh` to the server and set `LAN` and `COMFY` at the top.
-- Add it as an Unraid User Script "At Startup of Array". Add the `docker network connect` line from step 2 to the same script if cloudflared is a template container.
+- Copy `egress.sh` to the server and set `LAN`, `COMFY` and `TUNNEL` at the top.
+- Add it as an Unraid User Script (for example `disgourd_egress`) set to "At Startup of Array". It waits up to two minutes for Docker's firewall chain, since Unraid can run it before Docker is up. It also puts the tunnel back on `disgourd-edge`.
 - Run it once now.
+- It adds two things: a `DISGOURD-EGRESS` chain for traffic to other machines, and an `INPUT` rule for traffic to the Unraid host itself. DOCKER-USER never sees traffic to the host, so without that second rule the Unraid web UI stays reachable from the container.
 - Check from inside DisGourd:
   ```bash
   docker exec disgourd node -e "fetch('http://192.168.1.1').then(()=>console.log('open'),()=>console.log('blocked'))"
+  docker exec disgourd node -e "fetch('http://192.168.1.10').then(()=>console.log('open'),()=>console.log('blocked'))"
   docker exec disgourd node -e "fetch('http://192.168.1.20:8188').then(()=>console.log('open'),()=>console.log('blocked'))"
+  docker exec disgourd node -e "fetch('https://api.kie.ai').then(()=>console.log('open'),()=>console.log('blocked'))"
   ```
-  The first should print `blocked`; the second `open` (if ComfyUI is running).
-- Undo: run `./egress.sh remove`, and disable the User Script.
+  - The router and the Unraid host (use its web UI port if it isn't 80, e.g. `:180`) should print `blocked`.
+  - ComfyUI (if running) and the internet should print `open`.
+- Undo: run `./egress.sh remove` (it removes both the chain and the INPUT rule), and disable the User Script.
 
 **6. Pin cloudflared** (optional, recommended).
 - Use `cloudflare/cloudflared:2026.10.2@sha256:0e56c13c…93b2` (the full value is in `docker-compose.yml`) instead of `:latest`.
