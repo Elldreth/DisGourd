@@ -32,6 +32,18 @@ export default function InviteDialog({ space, code, expiresInDays = 7, onExpiry,
       live = false;
     };
   }, [code]);
+  // P14-03: "Email this invite", while the server can send email.
+  const [canEmail, setCanEmail] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api
+      .getAuthInfo()
+      .then((r) => live && setCanEmail(!!r.email))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
   return (
     <Modal onClose={onClose} panelClassName="w-full max-w-md rounded-xl bg-ink-800 p-6 shadow-2xl ring-1 ring-ink-500/50">
       <Modal.Title>Invite people to {space}</Modal.Title>
@@ -46,6 +58,7 @@ export default function InviteDialog({ space, code, expiresInDays = 7, onExpiry,
         </p>
       )}
       <CopyRow label="Invite code" value={code} buttonLabel="Copy code" className="mt-3" />
+      {canEmail && <EmailInvite space={space} code={code} />}
       {onExpiry && (
         <div className="mt-4 flex items-center gap-3">
           <label htmlFor={expiryId} className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -72,6 +85,47 @@ export default function InviteDialog({ space, code, expiresInDays = 7, onExpiry,
         </button>
       </div>
     </Modal>
+  );
+}
+
+// P14-03: send the link to an address. Nothing the sender types goes in
+// besides the address, so the server can't be used to mail arbitrary text.
+function EmailInvite({ space, code }) {
+  const [to, setTo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null); // { ok, text }
+  const toId = useId();
+  async function send(e) {
+    e.preventDefault();
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await api.emailInvite(space, code, to.trim());
+      setResult({ ok: true, text: `Sent to ${r.to}.` });
+      setTo('');
+    } catch (err) {
+      setResult({ ok: false, text: err.message || 'The invite wasn’t sent' });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form onSubmit={send} className="mt-4">
+      <label htmlFor={toId} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+        Email this invite
+      </label>
+      <div className="flex gap-2">
+        <input id={toId} type="email" required value={to} onChange={(e) => setTo(e.target.value)} placeholder="friend@example.com" autoComplete="email" className="input flex-1" />
+        <button type="submit" disabled={busy} className="shrink-0 rounded-lg bg-ink-600 px-3 py-2 text-sm font-semibold text-gray-200 hover:bg-ink-500 disabled:opacity-60">
+          {busy ? 'Sending…' : 'Send'}
+        </button>
+      </div>
+      {result && (
+        <p role={result.ok ? 'status' : 'alert'} className={`mt-1 text-xs ${result.ok ? 'text-gray-300' : 'text-danger'}`}>
+          {result.text}
+        </p>
+      )}
+    </form>
   );
 }
 

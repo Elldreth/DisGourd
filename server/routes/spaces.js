@@ -2,6 +2,10 @@
 const { withPublicEmbeds } = require('../net/imageProxy');
 const db = require('../db');
 const { newRegCode } = require('../auth/regCodes');
+const mail = require('../mail');
+const templates = require('../mail/templates');
+const { inviteCanCreateAccount } = require('../auth/invitePolicy');
+const { rateLimitOk } = require('../auth/rateLimit');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, intParam, sanitizeCrop, readJsonBody } = require('../http/util');
 const { validateSpaceName, normalizeChannelName, validateChannelName } = require('../validate');
@@ -355,6 +359,44 @@ const routes = [
         const code = newRegCode(); // P14-01: easy to type, like sign-up codes
         db.createInvite(code, space.id, userId, expiresAt, maxUses);
         return sendJson(res, 201, { code, expiresAt, maxUses });
+      }
+
+      // POST /spaces/:name/invites/:code/email { to } (P14-03): email an invite.
+      // Its creator (or a server manager) only, while email works; no text
+      // from the sender, and 10 an hour each on top of the mailer's limits.
+      if (pathSegments[2] === 'invites' && pathSegments[3] && pathSegments[4] === 'email' && pathSegments.length === 5 && req.method === 'POST') {
+        if (!access.actions.has('invite')) return sendJson(res, 403, { error: 'You are not allowed to invite people here' });
+        const invite = db.getInvite(pathSegments[3]);
+        if (!invite || invite.space_id !== space.id) return sendJson(res, 404, { error: 'This invite is invalid or has expired' });
+        if (invite.created_by !== userId && !canManage) return sendJson(res, 403, { error: 'Only the person who made this invite can email it' });
+        if ((invite.expires_at && Date.now() > invite.expires_at) || (invite.max_uses && invite.uses >= invite.max_uses)) {
+          return sendJson(res, 410, { error: 'This invite has expired or been used up. Make a new one.' });
+        }
+        const s = mail.settings();
+        if (s.missing.length) return sendJson(res, 409, { error: 'This server can’t send email right now' });
+        const { to } = await getJsonBody(req);
+        const address = typeof to === 'string' ? to.trim() : '';
+        if (!mail.looksLikeEmail(address)) return sendJson(res, 400, { error: 'Enter an email address' });
+        if (!rateLimitOk('invite-email:' + userId, 10, 60 * 60 * 1000)) {
+          return sendJson(res, 429, { error: 'That’s 10 invites by email this hour. Try again later, or copy the link instead.' });
+        }
+        const me = db.getUserById(userId);
+        const sent = mail.send({
+          to: address,
+          ...templates.serverInvite({
+            serverName: s.serverName,
+            publicUrl: s.publicUrl,
+            inviter: me.username,
+            space: space.name,
+            link: `${s.publicUrl}/invite/${encodeURIComponent(invite.code)}`,
+            expiresAt: invite.expires_at,
+            newAccounts: inviteCanCreateAccount(invite),
+          }),
+        });
+        if (!sent.queued) {
+          return sendJson(res, 429, { error: sent.reason === 'recipient' ? 'That address has had several emails this hour. Try again later.' : 'The server can’t send more email today. Copy the link instead.' });
+        }
+        return sendJson(res, 202, { sent: true, to: address });
       }
 
       // GET /spaces/:name/permissions — server action thresholds (managers can view)

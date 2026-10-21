@@ -415,6 +415,10 @@ export function kickMember(space, username) {
 export function previewInvite(code) {
   return request(`/invites/${encodeURIComponent(code)}`);
 }
+// P14-03: email an invite you made (no text of yours goes in).
+export function emailInvite(space, code, to) {
+  return request(`/spaces/${encodeURIComponent(space)}/invites/${encodeURIComponent(code)}/email`, { method: 'POST', body: { to } });
+}
 // Public: what an invite link is for, before signing in (P14-01).
 export function getInvitePreview(code) {
   return request(`/invites/${encodeURIComponent(code)}/preview`, { auth: false });
