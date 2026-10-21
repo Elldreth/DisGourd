@@ -205,6 +205,7 @@ All settings are optional and provided via environment variables (or
 | `THREAD_ARCHIVE_DAYS` | `7`                   | Threads with no new reply for this many days are archived (a new reply reopens them) |
 | `VAPID_CONTACT`    | `mailto:admin@disgourd.local` | Contact address sent to push services with web push notifications. The signing keys are generated on first run and kept in `.vapid.json` next to the database |
 | `PUSH_HOSTS_EXTRA` | _(none)_                 | Extra push services to allow, comma-separated (`push.example.org` exact, or `*.example.org` for subdomains). The browsers' own services are always allowed |
+| `ALLOWED_ORIGINS`  | _(none)_                 | Other sites allowed to call the API from a browser (CORS), comma-separated, e.g. `https://app.example.org`. The built-in app is same-origin and needs none |
 
 Example (Linux/macOS):
 

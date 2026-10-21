@@ -24,6 +24,10 @@ server {
 
     include /config/nginx/ssl.conf;
 
+    # HSTS (P11-06): DisGourd doesn't send it (it can't tell whether TLS is in
+    # front). Skip this line if your ssl.conf already sets it.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
     # Match MAX_UPLOAD_BYTES (25 MB by default), so nginx refuses anything
     # bigger before it reaches DisGourd. Raise both together.
     client_max_body_size 25m;
