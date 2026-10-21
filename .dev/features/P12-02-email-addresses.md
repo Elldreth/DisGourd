@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P12-00)
 - **Phase:** 12
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #234; AC-8 checked live on 2026-10-21)
 - **Starting baseline:** main after #233
 - **Effort:** M
 - **Depends on:** P12-01 (sending), P11-12 (case-insensitive emails; this builds on its NOCASE index)
@@ -84,7 +84,7 @@ An email is required at sign-up but never confirmed, so it can't be trusted for 
 - [x] AC-5: an address already confirmed by another account is refused, with the same wording as for an invalid address, so whether it's in use isn't revealed.
 - [x] AC-6: with the switch on, an unconfirmed member sees only the confirm step, and API calls answer 403 `EMAIL_UNCONFIRMED` except `/me`, `/me/email*`, `/logout` and `/email/confirm`. A site admin isn't blocked.
 - [x] AC-7: the web flows (add, change, resend, remove, confirm from a link while signed out) have Vitest coverage. axe is clean on the new screens.
-- [ ] AC-8: sandbox check with real email: add an address, click the link from the inbox, see "Confirmed".
+- [x] AC-8: sandbox check with real email: add an address, click the link from the inbox, see "Confirmed".
 
 ## Expected Areas of Change
 `server/db/migrations.js` and `server/db/index.js`, `server/routes/auth.js` (or a new `server/routes/email.js`), `server/validate.js`, `server/mail/templates.js` ("Confirm your email"), `web/devProxy.js`; web: `Login.jsx` (sign-up), `SetupWizard.jsx`, `ProfileDialog.jsx` (a new `settings/EmailSection.jsx`), a new `ConfirmEmailGate.jsx`, `App.jsx` (the `#confirm-email=` link), `api.js`, the admin Email page; tests.
@@ -104,4 +104,4 @@ Password reset (P12-03). Notices (P12-04). Several addresses per account.
 | AC-7 | `emailAddresses.test.jsx` (8 tests): the sign-up field, add/resend, change/remove (with a wrong password), the link page both ways, the address-bar capture, the gate (both wordings, a new link, check again, another address, sign out), the admin switch, and every control named in words (the a11y harness's check). The sandbox can't load axe from the CDN under P11-06's CSP |
 | Suites | Server 642 tests (2 Linux-only skipped), web 872 tests; `vite build` clean |
 | Sandbox (AC-8 stand-in) | A throwaway copy of the sandbox DB on :3012, with a test-only transport that prints each email to the log. **bob:** Settings › My account › Email showed "bob@example.test · Not confirmed" → Change → a new address plus password → "We sent a link to ...", "Waiting for you to open the link...". The log had the email with its link. Opening the link → **"Email confirmed"**, the address bar cleaned, and the server log showed only the domain. **cara (switch on, as sandy):** `/spaces` answered 403 `EMAIL_UNCONFIRMED`, and the app showed "Confirm your email". It first said "We sent a link" when none had been sent, so the wording was fixed to "isn't confirmed yet" with "Send a confirmation link". Then the link was sent, opened ("Email confirmed") and Continue chosen → the app loaded and `/spaces` answered 200. The temporary entry and DB were removed |
-| AC-8 (live) | Open: after deploying, add or change an address in Settings on the live server, open the link from the Gmail inbox, and see "Confirmed" |
+| AC-8 (live) | **The owner's Unraid server (2026-10-21):** after the update (migration v35 ran on start), Settings › My account › Email → send a confirmation link → the email arrived → its link opened DisGourd's "Email confirmed" → the address then showed **Confirmed** |
