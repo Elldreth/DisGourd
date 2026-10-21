@@ -72,3 +72,15 @@ test('the moderation log says who handed the server to whom', () => {
   const { container } = render(<div>{describeEntry({ action: 'ownership_transfer', actor: 'sandy', target: 'bob', details: { role: 'Admin' } })}</div>);
   expect(container.textContent).toBe('sandy handed the server to bob');
 });
+
+test('P10-07: Transfer is a neutral button (Delete keeps the danger colour); candidates show avatar and top role', () => {
+  const roles = [{ id: 1, name: 'Admin' }, { id: 2, name: 'Mods' }, { id: 9, name: '@everyone', isDefault: true }];
+  overview({ roles, members: [{ username: 'sandy' }, { username: 'bob', roles: [2, 9] }, { username: 'cara', roles: [9] }] });
+  const zone = screen.getByRole('region', { name: 'Danger zone' });
+  expect(within(zone).getByRole('button', { name: 'Transfer ownership…' }).className).not.toMatch(/text-danger/);
+  expect(within(zone).getByRole('button', { name: 'Delete server' }).className).toMatch(/text-danger/);
+  const dialog = openDialog();
+  const bob = within(dialog).getByRole('radio', { name: 'bob, Mods' });
+  expect(bob.closest('label').textContent).toContain('Mods');
+  expect(within(dialog).getByRole('radio', { name: 'cara' })).toBeTruthy(); // @everyone isn't shown
+});

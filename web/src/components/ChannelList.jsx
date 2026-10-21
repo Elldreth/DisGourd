@@ -797,6 +797,7 @@ export default function ChannelList({
             onReframeIcon: onReframeServerIcon,
             onDeleteServer,
             members,
+            roles, // P10-07: the transfer list shows each member's top role
             currentUser: user,
             onTransferred: (newOwner) => {
               setSettingsOpen(false); // what I may see in it changes

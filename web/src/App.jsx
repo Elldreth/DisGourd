@@ -6,6 +6,7 @@ import { useChannelMessages, badgeCounts, unreadKey, threadRootId } from './stat
 import { useDms, MAX_GROUP } from './state/useDms.js';
 import { useBlocks, BlocksContext } from './state/useBlocks.js';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
+import { navAlert } from './components/NavButton.jsx';
 import { useSpaces } from './state/useSpaces.js';
 import { useVoiceCall } from './state/useVoiceCall.js';
 import { useDocumentAttention } from './attention.js';
@@ -430,6 +431,8 @@ export default function App() {
   // Browser tab: "(N) DisGourd" + a favicon dot for mentions and unread DMs.
   const total = (counts) => Object.values(counts).reduce((a, b) => a + b, 0);
   useDocumentAttention({ mentions: total(spaceMentions), dms: dm.totalUnread, unread: total(spaceUnread) });
+  // P10-07: the phone ☰'s dot, since the rail and its badges hide in the drawer.
+  const navDot = navAlert({ dmUnread: dm.totalUnread, mentions: total(spaceMentions), openReports: sp.spaces.reduce((n, s) => n + (s.openReports || 0), 0) });
 
   // ---- Keyboard shortcuts and the Ctrl+K quick switcher ----
   // Remember where you've been, so the switcher can rank recent places first.
@@ -715,6 +718,7 @@ export default function App() {
       {/* Main content — full width on phones, alongside the nav on desktop. */}
       {view === 'dm' ? (
         <DmPanel
+          navAlert={navDot}
           conversationKey={dm.current}
           conversation={dm.currentConversation}
           title={dm.title(dm.currentConversation)}
@@ -745,6 +749,7 @@ export default function App() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {call.room && call.videos.length > 0 && <VideoStage videos={call.videos} />}
             <ChatPanel
+              navAlert={navDot}
               jumpRequest={jumpRequest}
               space={sp.currentSpace}
               channel={sp.currentChannel}

@@ -13,6 +13,7 @@ export default function OverviewSection({
   saved = false, // "Saved" after a rename (kept by the window: a rename reloads the server)
   onSavedChange,
   members = [], // P9-02: who the owner can hand the server to
+  roles = [], // P10-07: for each candidate's top role
   currentUser,
   onTransferred, // (newOwner) after a handover
 }) {
@@ -98,8 +99,9 @@ export default function OverviewSection({
           <button
             type="button"
             onClick={() => setTransferring(true)}
-            className="tap mt-3 rounded-lg px-3 py-2 text-sm font-semibold text-danger ring-1 ring-danger/50 transition hover:bg-danger/10"
+            className="tap mt-3 rounded-lg px-3 py-2 text-sm font-semibold text-gray-200 ring-1 ring-ink-500 transition hover:bg-ink-700"
           >
+            {/* P10-07: neutral; only Delete server, which can't be undone, wears the danger colour. */}
             Transfer ownership…
           </button>
           <p className="mt-4 text-sm text-gray-400">Deleting the server removes its channels and every message, for everyone. It can’t be undone.</p>
@@ -117,6 +119,7 @@ export default function OverviewSection({
         <TransferDialog
           space={space}
           members={members}
+          roles={roles}
           currentUser={currentUser}
           onTransfer={async (user, confirm) => {
             await api.transferServer(space, user, confirm);
