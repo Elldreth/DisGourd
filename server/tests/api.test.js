@@ -416,17 +416,16 @@ test('roles: owner promotes, admins kick members, permissions enforced', async (
   const members = async (tok) =>
     (await (await fetch(`${base}/spaces/roleco/members`, { headers: auth(tok) })).json()).members;
 
-  // Owner promotes tara to admin.
-  let res = await fetch(`${base}/spaces/roleco/members/tara`, {
-    method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(sam) }, body: JSON.stringify({ role: 'admin' }),
-  });
+  // Owner gives tara the Admin role (P11-02: through the roles route; the
+  // old PATCH /members/:u { role } is gone).
+  const { roles } = await (await fetch(`${base}/spaces/roleco/roles`, { headers: auth(sam) })).json();
+  const adminRole = roles.find((r) => r.name === 'Admin');
+  let res = await fetch(`${base}/spaces/roleco/members/tara/roles/${adminRole.id}`, { method: 'PUT', headers: auth(sam) });
   expect(res.status).toBe(200);
-  expect((await members(sam)).find((x) => x.username === 'tara').role).toBe('admin');
+  expect((await members(sam)).find((x) => x.username === 'tara').roles).toContain(adminRole.id);
 
   // A plain member cannot change roles.
-  res = await fetch(`${base}/spaces/roleco/members/uma`, {
-    method: 'PATCH', headers: { ...JSON_HEADERS, ...auth(uma) }, body: JSON.stringify({ role: 'admin' }),
-  });
+  res = await fetch(`${base}/spaces/roleco/members/uma/roles/${adminRole.id}`, { method: 'PUT', headers: auth(uma) });
   expect(res.status).toBe(403);
 
   // Admin (tara) may kick a member (uma).

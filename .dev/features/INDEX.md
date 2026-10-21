@@ -271,8 +271,8 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
 | P11-00 | Security review for the public cloud (Container) | 11 | COMPLETE | L | main 92f7178 | .dev/features/P11-00-security-review.md, .dev/security/ |
-| P11-01 | First-run setup code; safe SITE_ADMINS (C1; live: build order 2) | 11 | REVIEW | S | none | config.js, routes/auth.js, server.js, SetupWizard.jsx, README |
-| P11-02 | Role hierarchy on the legacy member-tier route (H1) | 11 | READY | S | none | routes/spaces.js, tests |
+| P11-01 | First-run setup code; safe SITE_ADMINS (C1; live: build order 2) | 11 | COMPLETE | S | none | config.js, routes/auth.js, server.js, SetupWizard.jsx, README |
+| P11-02 | Role hierarchy on the legacy member-tier route (H1) | 11 | REVIEW | S | none | routes/spaces.js, tests |
 | P11-03 | Gateway abuse limits: `read` checks, per-user op limits, socket cap, search limit (H2) | 11 | READY | M | none | gateway/router.js, gateway/chat.js, gateway/index.js, routes/social.js, composer notice |
 | P11-04 | Upload quotas, cleanup with their messages, sandboxed serving (H2, M4) | 11 | READY | M | none | routes/uploads.js, migrations, db/index.js, uploadsGc.js (new) |
 | P11-05 | Behind the Cloudflare Tunnel: trust only cloudflared, read-only root, LAN egress rule, pinned images (H3 rest, L8, L10) | 11 | READY | S–M | none | auth/rateLimit.js, static.js, routes/admin.js, deploy/unraid-tunnel/ (new), docker-compose.yml, Dockerfile, README |

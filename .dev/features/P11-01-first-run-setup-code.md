@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 2 in P11-00, right after P11-10). **C1 was live:** the owner started fresh and the live database had no accounts. Once this is deployed, an empty server refuses the first account without its setup code.
+- **State:** COMPLETE (merged in #215 and deployed; the live /auth-info shows setupCode:true)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P11-12 (both touch registration). This goes first.
