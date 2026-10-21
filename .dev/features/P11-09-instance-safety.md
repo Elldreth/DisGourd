@@ -2,9 +2,10 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** PLANNED (after P11-03 and P11-07; all three touch `server/gateway/`). Build order 11.
+- **State:** ACTIVE (build order 11; P11-03 and P11-07 are merged)
+- **Starting baseline:** main at 1615bc5 (#225 merged)
 - **Effort:** M
-- **Depends on:** P11-03; owner decision 2 in P11-00 (the DM default)
+- **Depends on:** P11-03; owner decision 2 in P11-00 (the DM default): **decided 2026-10-21, "Friends + shared servers"**
 - **Serialize with:** P11-03, P11-07
 - **Requirement Source:** P11-00 findings M7 and M9.
 

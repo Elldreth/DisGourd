@@ -317,7 +317,7 @@ Then the code, in this order. **P11-10's push endpoint allowlist is first: it's 
 
 ## Owner decisions
 1. **Move-day path: decided.** The Unraid box with a Cloudflare Tunnel (see "Deployment as built"). For the record, the question was: VPS (A) or the Unraid box (B)? For A: copy the existing `/config` (DB, `.jwt-secret`, `.vapid.json`) to the VPS, or start empty? Copying avoids C1 on day one, and push subscriptions keep working only if `.vapid.json` moves too. For B: C1 applies whenever the volume starts empty, as it did on 2026-10-21. The "Hosting setups" section matters more, though (LAN egress, origin lock, real IP).
-2. **DM default (P11-09):** recommended "friends and people I share a server with".
+2. **DM default (P11-09): decided (2026-10-21).** "Friends + shared servers": by default, only friends and people who share a server with you can start a DM with you or add you to a group DM; strangers on the instance can't. Everyone can switch theirs to "everyone" in Privacy & safety, and existing conversations keep working.
 3. **Voice (P11-11):** use a hosted TURN service (nothing opened at home), or keep STUN only and accept IP exposure among people in a call? Self-hosted coturn at home would need router port forwards again. Recommended: hosted TURN, relay-only off by default.
 4. **Registration:** it's `closed` today. If it opens up, use `code` (per-person codes with a use limit), never `open`.
 
