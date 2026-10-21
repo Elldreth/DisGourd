@@ -123,6 +123,12 @@ describe('spoilers and mentions', () => {
     expect(ms[0].className).toContain('md-mention-me');
   });
 
+  test('a mention of you in other capitals is still yours (P11-12)', () => {
+    const el = md('hi @Sandy', { me: 'sandy', mentions: true });
+    expect(el.querySelector('.md-mention').className).toContain('md-mention-me');
+    expect(el.querySelector('.md-mention').textContent).toBe('@Sandy'); // as written
+  });
+
   test('mentions are plain text when disabled (DMs)', () => {
     expect(md('hi @bob', { me: 'me', mentions: false }).querySelector('.md-mention')).toBeNull();
   });

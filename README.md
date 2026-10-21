@@ -53,6 +53,26 @@ npm start
 Restart the server afterwards so any changes take effect, and hard-refresh your
 browser (Ctrl/Cmd+Shift+R) to drop the old cached bundle.
 
+### Case-insensitive usernames
+
+Usernames and emails are unique whatever the capitals: `Sandy` can't be
+registered next to `sandy`, and signing in or mentioning `@SANDY` finds
+`sandy`. If an older database already has two accounts that differ only in
+case, the update stops at start with a message naming them, and changes
+nothing. Rename one of each, then start again:
+
+```bash
+sqlite3 server/db/disgourd.db "UPDATE users SET username = 'Bob2' WHERE username = 'Bob';"
+```
+
+In Docker (the image has no `sqlite3`), with the container stopped:
+
+```bash
+docker run --rm -v <your config folder>:/config -w /app/server --entrypoint node <your disgourd image> -e "require('better-sqlite3')('/config/disgourd.db').prepare(\"UPDATE users SET username = 'Bob2' WHERE username = 'Bob'\").run()"
+```
+
+For an email, use `SET email = '...' WHERE email = '...'` instead.
+
 Then open **http://localhost:3000**. The **first time** you visit a brand-new
 server, a short **setup wizard** appears: create the first account — it becomes
 the **owner and site admin** — and optionally name your first community. After

@@ -836,6 +836,43 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 34,
+    name: 'usernames and emails unique whatever the case',
+    up(db) {
+      // P11-12: `Sandy` next to `sandy` could impersonate her. Existing
+      // accounts that differ only in case stop the migration (nothing is
+      // changed): the owner renames one, then starts again. It never picks.
+      // Each group of clashing values, oldest account first.
+      const clashes = (col) => {
+        const groups = new Map();
+        const rows = db.prepare(
+          `SELECT lower(${col}) AS k, ${col} AS v FROM users
+           WHERE lower(${col}) IN (SELECT lower(${col}) FROM users GROUP BY 1 HAVING COUNT(*) > 1) ORDER BY k, id`
+        ).all();
+        for (const r of rows) groups.set(r.k, [...(groups.get(r.k) || []), r.v]);
+        return [...groups.values()].map((vs) => vs.join(', '));
+      };
+      const names = clashes('username');
+      const emails = clashes('email');
+      if (names.length || emails.length) {
+        const lines = [
+          ...names.map((n) => `usernames: ${n}`),
+          ...emails.map((e) => `emails: ${e}`),
+        ];
+        throw new Error(
+          `some accounts differ only in capital letters (${lines.join('; ')}). ` +
+          'Stop the server, rename one of each with sqlite3 on the database, for example ' +
+          "UPDATE users SET username = 'Bob2' WHERE username = 'Bob'; (or SET email = ...), then start it again. " +
+          'See "Case-insensitive usernames" in the README.'
+        );
+      }
+      db.exec(`
+        CREATE UNIQUE INDEX users_username_nocase ON users(username COLLATE NOCASE);
+        CREATE UNIQUE INDEX users_email_nocase ON users(email COLLATE NOCASE);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

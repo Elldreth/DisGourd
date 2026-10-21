@@ -58,7 +58,8 @@ function ThreadSummary({ thread, badge, onOpen }) {
 // Whether a message mentions you (for the row highlight).
 function mentionsUser(content, me) {
   if (!content || !me) return false;
-  return content.split(MENTION_RE).some((p) => p[0] === '@' && p.slice(1) === me);
+  const mine = me.toLowerCase(); // usernames ignore case (P11-12)
+  return content.split(MENTION_RE).some((p) => p[0] === '@' && p.slice(1).toLowerCase() === mine);
 }
 
 // Groups consecutive messages from the same author (within 5 minutes) into a
