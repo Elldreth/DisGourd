@@ -48,6 +48,7 @@ const ORPHAN_CLEANUP = [
   `UPDATE invites SET created_by = NULL WHERE created_by IS NOT NULL AND ${NOT_A_USER('created_by')}`,
   `DELETE FROM friend_requests WHERE ${NOT_A_USER('from_user')} OR ${NOT_A_USER('to_user')}`,
   `DELETE FROM friends WHERE ${NOT_A_USER('user_id')} OR ${NOT_A_USER('friend_id')}`,
+  `DELETE FROM user_blocks WHERE ${NOT_A_USER('blocker_id')} OR ${NOT_A_USER('blocked_id')}`, // P9-07a
   // P9-06a: someone gone leaves their conversations; a conversation (and its
   // messages) goes once nobody is left in it.
   `DELETE FROM dm_participants WHERE ${NOT_A_USER('user_id')}`,
@@ -1305,8 +1306,9 @@ const withParent = ({ parent, ...row }) => (parent ? { ...row, parent } : row);
 
 // Record which server members a message mentions (only real members count).
 // Returns the resolved usernames so the sender's client can highlight them.
-// `ids` (optional) collects the mentioned users' ids.
-function addMentions(messageId, spaceId, usernames, ids = []) {
+// `ids` (optional) collects the mentioned users' ids. P9-07a: someone who has
+// blocked `authorId` isn't mentioned (no row, no badge, no push).
+function addMentions(messageId, spaceId, usernames, ids = [], authorId = null) {
   if (!usernames.length) return [];
   const memberByName = db.prepare(
     'SELECT u.id, u.username FROM users u JOIN space_members sm ON sm.user_id = u.id WHERE sm.space_id = ? AND u.username = ?'
@@ -1315,6 +1317,7 @@ function addMentions(messageId, spaceId, usernames, ids = []) {
   const resolved = [];
   for (const name of usernames) {
     const row = memberByName.get(spaceId, name);
+    if (row && authorId && isBlocked(row.id, authorId)) continue;
     if (row) {
       insert.run(messageId, row.id);
       resolved.push(row.username);
@@ -1612,7 +1615,7 @@ function getDmConversations(userId, { only = null } = {}) {
     const other = r.kind === 'pair' ? list.find((m) => m.id !== userId) : null;
     return {
       id: r.id, kind: r.kind, name: r.name || null, ownerId: r.ownerId ?? null, muted: !!r.muted, members: list,
-      ...(other ? { username: other.username, avatar: other.avatar } : {}),
+      ...(other ? { username: other.username, avatar: other.avatar, blocked: eitherBlocked(userId, other.id) } : {}), // P9-07a
       lastContent: r.lastContent, lastAttachment: r.lastAttachment, lastTimestamp: r.lastTimestamp, unread: r.unread,
     };
   }).filter((c) => c.kind !== 'pair' || c.username); // a pair whose other person is gone
@@ -2121,6 +2124,29 @@ function removeFriend(id1, id2) {
   del.run(id1, id2, id2, id1);
 }
 
+// ---- Blocking (P9-07a) ----
+function blockUser(blockerId, blockedId) {
+  db.prepare('INSERT OR IGNORE INTO user_blocks(blocker_id, blocked_id, created_at) VALUES (?, ?, ?)').run(blockerId, blockedId, Date.now());
+}
+function unblockUser(blockerId, blockedId) {
+  return db.prepare('DELETE FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?').run(blockerId, blockedId).changes > 0;
+}
+// The people I've blocked: [{ id, username, avatar, since }], newest first.
+function getBlocked(userId) {
+  return db.prepare(`
+    SELECT u.id, u.username, u.avatar_url AS avatar, b.created_at AS since
+    FROM user_blocks b JOIN users u ON u.id = b.blocked_id
+    WHERE b.blocker_id = ? ORDER BY b.created_at DESC, u.username
+  `).all(userId);
+}
+function isBlocked(blockerId, blockedId) {
+  return !!db.prepare('SELECT 1 FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?').get(blockerId, blockedId);
+}
+// Either has blocked the other (private contact stops both ways).
+function eitherBlocked(a, b) {
+  return !!db.prepare('SELECT 1 FROM user_blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)').get(a, b, b, a);
+}
+
 function getFriends(userId) {
   const rows = db.prepare('SELECT friend_id FROM friends WHERE user_id = ?').all(userId);
   return rows.map(r => getUserById(r.friend_id)).filter(Boolean);
@@ -2183,7 +2209,7 @@ const storeMessageWithMentions = db.transaction(
     if (!stored) return null;
     markRead(authorId, spaceName, channelName, stored.id);
     const mentionedIds = [];
-    const mentions = mentionNames.length ? addMentions(stored.id, spaceId, mentionNames, mentionedIds) : [];
+    const mentions = mentionNames.length ? addMentions(stored.id, spaceId, mentionNames, mentionedIds, authorId) : [];
     // In a thread, posting or being mentioned makes you a follower.
     // `newFollows` lists who just became one, so they can be told.
     const newFollows = [];
@@ -2629,6 +2655,11 @@ module.exports = {
   addFriends,
   removeFriend,
   getFriends,
+  blockUser,
+  unblockUser,
+  getBlocked,
+  isBlocked,
+  eitherBlocked,
   cleanupOrphans,
   raw: db, // the underlying connection, for tests and maintenance scripts
 };

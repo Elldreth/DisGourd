@@ -110,6 +110,27 @@ const routes = [
     },
   },
   {
+    // ---- Blocking (P9-07a) ----
+    // GET /blocks — the people I've blocked. PUT / DELETE /blocks/:username.
+    match: ({ pathSegments }) => pathSegments[0] === 'blocks' && pathSegments.length <= 2,
+    run: async ({ req, res, parsedUrl, pathSegments }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      if (pathSegments.length === 1) {
+        if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method not allowed' });
+        return sendJson(res, 200, db.getBlocked(userId));
+      }
+      if (req.method !== 'PUT' && req.method !== 'DELETE') return sendJson(res, 405, { error: 'Method not allowed' });
+      const other = db.getUserByUsername(decodeURIComponent(pathSegments[1]));
+      if (!other) return sendJson(res, 404, { error: 'User not found' });
+      if (other.id === userId) return sendJson(res, 400, { error: "You can't block yourself" });
+      if (req.method === 'PUT') db.blockUser(userId, other.id);
+      else db.unblockUser(userId, other.id);
+      sendToUser(userId, JSON.stringify({ type: 'blocks_changed' })); // my other tabs
+      return sendJson(res, 200, { ok: true, blocked: req.method === 'PUT' });
+    },
+  },
+  {
     match: ({ req, pathSegments }) => pathSegments[0] === 'friends' && pathSegments[1] === 'request' && req.method === 'POST',
     run: async ({ req, res, parsedUrl }) => {
       const fromId = authUserId(req, parsedUrl);
@@ -118,6 +139,8 @@ const routes = [
       const to = db.getUserByUsername(username);
       if (!to) { res.writeHead(404); return res.end(JSON.stringify({ error: 'User not found' })); }
       if (to.id === fromId) return sendJson(res, 400, { error: "You can't send a friend request to yourself" });
+      // P9-07a: not between people where either has blocked the other (it doesn't say which).
+      if (db.eitherBlocked(fromId, to.id)) return sendJson(res, 403, { error: "You can't send this person a friend request" });
       db.createFriendRequest(fromId, to.id);
       res.writeHead(201);
       return res.end(JSON.stringify({ message: 'Request sent' }));

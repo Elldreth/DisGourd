@@ -773,6 +773,22 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 31,
+    name: 'user blocks',
+    up(db) {
+      // P9-07a: who has blocked whom.
+      db.exec(`
+        CREATE TABLE user_blocks (
+          blocker_id INTEGER NOT NULL,
+          blocked_id INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(blocker_id, blocked_id)
+        );
+        CREATE INDEX idx_user_blocks_blocked ON user_blocks(blocked_id);
+      `);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -244,7 +244,7 @@ Kept as its own table so it doesn't collide with other sessions' rows.
 | P9-06b | Conversations in the app (no visible change) | 9 | COMPLETE | M | P9-06a | useDms.js, App.jsx, DmSidebar, DmPanel, notify.js, sw.js, QuickSwitcher, Search |
 | P9-06c | Group DMs on the server (create, add, remove, leave, rename, mute) | 9 | COMPLETE | M | P9-06b | gateway/dm.js, db, push |
 | P9-06d | Group DMs in the app (picker, members dialog, rows, notices) | 9 | COMPLETE | M | P9-06c | useDms, DmSidebar, DmPanel, PeoplePicker, GroupAvatar, GroupMembersDialog, MessageList, notify, App |
-| P9-07 | Blocking people (Container: a–b) | 9 | PLANNED | M | P9-06, P9-01 | see children |
-| P9-07a | Blocking on the server (migration v31; DMs, groups, mentions, pushes) | 9 | READY | M | P9-07 design | migrations, db, routes, gateway/dm.js, gateway/chat.js, push |
-| P9-07b | Blocking in the app (four places, collapsed messages, DM bar, Settings list) | 9 | PLANNED | M | P9-07a | useBlocks, MemberList, MessageActions, MessageList, DmPanel, notify, My account |
-| P9-08 | A better built-in ComfyUI workflow (CLIP skip 2, 15+15 hires to 2048, the owner's detailer + Color Match; Upscale = USDU 2x + Color Match + saturation) | 9 | REVIEW | M | P3-28, P3-31, P3-33, P9-04 | engines/comfyui.js, QualityPage, Advanced |
+| P9-07 | Blocking people (Container: a–b) | 9 | ACTIVE | M | P9-06, P9-01 | see children |
+| P9-07a | Blocking on the server (migration v31; DMs, groups, mentions, pushes) | 9 | REVIEW | M | P9-07 design | migrations, db, routes, gateway/dm.js, gateway/chat.js, push |
+| P9-07b | Blocking in the app (four places, collapsed messages, DM bar, Settings list) | 9 | READY | M | P9-07a | useBlocks, MemberList, MessageActions, MessageList, DmPanel, notify, My account |
+| P9-08 | A better built-in ComfyUI workflow (CLIP skip 2, 15+15 hires to 2048, the owner's detailer + Color Match; Upscale = USDU 2x + Color Match + saturation) | 9 | COMPLETE | M | P3-28, P3-31, P3-33, P9-04 | engines/comfyui.js, QualityPage, Advanced |
