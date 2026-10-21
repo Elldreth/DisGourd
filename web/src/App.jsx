@@ -41,6 +41,7 @@ import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
 import { registerServiceWorker, onOpenRequest } from './pwa.js';
 import { cooldownKey, startCooldown, renameCooldowns } from './slowmode.js';
+import { rateLimitNotice } from './rateLimit.js';
 
 // The signed-in app: wires the feature hooks (state/*) to the layout. Each hook
 // owns one area's state, actions and gateway handlers.
@@ -251,6 +252,12 @@ export default function App() {
       // P9-07b: a DM refused because one of you has blocked the other.
       if (f.op === 'dm' && f.code === 'BLOCKED') {
         toastRef.current?.show({ id: 'dm-blocked', message: f.error || 'You can’t message this person', tone: 'error' });
+        return;
+      }
+      // P11-03: sent too fast; the server dropped it.
+      const limited = rateLimitNotice(f);
+      if (limited) {
+        toastRef.current?.show({ id: 'rate-limited', message: limited, tone: 'error' });
         return;
       }
       if (f.op !== 'message' || f.code !== 'SLOWMODE') return;

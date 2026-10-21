@@ -6,6 +6,7 @@ const { voiceLeave, voiceStatesFor } = require('./voice');
 const { handleGatewayMessage } = require('./router');
 const { threadUpdated } = require('./chat');
 const { config } = require('../config');
+const { tooManySockets } = require('./limits');
 
 // Per-connection lifecycle chatter is silenced under test to keep output clean
 // and to avoid "log after teardown" noise; warnings and errors still print.
@@ -84,6 +85,12 @@ function attachGateway(httpServer, wss) {
     const payload = token ? verifyToken(token) : null;
     if (!payload) {
       socket.destroy();
+      return;
+    }
+    // P11-03: at most MAX_SOCKETS_PER_USER open sockets each; the newest is refused.
+    const open = userClients[payload.sub] ? userClients[payload.sub].size : 0;
+    if (tooManySockets(open)) {
+      socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
       return;
     }
 

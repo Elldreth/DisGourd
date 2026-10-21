@@ -64,16 +64,20 @@ const ops = {
   // and separately the thread open in the panel (`thread: true`). No
   // channel clears that focus.
   focus({ ws, msg }) {
-    const at = typeof msg.space === 'string' && typeof msg.channel === 'string' ? { space: msg.space, channel: msg.channel } : null;
+    // P11-03: names are compared, never stored; anything longer than a name can be is ignored.
+    const named = (v) => typeof v === 'string' && v.length <= 100;
+    const at = named(msg.space) && named(msg.channel) ? { space: msg.space, channel: msg.channel } : null;
     if (msg.thread) ws.threadFocus = at;
     else ws.focus = at;
     return;
   },
   read({ msg, userId }) {
-    if (typeof msg.space === 'string' && typeof msg.channel === 'string') {
-      db.markRead(userId, msg.space, msg.channel, parseInt(msg.lastId, 10) || 0);
-    }
-    return;
+    // P11-03: only a real channel (or thread) this person can see gets a read
+    // marker; anything else would let one member fill the disk with rows.
+    if (typeof msg.space !== 'string' || typeof msg.channel !== 'string') return;
+    if (!db.channelRef(msg.space, msg.channel) || !canView(msg.space, msg.channel, userId)) return;
+    const lastId = Math.min(Math.max(parseInt(msg.lastId, 10) || 0, 0), Number.MAX_SAFE_INTEGER);
+    db.markRead(userId, msg.space, msg.channel, lastId);
   },
   message({ ws, msg, userId }) {
     const space = db.getSpaceByName(msg.space);
