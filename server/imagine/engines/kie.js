@@ -179,6 +179,44 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
     imageUrl = await uploadPicture(request.init, key, signal);
   }
   const body = buildInput(request, cfg, { permissive, imageUrl });
+  const name = (specFor(cfg) || {}).name || body.model;
+  // P13-02: when kie.ai's model times out or errors on its side and charged
+  // nothing, try once more before giving up.
+  try {
+    return await runTask(body, key, signal, name);
+  } catch (err) {
+    if (!err.retryable || signal?.aborted) throw err;
+    console.warn(`[imagine] kie.ai: ${err.message}; trying once more`);
+    try {
+      return await runTask(body, key, signal, name);
+    } catch (again) {
+      if (again.retryable) again.message += ' (tried twice)';
+      throw again;
+    }
+  }
+}
+
+// kie.ai's own reasons for a failed task, in plain words (P13-02). These are
+// kie.ai's side: our request was accepted, and the task failed there.
+const SIDE_TIMEOUT = /time ?out|timed out/i;
+const SIDE_ERROR = /internal|server error|service (is )?(busy|unavailable)|overload|try again/i;
+function taskFailed(data, name, taskId) {
+  const msg = (data && data.failMsg) || 'the task failed';
+  const free = data && data.creditsConsumed === 0;
+  const tail = free ? '. No credits were used' : '';
+  console.warn(`[imagine] kie.ai task ${taskId} (${name}) failed: ${data && data.failCode ? `${data.failCode} ` : ''}${msg}`);
+  if (REFUSAL.test(msg)) return fail('REFUSED', msg);
+  if (SIDE_TIMEOUT.test(msg)) {
+    return Object.assign(fail('ENGINE', `kie.ai’s ${name} ran out of time on kie.ai’s own servers ("${msg}"). The request was fine; try again, or a lower quality${tail}`), { retryable: free });
+  }
+  if (SIDE_ERROR.test(msg)) {
+    return Object.assign(fail('ENGINE', `kie.ai’s ${name} hit a problem on kie.ai’s side ("${msg}"); try again in a moment${tail}`), { retryable: free });
+  }
+  return fail('ENGINE', `kie.ai couldn’t make it with ${name}: ${msg}${tail}`);
+}
+
+// One kie.ai task: start it, wait for it, download the result.
+async function runTask(body, key, signal, name) {
   const created = await kie('/api/v1/jobs/createTask', { method: 'POST', body, key, signal });
   const taskId = created && created.taskId;
   if (!taskId) throw fail('ENGINE', 'kie.ai did not start the task');
@@ -187,10 +225,7 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
     await sleep(pollMs, signal); // on abort this throws; kie.ai has no cancel, so the task may still finish
     const data = await kie(`/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { key, signal });
     const state = data && data.state;
-    if (state === 'fail') {
-      const msg = data.failMsg || 'the task failed';
-      throw fail(REFUSAL.test(msg) ? 'REFUSED' : 'ENGINE', REFUSAL.test(msg) ? msg : `kie.ai: ${msg}`);
-    }
+    if (state === 'fail') throw taskFailed(data, name, taskId);
     if (state !== 'success') continue;
     let urls = [];
     try {
@@ -205,7 +240,7 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
       try {
         got = await safeFetch(url, { as: 'buffer', types: IMAGE_TYPES, maxBytes: MAX_IMAGE_BYTES, timeoutMs: 60000, allowLoopback: true });
       } catch (err) {
-        throw fail('ENGINE', `Couldn't download the image from kie.ai (${err.message})`);
+        throw fail('ENGINE', `kie.ai made the image, but downloading it failed (${err.message})`);
       }
       images.push({ buffer: got.body, contentType: (got.contentType || 'image/png').split(';')[0] });
     }
