@@ -244,9 +244,9 @@ Kept as its own table so it doesn't collide with other sessions' rows.
 | P9-06b | Conversations in the app (no visible change) | 9 | COMPLETE | M | P9-06a | useDms.js, App.jsx, DmSidebar, DmPanel, notify.js, sw.js, QuickSwitcher, Search |
 | P9-06c | Group DMs on the server (create, add, remove, leave, rename, mute) | 9 | COMPLETE | M | P9-06b | gateway/dm.js, db, push |
 | P9-06d | Group DMs in the app (picker, members dialog, rows, notices) | 9 | COMPLETE | M | P9-06c | useDms, DmSidebar, DmPanel, PeoplePicker, GroupAvatar, GroupMembersDialog, MessageList, notify, App |
-| P9-07 | Blocking people (Container: a–b) | 9 | REVIEW | M | P9-06, P9-01 | see children |
+| P9-07 | Blocking people (Container: a–b) | 9 | COMPLETE | M | P9-06, P9-01 | see children |
 | P9-07a | Blocking on the server (migration v31; DMs, groups, mentions, pushes) | 9 | COMPLETE | M | P9-07 design | migrations, db, routes, gateway/dm.js, gateway/chat.js, push |
-| P9-07b | Blocking in the app (four places, collapsed messages, DM bar, Settings list) | 9 | REVIEW | M | P9-07a | useBlocks, MemberList, MessageList, DmPanel, TypingIndicator, notify, BlockedSection, App |
+| P9-07b | Blocking in the app (four places, collapsed messages, DM bar, Settings list) | 9 | COMPLETE | M | P9-07a | useBlocks, MemberList, MessageList, DmPanel, TypingIndicator, notify, BlockedSection, App |
 | P9-08 | A better built-in ComfyUI workflow (CLIP skip 2, 15+15 hires to 2048, the owner's detailer + Color Match; Upscale = USDU 2x + Color Match + saturation) | 9 | COMPLETE | M | P3-28, P3-31, P3-33, P9-04 | engines/comfyui.js, QualityPage, Advanced |
 
 ## Design round 3 (P10)
@@ -263,7 +263,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P10-06 | /imagine panel: labelled chip groups and a steady height | 10 | COMPLETE | S–M | P9-04c, P9-05b | ImaginePanel.jsx, tests |
 | P10-07 | Small things: transfer button and list, ☰ badge dot, light amber badge | 10 | COMPLETE | S | none | OverviewSection.jsx, TransferDialog.jsx, the channel header in App.jsx, ServerRail.jsx, tests |
 | P10-08 | New art and sound: "all clear", group scene, "privacy" poses; group glyph; two sounds | 10 | COMPLETE | S–M | P8-01 | mascotParts.js, Mascot.jsx, serverGlyphs.js, sounds.js, web/public/sounds/, design/design-review-p10/refs/, tests |
-| P10-09 | Code blocks in messages can be reached by keyboard (axe scrollable-region-focusable) | 10 | REVIEW | S | none | markdown.jsx, index.css, markdown.test.jsx |
+| P10-09 | Code blocks in messages can be reached by keyboard (axe scrollable-region-focusable) | 10 | COMPLETE | S | none | markdown.jsx, index.css, markdown.test.jsx |
 
 ## Security for the public cloud (P11)
 Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **The live setup (2026-10-21) is the Unraid box behind a Cloudflare Tunnel** (see the review's "Deployment as built"). **Build order: P11-10 first (the go-live blocker), then P11-02, 03, 08, 05, 04, 06, 14, 01, 07, 09, 12, 11, 13**, one PR each, starting only when the owner says so.
@@ -285,3 +285,14 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-12 | Case-insensitive usernames and emails (M6) | 11 | PLANNED | S–M | P11-01 | migrations, db/index.js, routes/auth.js, config.js |
 | P11-13 | Low-severity sweep (L1–L7, L9) | 11 | PLANNED | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
 | P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning; off-box copy of `/config` | 11 | READY | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |
+
+## Email (P12)
+Container: `P12-00-email.md`. The owner's decisions (2026-10-21): Resend over SMTP 587; password reset and security notices first; confirmation optional, with an admin switch to require it; email optional. Builds after P11-01 and P11-12.
+
+| ID | Title | Phase | State | Effort | Depends on | Main files |
+|---|---|---|---|---|---|---|
+| P12-00 | Email: password reset and security notices (Container) | 12 | PLANNED | L | P11-01, P11-12 | see children |
+| P12-01 | Sending email: SMTP from the environment, mailer with queue and caps, Site admin › Email with "Send test email", Resend and DNS docs | 12 | PLANNED | S–M | P11-14 (soft) | mail/ (new), config.js, routes/admin.js, EmailPage.jsx, README |
+| P12-02 | Email addresses: optional, confirm by link, change with password, "require confirmed email" switch (migration: users rebuild, email_tokens) | 12 | PLANNED | M | P12-01, P11-12 | migrations, db/index.js, routes/auth.js, Login.jsx, EmailSection.jsx, ConfirmEmailGate.jsx |
+| P12-03 | Password reset: "Forgot password?", one-time link, admin reset link, console tool | 12 | PLANNED | M | P12-02; P11-08 (soft) | routes/auth.js, tools/reset-link.js, ResetPassword.jsx, Login.jsx |
+| P12-04 | Security notices: password changed, email changed, new device | 12 | PLANNED | S | P12-02 | routes/auth.js, mail/templates.js, Notifications settings |
