@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY (build order 9 in P11-00). The live instance already has accounts, so C1 can't happen there; this protects fresh installs (an empty volume, a second instance, a rebuild).
+- **State:** READY (build order 2 in P11-00, right after P11-10). **C1 is live:** the owner started fresh and the live database had no accounts. Until this lands, the owner's Step 0 in P11-00 (create the account before the tunnel is back) is the only protection, and it has to be repeated after every reset to an empty volume.
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P11-12 (both touch registration). This goes first.
