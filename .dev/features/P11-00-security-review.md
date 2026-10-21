@@ -8,9 +8,11 @@
 - **Requirement Source:** the owner, relayed 2026-10-20: DisGourd is moving from the Unraid box (behind SWAG, closed registration) to a cloud host, "so it must be safe on the open internet". Review first, then a prioritized plan; this unit changes no app code.
 
 ## The short version
-> **Update 2026-10-21:** DisGourd now runs on the Unraid box behind a Cloudflare Tunnel, with no open ports. See "Deployment as built" for what that already covers, and "Plan: the order to build in" for the order, starting with P11-10.
+> **Update 2026-10-21:** DisGourd now runs on the Unraid box behind a Cloudflare Tunnel, with no open ports. See "Deployment as built" for what that already covers, and "Plan: the order to build in" for the order.
+>
+> **C1 is live:** the owner started fresh, and the live database has no accounts. Through the tunnel, `/auth-info` answered `{"registration":"closed","setup":true}`, so the first stranger to register would become site admin. The container is stopped for now (Cloudflare answers 502). **Before it starts again, follow "Step 0" in the plan.**
 
-- **Nothing Critical can be used against today's instance.** It already has accounts, and registration is closed.
+- ~~Nothing Critical can be used against today's instance.~~ True when the review was written (the old instance had accounts). **No longer true:** the live instance was started fresh with an empty database, so C1 applies now (see the update above).
 - **One thing becomes Critical on move day:** a new, empty instance gives site admin to whoever registers first, even with `REGISTRATION_MODE=closed` (C1). If the cloud box starts empty, fix that first (P11-01), or copy the existing `/config` over before the port opens.
 - **Three High issues** should be fixed before the instance goes public:
   - A role holding `manage_roles` can promote itself to Admin (H1).
@@ -259,7 +261,7 @@ The owner deployed on the Unraid box, not a VPS (reported by the hosting session
 **What this changes, finding by finding:**
 | Finding | Status in this deployment | Still to do |
 |---|---|---|
-| C1 (first account) | **Not reachable.** The DB has accounts. | P11-01 still matters for any fresh install (a rebuild from an empty volume, or a second instance), but it's no longer urgent here. |
+| C1 (first account) | **Live.** The owner started fresh (the old data moved to `disgourd-old`), and the live DB has no accounts. `/auth-info` answered `setup: true` through the tunnel before the container was stopped. | Step 0 (the owner creates `elldreth` before the tunnel is back), then P11-01 second in the build order, so a future empty volume is never exposed again. |
 | H3 (public port, spoofable X-Forwarded-For) | **Mostly closed.** No published port, no router forward, origin reachable only through the tunnel. | With `TRUST_PROXY=1`, the app trusts X-Forwarded-For from *any* peer, and every container on `proxynet` (audiobookshelf, SWAG if still running, anything added later) can reach `disgourd:3000` and send any header. Cloudflare appends the visitor's address to X-Forwarded-For, so the last-hop rule probably already sees the right IP through cloudflared. **Check it on the live box** (P11-05 AC). The repo's `docker-compose.yml` still publishes 3000 for other installs. P11-05 narrows the trust to cloudflared. |
 | L8 (container hardening) | **Partly done:** 99:100, `cap_drop: [ALL]`, `no-new-privileges`, no ports, one network, two mounts. | `read_only: true` + tmpfs `/tmp`; pin the `cloudflared` and `node` images to versions; a `DOCKER-USER` rule so the container can't reach the LAN (router, Unraid UI, SMB) except ComfyUI:8188. |
 | Origin lock (Hosting setups) | **Done** by the tunnel: there's no origin port to hit. | Nothing. |
@@ -277,19 +279,26 @@ The owner deployed on the Unraid box, not a VPS (reported by the hosting session
 - **Bot Fight Mode:** test it before leaving it on. It can challenge the app's API calls and the socket.
 
 ## Plan: the order to build in
-The instance is already public, so this is the order to build in, starting now. **P11-10's push endpoint allowlist is first: it's the go-live blocker** (on the home LAN, it's the one server-side request a member can point at the router, the Unraid UI or SMB). The rest follow in this order, one PR each, starting only when the owner says so.
+**Step 0, before the server is reachable again (the owner, by hand, no code):** the live database is empty, so whoever registers first becomes site admin (C1).
+- Keep `cloudflared` stopped.
+- Start DisGourd and create the `elldreth` account from inside the network: temporarily publish `3000` on the LAN and use the setup wizard at `http://<unraid-ip>:3000`, or run `docker run --rm --network proxynet curlimages/curl -s -X POST http://disgourd:3000/register -H 'content-type: application/json' -d '{"username":"elldreth","email":"…","password":"…"}'` (use a long password).
+- Check that `/auth-info` now says `"setup":false`.
+- Remove the temporary port, then start `cloudflared`.
+- Every future reset to an empty volume needs the same step until P11-01 lands.
+
+Then the code, in this order. **P11-10's push endpoint allowlist is first: it's the go-live blocker** (on the home LAN, it's the one server-side request a member can point at the router, the Unraid UI or SMB). The rest follow in this order, one PR each, starting only when the owner says so.
 
 | Order | ID | Fixes | Title | Size | State |
 |---|---|---|---|---|---|
 | 1 | P11-10 | M10 (High at home), M5 | **Push endpoint allowlist** (go-live blocker); ComfyUI metadata block | S | READY |
-| 2 | P11-02 | H1 | Role hierarchy on the legacy member-tier route | S | READY |
-| 3 | P11-03 | H2 | Gateway abuse limits: `read` checks, per-user op rate limits, socket cap, search limit | M | READY |
-| 4 | P11-08 | M3 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (the one thing reachable without an account) | S–M | READY |
-| 5 | P11-05 | H3 (rest), L8, L10 | Trust only cloudflared; read-only root; LAN egress rule; pinned images; a tunnel compose sample | S–M | READY |
-| 6 | P11-04 | H2, M4 | Upload quotas, cleanup with their messages, private caching (Cloudflare edge) | M | READY |
-| 7 | P11-06 | M1 | Security headers, CSP and same-origin CORS (HSTS from Cloudflare) | S–M | READY |
-| 8 | P11-14 | Secrets | VAPID and other secrets from the environment; off-box backup of `/config` | S | READY |
-| 9 | P11-01 | C1 | First-run setup code; safe `SITE_ADMINS` (for fresh installs) | S | READY |
+| 2 | P11-01 | C1 (live) | **First-run setup code**; safe `SITE_ADMINS`. The live DB was empty, so this is the code fix behind Step 0 | S | READY |
+| 3 | P11-02 | H1 | Role hierarchy on the legacy member-tier route | S | READY |
+| 4 | P11-03 | H2 | Gateway abuse limits: `read` checks, per-user op rate limits, socket cap, search limit | M | READY |
+| 5 | P11-08 | M3 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (the one thing reachable without an account) | S–M | READY |
+| 6 | P11-05 | H3 (rest), L8, L10 | Trust only cloudflared; read-only root; LAN egress rule; pinned images; a tunnel compose sample | S–M | READY |
+| 7 | P11-04 | H2, M4 | Upload quotas, cleanup with their messages, private caching (Cloudflare edge) | M | READY |
+| 8 | P11-06 | M1 | Security headers, CSP and same-origin CORS (HSTS from Cloudflare) | S–M | READY |
+| 9 | P11-14 | Secrets | VAPID and other secrets from the environment; off-box backup of `/config` | S | READY |
 | 10 | P11-07 | M2 | Session tokens out of URLs | S–M | PLANNED (after P11-03) |
 | 11 | P11-09 | M7, M9 | Instance safety: suspend accounts; who can DM me | M | PLANNED (after P11-03 and P11-07) |
 | 12 | P11-12 | M6 | Case-insensitive usernames | S–M | PLANNED (after P11-01) |
@@ -306,7 +315,7 @@ The instance is already public, so this is the order to build in, starting now. 
 - P11-13 goes last.
 
 ## Owner decisions
-1. **Move-day path: decided.** The Unraid box with a Cloudflare Tunnel (see "Deployment as built"). For the record, the question was: VPS (A) or the Unraid box (B)? For A: copy the existing `/config` (DB, `.jwt-secret`, `.vapid.json`) to the VPS, or start empty? Copying avoids C1 on day one, and push subscriptions keep working only if `.vapid.json` moves too. For B: the data stays, so C1 doesn't apply. The "Hosting setups" section matters more, though (LAN egress, origin lock, real IP).
+1. **Move-day path: decided.** The Unraid box with a Cloudflare Tunnel (see "Deployment as built"). For the record, the question was: VPS (A) or the Unraid box (B)? For A: copy the existing `/config` (DB, `.jwt-secret`, `.vapid.json`) to the VPS, or start empty? Copying avoids C1 on day one, and push subscriptions keep working only if `.vapid.json` moves too. For B: C1 applies whenever the volume starts empty, as it did on 2026-10-21. The "Hosting setups" section matters more, though (LAN egress, origin lock, real IP).
 2. **DM default (P11-09):** recommended "friends and people I share a server with".
 3. **Voice (P11-11):** use a hosted TURN service (nothing opened at home), or keep STUN only and accept IP exposure among people in a call? Self-hosted coturn at home would need router port forwards again. Recommended: hosted TURN, relay-only off by default.
 4. **Registration:** it's `closed` today. If it opens up, use `code` (per-person codes with a use limit), never `open`.
