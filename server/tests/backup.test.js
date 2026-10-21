@@ -82,3 +82,21 @@ test('the schedule backs up on start when none is recent, and its timer does not
   expect(backupsIn(dir)).toHaveLength(1);
   clearInterval(again);
 });
+
+// P11-13 (L2): a copy holds password hashes and DMs, so only the server's user reads it.
+(process.platform === 'win32' ? test.skip : test)('a backup file is mode 0600, in a folder only its owner opens', async () => {
+  const dir = path.join(tmp, 'private-backups');
+  const result = await runBackup({ db, dir, keep: 7, logger: quiet });
+  expect(fs.statSync(result.file).mode & 0o777).toBe(0o600);
+  expect(fs.statSync(dir).mode & 0o077).toBe(0);
+});
+
+(process.platform === 'win32' ? test.skip : test)('copies and a folder made before this version are tightened too', async () => {
+  const dir = path.join(tmp, 'old-backups');
+  fs.mkdirSync(dir, { mode: 0o755 });
+  const older = path.join(dir, 'disgourd-20260101-000000.db');
+  fs.writeFileSync(older, 'old', { mode: 0o644 });
+  await runBackup({ db, dir, keep: 7, logger: quiet });
+  expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+  expect(fs.statSync(older).mode & 0o777).toBe(0o600);
+});

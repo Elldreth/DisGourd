@@ -80,7 +80,7 @@ function readJsonBody(request) {
       if (!isPlainObject(parsed)) return reject(httpError(400, 'JSON body must be an object'));
       resolve(parsed);
     });
-    request.on('error', (err) => reject(httpError(400, err.message)));
+    request.on('error', () => reject(httpError(400, 'The request was cut off'))); // P11-13 (L1): not the socket's own text
   });
 }
 

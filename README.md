@@ -311,7 +311,9 @@ every 24 hours (and on startup if the last one is older than that) into a
 (UTC) and the newest 7 are kept. The copies are made with SQLite's
 `VACUUM INTO`, so they're consistent even while people are chatting. Change
 this with `BACKUP_DIR`, `BACKUP_INTERVAL_HOURS` and `BACKUP_KEEP` (see
-[Configuration](#configuration)).
+[Configuration](#configuration)). Each copy is readable only by the server's
+own user (mode `0600`, in a `0700` folder): see [Secrets and backups](#secrets-and-backups)
+for what they hold.
 
 Uploads aren't included — back up the `uploads/` folder (or your uploads
 volume) with your normal file backups.
@@ -361,6 +363,23 @@ key is both in the environment and saved; remove the saved one in
 Settings › Image generation › kie.ai. The backups don't contain
 `.jwt-secret` or `.vapid.json`, so a restore from the backups alone signs
 everyone out and loses push subscriptions, unless those secrets are kept too.
+
+**Off-site backups.** Copies on the same disk don't survive the disk. Send
+`backups/` (and the uploads folder) somewhere else, encrypted before it
+leaves the machine, for example with [restic](https://restic.net) to object
+storage:
+
+```bash
+export RESTIC_REPOSITORY=s3:https://<account>.r2.cloudflarestorage.com/disgourd-backups
+export RESTIC_PASSWORD_FILE=/root/.restic-password   # keep a copy in your password manager
+export AWS_ACCESS_KEY_ID=...  AWS_SECRET_ACCESS_KEY=...   # a token for that one bucket
+restic backup /config/backups /path/to/disgourd-uploads
+restic forget --keep-daily 7 --keep-weekly 4 --prune
+```
+
+(`rclone` with a `crypt` remote works too.) Because the copies hold password
+hashes, DMs and a kie.ai key saved in the app, set `KIEAI_API_KEY` in the
+environment on a hosted server rather than saving it in Settings.
 
 **Litestream to R2 (or any S3 storage).** Use a private bucket and an API token
 scoped to that one bucket. Give the token to Litestream, not DisGourd. The

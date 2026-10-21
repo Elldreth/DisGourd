@@ -101,6 +101,6 @@ test('two concurrent sign-ups with the same username: one 201, one clean 409', a
   expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
   const loser = results.find((r) => r.status === 409);
   const body = await loser.json();
-  expect(body.error).toBe('User already exists');
+  expect(body.error).toBe('That username or email can’t be used'); // P11-13 (L6)
   expect(JSON.stringify(body)).not.toMatch(/sqlite|unique|constraint/i);
 });

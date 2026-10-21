@@ -53,6 +53,7 @@ const SIGNED_OUT_NOTES = {
   signed_out_elsewhere: 'You were signed out: all other devices were signed out from another one.',
   password_changed: 'Your password was changed on another device, so you were signed out here.',
   suspended: 'This account has been suspended by a site admin.', // P11-09
+  expired: 'Your sign-in expired. Please sign in again.', // P11-13
 };
 
 export default function App() {
@@ -673,7 +674,7 @@ export default function App() {
             onCreateChannel={sp.createChannel}
             canManage={sp.canManage}
             isOwner={sp.role === 'owner'}
-            onInvite={sp.makeInvite}
+            onInvite={() => sp.makeInvite()}
             onDeleteServer={sp.deleteServer}
             onLeaveServer={sp.leaveServer}
             onRenameServer={sp.renameServer}
@@ -877,7 +878,7 @@ export default function App() {
       )}
 
       {sp.inviteCode && (
-        <InviteDialog space={sp.currentSpace} code={sp.inviteCode} onClose={sp.closeInvite} />
+        <InviteDialog space={sp.currentSpace} code={sp.inviteCode} expiresInDays={sp.inviteExpiry} onExpiry={(days) => sp.makeInvite(days)} onClose={sp.closeInvite} />
       )}
       {profileOpen && profile && (
         <ProfileDialog

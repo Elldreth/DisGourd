@@ -39,13 +39,13 @@ function verifyToken(token) {
     // Signed out by a password change, or the account is gone.
     const current = db().getTokenVersion(payload.sub);
     if (current === null || (payload.ver || 0) !== current) return null;
-    // Signed out on the devices list (P9-03): its session is gone. Tokens
-    // from before sessions existed have no sid and run until they expire.
-    if (payload.sid) {
-      const session = db().getSession(payload.sid);
-      if (!session || Number(session.userId) !== Number(payload.sub)) return null;
-      db().touchSession(session);
-    }
+    // Signed out on the devices list (P9-03): its session is gone. A token
+    // with no session at all is from before sessions existed; those have all
+    // expired by now, so one turning up is refused (P11-13, L4).
+    if (!payload.sid) return null;
+    const session = db().getSession(payload.sid);
+    if (!session || Number(session.userId) !== Number(payload.sub)) return null;
+    db().touchSession(session);
     return payload;
   } catch {
     return null;

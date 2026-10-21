@@ -414,6 +414,13 @@ function visibleChannelIds(userId) {
   }
   return ids;
 }
+// The channels of one server this person can't see (P11-13, L3): moderators
+// get no reports, counts or log lines from them.
+function hiddenChannelNames(spaceId, userId) {
+  const access = resolveAccess(spaceId, userId);
+  const all = db.prepare('SELECT id, name FROM channels WHERE space_id = ?').all(spaceId);
+  return all.filter((c) => !access || !access.channel(c.id).view).map((c) => c.name);
+}
 // `c.id IN (...)` for a list of ids (an empty list matches nothing).
 const inList = (ids) => (ids.length ? `(${ids.map(() => '?').join(',')})` : '(NULL)');
 
@@ -798,7 +805,7 @@ function getUserSpaces(userId) {
       categories: getCategories(s.id), // P3-25a: in order
       timeout: getMemberTimeout(s.id, userId), // P3-26c: { until, reason } while I'm timed out
       // P9-01: open reports, for the people who handle them.
-      ...(access && (access.owner || access.actions.has('delete_others_messages')) ? { openReports: countOpenReports(s.id) } : {}),
+      ...(access && (access.owner || access.actions.has('delete_others_messages')) ? { openReports: countOpenReports(s.id, hiddenChannelNames(s.id, userId)) } : {}),
     };
   });
 }
@@ -1888,9 +1895,10 @@ const REPORT_SELECT = `
   FROM reports`;
 const shapeReport = (r) => r && { ...r, messageExists: !!r.messageExists };
 // A page of a server's reports, newest first: open ones, or closed ones.
-function listReports(spaceId, { status = 'open', before = null } = {}) {
-  const rows = db.prepare(`${REPORT_SELECT} WHERE space_id = ? AND ${status === 'open' ? "status = 'open'" : "status != 'open'"} ${before ? 'AND id < ?' : ''} ORDER BY id DESC LIMIT ?`)
-    .all(...[spaceId, ...(before ? [before] : []), REPORT_PAGE + 1]).map(shapeReport);
+function listReports(spaceId, { status = 'open', before = null, hidden = [] } = {}) {
+  const notHidden = hidden.length ? `AND channel NOT IN ${inList(hidden)}` : '';
+  const rows = db.prepare(`${REPORT_SELECT} WHERE space_id = ? AND ${status === 'open' ? "status = 'open'" : "status != 'open'"} ${before ? 'AND id < ?' : ''} ${notHidden} ORDER BY id DESC LIMIT ?`)
+    .all(...[spaceId, ...(before ? [before] : []), ...hidden, REPORT_PAGE + 1]).map(shapeReport);
   return { reports: rows.slice(0, REPORT_PAGE), more: rows.length > REPORT_PAGE };
 }
 function getReport(spaceId, id) {
@@ -1899,9 +1907,10 @@ function getReport(spaceId, id) {
 // Open reports, counted by message (P10-01): three reports on one message
 // are one thing to look at. A deleted message's reports count by author and
 // excerpt, the way the queue groups them.
-function countOpenReports(spaceId) {
+function countOpenReports(spaceId, hidden = []) {
+  const notHidden = hidden.length ? `AND channel NOT IN ${inList(hidden)}` : '';
   return db.prepare(`SELECT COUNT(DISTINCT CASE WHEN message_id IS NOT NULL THEN 'm' || message_id ELSE 'x' || author_id || ':' || excerpt END) AS n
-    FROM reports WHERE space_id = ? AND status = 'open'`).get(spaceId).n;
+    FROM reports WHERE space_id = ? AND status = 'open' ${notHidden}`).get(spaceId, ...hidden).n;
 }
 // Close a report and every other open report on the same message.
 function closeReports(spaceId, report, status, byId, resolution = null) {
@@ -1930,9 +1939,11 @@ function logModAction(spaceId, { actorId, targetId = null, action, reason = null
 
 // A page of a server's log, newest first: entries older than `before` (an id),
 // optionally one action, optionally involving one user (as actor or target).
-function getModLog(spaceId, { before = null, action = null, userId = null } = {}) {
+function getModLog(spaceId, { before = null, action = null, userId = null, hidden = [] } = {}) {
   const where = ['space_id = ?'];
   const args = [spaceId];
+  // Lines about a channel the reader can't see are left out (P11-13, L3).
+  if (hidden.length) { where.push(`(json_extract(details, '$.channel') IS NULL OR json_extract(details, '$.channel') NOT IN ${inList(hidden)})`); args.push(...hidden); }
   if (before) { where.push('id < ?'); args.push(before); }
   if (action) { where.push('action = ?'); args.push(action); }
   if (userId != null) { where.push('(actor_id = ? OR target_id = ?)'); args.push(userId, userId); }
@@ -2605,6 +2616,7 @@ module.exports = {
   listReports,
   getReport,
   countOpenReports,
+  hiddenChannelNames,
   closeReports,
   setMemberTimeout,
   setChannelSlowmode,

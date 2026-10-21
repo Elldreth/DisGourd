@@ -27,6 +27,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
   const [roles, setRoles] = useState([]); // the current server's roles, highest first
   const [error, setError] = useState('');
   const [inviteCode, setInviteCode] = useState(null);
+  const [inviteExpiry, setInviteExpiry] = useState(7); // days, or null for never (P11-13)
   const [bannedFrom, setBannedFrom] = useState(null); // P3-26b: { space, reason, at } after a ban
   const [notice, setNotice] = useState(null); // P9-02: { message, at } for App to show as a toast
   const [iconCrop, setIconCrop] = useState(null); // { src: File|url, initialCrop } while framing a server icon
@@ -295,9 +296,10 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
         setCurrentChannel(created.name);
       }
     }),
-    makeInvite: attempt('Could not create invite', async () => {
-      const res = await api.createInvite(currentSpace);
+    makeInvite: attempt('Could not create invite', async (expiresInDays = 7) => {
+      const res = await api.createInvite(currentSpace, { expiresInDays });
       setInviteCode(res.code);
+      setInviteExpiry(expiresInDays);
     }),
     closeInvite: () => setInviteCode(null),
     // Give (on) or take a role; the gateway's members_changed refreshes everyone.
@@ -437,6 +439,7 @@ export function useSpaces({ token, myId, status, reconnects = 0, view, dmCurrent
     memberNames: members.map((m) => m.username),
     error,
     inviteCode,
+    inviteExpiry,
     iconCrop,
     handlers,
     reset,

@@ -283,7 +283,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P11-10 | **Push endpoint allowlist (go-live blocker, build order 1)**; ComfyUI metadata block (M10, M5) | 11 | COMPLETE | S | none | routes/push.js, push.js, db/index.js, net/safeFetch.js, engines/comfyui.js, README |
 | P11-11 | Voice: TURN credentials from the server (hosted TURN for the tunnel setup), relay-only option, honour forced mute (M8) | 11 | COMPLETE | M | none (which TURN: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
 | P11-12 | Case-insensitive usernames and emails (M6) | 11 | COMPLETE | S–M | P11-01 | migrations, db/index.js, routes/auth.js, config.js |
-| P11-13 | Low-severity sweep (L1–L7, L9) | 11 | ACTIVE | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
+| P11-13 | Low-severity sweep (L1–L7, L9) | 11 | REVIEW | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
 | P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning; off-box copy of `/config` | 11 | COMPLETE | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |
 
 ## Email (P12)
