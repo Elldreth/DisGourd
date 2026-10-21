@@ -48,7 +48,7 @@ const get = async (who, p) => {
 async function register(username) {
   const res = await fetch(`${base()}/register`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username, password: 'password123', email: `${username}@example.com` }),
+    body: JSON.stringify({ username, password: 'gourd-test-pass-1', email: `${username}@example.com` }),
   });
   users[username] = { token: (await res.json()).token, id: db.getUserByUsername(username).id };
 }

@@ -68,7 +68,7 @@ beforeAll(async () => {
   const res = await fetch(`${base()}/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'viewer', password: 'password123', email: 'viewer@example.com' }),
+    body: JSON.stringify({ username: 'viewer', password: 'gourd-test-pass-1', email: 'viewer@example.com' }),
   });
   token = (await res.json()).token;
   const { db } = serverModule;

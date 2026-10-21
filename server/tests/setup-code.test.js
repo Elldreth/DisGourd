@@ -43,7 +43,7 @@ const register = (username, extra = {}, token) =>
   fetch(`${base()}/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ username, password: 'password123', email: `${username}@example.com`, ...extra }),
+    body: JSON.stringify({ username, password: 'gourd-test-pass-1', email: `${username}@example.com`, ...extra }),
   });
 const call = async (token, method, p, body) => {
   const res = await fetch(`${base()}${p}`, { method, headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` }, body: body && JSON.stringify(body) });

@@ -55,10 +55,10 @@ setup="$(docker exec "$NAME" cat /config/.setup-code)"
 [ -n "$setup" ] || fail "no setup code in /config/.setup-code"
 [ "$(curl -fsS "$base/auth-info" | jq -r .setupCode)" = true ] || fail "auth-info doesn't ask for the setup code"
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/register" -H 'content-type: application/json' \
-  -d '{"username":"nocode","password":"smoke-pass-123","email":"nocode@example.test"}')"
+  -d '{"username":"nocode","password":"amber-lantern-orbit-58","email":"nocode@example.test"}')"
 [ "$code" = 403 ] || fail "the first account without the setup code got $code, expected 403"
 token="$(curl -fsS -X POST "$base/register" -H 'content-type: application/json' \
-  -d "{\"username\":\"smoke\",\"password\":\"smoke-pass-123\",\"email\":\"smoke@example.test\",\"setupCode\":\"$setup\"}" | jq -r .token)"
+  -d "{\"username\":\"smoke\",\"password\":\"amber-lantern-orbit-58\",\"email\":\"smoke@example.test\",\"setupCode\":\"$setup\"}" | jq -r .token)"
 [ -n "$token" ] && [ "$token" != null ] || fail "register gave no token"
 url="$(curl -fsS -X POST "$base/uploads?name=hello.txt" -H "Authorization: Bearer $token" \
   --data-binary 'hello from the smoke test' | jq -r .url)"
@@ -67,7 +67,7 @@ echo "uploaded $url"
 docker restart "$NAME" >/dev/null
 wait_healthy "$NAME" || fail "not healthy after restart"
 curl -fsS -X POST "$base/login" -H 'content-type: application/json' \
-  -d '{"username":"smoke","password":"smoke-pass-123"}' | jq -e .token >/dev/null || fail "login failed after restart"
+  -d '{"username":"smoke","password":"amber-lantern-orbit-58"}' | jq -e .token >/dev/null || fail "login failed after restart"
 [ "$(curl -fsS "$base$url")" = 'hello from the smoke test' ] || fail "upload missing after restart"
 owner="$(sudo stat -c '%u:%g' "$WORK/config/disgourd.db")"
 echo "database file on the host is owned by $owner"
