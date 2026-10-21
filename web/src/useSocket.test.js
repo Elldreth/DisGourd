@@ -6,8 +6,10 @@ import { useGateway } from './useSocket.js';
 let sockets;
 class FakeSocket {
   static OPEN = 1;
-  constructor() {
+  constructor(url) {
+    this.url = url;
     this.readyState = 0;
+    this.sent = [];
     sockets.push(this);
   }
   open() {
@@ -18,7 +20,9 @@ class FakeSocket {
     this.readyState = 3;
     this.onclose?.();
   }
-  send() {}
+  send(data) {
+    this.sent.push(JSON.parse(data));
+  }
   close() {
     this.drop();
   }
@@ -33,6 +37,23 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+test('P11-07: the socket URL carries no token; the auth frame goes first on every open, before queued frames', () => {
+  const { result } = renderHook(() => useGateway({ token: 'secret-token', handlers: {} }));
+  expect(sockets[0].url).toBe(`ws://${window.location.host}/gateway`);
+  expect(sockets[0].url).not.toContain('secret-token');
+  act(() => {
+    result.current.send({ op: 'focus', channel: 'general' }); // queued while connecting
+  });
+  act(() => sockets[0].open());
+  expect(sockets[0].sent).toEqual([{ op: 'auth', token: 'secret-token' }, { op: 'focus', channel: 'general' }]);
+
+  act(() => sockets[0].drop());
+  act(() => vi.advanceTimersByTime(20000));
+  act(() => sockets[1].open());
+  expect(sockets[1].url).not.toContain('token');
+  expect(sockets[1].sent[0]).toEqual({ op: 'auth', token: 'secret-token' });
 });
 
 test('reconnects counts the times the socket opens again after the first', () => {

@@ -53,11 +53,11 @@ function verifyToken(token) {
 }
 
 // The verified token's payload for a request ({ sub, sid?, … }), or null.
+// Only from the Authorization header: a token in the URL ends up in logs
+// (P11-07). `parsedUrl` stays in the signature for the callers.
 function authPayload(req, parsedUrl) {
   const auth = req.headers['authorization'];
-  const token = auth && auth.startsWith('Bearer ')
-    ? auth.slice(7)
-    : (parsedUrl.query && parsedUrl.query.token);
+  const token = auth && auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return null;
   return verifyToken(token);
 }
