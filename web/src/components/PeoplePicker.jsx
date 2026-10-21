@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import Modal from './Modal.jsx';
 import Avatar from './Avatar.jsx';
+import BlockedMatches, { blockedMatching } from './BlockedMatches.jsx';
 
 // Pick several people (P9-06d): for a new group, for one started from a
 // 1-to-1 (that person comes already picked and stays), or to add to a group.
@@ -14,6 +15,7 @@ import Avatar from './Avatar.jsx';
 //   onConfirm({ members, name }) / onClose
 export default function PeoplePicker({
   title, people = [], locked = [], min = 1, max = 9, withName = false, note, confirmLabel = (n) => `Add ${n}`, onConfirm, onClose,
+  blocked = [], onUnblock, // P10-03: blocked people matching the search, greyed, with Unblock
 }) {
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState(locked);
@@ -89,8 +91,9 @@ export default function PeoplePicker({
             </li>
           );
         })}
-        {shown.length === 0 && <li className="p-4 text-center text-sm text-gray-500">No one by that name. People you share a server with, and friends, show up here.</li>}
+        {shown.length === 0 && !blockedMatching(blocked, query).length && <li className="p-4 text-center text-sm text-gray-500">No one by that name. People you share a server with, and friends, show up here.</li>}
       </ul>
+      <BlockedMatches query={query} blocked={blocked} onUnblock={onUnblock} returnFocusTo={inputRef} />
       <div className="space-y-3 border-t border-ink-500/40 p-4">
         {withName && (
           <div>

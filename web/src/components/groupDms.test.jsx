@@ -123,10 +123,16 @@ test('DmPanel: a group’s header (members, Members button); a pair’s has Add 
   fireEvent.click(screen.getByRole('button', { name: 'Members' }));
   expect(onShowMembers).toHaveBeenCalled();
   cleanup();
-  render(<DmPanel {...base} conversationKey="c:1" conversation={{ key: 'c:1', kind: 'pair', username: 'bob' }} title="bob" username="bob" myId={1} onShowMembers={onShowMembers} onAddPeople={onAddPeople} />);
+  const onMute = vi.fn();
+  render(<DmPanel {...base} conversationKey="c:1" conversation={{ id: 1, key: 'c:1', kind: 'pair', username: 'bob' }} title="bob" username="bob" myId={1} onShowMembers={onShowMembers} onAddPeople={onAddPeople} onMute={onMute} />);
   expect(screen.queryByRole('button', { name: 'Members' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Add people' }));
+  // P10-03: Add people and Mute are in the ⋯ menu.
+  fireEvent.click(screen.getByRole('button', { name: 'More for bob' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Add people…' }));
   expect(onAddPeople).toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'More for bob' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Mute' }));
+  expect(onMute).toHaveBeenCalledWith(true);
   expect(screen.getByPlaceholderText('Message @bob')).toBeTruthy();
 });
 
