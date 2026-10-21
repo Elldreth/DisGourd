@@ -22,6 +22,8 @@ beforeAll((done) => {
   process.env.DB_PATH = ':memory:';
   process.env.UPLOADS_DIR = path.join(os.tmpdir(), `disgourd-test-uploads-push-${process.pid}`);
   serverModule = require('../server');
+  // P11-10: pushes check DNS before sending; answer with a public address, no network.
+  require('../net/pushHosts').setLookup(async () => [{ address: '142.250.0.1', family: 4 }]);
   serverModule.httpServer.listen(0, () => {
     port = serverModule.httpServer.address().port;
     done();
@@ -38,7 +40,7 @@ const base = () => `http://localhost:${port}`;
 const auth = (who) => ({ Authorization: `Bearer ${users[who].token}` });
 const req = (who, method, p, body) =>
   fetch(`${base()}${p}`, { method, headers: { 'content-type': 'application/json', ...auth(who) }, body: body && JSON.stringify(body) });
-const sub = (name) => ({ endpoint: `https://push.example/${name}`, keys: { p256dh: 'p256dh-key', auth: 'auth-key' } });
+const sub = (name) => ({ endpoint: `https://fcm.googleapis.com/fcm/send/${name}`, keys: { p256dh: 'p256dh-key', auth: 'auth-key' } });
 const sent = () => webpush.sendNotification.mock.calls.map(([s, payload]) => ({ endpoint: s.endpoint, ...JSON.parse(payload) }));
 
 async function register(username) {
@@ -78,9 +80,9 @@ test('the public key is there for signed-in people; subscriptions are saved, upd
   expect((await req('ben', 'POST', '/push/subscriptions', { subscription: sub('ben-phone'), previews: false })).status).toBe(201); // updates in place
   expect((await req('cat', 'POST', '/push/subscriptions', { subscription: sub('cat-laptop'), previews: true })).status).toBe(201);
   const { db } = serverModule;
-  expect(db.getPushSubscriptions(users.ben.id)).toEqual([expect.objectContaining({ endpoint: 'https://push.example/ben-phone', previews: 0 })]);
-  expect((await req('ben', 'DELETE', '/push/subscriptions', { endpoint: 'https://push.example/nope' })).status).toBe(404);
-  expect((await req('ben', 'DELETE', '/push/subscriptions', { endpoint: 'https://push.example/ben-phone' })).status).toBe(200);
+  expect(db.getPushSubscriptions(users.ben.id)).toEqual([expect.objectContaining({ endpoint: 'https://fcm.googleapis.com/fcm/send/ben-phone', previews: 0 })]);
+  expect((await req('ben', 'DELETE', '/push/subscriptions', { endpoint: 'https://fcm.googleapis.com/fcm/send/nope' })).status).toBe(404);
+  expect((await req('ben', 'DELETE', '/push/subscriptions', { endpoint: 'https://fcm.googleapis.com/fcm/send/ben-phone' })).status).toBe(200);
   expect(db.getPushSubscriptions(users.ben.id)).toEqual([]);
   // Back on, with previews (the default).
   await req('ben', 'POST', '/push/subscriptions', { subscription: sub('ben-phone') });

@@ -26,6 +26,8 @@ beforeAll((done) => {
   process.env.DB_PATH = ':memory:';
   process.env.UPLOADS_DIR = path.join(os.tmpdir(), `disgourd-test-uploads-blocks-${process.pid}`);
   serverModule = require('../server');
+  // P11-10: pushes check DNS before sending; answer with a public address, no network.
+  require('../net/pushHosts').setLookup(async () => [{ address: '142.250.0.1', family: 4 }]);
   db = serverModule.db;
   serverModule.httpServer.listen(0, () => {
     port = serverModule.httpServer.address().port;
@@ -60,7 +62,7 @@ function connect(name, who = name) {
   return new Promise((r) => ws.on('open', r));
 }
 const pushedTo = () => webpush.sendNotification.mock.calls.map(([s]) => s.endpoint);
-const subscribe = (who) => call(who, 'POST', '/push/subscriptions', { subscription: { endpoint: `https://push.example/${who}`, keys: { p256dh: 'k', auth: 'a' } } });
+const subscribe = (who) => call(who, 'POST', '/push/subscriptions', { subscription: { endpoint: `https://fcm.googleapis.com/fcm/send/${who}`, keys: { p256dh: 'k', auth: 'a' } } });
 
 beforeAll(async () => {
   for (const n of ['ann', 'ben', 'cyd']) await register(n);
@@ -149,7 +151,7 @@ test('groups: neither adds the other; a third person can; in it, the blocker get
   webpush.sendNotification.mockClear();
   gws.ben.send({ op: 'dm', conversation: group, content: 'hello all' });
   await wait(150);
-  expect(pushedTo()).toEqual(['https://push.example/cyd']);
+  expect(pushedTo()).toEqual(['https://fcm.googleapis.com/fcm/send/cyd']);
   await connect('ann');
   await connect('ann2', 'ann');
   await connect('cyd');
@@ -166,7 +168,7 @@ test('mentions: ben’s @ann gives ann no mention, badge or push; cyd still gets
   const msg = db.raw.prepare("SELECT id FROM messages WHERE content = '@ann and @cyd look'").get();
   const mentioned = db.raw.prepare('SELECT user_id FROM mentions WHERE message_id = ?').all(msg.id).map((r) => r.user_id);
   expect(mentioned).toEqual([users.cyd.id]);
-  expect(pushedTo()).toEqual(['https://push.example/cyd']);
+  expect(pushedTo()).toEqual(['https://fcm.googleapis.com/fcm/send/cyd']);
   // Friend requests: refused both ways, with the same words.
   for (const [from, to] of [['ben', 'ann'], ['ann', 'ben']]) {
     expect(await call(from, 'POST', '/friends/request', { username: to })).toEqual({ status: 403, body: { error: "You can't send this person a friend request" } });

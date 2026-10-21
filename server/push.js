@@ -7,6 +7,7 @@ const webpush = require('web-push');
 const db = require('./db');
 const { SECRET_FILE } = require('./config');
 const { userClients } = require('./gateway/delivery');
+const pushHosts = require('./net/pushHosts');
 
 const KEYS_FILE = process.env.VAPID_KEYS_FILE || path.join(path.dirname(SECRET_FILE), '.vapid.json');
 const CONTACT = process.env.VAPID_CONTACT || 'mailto:admin@disgourd.local';
@@ -39,6 +40,11 @@ webpush.setVapidDetails(CONTACT, keys.publicKey, keys.privateKey);
 
 const publicKey = () => keys.publicKey;
 
+// P11-10: subscriptions saved before the allowlist that point anywhere but a
+// real push service are dropped once, at start.
+const pruned = pushHosts.pruneSubscriptions(db);
+if (pruned) console.warn(`[push] Removed ${pruned} push subscription(s) that weren't for a known push service`);
+
 // The first 100 characters of a message, markdown markers and spoilers out.
 function preview(content, attachments = []) {
   let text = String(content || '')
@@ -64,6 +70,12 @@ async function notifyIfAway(userId, { title, body, data }) {
   let sent = 0;
   await Promise.all(
     subs.map(async (sub) => {
+      // P11-10: only listed push services, and only while their addresses are public.
+      if (!pushHosts.allowedPushEndpoint(sub.endpoint)) {
+        db.deletePushEndpoint(sub.endpoint);
+        return;
+      }
+      if (!(await pushHosts.endpointAddressesOk(sub.endpoint))) return;
       const payload = JSON.stringify({ title, body: sub.previews ? body : undefined, data });
       try {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: 60 * 60 });

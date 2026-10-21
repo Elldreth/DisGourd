@@ -182,6 +182,7 @@ All settings are optional and provided via environment variables (or
 | `BACKUP_KEEP`      | `7`                      | How many backups to keep (oldest are deleted)      |
 | `THREAD_ARCHIVE_DAYS` | `7`                   | Threads with no new reply for this many days are archived (a new reply reopens them) |
 | `VAPID_CONTACT`    | `mailto:admin@disgourd.local` | Contact address sent to push services with web push notifications. The signing keys are generated on first run and kept in `.vapid.json` next to the database |
+| `PUSH_HOSTS_EXTRA` | _(none)_                 | Extra push services to allow, comma-separated (`push.example.org` exact, or `*.example.org` for subdomains). The browsers' own services are always allowed |
 
 Example (Linux/macOS):
 
@@ -281,6 +282,16 @@ To reset everything, stop the server and delete the database and uploads.
 - Auth endpoints are rate-limited against brute-force attempts.
 - Uploaded files get randomized storage paths and are served with
   `X-Content-Type-Options: nosniff`; executable types are rejected.
+- The server only fetches things on its own for link previews, preview images
+  and generated images, and those refuse private, loopback, link-local and
+  Tailscale addresses. Push notifications go only to the browsers' push
+  services (Google, Mozilla, Microsoft, Apple), checked again before each send,
+  at most 10 devices per person. So nobody can point the server at your router
+  or NAS.
+- **ComfyUI** is the one exception: it's meant to live on your LAN (or a
+  tailnet), so private addresses are allowed there, but link-local and cloud
+  metadata addresses are refused. Keep ComfyUI itself off the internet: never
+  port-forward or publicly tunnel it (anyone who reaches it can run workflows).
 - Keep `server/.jwt-secret` (and any `JWT_SECRET` you set) private — anyone with
   it can forge logins. It is gitignored by default.
 

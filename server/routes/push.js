@@ -4,6 +4,7 @@ const db = require('../db');
 const { authUserId } = require('../auth/tokens');
 const { sendJson, readJsonBody } = require('../http/util');
 const push = require('../push');
+const { allowedPushEndpoint } = require('../net/pushHosts');
 
 const validSubscription = (s) =>
   s && typeof s.endpoint === 'string' && /^https:\/\//.test(s.endpoint) && s.endpoint.length < 2048
@@ -28,6 +29,8 @@ const routes = [
         return sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'No such subscription' });
       }
       if (!validSubscription(body.subscription)) return sendJson(res, 400, { error: 'That is not a push subscription' });
+      // P11-10: only the real push services, never an address on our own network.
+      if (!allowedPushEndpoint(body.subscription.endpoint)) return sendJson(res, 400, { error: "That push service isn't supported" });
       db.savePushSubscription(userId, body.subscription, body.previews !== false);
       return sendJson(res, 201, { ok: true, previews: body.previews !== false });
     },
