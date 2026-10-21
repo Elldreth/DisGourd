@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { attentionKind, shouldNotify, soundFor, notificationText } from './notify.js';
+import { attentionKind, shouldNotify, soundFor, notificationText, reportsRose } from './notify.js';
 
 // Where you are and what you've chosen; tests override what they need.
 const ctx = (over = {}) => ({
@@ -127,5 +127,16 @@ describe('threads (P2-22c)', () => {
     const { notificationPlace } = await import('./notify.js');
     expect(notificationPlace(inThread())).toBe('Weekend plans (#general) · Home');
     expect(notificationPlace(msg())).toBe('#random · Home');
+  });
+});
+
+describe('reportsRose (P10-08)', () => {
+  const spaces = (a, b) => [{ name: 'A', openReports: a }, { name: 'B', openReports: b }];
+  test('only a rise in a server already seen counts', () => {
+    expect(reportsRose(null, spaces(3, 0))).toBe(false); // the first look (signing in)
+    expect(reportsRose({ A: 3, B: 0 }, spaces(3, 0))).toBe(false);
+    expect(reportsRose({ A: 3, B: 0 }, spaces(2, 0))).toBe(false); // one was handled
+    expect(reportsRose({ A: 3, B: 0 }, spaces(3, 1))).toBe(true);
+    expect(reportsRose({ A: 3 }, spaces(3, 4))).toBe(false); // B is new to us (joined, or a reload)
   });
 });

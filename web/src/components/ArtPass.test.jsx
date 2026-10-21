@@ -7,11 +7,11 @@ vi.mock('../serverGlyphs.js', async (orig) => {
   // jsdom can't draw to a canvas: hand back a small PNG file instead.
   return { ...real, glyphToPng: vi.fn(async (g) => new File(['png'], `${g.id}.png`, { type: 'image/png' })) };
 });
-const { default: Mascot } = await import('./Mascot.jsx');
+const { default: Mascot, MascotGroup } = await import('./Mascot.jsx');
 const { default: LoginArt } = await import('./LoginArt.jsx');
 const { default: GlyphPicker } = await import('./GlyphPicker.jsx');
 const { default: AuthShell } = await import('./AuthShell.jsx');
-const { POSE_NAMES, mascotSvg } = await import('../mascotParts.js');
+const { POSE_NAMES, mascotSvg, groupSvg } = await import('../mascotParts.js');
 const { SERVER_GLYPHS, glyphTileSvg } = await import('../serverGlyphs.js');
 
 afterEach(cleanup);
@@ -22,8 +22,8 @@ test('the wave is the leaf tipped up with motion marks, not an arm (owner, 2026-
   expect(svg).not.toContain('M30 66 C21 62 16 55 14 47'); // the old arm
 });
 
-test('seven poses, each drawn only with the theme colours, no face, and small', () => {
-  expect(POSE_NAMES).toEqual(['wave', 'sleep', 'music', 'search', 'confused', 'party', 'shush']);
+test('nine poses, each drawn only with the theme colours, no face, and small', () => {
+  expect(POSE_NAMES).toEqual(['wave', 'sleep', 'music', 'search', 'confused', 'party', 'shush', 'clear', 'privacy']);
   for (const pose of POSE_NAMES) {
     cleanup();
     const { container } = render(<Mascot pose={pose} size={80} />);
@@ -71,16 +71,26 @@ test('the sign-in card shows the waving mascot; the setup wizard can ask for ano
 });
 
 test('twelve ready-made icons; picking one hands over a PNG file', async () => {
-  expect(SERVER_GLYPHS).toHaveLength(12);
-  expect(new Set(SERVER_GLYPHS.map((g) => g.id)).size).toBe(12);
+  expect(SERVER_GLYPHS).toHaveLength(16);
+  expect(new Set(SERVER_GLYPHS.map((g) => g.id)).size).toBe(16);
   for (const g of SERVER_GLYPHS) expect(glyphTileSvg(g)).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/);
   const onPick = vi.fn();
   render(<GlyphPicker onPick={onPick} />);
   const group = screen.getByRole('group', { name: 'Ready-made icons' });
-  expect(within(group).getAllByRole('button')).toHaveLength(12);
+  expect(within(group).getAllByRole('button')).toHaveLength(16);
   fireEvent.click(within(group).getByRole('button', { name: 'Use the rocket icon' }));
   await waitFor(() => expect(onPick).toHaveBeenCalledTimes(1));
   const [file, glyph] = onPick.mock.calls[0];
   expect(file.type).toBe('image/png');
   expect(glyph.id).toBe('rocket');
+});
+
+test('the group scene (P10-08) is three gourds from the theme colours, and small', () => {
+  const { container } = render(<MascotGroup />);
+  const svg = container.querySelector('svg[data-art="group"]');
+  expect(svg.getAttribute('aria-hidden')).toBe('true');
+  expect(svg.outerHTML).not.toMatch(/#[0-9a-f]{3,6}/i);
+  expect(svg.querySelectorAll(':scope > g')).toHaveLength(2); // the two side gourds
+  expect(svg.outerHTML.length).toBeLessThan(5000);
+  expect(groupSvg({ size: 120 })).toContain('scale(-0.74 0.74)'); // the left one turned in
 });

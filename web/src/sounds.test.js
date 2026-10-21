@@ -99,3 +99,12 @@ test('a network error or an undecodable file also falls back', async () => {
   await sounds.playMessage();
   expect(ctx.made.oscillators).toBe(1);
 });
+
+test('P10-08: a new report and being added to a group have their own files', async () => {
+  const fetchMock = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+  vi.stubGlobal('fetch', fetchMock);
+  const s = await import('./sounds.js');
+  await s.playReport();
+  await s.playGroup();
+  expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['/sounds/report.ogg', '/sounds/group.ogg']);
+});

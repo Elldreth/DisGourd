@@ -51,8 +51,11 @@ const isKey = (k) => typeof k === 'string' && (k.startsWith('c:') || k.startsWit
 //   send:   gateway send; status: the gateway status
 //   onIncoming(frame): told about every incoming DM (notifications, sounds)
 // `onLeft({ conversation, reason, name })` (P9-06d): you left or were removed from a group.
-export function useDms({ active, user, send, status, reconnects = 0, onIncoming, onLeft }) {
+// `onAdded(conversation)` (P10-08): someone else put you in a group.
+export function useDms({ active, user, send, status, reconnects = 0, onIncoming, onLeft, onAdded }) {
   const [conversations, setConversations] = useState([]);
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
   const [current, setCurrent] = useState(''); // the open conversation's key ('' for none)
   const [messages, dispatch] = useReducer(messagesReducer, []);
   const [unread, setUnread] = useState({}); // key -> count
@@ -136,6 +139,9 @@ export function useDms({ active, user, send, status, reconnects = 0, onIncoming,
     // P9-06d: a conversation's summary changed (or a group you were added to).
     dm_conversation: (f) => {
       const c = { ...f.conversation, key: `c:${f.conversation.id}` };
+      // A group that's new to you, and not one you made: you were added.
+      const owner = c.members?.find((m) => m.id === c.ownerId)?.username;
+      if (c.kind === 'group' && owner !== userRef.current && !conversationsRef.current.some((d) => d.key === c.key)) onAdded?.(c);
       setConversations((prev) => (prev.some((d) => d.key === c.key) ? prev.map((d) => (d.key === c.key ? { ...d, ...c } : d)) : [c, ...prev]));
     },
     // The group you just made: open it.

@@ -1,4 +1,4 @@
-// Ready-made server icons (P8): twelve flat glyphs, white on a coloured tile,
+// Ready-made server icons (P8; four more in P10-08): sixteen flat glyphs, white on a coloured tile,
 // for servers without a picture. Picking one renders it to a PNG and uploads
 // it like any icon, so the server and the rail need nothing new. The glyph
 // markup is static and ours (never user input), drawn in a 48×48 box.
@@ -21,6 +21,11 @@ export const SERVER_GLYPHS = [
   { id: 'coffee', label: 'Coffee', bg: '#7a4a2a', svg: `<path ${W} d="M7 19h28v8c0 8-6 13-14 13S7 35 7 27z"/><path ${S} d="M35 22h3a5 5 0 0 1 0 10h-4M15 6c-2 3 2 5 0 8M23 6c-2 3 2 5 0 8"/>` },
   { id: 'film', label: 'Film', bg: '#4b4870', svg: `<path ${W} d="M6 20h36v18a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3z"/><path ${W} d="M6 12.5L39 6l1.5 7L7.5 19.5z"/><path fill="none" stroke="#4b4870" stroke-width="2.6" d="M15 11l4 6M25 9l4 6"/>` },
   { id: 'star', label: 'Star', bg: '#b23b3b', svg: `<path ${W} d="M24 5l5.6 12 13 1.4-9.8 8.8 2.8 12.9L24 33.5l-11.6 6.6 2.8-12.9-9.8-8.8 13-1.4z"/>` },
+  // P10-08: four more, the first also used as a group picture.
+  { id: 'group', label: 'Group', bg: '#5b3fc4', svg: `<path ${W} d="M29 5c8 0 14 5 14 11.5 0 3-1.3 5.7-3.4 7.7l1.6 5.3-5.6-2.6c-2 .7-4.3 1-6.6 1-8 0-14-5-14-11.4S21 5 29 5z"/><path ${W} stroke="#5b3fc4" stroke-width="3" d="M19 17c8.3 0 15 5.4 15 12.3S27.3 41.5 19 41.5c-2.3 0-4.5-.4-6.5-1.200L6 43l2-6.3C5.5 34.6 4 32 4 29.3 4 22.4 10.700 17 19 17z"/><circle cx="13" cy="29.3" r="2" fill="#5b3fc4"/><circle cx="19" cy="29.3" r="2" fill="#5b3fc4"/><circle cx="25" cy="29.3" r="2" fill="#5b3fc4"/>` },
+  { id: 'heart', label: 'Heart', bg: '#c0396b', svg: `<path ${W} d="M24 41C13 33 5 26 5 17.5 5 11.5 9.5 7 15 7c3.8 0 7 2 9 5.2C26 9 29.2 7 33 7c5.5 0 10 4.5 10 10.5C43 26 35 33 24 41z"/>` },
+  { id: 'ball', label: 'Sports', bg: '#1f7a4a', svg: `<circle ${W} cx="24" cy="24" r="18"/><path fill="none" stroke="#1f7a4a" stroke-width="2.6" stroke-linecap="round" d="M24 6v36M6 24h36M11 11c7 6 7 20 0 26M37 11c-7 6-7 20 0 26"/>` },
+  { id: 'camera', label: 'Camera', bg: '#38557a', svg: `<path ${W} d="M8 14h7l3-5h12l3 5h7a3 3 0 0 1 3 3v19a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V17a3 3 0 0 1 3-3z"/><circle cx="24" cy="26" r="8" fill="#38557a"/><circle ${W} cx="24" cy="26" r="4.5"/>` },
 ];
 
 // The tile as standalone SVG markup (a rounded square, like the server rail's).

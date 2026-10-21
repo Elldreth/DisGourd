@@ -1,0 +1,7 @@
+{
+  "prompts": {
+    "report": "Soft low two-note wooden knock, a calm heads-up for a moderator that something needs a look. Short, warm, not alarming, no music, no drums.",
+    "group": "Short cheerful rising three-note pluck, light and bubbly, UI sound for being added to a group chat. Dry, under one second, no music, no drums."
+  },
+  "model": "ai-music-api/sounds V6_MINI"
+}

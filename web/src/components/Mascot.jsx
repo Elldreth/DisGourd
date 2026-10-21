@@ -1,4 +1,4 @@
-import { poseParts, POSES, MASCOT_VIEWBOX } from '../mascotParts.js';
+import { poseParts, groupParts, POSES, MASCOT_VIEWBOX, GROUP_VIEWBOX } from '../mascotParts.js';
 
 // The pose's shapes alone, for drawing inside another SVG (an empty-state
 // scene places it with a nested <svg x y width height viewBox={MASCOT_VIEWBOX}>).
@@ -26,7 +26,7 @@ function drawWith(violet, lime) {
 // The DisGourd mascot (P8): the gourd mark in a pose. It has no face; its
 // speech-bubble belly "says" the mood. Drawn from the theme tokens, so it
 // follows the light theme, or in one colour with `color`.
-//   <Mascot pose="wave" size={80} />   poses: wave, sleep, music, search, confused, party, shush
+//   <Mascot pose="wave" size={80} />   poses: wave, sleep, music, search, confused, party, shush, clear, privacy
 // Decorative by default; pass `title` when it carries meaning on its own.
 export default function Mascot({ pose = 'wave', size = 64, color, title, className = '' }) {
   const draw = drawWith(color || 'var(--color-brand-logo)', color || 'var(--color-lime)');
@@ -43,6 +43,16 @@ export default function Mascot({ pose = 'wave', size = 64, color, title, classNa
     >
       {title ? <title>{title}</title> : null}
       {poseParts(pose).map(draw)}
+    </svg>
+  );
+}
+
+// Three gourds together (P10-08), for group conversations. Decorative.
+export function MascotGroup({ width = 144, className = '' }) {
+  const draw = drawWith('var(--color-brand-logo)', 'var(--color-lime)');
+  return (
+    <svg width={width} height={(width * 96) / 156} viewBox={GROUP_VIEWBOX} className={className} data-art="group" aria-hidden="true">
+      {groupParts().map(draw)}
     </svg>
   );
 }

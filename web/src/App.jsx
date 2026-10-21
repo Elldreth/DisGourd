@@ -128,6 +128,7 @@ export default function App() {
       id: `left-${f.conversation}`,
       message: f.reason === 'removed' ? `You were removed from ${f.name || 'the group'}` : `You left ${f.name || 'the group'}`,
     }),
+    onAdded: notifier.onAddedToGroup, // P10-08: a short sound
   });
   // Blocking (P9-07b): who I've blocked; "Block bob?" asks first.
   const blocks = useBlocks({ token, reconnects });
@@ -205,6 +206,10 @@ export default function App() {
       threadOpener.current = null;
     }
   }, [openThread, sp.currentSpace, sp.currentChannel]);
+  // P10-08: a soft sound when a server you moderate gets a new report.
+  useEffect(() => {
+    notifier.onSpaces(sp.spaces);
+  }, [sp.spaces]); // eslint-disable-line react-hooks/exhaustive-deps
   // Notifications need to know what you're looking at, and how to open what
   // a clicked notification is about.
   notifier.update({

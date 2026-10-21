@@ -20,4 +20,9 @@ The app plays these through `web/src/sounds.js` at a per-sound gain (0.5 for the
 | A mention or a DM | `mention.ogg` | `mention-2` | Bright pleasant two-note bell ding, warm notification sound for a direct message or mention. Short, clear, not harsh, no music. |
 | Any new message ("All messages" level) | `message.ogg` | `message-1` | A tiny soft bubble pop, quiet UI tick for a new chat message. Extremely short, dry, gentle. |
 
+| A new report, for moderators (P10-08) | `report.ogg` | `report-2`, cut by hand to its first two knocks (0.03–0.52 s) | Soft low two-note wooden knock, a calm heads-up for a moderator that something needs a look. Short, warm, not alarming, no music, no drums. |
+| Someone adds you to a group (P10-08) | `group.ogg` | `group-2`, cut by hand to its first three notes (0.08–0.80 s) | Short cheerful rising three-note pluck, light and bubbly, UI sound for being added to a group chat. Dry, under one second, no music, no drums. |
+
+**P10-08 (2026-10-21):** two more requests, 5 credits. The automatic cut keeps only the first event, which would have kept a single knock and a single note. So these two were cut by hand with the same fade (the last 30%) and peaked to −6 dBFS; their automatic cuts are still in `takes/`. Both play at the message-sounds setting, never in Do Not Disturb: the report sound when a server's open-report count goes up, and the group sound when someone else adds you to a group (not one you made).
+
 To swap a take, copy it from `takes/` over the file in `web/public/sounds/`.

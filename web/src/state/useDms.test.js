@@ -165,3 +165,18 @@ test('P9-06d: with a new 1-to-1 open, a group message from that person doesn’t
   expect(result.current.current).toBe('@cara');
   expect(result.current.unread['c:9']).toBe(1);
 });
+
+test('being added to a group by someone else calls onAdded; a group you made or already have does not (P10-08)', async () => {
+  const onAdded = vi.fn();
+  const { result } = renderHook(() => useDms({ user: 'sandy', send, status: 'open', active: true, onAdded }));
+  await waitFor(() => expect(result.current.conversations).toEqual(listed));
+  const members = [{ id: 1, username: 'sandy' }, { id: 2, username: 'bob' }, { id: 3, username: 'cara' }];
+  const mine = { id: 5, kind: 'group', name: null, ownerId: 1, muted: false, members, unread: 0 };
+  act(() => result.current.handlers.dm_conversation({ type: 'dm_conversation', conversation: mine }));
+  expect(onAdded).not.toHaveBeenCalled();
+  const theirs = { ...mine, id: 6, ownerId: 2, name: 'Gourd Club' };
+  act(() => result.current.handlers.dm_conversation({ type: 'dm_conversation', conversation: theirs }));
+  expect(onAdded).toHaveBeenCalledWith(expect.objectContaining({ key: 'c:6', name: 'Gourd Club' }));
+  act(() => result.current.handlers.dm_conversation({ type: 'dm_conversation', conversation: { ...theirs, name: 'Renamed' } }));
+  expect(onAdded).toHaveBeenCalledTimes(1); // an update, not a new group
+});
