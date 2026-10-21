@@ -34,10 +34,18 @@ export default function QualityPage() {
           <SettingRow
             className="py-0"
             label="Hires fix for High quality"
-            description="High-quality images are made at the Standard size, enlarged about 1.5× with the upscale model, then lightly repainted for detail. Slower, sharper."
+            description="High-quality images are made at the Standard size, enlarged with the upscale model (SDXL: to 2048 on the long edge on the High memory setting), then repainted for detail. Slower, sharper."
           >
             <Switch label="Hires fix for High quality" checked={comfy.hires} disabled={custom} onChange={(on) => setComfy((c) => ({ ...c, hires: on }))} />
           </SettingRow>
+          {comfy.hires && !custom && (
+            <div className="mt-2">
+              <label htmlFor="imagine-hires-denoise" className={heading}>Hires strength</label>
+              <input id="imagine-hires-denoise" type="number" min="0.1" max="0.8" step="0.05" value={comfy.hiresDenoise}
+                onChange={(e) => setComfy((c) => ({ ...c, hiresDenoise: e.target.value }))} className="input w-32" />
+              <p className="mt-1 text-xs text-gray-500">How much the hires repaint changes the enlarged image. 0.45 adds detail; lower keeps it closer.</p>
+            </div>
+          )}
           {custom && <p className="mt-1 text-xs text-gray-500">Not used with your own workflow: it decides this.</p>}
         </div>
 
@@ -152,7 +160,7 @@ export default function QualityPage() {
               </select>
             </div>
             <p className="col-span-full text-xs text-gray-500">
-              Passes repeat the repaint inside each face crop (it isn’t a loopback of the whole image; that’s Variations). 1 is usually enough.
+              Passes repeat the repaint inside each face crop, each one starting from the last (it isn’t a loopback of the whole image; that’s Variations). 3 is the default.
             </p>
           </div>
         )}
@@ -210,6 +218,23 @@ export default function QualityPage() {
               ))}
             </div>
           </fieldset>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div>
+              <label htmlFor="imagine-hires-steps" className={heading}>Hires steps</label>
+              <input id="imagine-hires-steps" type="number" min="1" max="150" step="1" value={comfy.hiresSteps} placeholder={`Default (${d.hiresSteps})`}
+                onChange={(e) => setComfy((c) => ({ ...c, hiresSteps: e.target.value }))} className="input" />
+            </div>
+            {comfy.kind !== 'unet' && (comfy.family === 'sdxl' || comfy.family === 'sd15') && (
+              <div>
+                <label htmlFor="imagine-clip-skip" className={heading}>CLIP skip</label>
+                <select id="imagine-clip-skip" value={comfy.clipSkip} onChange={(e) => setComfy((c) => ({ ...c, clipSkip: e.target.value }))} className="input">
+                  <option value="">Default ({d.clipSkip})</option>
+                  <option value="1">1 (off)</option>
+                  <option value="2">2</option>
+                </select>
+              </div>
+            )}
+          </div>
           <div>
             <label htmlFor="imagine-negative" className={heading}>Negative prompt</label>
             <textarea id="imagine-negative" rows={2} maxLength={1000} value={comfy.negative} placeholder="Default (lowres, worst quality, blurry, watermark…)"

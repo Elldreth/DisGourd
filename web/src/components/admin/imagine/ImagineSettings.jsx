@@ -14,7 +14,7 @@ const Ctx = createContext(null);
 export const useImagine = () => useContext(Ctx);
 
 // Style presets (P9-04b): what belongs to one style; the rest is shared.
-export const STYLE_FIELDS = ['model', 'kind', 'family', 'clip1', 'clip2', 'vae', 'sampler', 'scheduler', 'cfgScale', 'negative', 'steps', 'promptPrefix', 'workflowMode', 'workflow', 'upscaleWorkflow', 'img2imgWorkflow'];
+export const STYLE_FIELDS = ['model', 'kind', 'family', 'clip1', 'clip2', 'vae', 'sampler', 'scheduler', 'cfgScale', 'negative', 'steps', 'promptPrefix', 'workflowMode', 'workflow', 'upscaleWorkflow', 'img2imgWorkflow', 'clipSkip', 'hiresSteps'];
 const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 const omit = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
 
@@ -26,6 +26,7 @@ export function styleDraft(c = {}) {
     sampler: c.sampler || '', scheduler: c.scheduler || '', cfgScale: c.cfgScale ?? '', negative: c.negative || '',
     steps: { draft: c.steps?.draft ?? '', standard: c.steps?.standard ?? '', high: c.steps?.high ?? '' },
     promptPrefix: c.promptPrefix || '',
+    clipSkip: c.clipSkip ? String(c.clipSkip) : '', hiresSteps: c.hiresSteps ?? '', // P9-08
     workflowMode: c.workflowMode || 'builtin', workflow: c.workflow || '', upscaleWorkflow: c.upscaleWorkflow || '', img2imgWorkflow: c.img2imgWorkflow || '',
   };
 }
@@ -37,10 +38,10 @@ function comfyDraft(c) {
   return {
     enabled: !!c.enabled, url: c.url || '',
     tier: c.tier || 'medium',
-    hires: c.hires !== false, upscaler: c.upscaler || '',
-    upscaleMode: c.upscaleMode || 'model', tileDenoise: c.tileDenoise ?? 0.3, tileSize: c.tileSize || 1024,
-    detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.4,
-    detailerPasses: c.detailerPasses || 1, tilePasses: c.tilePasses || 1, varyLoops: c.varyLoops || 2,
+    hires: c.hires !== false, upscaler: c.upscaler || '', hiresDenoise: c.hiresDenoise ?? 0.45,
+    upscaleMode: c.upscaleMode || 'model', tileDenoise: c.tileDenoise ?? 0.2, tileSize: c.tileSize || 1280,
+    detailer: !!c.detailer, detector: c.detector || '', detailerDenoise: c.detailerDenoise ?? 0.3,
+    detailerPasses: c.detailerPasses || 3, tilePasses: c.tilePasses || 1, varyLoops: c.varyLoops || 2,
     varySubtle: c.varySubtle ?? 0.3, varyStrong: c.varyStrong ?? 0.65,
     styles: presets.map((p) => ({ id: p.id, name: p.name, saved: true, ...styleDraft(p) })),
     defaultStyle: c.defaultPreset || presets[0].id,
@@ -64,6 +65,9 @@ function styleBody(s) {
     steps: { draft: numOrNull(s.steps.draft), standard: numOrNull(s.steps.standard), high: numOrNull(s.steps.high) },
     negative: s.negative.trim() || null,
     promptPrefix: s.promptPrefix.trim() || null,
+    // P9-08: blank = the model type's default.
+    clipSkip: s.clipSkip ? Number(s.clipSkip) : null,
+    hiresSteps: numOrNull(s.hiresSteps),
     // Custom workflows (P3-34): the boxes are kept even while Built-in is chosen.
     workflowMode: s.workflowMode,
     workflow: s.workflow.trim() || null,
@@ -82,6 +86,7 @@ export function saveBody({ comfy, kie, kieKey, defaultEngine, general, savedDefa
       comfyui: {
         enabled: comfy.enabled, url: comfy.url, tier: comfy.tier,
         hires: comfy.hires,
+        hiresDenoise: Number(comfy.hiresDenoise), // P9-08
         upscaler: comfy.upscaler || null,
         upscaleMode: comfy.upscaleMode,
         ...(comfy.upscaleMode === 'tiled' ? { tileDenoise: Number(comfy.tileDenoise), tileSize: Number(comfy.tileSize), tilePasses: Number(comfy.tilePasses) } : {}),
