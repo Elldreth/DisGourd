@@ -15,6 +15,7 @@ export const apiPaths = [
   '/spaces',
   '/dms',
   '/friends',
+  '/blocks', // P9-07a
   '/invites',
   '/search',
   '/admin',
