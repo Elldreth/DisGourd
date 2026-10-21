@@ -134,4 +134,5 @@ test('Settings › Blocked people: the list with Unblock, or a note when empty',
   cleanup();
   withBlocks(<BlockedSection />, []);
   expect(screen.getByText('You haven’t blocked anyone.')).toBeTruthy();
+  expect(document.querySelector('svg[data-art="privacy"]')).toBeTruthy(); // P10-02: the shield mascot
 });

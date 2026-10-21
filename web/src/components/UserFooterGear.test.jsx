@@ -21,12 +21,12 @@ test('the footer has a Settings gear and no one-click sign-out', () => {
   expect(onLogout).not.toHaveBeenCalled();
 });
 
-test('the status menu ends with Sign out', () => {
+test('the status menu ends with Log out', () => {
   const { onLogout } = setup();
   fireEvent.click(screen.getByRole('button', { name: 'Set status (Online)' }));
   const menu = screen.getByRole('menu', { name: 'Set status' });
   const items = [...menu.querySelectorAll('[role^=menuitem]')];
-  expect(items[items.length - 1].textContent).toMatch(/Sign out/);
-  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Sign out' }));
+  expect(items[items.length - 1].textContent).toMatch(/Log out/);
+  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Log out' }));
   expect(onLogout).toHaveBeenCalledTimes(1);
 });

@@ -68,6 +68,15 @@ export const ART = {
       </svg>
     </>
   ),
+  // Privacy and safety (P10-02): the mascot with a shield.
+  privacy: (
+    <>
+      <Ground x={40} w={120} />
+      <svg x="41" y="4" width="118" height="118" viewBox={MASCOT_VIEWBOX}>
+        <MascotParts pose="privacy" />
+      </svg>
+    </>
+  ),
   // Image generation not set up (P5-06): a gourd beside an easel with a blank
   // canvas and a lime-tipped brush, waiting to paint.
   imagine: (

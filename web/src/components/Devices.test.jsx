@@ -93,3 +93,20 @@ test('the list reloads when the server says a device signed in or out', async ()
   window.dispatchEvent(new Event('disgourd:sessions-changed')); // unmounted: no listener left
   expect(api.getSessions).toHaveBeenCalledTimes(2);
 });
+
+test('P10-02: this device first, then five others until "Show n more"; no browser name reads "Unknown browser"', async () => {
+  const other = (i) => ({ id: `o${i}`, device: i % 2 ? 'Unknown device' : `Firefox ${i}`, createdAt: NOW - 86400e3, lastSeenAt: NOW - i * 60e3, current: false });
+  api.getSessions.mockResolvedValue({
+    sessions: [other(1), other(2), { id: 'me', device: 'Edge on Windows', createdAt: NOW, lastSeenAt: NOW, current: true }, ...[3, 4, 5, 6, 7, 8].map(other)],
+    olderSignIns: false,
+  });
+  render(<DevicesSection />);
+  const rows = () => within(screen.getByRole('list', { name: 'Signed-in devices' })).getAllByRole('listitem');
+  await waitFor(() => expect(rows()).toHaveLength(6));
+  expect(rows()[0].textContent).toContain('Edge on Windows');
+  expect(rows()[1].textContent).toContain('Unknown browser');
+  expect(screen.queryByText('Unknown device')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Show 3 more' }));
+  expect(rows()).toHaveLength(9);
+  expect(screen.queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
+});

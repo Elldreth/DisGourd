@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P10-00)
 - **Phase:** 10
-- **State:** REVIEW
+- **State:** COMPLETE (merged #202)
 - **Effort:** M
 - **Depends on:** P10-00 (decision 3); P10-08 for the empty-state pose (optional)
 - **Serialize with:** P10-03 (`MessageList.jsx` message menu)
