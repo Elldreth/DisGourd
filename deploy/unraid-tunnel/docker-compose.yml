@@ -41,9 +41,13 @@ services:
       # Cloudflare's CF-Connecting-IP names the visitor.
       - TRUSTED_PROXIES=172.30.80.0/24
       - CLIENT_IP_HEADER=cf-connecting-ip
+      # A voice relay (README step 7, optional): Cloudflare TURN.
+      # - TURN_KEY_ID=your-turn-key-id
+      # - TURN_KEY_TOKEN_FILE=/run/secrets/turn-key-token
     volumes:
       - /mnt/cache/appdata/disgourd:/config
       - /mnt/user/your-share/disgourd-uploads:/uploads
+      # - ./secrets/turn-key-token:/run/secrets/turn-key-token:ro
     # No `ports:` at all. Only cloudflared reaches it, over disgourd-edge.
     networks:
       - disgourd-edge

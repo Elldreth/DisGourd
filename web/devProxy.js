@@ -20,6 +20,7 @@ export const apiPaths = [
   '/search',
   '/admin',
   '/push',
+  '/voice', // P11-11
 ];
 
 // Proxy keys that match a path segment exactly (`/me` and `/me/…`, not

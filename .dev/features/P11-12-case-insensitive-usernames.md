@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 12)
+- **State:** COMPLETE (merged in #228; build order 12)
 - **Starting baseline:** main at 5917e47 (#226 merged)
 - **Effort:** S–M
 - **Depends on:** P11-01 (both touch registration and SITE_ADMINS matching)

@@ -467,6 +467,11 @@ export function getDmMessages(key, { limit = 50, before, after, around } = {}) {
   return request(`${dmPath(key)}/messages?${qs}`);
 }
 
+// ---- Voice (P11-11): ICE servers and short-lived TURN credentials for calls ----
+export function getVoiceIce() {
+  return request('/voice/ice');
+}
+
 // ---- Current user profile ----
 export function getMe() {
   return request('/me');

@@ -5,13 +5,14 @@ const { canViewChannel } = require('../permissions');
 const { deliverToChannelViewers } = require('./delivery');
 
 // ---- Voice rooms (mesh WebRTC signaling relay; no media touches the server) ----
-// roomKey -> { space, channel, members: Map<userId, { ws, userId, username, avatar, muted }> }
+// roomKey -> { space, channel, members: Map<userId, { ws, userId, username, avatar, muted, forced }> }
+// `forced` (P11-11): timed out, so the others' apps don't play their audio.
 const voiceRooms = new Map();
 const voiceKey = (space, channel) => JSON.stringify([space, channel]);
 
 function voiceParticipants(room) {
   return [...room.members.values()].map((p) => ({
-    userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted, sharing: !!p.sharing,
+    userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted, sharing: !!p.sharing, forced: !!p.forced,
   }));
 }
 
@@ -82,11 +83,11 @@ const ops = {
       }
     }
     const existing = [...room.members.values()].map((p) => ({
-      userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted,
+      userId: p.userId, username: p.username, avatar: p.avatar, muted: p.muted, forced: !!p.forced,
     }));
     // Timed out (P3-26c): they can listen, but join muted and can't unmute.
     const forcedMute = !!db.getMemberTimeout(space.id, userId);
-    const me = { ws, userId, username: user.username, avatar: user.avatar_url || null, muted: forcedMute, sharing: false };
+    const me = { ws, userId, username: user.username, avatar: user.avatar_url || null, muted: forcedMute, forced: forcedMute, sharing: false };
     room.members.set(userId, me);
     ws.voiceRoom = key;
     // The joiner initiates offers to everyone already here.
@@ -95,7 +96,7 @@ const ops = {
       if (p.userId !== userId && p.ws.readyState === WebSocket.OPEN) {
         p.ws.send(JSON.stringify({
           type: 'voice_peer_joined', space: msg.space, channel: msg.channel,
-          peer: { userId, username: me.username, avatar: me.avatar, muted: me.muted },
+          peer: { userId, username: me.username, avatar: me.avatar, muted: me.muted, forced: me.forced },
         }));
       }
     }
@@ -121,7 +122,8 @@ const ops = {
     const entry = room.members.get(userId);
     if (entry) {
       const space = db.getSpaceByName(room.space);
-      entry.muted = !!msg.muted || !!(space && db.getMemberTimeout(space.id, userId));
+      entry.forced = !!(space && db.getMemberTimeout(space.id, userId)); // a timeout that ran out clears here too
+      entry.muted = !!msg.muted || entry.forced;
       broadcastVoiceState(room);
     }
     return;
@@ -193,10 +195,9 @@ function voiceEject(userId, spaceName, reason) {
 function voiceForceMute(userId, spaceName, on) {
   const s = voiceSessionIn(userId, spaceName);
   if (!s) return false;
-  if (on && !s.entry.muted) {
-    s.entry.muted = true;
-    broadcastVoiceState(s.room);
-  }
+  if (on) s.entry.muted = true;
+  s.entry.forced = !!on;
+  broadcastVoiceState(s.room); // everyone's app honours (or stops honouring) the mute
   const { ws } = s.entry;
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'voice_forced_mute', space: spaceName, on }));
   return true;

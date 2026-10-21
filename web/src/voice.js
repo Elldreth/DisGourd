@@ -2,8 +2,9 @@
 // directly to each other and the gateway only relays signaling (SDP + ICE).
 // onChange(state) pushes updates to React. Great for small friend-group calls.
 //
-// STUN handles most NATs; for tricky networks add a TURN server by setting
-// window.__DISGOURD_ICE__ (an array of RTCIceServer objects) before load.
+// ICE servers come from the server (GET /voice/ice via `loadIce`, P11-11):
+// STUN by default, plus short-lived TURN credentials when a relay is set up,
+// and relay-only when the server asks for it. Without an answer, plain STUN.
 import {
   audioConstraints,
   getPreferredInput,
@@ -17,12 +18,11 @@ import { playSelfJoin, playSelfLeave, playPeerJoin, playPeerLeave } from './soun
 // reconnect before giving up.
 const REJOIN_TIMEOUT_MS = 5000;
 
-const ICE_SERVERS =
-  (typeof window !== 'undefined' && window.__DISGOURD_ICE__) || [
-    { urls: 'stun:stun.l.google.com:19302' },
-  ];
+const DEFAULT_ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], relayOnly: false, expiresAt: null };
+// Ask again this long before the credentials run out.
+const ICE_RENEW_MS = 5 * 60 * 1000;
 
-export function createVoiceController({ send, myId, onChange }) {
+export function createVoiceController({ send, myId, onChange, loadIce }) {
   let room = null; // { space, channel }
   let status = 'idle'; // idle | connecting | connected
   let muted = false;
@@ -40,6 +40,9 @@ export function createVoiceController({ send, myId, onChange }) {
   let videoError = ''; // last camera/screen failure message, for the UI
   const remoteVideos = new Map(); // streamId -> { userId, stream } for remote video
   let participants = []; // authoritative list from the server (voice_state)
+  let ice = DEFAULT_ICE; // what new links use (P11-11)
+  let iceFetchedAt = 0;
+  let forcedPeers = new Set(); // timed out: their audio isn't played (P11-11)
   let knownIds = null; // Set of participant userIds, for join/leave chimes
   const pcs = new Map(); // userId -> peer state { pc, polite, makingOffer, ignoreOffer, state }
   const audioEls = new Map(); // streamId -> HTMLAudioElement (a user may send 2)
@@ -116,7 +119,10 @@ export function createVoiceController({ send, myId, onChange }) {
   // mute and volume for that user.
   function applyElState(sid, el) {
     const owner = streamOwner.get(sid);
-    if (isShareStream(sid)) {
+    if (forcedPeers.has(owner)) {
+      // The server says they're timed out: don't play them, whatever their app sends.
+      el.muted = true;
+    } else if (isShareStream(sid)) {
       el.muted = deafened || shareMutedUsers.has(owner);
       el.volume = shareVolume.has(owner) ? shareVolume.get(owner) : 1;
     } else {
@@ -280,7 +286,7 @@ export function createVoiceController({ send, myId, onChange }) {
     const existing = pcs.get(userId);
     if (existing) return existing;
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: ice.iceServers, ...(ice.relayOnly ? { iceTransportPolicy: 'relay' } : {}) });
     // Deterministic, opposite roles per pair so simultaneous offers resolve.
     const polite = Number(myId) < Number(userId);
     const st = { pc, polite, makingOffer: false, ignoreOffer: false, answerPending: false, state: 'new' };
@@ -347,6 +353,21 @@ export function createVoiceController({ send, myId, onChange }) {
     return st;
   }
 
+  // The ICE servers for new links: the last answer while it's fresh enough,
+  // else ask the server; on any failure, plain STUN.
+  async function refreshIce() {
+    if (!loadIce) return;
+    const fresh = ice !== DEFAULT_ICE && (ice.expiresAt == null ? Date.now() - iceFetchedAt < ICE_RENEW_MS : ice.expiresAt - Date.now() > ICE_RENEW_MS);
+    if (fresh) return;
+    try {
+      const got = await loadIce();
+      ice = got && Array.isArray(got.iceServers) && got.iceServers.length ? got : DEFAULT_ICE;
+    } catch {
+      ice = DEFAULT_ICE;
+    }
+    iceFetchedAt = Date.now();
+  }
+
   async function join(space, channel) {
     if (room) leave();
     notice = '';
@@ -366,6 +387,8 @@ export function createVoiceController({ send, myId, onChange }) {
       localStream = null;
       micError = true;
     }
+    await refreshIce();
+    if (!room) return; // left while waiting
     if (!speakTimer) speakTimer = setInterval(pollSpeaking, 200);
     status = 'connected';
     emit();
@@ -850,6 +873,8 @@ export function createVoiceController({ send, myId, onChange }) {
   function handleState(f) {
     if (!room || f.space !== room.space || f.channel !== room.channel) return;
     participants = f.participants || [];
+    forcedPeers = new Set(participants.filter((p) => p.forced && p.userId !== myId).map((p) => p.userId));
+    audioEls.forEach((el, sid) => applyElState(sid, el));
     const ids = new Set(participants.map((p) => p.userId));
     if (knownIds === null) {
       // First roster for this channel — establish a baseline without chiming

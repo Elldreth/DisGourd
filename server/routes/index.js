@@ -10,6 +10,7 @@ const modules = [
   require('./uploads'),
   require('./media'),
   require('./push'),
+  require('./voice'), // P11-11
 ];
 
 async function dispatch(ctx) {
