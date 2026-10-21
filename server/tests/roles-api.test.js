@@ -243,3 +243,32 @@ describe('hierarchy for a non-owner with manage_roles', () => {
     expect(await metaFor('owner', 'general')).toMatchObject({ view: 3, post: 3, private: false, readOnly: false });
   });
 });
+
+// P11-02: the old member-tier route (PATCH /members/:u { role }) skipped the
+// hierarchy, so a role holding manage_roles below Admin could make itself
+// Admin or take Admin from someone above. The route is gone; only the roles
+// route gives roles, with its rules.
+test('manage_roles below Admin cannot reach Admin by any route', async () => {
+  const admin = await roleNamed('Admin');
+  expect(await roleNamed('Managers')).toBeTruthy(); // mgr's top role, below Admin
+  db.addMemberRole(spaceId, users.cara.id, admin.id); // cara is an Admin, above mgr
+  const hasAdmin = (who) => db.getMemberRoleIds(spaceId, users[who].id).includes(admin.id);
+
+  // Themself up to Admin: the old route is gone, the roles route refuses.
+  expect((await call('mgr', 'PATCH', `${S}/members/mgr`, { role: 'admin' })).status).toBe(404);
+  expect((await call('mgr', 'PUT', `${S}/members/mgr/roles/${admin.id}`)).status).toBe(403);
+  expect(hasAdmin('mgr')).toBe(false);
+  expect(db.resolveAccess(spaceId, users.mgr.id).actions.has('ban_members')).toBe(false); // Admin has it; Managers doesn't
+
+  // Admin away from someone above them.
+  expect((await call('mgr', 'PATCH', `${S}/members/cara`, { role: 'member' })).status).toBe(404);
+  expect((await call('mgr', 'DELETE', `${S}/members/cara/roles/${admin.id}`)).status).toBe(403);
+  expect(hasAdmin('cara')).toBe(true);
+
+  // The owner still gives and takes Admin through the roles route.
+  expect((await call('owner', 'PUT', `${S}/members/bob/roles/${admin.id}`)).status).toBe(200);
+  expect(hasAdmin('bob')).toBe(true);
+  expect((await call('owner', 'DELETE', `${S}/members/bob/roles/${admin.id}`)).status).toBe(200);
+  expect(hasAdmin('bob')).toBe(false);
+  db.removeMemberRole(spaceId, users.cara.id, admin.id);
+});

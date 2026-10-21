@@ -174,20 +174,6 @@ const routes = [
         return sendJson(res, 200, { members });
       }
 
-      // PATCH /spaces/:name/members/:username — change a member's tier (legacy:
-      // the app gives and takes roles through /members/:u/roles/:id)
-      if (pathSegments[2] === 'members' && pathSegments[3] && req.method === 'PATCH') {
-        if (!access.actions.has('manage_roles')) return sendJson(res, 403, { error: 'You are not allowed to change roles' });
-        const target = db.getUserByUsername(pathSegments[3]);
-        if (!target || !db.isMember(space.id, target.id)) return sendJson(res, 404, { error: 'Member not found' });
-        if (target.id === space.owner_id) return sendJson(res, 400, { error: "The owner's role can't be changed" });
-        const { role: newRole } = await getJsonBody(req);
-        if (newRole !== 'admin' && newRole !== 'member') return sendJson(res, 400, { error: 'Invalid role' });
-        db.setMemberRole(space.id, target.id, newRole);
-        deliverToSpaceMembers(spaceName, JSON.stringify({ type: 'members_changed', space: spaceName }));
-        return sendJson(res, 200, { ok: true });
-      }
-
       // DELETE /spaces/:name/members/me — leave the server (P6-01). Usernames are
       // at least 3 characters, so "me" never names a member. The owner can't leave.
       if (pathSegments[2] === 'members' && pathSegments[3] === 'me' && pathSegments.length === 4 && req.method === 'DELETE') {

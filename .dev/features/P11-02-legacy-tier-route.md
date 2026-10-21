@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY (build order 3 in P11-00; start only when the owner says so)
+- **State:** REVIEW (build order 3 in P11-00)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** none
@@ -17,13 +17,27 @@
 - Log it to the moderation log like `role_add` / `role_remove`.
 
 ## Acceptance criteria
-- [ ] AC-1: a member whose highest role holds `manage_roles` but sits below Admin can't gain Admin through any route (403 or 404).
-- [ ] AC-2: they can't remove Admin from someone at or above them.
-- [ ] AC-3: the owner can still give and take Admin through the roles route.
-- [ ] AC-4: the web suites pass unchanged (nothing in the app used the route).
+- [x] AC-1: a member whose highest role holds `manage_roles` but sits below Admin can't gain Admin through any route (403 or 404).
+- [x] AC-2: they can't remove Admin from someone at or above them.
+- [x] AC-3: the owner can still give and take Admin through the roles route.
+- [x] AC-4: the web suites pass unchanged (nothing in the app used the route).
 
-## Expected Areas of Change
-`server/routes/spaces.js`, maybe `server/db/index.js` (`setMemberRole` stays for the transfer flow and tests), the tests that used the PATCH (`grep -rn "members/.*PATCH\|'PATCH', .*members" server/tests`), and a new regression test in `server/tests/roles-api.test.js`.
+## As built
+- **The route is removed** from `server/routes/spaces.js`. `PATCH /spaces/:s/members/:u` now falls through to the spaces router's 404. Nothing in `web/src` called it (checked: the only member PATCH-style changes go through `/members/:u/roles/:id`, `/timeout`, and `DELETE` for kicks).
+- **No logging change was needed:** the roles route already logs `role_add` / `role_remove`.
+- **`db.setMemberRole`** stays: ownership transfer and some tests use it.
+- **Tests:**
+  - `api.test.js` gave Admin through the old route; it now uses `PUT /members/tara/roles/<Admin id>` and checks the member's `roles`.
+  - A new regression test is at the end of `roles-api.test.js`.
+
+## Verification Evidence
+| Acceptance Criterion | Status | Verification Type | Evidence |
+|---|---|---|---|
+| AC-1 | Verified | Jest `roles-api.test.js` + sandbox | The new test failed before the fix (`PATCH /members/mgr { role: 'admin' }` → 200), and passes after: 404; `PUT /members/mgr/roles/<Admin>` → 403; mgr has no Admin role and no `ban_members`. Sandbox :3005 (Tx Check): a temporary "P11-02 Mods" role with `manage_roles` was given to bob; his legacy PATCH → 404, roles route → 403 "You can only give or take roles below your own", no Admin. The role was then deleted, and bob's roles were back to what they were |
+| AC-2 | Verified | Jest | `PATCH /members/cara { role: 'member' }` → 404; `DELETE /members/cara/roles/<Admin>` → 403; cara keeps Admin |
+| AC-3 | Verified | Jest | The owner's `PUT` and `DELETE /members/bob/roles/<Admin>` → 200 both ways |
+| AC-4 | Verified | Vitest | Web 106 files / 841 tests, no changes in `web/` |
+| Suites | Verified | Jest | Server 56 suites / 506 tests |
 
 ## Not in scope
 Any other change to the roles model.
