@@ -81,8 +81,8 @@ SAM (Impact Pack's SAMLoader and the sam_vit_b model), KJNodes (Color Match) and
 
 ## Acceptance criteria
 - [ ] **Server tests** on the built graphs:
-  - **SDXL High:** CLIP skip −2 feeding the encoders; a 1024×1536 first pass with 15 steps, CFG 5, dpmpp_2m / karras; hires to 1368×2048 with 15 steps at 0.45; FaceDetailer with the owner's values plus SAM and `cycle` = passes; Color Match from the base image to the detailer output; saving from Color Match.
-  - **Standard:** no hires; detailer and Color Match on the first pass.
+  - **SDXL High:** CLIP skip −2 feeding the encoders; a 1024×1536 base image with 15 steps, CFG 5, dpmpp_2m / karras; hires to 1368×2048 with 15 steps at 0.45; FaceDetailer with the owner's values plus SAM and `cycle` = passes (default 3); Color Match from the base image to the detailer output; saving from Color Match.
+  - **Standard:** no hires; detailer and Color Match on the base image.
   - **Draft:** 10 steps, nothing else.
   - **Tiers** cap the hires size; **CLIP skip 1** removes the node; **saved overrides** win; other families unaffected apart from the detailer and Color Match.
   - **Tiled Upscale:** the owner's USDU values, Color Match to the source image, saturation 1.15, then save.
