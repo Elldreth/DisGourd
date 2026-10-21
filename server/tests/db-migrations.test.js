@@ -199,3 +199,41 @@ test('P9-06a (v30): each DM pair becomes one conversation with its two people, r
   expect(raw.prepare('SELECT kind FROM dm_messages WHERE id = ?').get(ids[0]).kind).toBe(null);
   raw.close();
 });
+
+test('P11-12 (v34): usernames and emails become unique whatever the case', () => {
+  const raw = new Database(path.join(tmp, 'nocase.db'));
+  runMigrations(raw);
+  const user = raw.prepare('INSERT INTO users(username, email, password_hash, salt) VALUES (?, ?, ?, ?)');
+  user.run('bob', 'bob@x.test', 'h', 's');
+  expect(() => user.run('BOB', 'other@x.test', 'h', 's')).toThrow(/UNIQUE/);
+  expect(() => user.run('rob', 'Bob@X.test', 'h', 's')).toThrow(/UNIQUE/);
+  raw.close();
+});
+
+test('P11-12 (v34): a database with names or emails that differ only in case refuses to migrate, names them, and is left as it was', () => {
+  const raw = new Database(path.join(tmp, 'clash.db'));
+  runMigrations(raw, MIGRATIONS.filter((m) => m.version <= 33));
+  const user = raw.prepare('INSERT INTO users(username, email, password_hash, salt) VALUES (?, ?, ?, ?)');
+  user.run('bob', 'bob@x.test', 'h', 's');
+  user.run('Bob', 'bob2@x.test', 'h', 's');
+  user.run('amy', 'Amy@x.test', 'h', 's');
+  user.run('ann', 'amy@X.test', 'h', 's');
+  let error;
+  try {
+    runMigrations(raw);
+  } catch (err) {
+    error = err;
+  }
+  expect(error.message).toMatch(/migration 34/);
+  expect(error.message).toMatch(/bob, Bob/);
+  expect(error.message).toMatch(/Amy@x\.test, amy@X\.test/);
+  expect(error.message).toMatch(/UPDATE users SET username/);
+  expect(raw.pragma('user_version', { simple: true })).toBe(33);
+  expect(raw.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'users_%_nocase'").all()).toEqual([]);
+  // Renamed as the message says, it goes through.
+  raw.prepare("UPDATE users SET username = 'bob2' WHERE username = 'Bob'").run();
+  raw.prepare("UPDATE users SET email = 'ann@x.test' WHERE username = 'ann'").run();
+  runMigrations(raw);
+  expect(raw.pragma('user_version', { simple: true })).toBe(LATEST_VERSION);
+  raw.close();
+});

@@ -1312,14 +1312,14 @@ const withParent = ({ parent, ...row }) => (parent ? { ...row, parent } : row);
 function addMentions(messageId, spaceId, usernames, ids = [], authorId = null) {
   if (!usernames.length) return [];
   const memberByName = db.prepare(
-    'SELECT u.id, u.username FROM users u JOIN space_members sm ON sm.user_id = u.id WHERE sm.space_id = ? AND u.username = ?'
+    'SELECT u.id, u.username FROM users u JOIN space_members sm ON sm.user_id = u.id WHERE sm.space_id = ? AND u.username = ? COLLATE NOCASE'
   );
   const insert = db.prepare('INSERT OR IGNORE INTO mentions(message_id, user_id) VALUES (?, ?)');
   const resolved = [];
   for (const name of usernames) {
     const row = memberByName.get(spaceId, name);
     if (row && authorId && isBlocked(row.id, authorId)) continue;
-    if (row) {
+    if (row && !ids.includes(row.id)) { // `@Sandy @sandy` is one mention (P11-12)
       insert.run(messageId, row.id);
       resolved.push(row.username);
       ids.push(row.id);
@@ -1966,7 +1966,7 @@ function setSiteAdmin(userId, on) {
   db.prepare('UPDATE users SET site_admin = ? WHERE id = ?').run(on ? 1 : 0, userId);
 }
 function setSiteAdminByUsername(username, on) {
-  return db.prepare('UPDATE users SET site_admin = ? WHERE username = ?').run(on ? 1 : 0, username).changes > 0;
+  return db.prepare('UPDATE users SET site_admin = ? WHERE username = ? COLLATE NOCASE').run(on ? 1 : 0, username).changes > 0;
 }
 function listSiteAdmins() {
   return db.prepare('SELECT username FROM users WHERE site_admin = 1 ORDER BY username COLLATE NOCASE').all().map((r) => r.username);
@@ -2059,12 +2059,12 @@ function revokeRegCode(id) {
 // than making SQLite throw on an unbindable value).
 function getUserByUsername(username) {
   if (typeof username !== 'string') return undefined;
-  return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  return db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username); // P11-12
 }
 
 function getUserByEmail(email) {
   if (typeof email !== 'string') return undefined;
-  return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  return db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE').get(email);
 }
 
 function getUserById(id) {
@@ -2357,7 +2357,7 @@ function ensureImagineBot() {
   const existing = db.prepare('SELECT id FROM users WHERE is_bot = 1 ORDER BY id LIMIT 1').get();
   if (existing) return (imagineBotId = existing.id);
   for (const name of IMAGINE_BOT_NAMES) {
-    if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(name)) continue;
+    if (db.prepare('SELECT 1 FROM users WHERE username = ? COLLATE NOCASE').get(name)) continue;
     const info = db.prepare("INSERT INTO users(username, email, password_hash, salt, site_admin, is_bot) VALUES (?, ?, '!', '!', 0, 1)")
       .run(name, `${name.toLowerCase()}@bot.invalid`);
     return (imagineBotId = Number(info.lastInsertRowid));

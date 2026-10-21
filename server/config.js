@@ -65,17 +65,20 @@ function applySiteAdmins(names) {
     seen = {};
   }
   for (const name of names) {
+    // P11-12: names match whatever the case, so "Sandy" and "sandy" are one entry.
+    const key = String(name).toLowerCase();
+    if (!seen[key] && seen[name]) seen[key] = seen[name]; // remembered before P11-12
     const user = db.getUserByUsername(name);
-    if (seen[name] === 'missing' && user && !user.site_admin) {
+    if (seen[key] === 'missing' && user && !user.site_admin) {
       console.warn(`[security] SITE_ADMINS lists "${name}", but that account was created after the name was listed, so it isn't made a site admin automatically. If it's yours, make it one in Settings → Registration & access.`);
     }
-    if (seen[name]) continue;
+    if (seen[key]) continue;
     if (user) {
       db.setSiteAdminByUsername(name, true);
-      seen[name] = 'applied';
+      seen[key] = 'applied';
     } else {
       console.warn(`[security] SITE_ADMINS lists "${name}", but there's no such account. It won't be promoted when someone registers that name; make it a site admin in Settings → Registration & access instead.`);
-      seen[name] = 'missing';
+      seen[key] = 'missing';
     }
   }
   db.setSetting('site_admins_seen', JSON.stringify(seen));

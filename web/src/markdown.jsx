@@ -239,7 +239,7 @@ function parseInline(text, opts, keys) {
         const name = m[1].replace(/\.+$/, '');
         if (name) {
           flush();
-          const isMe = name === opts.me;
+          const isMe = !!opts.me && name.toLowerCase() === opts.me.toLowerCase(); // usernames ignore case (P11-12)
           out.push(
             <span
               key={key()}

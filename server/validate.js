@@ -21,11 +21,12 @@ function validateChannelName(name) {
 
 // Extract @username tokens from message content (deduplicated).
 function parseMentionUsernames(content) {
-  const names = new Set();
+  // Keyed by lower case: `@Sandy @sandy` is one name (P11-12); the first spelling is kept.
+  const names = new Map();
   const re = /@([A-Za-z0-9_.-]{3,32})/g;
   let m;
-  while ((m = re.exec(content)) !== null) names.add(m[1]);
-  return [...names];
+  while ((m = re.exec(content)) !== null) if (!names.has(m[1].toLowerCase())) names.set(m[1].toLowerCase(), m[1]);
+  return [...names.values()];
 }
 
 // Album support: accept a list of attachment URLs (msg.attachments) or a single
