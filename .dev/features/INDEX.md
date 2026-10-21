@@ -248,3 +248,18 @@ Kept as its own table so it doesn't collide with other sessions' rows.
 | P9-07a | Blocking on the server (migration v31; DMs, groups, mentions, pushes) | 9 | COMPLETE | M | P9-07 design | migrations, db, routes, gateway/dm.js, gateway/chat.js, push |
 | P9-07b | Blocking in the app (four places, collapsed messages, DM bar, Settings list) | 9 | REVIEW | M | P9-07a | useBlocks, MemberList, MessageList, DmPanel, TypingIndicator, notify, BlockedSection, App |
 | P9-08 | A better built-in ComfyUI workflow (CLIP skip 2, 15+15 hires to 2048, the owner's detailer + Color Match; Upscale = USDU 2x + Color Match + saturation) | 9 | COMPLETE | M | P3-28, P3-31, P3-33, P9-04 | engines/comfyui.js, QualityPage, Advanced |
+
+## Design round 3 (P10)
+Kept as its own table so it doesn't collide with other sessions' rows. Review: `design/design-review-p10/REVIEW.md`.
+
+| ID | Title | Phase | State | Effort | Depends on | Main files |
+|---|---|---|---|---|---|---|
+| P10-00 | Design round 3: review of the Phase 9 screens (Container) | 10 | REVIEW | L | P9-01…P9-08 | design/design-review-p10/ |
+| P10-01 | Reports: grouped cards, action hierarchy, nav count, quoted dialog, empty state, menu groups | 10 | PLANNED | M | P10-00 (decision 3); P10-08 for the empty-state pose (optional) | ReportsSection.jsx, ReportDialog.jsx, MessageList.jsx (menu), ServerSettingsDialog.jsx, SettingsLayout.jsx, tests |
+| P10-02 | Privacy & safety page, device list order and limit, Log out wording | 10 | PLANNED | S–M | P10-00 (decision 2) | ProfileDialog.jsx, settings/DevicesSection.jsx, settings/BlockedSection.jsx, a new settings/PrivacySection.jsx, tests |
+| P10-03 | Blocking polish: collapsed row, menus, pickers, member mark, Undo, DM header ⋯ | 10 | PLANNED | M | P9-07 | MessageList.jsx, MemberList.jsx, DmPanel.jsx, PeoplePicker.jsx, the New message picker, App.jsx (toast), tests |
+| P10-04 | Group DMs polish: picture, previews, welcome art, Members dialog, notice contrast | 10 | PLANNED | S–M | P9-06; P10-08 for the group scene (optional) | GroupAvatar.jsx, DmSidebar.jsx, DmPanel.jsx, GroupMembersDialog.jsx, MessageList.jsx, tests |
+| P10-05 | Image generation: a Styles page, full-width model picker, Hires vs Upscale cards, strength sliders, kie.ai Pictures row | 10 | PLANNED | M–L | P10-00 (decisions 1 and 4) | ImagineSettings.jsx, StylesSection.jsx → StylesPage.jsx, ComfyPage.jsx, QualityPage.jsx, KiePage.jsx, ProfileDialog sections, tests |
+| P10-06 | /imagine panel: labelled chip groups and a steady height | 10 | PLANNED | S–M | P9-04c, P9-05b | ImaginePanel.jsx, tests |
+| P10-07 | Small things: transfer button and list, ☰ badge dot, light amber badge | 10 | PLANNED | S | none | OverviewSection.jsx, TransferDialog.jsx, the channel header in App.jsx, ServerRail.jsx, tests |
+| P10-08 | New art and sound: "all clear", group scene, "privacy" poses; group glyph; two sounds | 10 | PLANNED | S–M | P8-01 | mascotParts.js, Mascot.jsx, serverGlyphs.js, sounds.js, web/public/sounds/, design/design-review-p10/refs/, tests |
