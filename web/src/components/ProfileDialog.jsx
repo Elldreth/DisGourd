@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as api from '../api.js';
 import Avatar from './Avatar.jsx';
+import Icon from './Icon.jsx';
 import AudioSettings from './AudioSettings.jsx';
 import NotificationSettings from './NotificationSettings.jsx';
 import AppearanceSettings from './AppearanceSettings.jsx';
@@ -26,6 +27,8 @@ import { PRESENCE_MODES } from './UserFooter.jsx';
 // last used is remembered per browser; `initialSection` opens a given one.
 const SECTIONS = [
   { id: 'profile', label: 'My account' },
+  // P10-02: signed-in devices and blocked people, out of My account.
+  { id: 'privacy', label: 'Privacy & safety' },
   { id: 'audio', label: 'Voice & audio' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'appearance', label: 'Appearance' },
@@ -204,8 +207,6 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
               </div>
             </div>
           )}
-          {onPasswordChanged && <DevicesSection onToken={onPasswordChanged} />}
-          {onPasswordChanged && <BlockedSection />}
           {passwordOpen && (
             <ChangePasswordDialog
               onClose={() => setPasswordOpen(false)}
@@ -218,11 +219,19 @@ export default function ProfileDialog({ profile, presence = 'online', onClose, o
 
           {onLogout && (
             <div className="border-t border-ink-500/40 pt-5">
-              <button type="button" onClick={onLogout} className="tap rounded-lg px-3 py-2 text-sm font-semibold text-danger ring-1 ring-danger/40 transition hover:bg-danger/10">
-                Sign out
+              <button type="button" onClick={onLogout} className="tap flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-danger ring-1 ring-danger/40 transition hover:bg-danger/10">
+                <Icon name="logout" size={16} />
+                Log out
               </button>
             </div>
           )}
+        </div>
+      );
+    if (id === 'privacy')
+      return (
+        <div className="space-y-6">
+          {onPasswordChanged && <DevicesSection onToken={onPasswordChanged} />}
+          <BlockedSection />
         </div>
       );
     if (id === 'audio') return <AudioSettings onOutputChange={onOutputChange} onPttChange={onPttChange} onMicChange={onMicChange} inCall={inCall} />;

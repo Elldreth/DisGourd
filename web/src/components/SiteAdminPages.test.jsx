@@ -52,7 +52,7 @@ const bars = () => screen.queryAllByRole('region', { name: 'Unsaved changes' });
 test('Site admin lists General, Image generation and its five pages, the pages indented', async () => {
   await open();
   const tabs = within(screen.getByRole('tablist')).getAllByRole('tab').map((t) => t.textContent);
-  expect(tabs.slice(4)).toEqual(['General', 'Image generation', 'ComfyUI', 'Quality', 'Variations', 'kie.ai', 'Try it']);
+  expect(tabs.slice(5)).toEqual(['General', 'Image generation', 'ComfyUI', 'Quality', 'Variations', 'kie.ai', 'Try it']);
   expect(screen.getByRole('tab', { name: 'Quality' }).className).toMatch(/\bpl-6\b/);
   // Link previews lives on General now.
   expect(within(panelFor('General')).getByText(/Link previews/)).toBeTruthy();

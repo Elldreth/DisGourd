@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 // P4-02: Settings is one dialog with sections you can navigate instead of one
 // long scroll. Sections stay mounted while hidden, so edits survive.
 // P5-02: a fixed-size window on the settings kit (a list then a page on
-// phones), My account with status and Sign out, switches for on/off settings.
+// phones), My account with status and Log out, switches for on/off settings.
 
 vi.mock('../api.js', () => ({
   getAdminRegistration: vi.fn(async () => ({ mode: 'open', maxAccounts: 0, envCodeActive: false, codes: [], admins: ['sandy'], linkPreviews: true })),
@@ -41,19 +41,19 @@ test('the sections are tabs; only the chosen one is shown and the rest stay moun
   open();
   const list = screen.getByRole('tablist', { name: 'Settings sections' });
   const tabs = within(list).getAllByRole('tab');
-  expect(tabs.map((t) => t.textContent.trim())).toEqual(['My account', 'Voice & audio', 'Notifications', 'Appearance']);
+  expect(tabs.map((t) => t.textContent.trim())).toEqual(['My account', 'Privacy & safety', 'Voice & audio', 'Notifications', 'Appearance']); // Privacy & safety: P10-02
   expect(tabs[0].getAttribute('aria-selected')).toBe('true');
   // Panels: one visible, the others hidden but still in the DOM.
   const panels = tabs.map(panelFor);
   expect(panels.every(Boolean)).toBe(true);
   expect(panels[0].hidden).toBe(false);
   expect(panels.slice(1).every((p) => p.hidden)).toBe(true);
-  expect(within(panels[3]).getByRole('radio', { name: 'Dark', hidden: true })).toBeTruthy(); // mounted while hidden
+  expect(within(panels[4]).getByRole('radio', { name: 'Dark', hidden: true })).toBeTruthy(); // mounted while hidden
 
-  fireEvent.click(tabs[3]);
-  expect(tabs[3].getAttribute('aria-selected')).toBe('true');
+  fireEvent.click(tabs[4]);
+  expect(tabs[4].getAttribute('aria-selected')).toBe('true');
   expect(tabs[0].getAttribute('aria-selected')).toBe('false');
-  expect(panels[3].hidden).toBe(false);
+  expect(panels[4].hidden).toBe(false);
   expect(panels[0].hidden).toBe(true);
   expect(screen.getByRole('button', { name: 'Upload avatar', hidden: true })).toBeTruthy(); // Profile still mounted
 });
@@ -71,7 +71,7 @@ test('a fixed-size window on desktop, full screen on phones, with tap-sized tabs
   expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
 });
 
-test('My account: who you are, your status, Edit status and Sign out', () => {
+test('My account: who you are, your status, Edit status and Log out', () => {
   const onLogout = vi.fn();
   const onEditStatus = vi.fn();
   open({ profile: { ...profile, statusEmoji: '🎧', statusText: 'Deep work' }, presence: 'dnd', onLogout, onEditStatus });
@@ -81,7 +81,8 @@ test('My account: who you are, your status, Edit status and Sign out', () => {
   expect(within(panel).getByText('Do Not Disturb')).toBeTruthy();
   fireEvent.click(within(panel).getByRole('button', { name: 'Edit status' }));
   expect(onEditStatus).toHaveBeenCalledTimes(1);
-  fireEvent.click(within(panel).getByRole('button', { name: 'Sign out' }));
+  expect(within(panel).queryByRole('list', { name: 'Signed-in devices' })).toBeNull(); // P10-02: in Privacy & safety
+  fireEvent.click(within(panel).getByRole('button', { name: 'Log out' }));
   expect(onLogout).toHaveBeenCalledTimes(1);
 });
 
@@ -104,12 +105,12 @@ test('arrow keys, Home and End move between tabs; Enter puts focus in the panel'
   expect(tabs[1].tabIndex).toBe(0);
   expect(tabs[0].tabIndex).toBe(-1);
   fireEvent.keyDown(tabs[1], { key: 'End' });
-  expect(document.activeElement).toBe(tabs[3]);
-  fireEvent.keyDown(tabs[3], { key: 'ArrowRight' });
+  expect(document.activeElement).toBe(tabs[4]);
+  fireEvent.keyDown(tabs[4], { key: 'ArrowRight' });
   expect(document.activeElement).toBe(tabs[0]); // wraps
   fireEvent.keyDown(tabs[0], { key: 'ArrowUp' });
-  expect(document.activeElement).toBe(tabs[3]);
-  fireEvent.keyDown(tabs[3], { key: 'Home' });
+  expect(document.activeElement).toBe(tabs[4]);
+  fireEvent.keyDown(tabs[4], { key: 'Home' });
   expect(document.activeElement).toBe(tabs[0]);
   fireEvent.keyDown(tabs[0], { key: 'Enter' });
   expect(document.activeElement).toBe(panelFor(tabs[0]));

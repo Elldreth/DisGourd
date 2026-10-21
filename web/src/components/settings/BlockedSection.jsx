@@ -1,7 +1,9 @@
 import Avatar from '../Avatar.jsx';
+import EmptyState from '../EmptyState.jsx';
 import { useBlocked } from '../../state/useBlocks.js';
 
-// Settings › My account › Blocked people (P9-07b): who I've blocked, with Unblock.
+// Settings › Privacy & safety › Blocked people (P9-07b; its own section since
+// P10-02): who I've blocked, with Unblock. Nobody yet: the shield mascot.
 export default function BlockedSection() {
   const { list, unblock } = useBlocked();
   return (
@@ -9,7 +11,7 @@ export default function BlockedSection() {
       <h3 id="blocked-heading" className="text-xs font-semibold uppercase tracking-wide text-gray-500">Blocked people</h3>
       <p className="mt-1 text-xs text-gray-500">They can’t message you or add you to groups, and their messages are hidden behind “Show”. They aren’t told.</p>
       {list.length === 0 ? (
-        <p className="mt-3 text-sm text-gray-400">You haven’t blocked anyone.</p>
+        <EmptyState art="privacy" compact as="p" title="You haven’t blocked anyone." className="pb-2" />
       ) : (
         <ul aria-label="Blocked people" className="mt-3 space-y-1">
           {list.map((u) => (

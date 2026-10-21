@@ -23,8 +23,9 @@ const DOT_CLASS = { online: 'bg-online', idle: 'bg-idle', dnd: 'bg-pink', offlin
 
 // The current-user strip at the bottom of the left sidebar: your avatar (click
 // it to set your status), your name and status (click for your settings), and
-// a Settings gear. Sign out lives at the bottom of the status menu and in
-// Settings › My account (P5-02), not one click away in the footer.
+// a Settings gear. Log out lives at the bottom of the status menu and in
+// Settings › My account (P5-02), not one click away in the footer. (It says
+// "Log out" since P10-02, so it isn't confused with signing out a device.)
 // statusText/statusEmoji: your custom status (shown under your name instead
 // of the plain status word), set from the menu via onEditStatus.
 export default function UserFooter({ user, avatar, status, presence = 'online', statusText, statusEmoji, onSetPresence, onEditStatus, onOpenShortcuts, onOpenProfile, onLogout }) {
@@ -181,7 +182,7 @@ export default function UserFooter({ user, avatar, status, presence = 'online', 
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-gray-300 transition hover:bg-ink-600 hover:text-danger focus-visible:bg-ink-600"
               >
                 <Icon name="logout" size={12} className="shrink-0" />
-                Sign out
+                Log out
               </button>
             </>
           )}
