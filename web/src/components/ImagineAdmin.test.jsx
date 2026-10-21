@@ -7,7 +7,7 @@ const MODELS = [
   { name: 'SD1\\absolutereality_v16.safetensors', family: 'sd15' },
 ];
 // What Save sends when nothing in Advanced was touched (P3-31).
-const NO_ADVANCED = { promptPrefix: null, sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65, detailer: false, detector: null, workflowMode: 'builtin', workflow: null, upscaleWorkflow: null, img2imgWorkflow: null };
+const NO_ADVANCED = { promptPrefix: null, clipSkip: null, hiresSteps: null, hiresDenoise: 0.45, sampler: null, scheduler: null, cfgScale: null, steps: { draft: null, standard: null, high: null }, negative: null, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65, detailer: false, detector: null, workflowMode: 'builtin', workflow: null, upscaleWorkflow: null, img2imgWorkflow: null };
 // Like the server (P9-04a): the default style's fields also flat, beside `presets`.
 const asServer = (comfy) => {
   if (!comfy.presets) return comfy;
@@ -252,8 +252,11 @@ test('P3-28: the hires fix switch and its upscale model (suggested after a test)
   expect(screen.getByLabelText('Upscale model').value).toBe('4x-UltraSharp.pth');
   fireEvent.change(screen.getByLabelText('Upscale model'), { target: { value: '4x-AnimeSharp.pth' } });
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
+  // P9-08: the hires strength (shared), 0.45 by default.
+  expect(screen.getByLabelText('Hires strength').value).toBe('0.45');
+  fireEvent.change(screen.getByLabelText('Hires strength'), { target: { value: '0.4' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-  await waitFor(() => expect(sent()).toMatchObject({ hires: true, upscaler: '4x-AnimeSharp.pth' }));
+  await waitFor(() => expect(sent()).toMatchObject({ hires: true, upscaler: '4x-AnimeSharp.pth', hiresDenoise: 0.4 }));
   fireEvent.click(hires);
   expect(screen.getByLabelText('Upscale model').value).toBe('4x-AnimeSharp.pth'); // still used by the Upscale button
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -296,8 +299,13 @@ test('P3-31: Advanced starts closed; its lists come from the test; defaults are 
   expect(advanced.open).toBe(false);
   fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'checkpoint:sdxl_base.safetensors' } });
   expect(within(screen.getByLabelText('Sampler')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Default (dpmpp_2m)', 'euler', 'dpmpp_2m_sde']);
-  expect(screen.getByLabelText('High').getAttribute('placeholder')).toBe('Default (36)');
-  expect(screen.getByLabelText('CFG').getAttribute('placeholder')).toBe('Default (6)');
+  // P9-08: the SDXL family's new defaults, and the new Advanced fields.
+  expect(screen.getByLabelText('High').getAttribute('placeholder')).toBe('Default (15)');
+  expect(screen.getByLabelText('CFG').getAttribute('placeholder')).toBe('Default (5)');
+  expect(screen.getByLabelText('Hires steps').getAttribute('placeholder')).toBe('Default (15)');
+  expect(within(screen.getByLabelText('CLIP skip')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Default (2)', '1 (off)', '2']);
+  fireEvent.change(screen.getByLabelText('Hires steps'), { target: { value: '20' } });
+  fireEvent.change(screen.getByLabelText('CLIP skip'), { target: { value: '1' } });
   fireEvent.change(screen.getByLabelText('Sampler'), { target: { value: 'dpmpp_2m_sde' } });
   fireEvent.change(screen.getByLabelText('CFG'), { target: { value: '4.5' } });
   fireEvent.change(screen.getByLabelText('High'), { target: { value: '40' } });
@@ -309,7 +317,7 @@ test('P3-31: Advanced starts closed; its lists come from the test; defaults are 
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() =>
     expect(sent()).toMatchObject({
-      sampler: 'dpmpp_2m_sde', scheduler: null, cfgScale: 4.5, steps: { draft: null, standard: null, high: 40 }, negative: 'extra fingers',
+      sampler: 'dpmpp_2m_sde', scheduler: null, cfgScale: 4.5, steps: { draft: null, standard: null, high: 40 }, negative: 'extra fingers', hiresSteps: 20, clipSkip: 1,
       detailer: true, detector: 'bbox/face_yolov8m.pt', detailerDenoise: 0.35, detailerPasses: 3,
     })
   );

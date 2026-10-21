@@ -15,11 +15,12 @@ export const SPLIT_FAMILIES = [
 // Each model type's tuned defaults (match the server's FAMILIES), shown as
 // "Default (…)" in the Advanced settings (P3-31).
 export const TYPE_DEFAULTS = {
-  sd15: { sampler: 'dpmpp_2m', scheduler: 'karras', cfg: 7, steps: { draft: 16, standard: 26, high: 34 } },
-  sdxl: { sampler: 'dpmpp_2m', scheduler: 'karras', cfg: 6, steps: { draft: 18, standard: 28, high: 36 } },
-  flux: { sampler: 'euler', scheduler: 'simple', cfg: 1, steps: { draft: 12, standard: 20, high: 28 } },
-  zimage: { sampler: 'res_multistep', scheduler: 'simple', cfg: 1, steps: { draft: 6, standard: 8, high: 10 } },
-  anima: { sampler: 'er_sde', scheduler: 'simple', cfg: 4, steps: { draft: 20, standard: 30, high: 40 } },
+  // hiresSteps: the hires repaint's; clipSkip: checkpoints only (P9-08).
+  sd15: { sampler: 'dpmpp_2m', scheduler: 'karras', cfg: 7, steps: { draft: 16, standard: 26, high: 34 }, hiresSteps: 26, clipSkip: 1 },
+  sdxl: { sampler: 'dpmpp_2m', scheduler: 'karras', cfg: 5, steps: { draft: 10, standard: 15, high: 15 }, hiresSteps: 15, clipSkip: 2 },
+  flux: { sampler: 'euler', scheduler: 'simple', cfg: 1, steps: { draft: 12, standard: 20, high: 28 }, hiresSteps: 20 },
+  zimage: { sampler: 'res_multistep', scheduler: 'simple', cfg: 1, steps: { draft: 6, standard: 8, high: 10 }, hiresSteps: 8 },
+  anima: { sampler: 'er_sde', scheduler: 'simple', cfg: 4, steps: { draft: 20, standard: 30, high: 40 }, hiresSteps: 30 },
 };
 export const QUALITY_NAMES = { draft: 'Draft', standard: 'Standard', high: 'High' };
 // A number field's value for the API: blank is null.

@@ -33,6 +33,7 @@ const KNOWN_NODES = ['CheckpointLoaderSimple', 'KSampler', 'EmptyLatentImage', '
 // What the mock saw.
 const seen = { prompts: [], deleted: [], interrupts: 0, uploads: [] };
 let hasTiled = true; // whether the mock has the Ultimate SD Upscale node
+let hasExtras = true; // P9-08: SAMLoader (with a model), KJNodes' ColorMatch, WAS's Image Filter Adjustments
 const SAMPLERS = ['euler', 'dpmpp_2m', 'dpmpp_2m_sde'];
 const SCHEDULERS = ['simple', 'karras', 'exponential'];
 const DETECTORS = ['bbox/hand_yolov8n.pt', 'bbox/face_yolov8n.pt', 'bbox/face_yolov8m.pt'];
@@ -60,6 +61,9 @@ function startMock() {
         return json(200, partsListed ? { KSampler: { input: { required: { sampler_name: [SAMPLERS], scheduler: [SCHEDULERS] } } } } : {});
       }
       if (url.pathname === '/object_info/UltralyticsDetectorProvider') return combo('UltralyticsDetectorProvider', 'model_name', DETECTORS);
+      if (url.pathname === '/object_info/SAMLoader') return json(200, hasExtras ? { SAMLoader: { input: { required: { model_name: [['sam_vit_h_4b8939.pth', 'sam_vit_b_01ec64.pth']] } } } } : {});
+      if (url.pathname === '/object_info/ColorMatch') return json(200, hasExtras ? { ColorMatch: { input: { required: {} } } } : {});
+      if (decodeURIComponent(url.pathname) === '/object_info/Image Filter Adjustments') return json(200, hasExtras ? { 'Image Filter Adjustments': { input: { required: {} } } } : {});
       if (url.pathname === '/object_info/UltimateSDUpscaleNoUpscale') return json(200, hasTiled ? { UltimateSDUpscaleNoUpscale: { input: { required: {} } } } : {});
       if (url.pathname === '/object_info/FaceDetailer') return json(200, hasTiled ? { FaceDetailer: { input: { required: {} } } } : {});
       if (url.pathname === '/object_info/UltimateSDUpscale') return json(200, hasTiled ? { UltimateSDUpscale: { input: { required: {} } } } : {});
@@ -244,14 +248,17 @@ describe('the engine', () => {
     const { workflow: wf, width, height, hires } = comfy.buildWorkflow(request({ quality: 'high' }), on, { seed: 7 });
     expect(hires).toBe(true);
     expect(wf['5'].inputs).toMatchObject({ width: 1024, height: 1024 }); // the Standard size
-    expect([width, height]).toEqual([1536, 1536]);
+    expect([width, height]).toEqual([1792, 1792]); // P9-08: the Medium tier's 1792 long edge
     expect(wf['20']).toEqual({ class_type: 'UpscaleModelLoader', inputs: { model_name: '4x-UltraSharp.pth' } });
     expect(wf['21']).toEqual({ class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['20', 0], image: ['8', 0] } });
-    expect(wf['22']).toEqual({ class_type: 'ImageScale', inputs: { image: ['21', 0], upscale_method: 'lanczos', width: 1536, height: 1536, crop: 'disabled' } });
+    expect(wf['22']).toEqual({ class_type: 'ImageScale', inputs: { image: ['21', 0], upscale_method: 'lanczos', width: 1792, height: 1792, crop: 'disabled' } });
     expect(wf['23']).toEqual({ class_type: 'VAEEncode', inputs: { pixels: ['22', 0], vae: ['4', 2] } });
-    expect(wf['24'].inputs).toMatchObject({ seed: 7, denoise: 0.4, steps: 28, model: ['4', 0], positive: ['6', 0], negative: ['7', 0], latent_image: ['23', 0] });
-    expect(wf['3'].inputs.steps).toBe(36); // the first pass keeps High's steps
-    expect(wf['9'].inputs.images).toEqual(['25', 0]);
+    // P9-08: 15 hires steps at 0.45; the base image keeps High's (15) steps.
+    expect(wf['24'].inputs).toMatchObject({ seed: 7, denoise: 0.45, steps: 15, model: ['4', 0], positive: ['6', 0], negative: ['7', 0], latent_image: ['23', 0] });
+    expect(wf['3'].inputs.steps).toBe(15);
+    // P9-08: then a Color Match back to the base image.
+    expect(wf['43']).toEqual({ class_type: 'ColorMatch', inputs: { image_ref: ['8', 0], image_target: ['25', 0], method: 'hm-mvgd-hm', strength: 1, multithread: true } });
+    expect(wf['9'].inputs.images).toEqual(['43', 0]);
     // Flux in parts: the repaint uses the same guidance and loaders.
     const flux = comfy.buildWorkflow(request({ quality: 'high' }), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0], upscaler: 'x.pth' })).workflow;
     expect(flux['24'].inputs).toMatchObject({ model: ['11', 0], positive: ['10', 0], cfg: 1 });
@@ -263,19 +270,22 @@ describe('the engine', () => {
       expect(out.workflow['20']).toBeUndefined();
       expect(out.workflow['9'].inputs.images).toEqual(['8', 0]);
     }
-    // Each tier stays within its hires budget (10% rounding allowance).
+    // P9-08: the SDXL family's hires reaches each tier's long edge (multiples of 8).
     for (const tier of ['low', 'medium', 'high']) {
       for (const shape of ['square', 'portrait', 'landscape', 'wide']) {
         const out = comfy.buildWorkflow(request({ quality: 'high', shape }), { ...on, tier });
-        expect(out.width % 64 + out.height % 64).toBe(0);
-        expect(out.width * out.height).toBeLessThanOrEqual(comfy.HIRES_MP[tier] * 1e6 * 1.1);
+        expect(out.width % 8 + out.height % 8).toBe(0);
+        expect(Math.max(out.width, out.height)).toBe(comfy.HIRES_LONG[tier]);
       }
     }
+    // Other families keep the megapixel budget (10% rounding allowance).
+    const sd = comfy.buildWorkflow(request({ quality: 'high' }), { ...on, family: 'sd15', tier: 'high' });
+    expect(sd.width * sd.height).toBeLessThanOrEqual(comfy.HIRES_MP.high * 1e6 * 1.1);
   });
 
   test('P3-28: a hires generation runs end to end; a missing upscale model is explained; config round-trips', async () => {
     const out = await comfy.generate(request({ quality: 'high' }), cfg({ upscaler: '4x-UltraSharp.pth', tier: 'high' }));
-    expect(out).toMatchObject({ width: 1536, height: 1536 });
+    expect(out).toMatchObject({ width: 2048, height: 2048 }); // P9-08: 1216 square -> 2048
     expect(seen.prompts.at(-1)['20'].inputs.model_name).toBe('4x-UltraSharp.pth');
     await expect(comfy.generate(request({ quality: 'high' }), cfg({ upscaler: 'gone.pth' }))).rejects.toMatchObject({ message: 'The upscale model "gone.pth" isn\'t in ComfyUI any more' });
     expect(comfy.validateConfig({ upscaler: 5 }).error).toMatch(/upscale model/);
@@ -287,13 +297,13 @@ describe('the engine', () => {
     comfy.upscalerCache.clear();
     const before = seen.prompts.length;
     const out = await comfy.generate(request({ quality: 'high' }), cfg({ upscaler: undefined, tier: 'high' }));
-    expect(out).toMatchObject({ width: 1536, height: 1536 });
+    expect(out).toMatchObject({ width: 2048, height: 2048 });
     expect(seen.prompts.at(-1)['20'].inputs.model_name).toBe('4x-UltraSharp.pth');
     expect(seen.prompts.length).toBe(before + 1);
     expect(comfy.upscalerCache.get(mockUrl)).toMatchObject({ name: '4x-UltraSharp.pth' });
     expect(await comfy.resolveUpscaler(cfg({ upscaler: 'mine.pth' }))).toBe('mine.pth'); // a saved one wins
     // Switched off: no upscale model is looked for or used.
-    expect((await comfy.generate(request({ quality: 'high' }), cfg({ hires: false }))).width).toBe(1088); // High's own size, no fix
+    expect((await comfy.generate(request({ quality: 'high' }), cfg({ hires: false }))).width).toBe(1216); // High's own size (High tier square, P9-08), no fix
     expect(seen.prompts.at(-1)['20']).toBeUndefined();
   });
 
@@ -312,14 +322,22 @@ describe('the engine', () => {
     expect(tiled['30'].class_type).toBe('UltimateSDUpscale');
     expect(tiled['30'].inputs).toMatchObject({
       image: ['1', 0], model: ['4', 0], positive: ['6', 0], negative: ['7', 0], vae: ['4', 2], upscale_model: ['20', 0],
-      upscale_by: 2, seed: 5, steps: 28, cfg: 6, sampler_name: 'dpmpp_2m', scheduler: 'karras', denoise: 0.25, tile_width: 768, tile_height: 768, mode_type: 'Linear', seam_fix_mode: 'None',
+      // P9-08: the owner's Phase 5 sampling for classic-CFG models.
+      upscale_by: 2, seed: 5, steps: 30, cfg: 6, sampler_name: 'ddim', scheduler: 'simple', denoise: 0.25, tile_width: 768, tile_height: 768, mode_type: 'Linear', seam_fix_mode: 'None',
+      mask_blur: 16, tile_padding: 64, force_uniform_tiles: true, tiled_decode: false,
     });
     expect(tiled['3'] || tiled['5'] || tiled['8']).toBeUndefined(); // no KSampler, latent or decode of its own
-    expect(tiled['9'].inputs.images).toEqual(['30', 0]);
+    // P9-08: Color Match back to the image being upscaled, then saturation 1.15.
+    expect(tiled['50']).toEqual({ class_type: 'ColorMatch', inputs: { image_ref: ['1', 0], image_target: ['30', 0], method: 'hm-mvgd-hm', strength: 1, multithread: true } });
+    expect(tiled['51']).toEqual({
+      class_type: 'Image Filter Adjustments',
+      inputs: { image: ['50', 0], brightness: 0, contrast: 1, saturation: 1.15, sharpness: 1, blur: 0, gaussian_blur: 0, edge_enhance: 0, detail_enhance: false },
+    });
+    expect(tiled['9'].inputs.images).toEqual(['51', 0]);
     expect(tiled['7'].inputs.text).toMatch(/nsfw/); // the negative nudge still applies outside 18+
     // Flux in parts: its loaders, guidance and VAE; default denoise and tile size.
     const flux = comfy.buildUpscaleWorkflow(request(up), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0], upscaler: 'u.pth', upscaleMode: 'tiled' }), 'in.png').workflow;
-    expect(flux['30'].inputs).toMatchObject({ model: ['11', 0], positive: ['10', 0], vae: ['13', 0], cfg: 1, steps: 20, denoise: 0.3, tile_width: 1024 });
+    expect(flux['30'].inputs).toMatchObject({ model: ['11', 0], positive: ['10', 0], vae: ['13', 0], cfg: 1, steps: 20, denoise: 0.2, tile_width: 1280 }); // its own sampling
   });
 
   test('P3-29: Upscale config: mode, denoise and tile size are checked', () => {
@@ -327,20 +345,22 @@ describe('the engine', () => {
     expect(comfy.validateConfig({ tileDenoise: 0.9 }).error).toMatch(/0.05–0.6/);
     expect(comfy.validateConfig({ tileSize: 1000 }).error).toMatch(/steps of 64/);
     expect(comfy.validateConfig({ upscaleMode: 'tiled', tileDenoise: 0.35, tileSize: 1536 })).toMatchObject({ upscaleMode: 'tiled', tileDenoise: 0.35, tileSize: 1536 });
-    expect(comfy.publicConfig({})).toMatchObject({ upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024 });
+    expect(comfy.publicConfig({})).toMatchObject({ upscaleMode: 'model', tileDenoise: 0.2, tileSize: 1280 }); // P9-08 defaults
   });
 
   test('P3-31: advanced sampler, scheduler, CFG and steps reach every sampling node; blanks keep the defaults', () => {
     const adv = cfg({ sampler: 'dpmpp_2m_sde', scheduler: 'exponential', cfgScale: 4.5, steps: { draft: 9, standard: 22, high: 40 }, upscaler: 'u.pth', tier: 'high' });
     const high = comfy.buildWorkflow(request({ quality: 'high' }), adv).workflow;
     expect(high['3'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m_sde', scheduler: 'exponential', cfg: 4.5, steps: 40 });
-    expect(high['24'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m_sde', scheduler: 'exponential', cfg: 4.5, steps: 22 }); // the hires repaint: Standard's steps
+    expect(high['24'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m_sde', scheduler: 'exponential', cfg: 4.5, steps: 15 }); // the hires repaint: its own steps (P9-08)
+    expect(comfy.buildWorkflow(request({ quality: 'high' }), { ...adv, hiresSteps: 12 }).workflow['24'].inputs.steps).toBe(12);
     expect(comfy.buildWorkflow(request({ quality: 'draft' }), adv).workflow['3'].inputs.steps).toBe(9);
     const tiled = comfy.buildUpscaleWorkflow(request({ upscale: { width: 512, height: 512, factor: 2 } }), { ...adv, upscaleMode: 'tiled' }, 'in.png').workflow;
-    expect(tiled['30'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m_sde', scheduler: 'exponential', cfg: 4.5, steps: 22 });
+    // P9-08: the tiled upscale's sampling is built in for classic-CFG models.
+    expect(tiled['30'].inputs).toMatchObject({ sampler_name: 'ddim', scheduler: 'simple', cfg: 6, steps: 30 });
     // Blank: the model type's tuned defaults; a partial steps object fills the rest.
-    expect(comfy.buildWorkflow(request(), cfg()).workflow['3'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m', scheduler: 'karras', cfg: 6, steps: 28 });
-    expect(comfy.buildWorkflow(request({ quality: 'high' }), cfg({ steps: { draft: 5 } })).workflow['3'].inputs.steps).toBe(36);
+    expect(comfy.buildWorkflow(request(), cfg()).workflow['3'].inputs).toMatchObject({ sampler_name: 'dpmpp_2m', scheduler: 'karras', cfg: 5, steps: 15 });
+    expect(comfy.buildWorkflow(request({ quality: 'high' }), cfg({ steps: { draft: 5 } })).workflow['3'].inputs.steps).toBe(15);
     expect(comfy.buildWorkflow(request(), cfg({ model: MODELS[0], family: 'flux' })).workflow['3'].inputs).toMatchObject({ sampler_name: 'euler', cfg: 1 });
   });
 
@@ -361,16 +381,20 @@ describe('the engine', () => {
     expect(std.workflow['41']).toMatchObject({
       class_type: 'FaceDetailer',
       inputs: {
-        image: ['8', 0], model: ['4', 0], clip: ['4', 1], vae: ['4', 2], positive: ['6', 0], negative: ['7', 0], bbox_detector: ['40', 0],
-        seed: 3, steps: 28, cfg: 6, sampler_name: 'euler', scheduler: 'karras', denoise: 0.35, guide_size: 1024, max_size: 2048, bbox_crop_factor: 2, sam_mask_hint_use_negative: 'False', cycle: 1,
+        // P9-08: CLIP skip 2 (node 15); the owner's settings (guide and max 1024 for the
+        // face box, crop factor 3, 30 steps, CFG 5, ddim / simple), the saved strength, 3 passes.
+        image: ['8', 0], model: ['4', 0], clip: ['15', 0], vae: ['4', 2], positive: ['6', 0], negative: ['7', 0], bbox_detector: ['40', 0],
+        seed: 3, steps: 30, cfg: 5, sampler_name: 'ddim', scheduler: 'simple', denoise: 0.35, guide_size: 1024, guide_size_for: true, max_size: 1024, bbox_crop_factor: 3,
+        sam_mask_hint_use_negative: 'False', cycle: 3,
       },
     });
-    expect(std.workflow['9'].inputs.images).toEqual(['41', 0]);
+    expect(std.workflow['9'].inputs.images).toEqual(['43', 0]); // then Color Match
+    expect(std.workflow['43'].inputs).toMatchObject({ image_ref: ['8', 0], image_target: ['41', 0] });
     const high = comfy.buildWorkflow(request({ quality: 'high' }), on).workflow;
     expect(high['41'].inputs.image).toEqual(['25', 0]); // after the hires repaint
     // Flux in parts: its own loaders and guidance; SD 1.5 guides at 512.
     const flux = comfy.buildWorkflow(request(), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0], detailer: true, detector: 'd.pt' })).workflow;
-    expect(flux['41'].inputs).toMatchObject({ model: ['11', 0], clip: ['12', 0], vae: ['13', 0], positive: ['10', 0], cfg: 1 });
+    expect(flux['41'].inputs).toMatchObject({ model: ['11', 0], clip: ['12', 0], vae: ['13', 0], positive: ['10', 0], cfg: 1, sampler_name: 'euler' }); // its own sampling
     expect(comfy.buildWorkflow(request(), cfg({ family: 'sd15', detailer: true, detector: 'd.pt' })).workflow['41'].inputs.guide_size).toBe(512);
     for (const [req, c] of [[request({ quality: 'draft' }), on], [request(), { ...on, detailer: false }], [request(), { ...on, detector: null }]]) {
       const out = comfy.buildWorkflow(req, c);
@@ -385,7 +409,7 @@ describe('the engine', () => {
     comfy.detectorCache.clear();
     await comfy.generate(request(), cfg({ detailer: true }));
     expect(seen.prompts.at(-1)['40'].inputs.model_name).toBe('bbox/face_yolov8m.pt');
-    expect(seen.prompts.at(-1)['9'].inputs.images).toEqual(['41', 0]);
+    expect(seen.prompts.at(-1)['41'].class_type).toBe('FaceDetailer');
     await comfy.generate(request({ quality: 'draft' }), cfg({ detailer: true }));
     expect(seen.prompts.at(-1)['41']).toBeUndefined();
     await expect(comfy.generate(request(), cfg({ detailer: true, detector: 'gone.pt' }))).rejects.toMatchObject({ message: `The face detector "gone.pt" isn't in ComfyUI any more` });
@@ -409,7 +433,8 @@ describe('the engine', () => {
     expect(wf['31']).toMatchObject({ class_type: 'UltimateSDUpscaleNoUpscale', inputs: { upscaled_image: ['30', 0], seed: 11, denoise: 0.25, model: ['4', 0], positive: ['6', 0], vae: ['4', 2] } });
     expect(wf['32'].inputs).toMatchObject({ upscaled_image: ['31', 0], seed: 12 });
     for (const k of ['image', 'upscale_model', 'upscale_by']) expect(k in wf['31'].inputs).toBe(false);
-    expect(wf['9'].inputs.images).toEqual(['32', 0]);
+    expect(wf['50'].inputs.image_target).toEqual(['32', 0]); // the last pass feeds Color Match (P9-08)
+    expect(wf['9'].inputs.images).toEqual(['51', 0]);
     expect(comfy.buildUpscaleWorkflow(up, cfg({ upscaler: 'u.pth', upscaleMode: 'tiled' }), 'in.png').workflow['31']).toBeUndefined(); // one pass by default
     expect(comfy.validateConfig({ detailerPasses: 0 }).error).toMatch(/1–5/);
     expect(comfy.validateConfig({ tilePasses: 4 }).error).toMatch(/1–3/);
@@ -504,7 +529,7 @@ describe('the engine', () => {
     const req = request({ quality: 'high', shape: 'portrait', initName: 'disgourd-vary-x.png', init: { denoise: 0.3 } });
     const out = comfy.buildWorkflow(req, cfg({ upscaler: 'u.pth', detailer: true, detector: 'd.pt', tier: 'medium', varyLoops: 3 }), { seed: 9 });
     const wf = out.workflow;
-    const final = comfy.hiresSize(comfy.sizeFor('sdxl', 'standard', 'portrait', 'medium'), 'medium');
+    const final = comfy.hiresLongSize(comfy.sizeFor('sdxl', 'standard', 'portrait', 'medium'), 'medium'); // P9-08: the long-edge hires size
     expect([out.width, out.height]).toEqual([final.width, final.height]);
     expect(out.loops).toBe(3);
     // Loop 1: the image, scaled to the final size, encoded, repainted at 0.3, detailed.
@@ -513,21 +538,25 @@ describe('the engine', () => {
     expect(wf['5']).toEqual({ class_type: 'VAEEncode', inputs: { pixels: ['2', 0], vae: ['4', 2] } });
     expect(wf['3'].inputs).toMatchObject({ seed: 9, denoise: 0.3, latent_image: ['5', 0] });
     expect(wf['24']).toBeUndefined(); // no separate hires pass: the loops refine at full size
-    expect(wf['41'].inputs).toMatchObject({ image: ['8', 0], max_size: 1536 });
-    // Loops 2 and 3: from the previous loop's detailed image, new seeds.
-    expect(wf['110']).toEqual({ class_type: 'VAEEncode', inputs: { pixels: ['41', 0], vae: ['4', 2] } });
+    expect(wf['41'].inputs).toMatchObject({ image: ['8', 0], max_size: 1024 });
+    // P9-08: each loop ends in a Color Match back to the source picture.
+    expect(wf['43']).toEqual({ class_type: 'ColorMatch', inputs: { image_ref: ['1', 0], image_target: ['41', 0], method: 'hm-mvgd-hm', strength: 1, multithread: true } });
+    // Loops 2 and 3: from the previous loop's detailed, color-matched image, new seeds.
+    expect(wf['110']).toEqual({ class_type: 'VAEEncode', inputs: { pixels: ['43', 0], vae: ['4', 2] } });
     expect(wf['111'].inputs).toMatchObject({ seed: 10, denoise: 0.3, latent_image: ['110', 0], model: ['4', 0] });
     expect(wf['112']).toEqual({ class_type: 'VAEDecode', inputs: { samples: ['111', 0], vae: ['4', 2] } });
     expect(wf['113'].inputs).toMatchObject({ image: ['112', 0], seed: 10 });
-    expect(wf['120'].inputs.pixels).toEqual(['113', 0]);
+    expect(wf['114'].inputs).toMatchObject({ image_ref: ['1', 0], image_target: ['113', 0] });
+    expect(wf['120'].inputs.pixels).toEqual(['114', 0]);
     expect(wf['121'].inputs).toMatchObject({ seed: 11 });
-    expect(wf['9'].inputs.images).toEqual(['123', 0]);
+    expect(wf['9'].inputs.images).toEqual(['124', 0]);
     // Two loops by default; without the detailer a loop is encode → sample → decode.
     const plainLoops = comfy.buildWorkflow(request({ initName: 'v.png', init: { denoise: 0.5 } }), cfg()).workflow;
     expect(plainLoops['111'].inputs.denoise).toBe(0.5);
     expect(plainLoops['113']).toBeUndefined();
     expect(plainLoops['120']).toBeUndefined();
-    expect(plainLoops['9'].inputs.images).toEqual(['112', 0]);
+    expect(plainLoops['114'].inputs.image_target).toEqual(['112', 0]);
+    expect(plainLoops['9'].inputs.images).toEqual(['114', 0]);
     // Flux in parts: its own VAE through every loop.
     const flux = comfy.buildWorkflow(request({ initName: 'v.png', init: { denoise: 0.5 } }), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0] })).workflow;
     expect(flux['5'].inputs.vae).toEqual(['13', 0]);
@@ -539,9 +568,9 @@ describe('the engine', () => {
     expect(plain['3'].inputs.denoise).toBe(1);
     expect(plain['1']).toBeUndefined();
     expect(plain['110']).toBeUndefined();
-    // The detailer's biggest crop follows the tier; SD 1.5 stays small.
-    for (const [tier, max] of [['low', 1024], ['medium', 1536], ['high', 2048]]) {
-      expect(comfy.buildWorkflow(request(), cfg({ tier, detailer: true, detector: 'd.pt' })).workflow['41'].inputs.max_size).toBe(max);
+    // P9-08: the face is repainted at 1024 on every tier (it was 1024–2048 by tier); SD 1.5 stays small.
+    for (const tier of ['low', 'medium', 'high']) {
+      expect(comfy.buildWorkflow(request(), cfg({ tier, detailer: true, detector: 'd.pt' })).workflow['41'].inputs).toMatchObject({ guide_size: 1024, max_size: 1024 });
     }
     expect(comfy.buildWorkflow(request(), cfg({ family: 'sd15', detailer: true, detector: 'd.pt' })).workflow['41'].inputs).toMatchObject({ guide_size: 512, max_size: 768 });
     expect(comfy.validateConfig({ varyLoops: 5 }).error).toMatch(/1–4/);
@@ -609,12 +638,108 @@ describe('the engine', () => {
     });
   });
 
+  // ---- P9-08: the owner's workflow ----
+  test('P9-08: SDXL at High: CLIP skip 2, a 1024×1536 base image (15 steps, CFG 5), hires to 1368×2048 (15 at 0.45), the owner’s detailer with SAM, Color Match to the base image', () => {
+    const on = cfg({ upscaler: '4x-AnimeSharp.pth', detailer: true, detector: 'bbox/face_yolov8m.pt', sam: 'sam_vit_b_01ec64.pth', tier: 'high' });
+    const { workflow: wf, width, height } = comfy.buildWorkflow(request({ quality: 'high', shape: 'portrait' }), on, { seed: 4 });
+    expect(wf['15']).toEqual({ class_type: 'CLIPSetLastLayer', inputs: { clip: ['4', 1], stop_at_clip_layer: -2 } });
+    expect(wf['6'].inputs.clip).toEqual(['15', 0]);
+    expect(wf['7'].inputs.clip).toEqual(['15', 0]);
+    expect(wf['5'].inputs).toMatchObject({ width: 1024, height: 1536 });
+    expect(wf['3'].inputs).toMatchObject({ steps: 15, cfg: 5, sampler_name: 'dpmpp_2m', scheduler: 'karras', denoise: 1 });
+    expect([width, height]).toEqual([1368, 2048]);
+    expect(wf['22'].inputs).toMatchObject({ width: 1368, height: 2048 });
+    expect(wf['24'].inputs).toMatchObject({ steps: 15, denoise: 0.45, cfg: 5, sampler_name: 'dpmpp_2m', scheduler: 'karras', seed: 4 });
+    expect(wf['42']).toEqual({ class_type: 'SAMLoader', inputs: { model_name: 'sam_vit_b_01ec64.pth', device_mode: 'AUTO' } });
+    expect(wf['41'].inputs).toMatchObject({
+      image: ['25', 0], clip: ['15', 0], sam_model_opt: ['42', 0], bbox_detector: ['40', 0],
+      guide_size: 1024, guide_size_for: true, max_size: 1024, steps: 30, cfg: 5, sampler_name: 'ddim', scheduler: 'simple', denoise: 0.3,
+      feather: 5, noise_mask: true, force_inpaint: true, bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: 3,
+      sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93, sam_bbox_expansion: 0, sam_mask_hint_threshold: 0.7, sam_mask_hint_use_negative: 'False', drop_size: 10, cycle: 3,
+    });
+    expect(wf['43']).toEqual({ class_type: 'ColorMatch', inputs: { image_ref: ['8', 0], image_target: ['41', 0], method: 'hm-mvgd-hm', strength: 1, multithread: true } });
+    expect(wf['9'].inputs.images).toEqual(['43', 0]);
+    // Standard: the base image, the detailer and Color Match; no hires.
+    const std = comfy.buildWorkflow(request({ shape: 'portrait' }), on).workflow;
+    expect(std['24']).toBeUndefined();
+    expect(std['5'].inputs).toMatchObject({ width: 1024, height: 1536 });
+    expect(std['41'].inputs.image).toEqual(['8', 0]);
+    expect(std['9'].inputs.images).toEqual(['43', 0]);
+    // Draft: about 1 MP, 10 steps, nothing else.
+    const draft = comfy.buildWorkflow(request({ quality: 'draft', shape: 'portrait' }), on);
+    expect([draft.width, draft.height]).toEqual([832, 1216]);
+    expect(draft.workflow['3'].inputs.steps).toBe(10);
+    for (const k of ['24', '41', '42', '43']) expect(draft.workflow[k]).toBeUndefined();
+    expect(draft.workflow['9'].inputs.images).toEqual(['8', 0]);
+  });
+
+  test('P9-08: CLIP skip, saved overrides, other families, and the new settings', () => {
+    // CLIP skip 1 (a style's choice) drops the node; split models and SD 1.5 don't get it by default.
+    const one = comfy.buildWorkflow(request(), cfg({ clipSkip: 1 })).workflow;
+    expect(one['15']).toBeUndefined();
+    expect(one['6'].inputs.clip).toEqual(['4', 1]);
+    expect(comfy.buildWorkflow(request(), cfg({ family: 'sd15' })).workflow['15']).toBeUndefined();
+    expect(comfy.buildWorkflow(request(), cfg({ family: 'sd15', clipSkip: 2 })).workflow['15'].inputs.stop_at_clip_layer).toBe(-2);
+    const flux = comfy.buildWorkflow(request({ quality: 'high' }), cfg({ kind: 'unet', model: UNETS[0], family: 'flux', clip1: CLIPS[0], clip2: CLIPS[1], vae: VAES[0], clipSkip: 2, upscaler: 'u.pth', detailer: true, detector: 'd.pt' })).workflow;
+    expect(flux['15']).toBeUndefined();
+    expect(flux['41'].inputs).toMatchObject({ cfg: 1, sampler_name: 'euler', guide_size: 1024, max_size: 1024 }); // its own sampling, the new crop
+    // Saved values still win: steps, CFG, sampler, hires steps and strength, detailer strength and passes.
+    const mine = comfy.buildWorkflow(request({ quality: 'high' }), cfg({ steps: { high: 36 }, cfgScale: 6, sampler: 'euler', hiresSteps: 20, hiresDenoise: 0.5, upscaler: 'u.pth', detailer: true, detector: 'd.pt', detailerDenoise: 0.4, detailerPasses: 2 })).workflow;
+    expect(mine['3'].inputs).toMatchObject({ steps: 36, cfg: 6, sampler_name: 'euler' });
+    expect(mine['24'].inputs).toMatchObject({ steps: 20, denoise: 0.5 });
+    expect(mine['41'].inputs).toMatchObject({ denoise: 0.4, cycle: 2, sampler_name: 'ddim', cfg: 5 }); // the detailer's own sampling stays
+    // Color Match can be absent (no KJNodes): the detailer's image is saved.
+    expect(comfy.buildWorkflow(request(), cfg({ detailer: true, detector: 'd.pt', colorMatch: false })).workflow['9'].inputs.images).toEqual(['41', 0]);
+    // Settings: CLIP skip 1–2, hires steps 1–150 (both a style's), hires strength 0.1–0.8 (shared).
+    expect(comfy.validateConfig({ clipSkip: 3 }).error).toBe('CLIP skip is 1 or 2');
+    expect(comfy.validateConfig({ hiresSteps: 0 }).error).toBe('Hires steps are 1–150');
+    expect(comfy.validateConfig({ hiresDenoise: 0.9 }).error).toBe('The hires strength is 0.1–0.8');
+    const saved = comfy.validateConfig({ presets: [{ id: 'a', name: 'A', model: MODELS[1], clipSkip: 1, hiresSteps: 18 }, { id: 'b', name: 'B', model: MODELS[1] }], defaultPreset: 'a', hiresDenoise: 0.5 });
+    expect(saved.error).toBeUndefined();
+    expect(saved.presets[0]).toMatchObject({ clipSkip: 1, hiresSteps: 18 });
+    expect(saved.presets[1].clipSkip).toBeUndefined();
+    expect(saved.hiresDenoise).toBe(0.5);
+    expect(comfy.styleConfig(saved, 'a').config).toMatchObject({ clipSkip: 1, hiresSteps: 18, hiresDenoise: 0.5 });
+    expect(comfy.publicConfig(saved)).toMatchObject({ clipSkip: 1, hiresSteps: 18, hiresDenoise: 0.5, detailerPasses: 3, detailerDenoise: 0.3 });
+  });
+
+  test('P9-08: generating finds the SAM model; without SAM, KJNodes or WAS the step is left out and noted', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      comfy.nodeCache.clear();
+      comfy.samCache.clear();
+      let out = await comfy.generate(request(), cfg({ detailer: true, detector: 'bbox/face_yolov8m.pt' }));
+      expect(seen.prompts.at(-1)['42'].inputs.model_name).toBe('sam_vit_b_01ec64.pth'); // sam_vit_b preferred
+      expect(seen.prompts.at(-1)['9'].inputs.images).toEqual(['43', 0]);
+      expect(out.notes).toEqual([]);
+      const tiled = await comfy.generate(request({ upscale: { buffer: PNG, width: 512, height: 512, factor: 2 } }), cfg({ upscaler: 'u.pth', upscaleMode: 'tiled' }));
+      expect(seen.prompts.at(-1)['9'].inputs.images).toEqual(['51', 0]);
+      expect(tiled.notes).toEqual([]);
+      hasExtras = false;
+      comfy.nodeCache.clear();
+      comfy.samCache.clear();
+      out = await comfy.generate(request(), cfg({ detailer: true, detector: 'bbox/face_yolov8m.pt' }));
+      expect(seen.prompts.at(-1)['42']).toBeUndefined();
+      expect('sam_model_opt' in seen.prompts.at(-1)['41'].inputs).toBe(false);
+      expect(seen.prompts.at(-1)['9'].inputs.images).toEqual(['41', 0]);
+      expect(out.notes).toEqual(['faces found without SAM: ComfyUI is missing SAMLoader', 'made without Color Match: ComfyUI is missing ColorMatch']);
+      const plain = await comfy.generate(request({ upscale: { buffer: PNG, width: 512, height: 512, factor: 2 } }), cfg({ upscaler: 'u.pth', upscaleMode: 'tiled' }));
+      expect(seen.prompts.at(-1)['9'].inputs.images).toEqual(['30', 0]);
+      expect(plain.notes).toEqual(['made without Color Match: ComfyUI is missing ColorMatch', 'upscaled without the saturation lift: ComfyUI is missing Image Filter Adjustments']);
+    } finally {
+      hasExtras = true;
+      comfy.nodeCache.clear();
+      warn.mockRestore();
+    }
+  });
+
   test('SD 1.5 / SDXL workflows: checkpoint, sizes, sampler, and the negative nudge only outside 18+', () => {
     const { workflow, width, height } = comfy.buildWorkflow(request(), cfg());
     expect(workflow['4'].inputs.ckpt_name).toBe(MODELS[1]);
-    expect(workflow['5']).toMatchObject({ class_type: 'EmptyLatentImage', inputs: { width: 1024, height: 1024 } });
-    expect([width, height]).toEqual([1024, 1024]);
-    expect(workflow['3'].inputs).toMatchObject({ steps: 28, cfg: 6, sampler_name: 'dpmpp_2m', scheduler: 'karras' });
+    // P9-08: the High tier's 1216 square, 15 steps, CFG 5.
+    expect(workflow['5']).toMatchObject({ class_type: 'EmptyLatentImage', inputs: { width: 1216, height: 1216 } });
+    expect([width, height]).toEqual([1216, 1216]);
+    expect(workflow['3'].inputs).toMatchObject({ steps: 15, cfg: 5, sampler_name: 'dpmpp_2m', scheduler: 'karras' });
     expect(workflow['9'].class_type).toBe('PreviewImage');
     expect(workflow['7'].inputs.text).toMatch(/nsfw, nude, nudity$/);
     expect(comfy.buildWorkflow(request(), cfg(), { permissive: true }).workflow['7'].inputs.text).not.toMatch(/nsfw/);
@@ -650,7 +775,7 @@ describe('the engine', () => {
 
   test('a generation queues the prompt, waits for it and fetches the image', async () => {
     const out = await comfy.generate(request(), cfg());
-    expect(out).toMatchObject({ model: MODELS[1], width: 1024, height: 1024 });
+    expect(out).toMatchObject({ model: MODELS[1], width: 1216, height: 1216 });
     expect(out.images[0].buffer.equals(PNG)).toBe(true);
     expect(seen.prompts.at(-1)['6'].inputs.text).toBe('a gourd in a hat');
   });
@@ -719,8 +844,8 @@ describe('the admin routes and the chat path', () => {
     const { presets, defaultPreset, ...flatPublic } = saved.body.engines.find((e) => e.id === 'comfyui').config;
     expect(presets).toEqual([expect.objectContaining({ id: 'default', name: 'Default', model: MODELS[0] })]);
     expect(defaultPreset).toBe('default');
-    expect(flatPublic).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, upscaleMode: 'model', tileDenoise: 0.3, tileSize: 1024,
-      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.4, detailerPasses: 1, tilePasses: 1, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65,
+    expect(flatPublic).toEqual({ enabled: true, url: mockUrl, model: MODELS[0], family: 'flux', tier: 'high', kind: 'checkpoint', clip1: null, clip2: null, vae: null, hires: true, upscaler: null, hiresDenoise: 0.45, clipSkip: null, hiresSteps: null, upscaleMode: 'model', tileDenoise: 0.2, tileSize: 1280,
+      sampler: null, scheduler: null, cfgScale: null, steps: null, negative: null, detailer: false, detector: null, detailerDenoise: 0.3, detailerPasses: 3, tilePasses: 1, varyLoops: 2, varySubtle: 0.3, varyStrong: 0.65,
       workflowMode: 'builtin', workflow: '', upscaleWorkflow: '', img2imgWorkflow: '', promptPrefix: '' });
     expect((await call('pat', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'x' })).status).toBe(403);
     expect((await call('admin', 'POST', '/admin/imagine/try', { engine: 'comfyui', prompt: 'nude 12 year old' })).status).toBe(400);

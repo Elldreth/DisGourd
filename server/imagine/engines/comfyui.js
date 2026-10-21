@@ -17,8 +17,12 @@
 const crypto = require('crypto');
 
 const FAMILIES = {
-  sd15: { name: 'SD 1.5', mp: { draft: 0.26, standard: 0.33, high: 0.45 }, steps: { draft: 16, standard: 26, high: 34 }, cfg: 7, sampler: 'dpmpp_2m', scheduler: 'karras' },
-  sdxl: { name: 'SDXL', mp: { draft: 0.8, standard: 1.0, high: 1.15 }, steps: { draft: 18, standard: 28, high: 36 }, cfg: 6, sampler: 'dpmpp_2m', scheduler: 'karras' },
+  sd15: { name: 'SD 1.5', mp: { draft: 0.26, standard: 0.33, high: 0.45 }, steps: { draft: 16, standard: 26, high: 34 }, classic: true, cfg: 7, sampler: 'dpmpp_2m', scheduler: 'karras' },
+  // P9-08 (the owner's recipe): a 1024-short-edge base image (about 1.5 MP),
+  // 15 steps, CFG 5; at High, 15 more hires steps up to 2048 on the long edge.
+  // Base sizes at the High memory tier (1024 short edge); Medium and Low, and
+  // Draft, about 1 MP.
+  sdxl: { name: 'SDXL', mp: { draft: 1.0, standard: 1.0, high: 1.0 }, base: { square: [1216, 1216], portrait: [1024, 1536], landscape: [1536, 1024], wide: [1792, 1024] }, steps: { draft: 10, standard: 15, high: 15 }, hiresSteps: 15, hiresLong: true, clipSkip: 2, classic: true, cfg: 5, sampler: 'dpmpp_2m', scheduler: 'karras' },
   flux: { name: 'Flux', mp: { draft: 0.6, standard: 1.0, high: 1.6 }, steps: { draft: 12, standard: 20, high: 28 }, cfg: 1, guidance: 3.5, sampler: 'euler', scheduler: 'simple' },
   // Z-Image Turbo (P3-24): separate parts only; Qwen 3 4B text encoder (lumina2).
   zimage: { name: 'Z-Image Turbo', splitOnly: true, mp: { draft: 0.8, standard: 1.0, high: 1.6 }, steps: { draft: 6, standard: 8, high: 10 }, cfg: 1, shift: 3, sampler: 'res_multistep', scheduler: 'simple' },
@@ -38,18 +42,28 @@ const TIERS = { low: 1.0, medium: 1.5, high: 2.4 };
 // many megapixels for the tier), then repainted lightly at that size.
 const HIRES_MP = { low: 1.6, medium: 2.4, high: 3.6 };
 const HIRES_SCALE = 1.5;
-const HIRES_DENOISE = 0.4;
+// P9-08: the hires repaint's strength (a shared setting), and for the SDXL
+// family the long edge it enlarges to, by graphics-memory tier.
+const HIRES_DENOISE = 0.45;
+const HIRES_LONG = { low: 1536, medium: 1792, high: 2048 };
 // The Upscale button (P3-29): 'model' (the upscale model alone; ComfyUI tiles
 // it internally, so big images are fine) or 'tiled' (Ultimate SD Upscale:
 // repaints tile by tile for added detail; needs that custom node).
 const UPSCALE_MODES = ['model', 'tiled'];
-const TILE = { denoise: 0.3, size: 1024 };
+// P9-08: the owner's Phase 5 (denoise 0.2, 1280 tiles, blur 16, padding 64;
+// for classic-CFG models 30 steps, CFG 6, ddim / simple), then a Color Match
+// to the image being upscaled and a saturation lift.
+const TILE = { denoise: 0.2, size: 1280, maskBlur: 16, padding: 64, steps: 30, cfg: 6, sampler: 'ddim', scheduler: 'simple' };
+const SATURATION = 1.15;
 // The face detailer (P3-31, Impact Pack's FaceDetailer): on Standard and High.
-const DETAILER_DENOISE = 0.4;
-// The largest the face crop is enlarged to before repainting, by VRAM tier
-// (P3-36a: 1024 left big faces barely enlarged, so the detailer did little).
-const DETAILER_MAX = { low: 1024, medium: 1536, high: 2048 };
-const DETAILER_CROP = 2;
+// P9-08: set up like the owner's own (guide and max 1024 for the face box,
+// crop factor 3, 3 passes at 0.3; for classic-CFG models 30 steps, CFG 5,
+// ddim / simple), with SAM for the face outline, then a Color Match back to
+// the base image. Before, small faces were enlarged ~6× to 2048 and only
+// tidied at 0.4.
+const DETAILER_DENOISE = 0.3;
+const DETAILER = { guide: 1024, max: 1024, crop: 3, passes: 3, steps: 30, cfg: 5, sampler: 'ddim', scheduler: 'simple' };
+const COLOR_MATCH = 'hm-mvgd-hm';
 // Variations are an img2img loopback (P3-36a): each loop repaints the whole
 // image (a new seed each time), runs the face detailer, and feeds the next.
 const DEFAULT_LOOPS = 2;
@@ -65,6 +79,9 @@ const NEEDS = {
   detailer: ['FaceDetailer', 'UltralyticsDetectorProvider'],
   tiled: ['UltimateSDUpscale'],
   tilePasses: ['UltimateSDUpscaleNoUpscale'],
+  sam: ['SAMLoader'], // Impact Pack (P9-08)
+  colorMatch: ['ColorMatch'], // KJNodes (P9-08)
+  saturation: ['Image Filter Adjustments'], // WAS Node Suite (P9-08)
 };
 const RATIOS = { square: [1, 1], portrait: [2, 3], landscape: [3, 2], wide: [16, 9] };
 const NEGATIVE = 'lowres, worst quality, low quality, blurry, jpeg artifacts, watermark, signature, text';
@@ -141,6 +158,11 @@ function guessFamily(name) {
 // pixel count (capped by the tier), in multiples of 64.
 function sizeFor(family, quality, shape, tier) {
   const f = FAMILIES[family] || FAMILIES.sdxl;
+  // P9-08: the SDXL family's own base sizes on the High tier (not Draft).
+  if (f.base && tier === 'high' && quality !== 'draft') {
+    const [width, height] = f.base[shape] || f.base.square;
+    return { width, height };
+  }
   const mp = Math.min(f.mp[quality] || f.mp.standard, TIERS[tier] || TIERS.medium);
   const [rw, rh] = RATIOS[shape] || RATIOS.square;
   const px = mp * 1e6;
@@ -165,12 +187,22 @@ function hiresSize({ width, height }, tier) {
   const scale = Math.min(HIRES_SCALE, Math.sqrt(budget / (width * height)));
   return { width: Math.round((width * scale) / 64) * 64, height: Math.round((height * scale) / 64) * 64 };
 }
+// P9-08: the SDXL family's hires size: the base image scaled to the tier's
+// long edge (never smaller), in multiples of 8.
+function hiresLongSize({ width, height }, tier) {
+  const scale = Math.max(1, (HIRES_LONG[tier] || HIRES_LONG.medium) / Math.max(width, height));
+  return { width: Math.round((width * scale) / 8) * 8, height: Math.round((height * scale) / 8) * 8 };
+}
 // Whether a request gets the hires fix: High quality, switched on, with an upscale model.
 const hiresFor = (request, cfg) => request.quality === 'high' && cfg.hires !== false && !!cfg.upscaler;
 
 // The host's advanced settings (P3-31), each falling back to the family's
 // tuned default when blank.
 const stepsFor = (f, cfg, quality) => cfg.steps?.[quality] || f.steps[quality] || f.steps.standard;
+// P9-08: the hires repaint's steps (a style setting) and CLIP skip (a style
+// setting for checkpoints: 2 by default for the SDXL family, else 1).
+const hiresStepsFor = (f, cfg) => cfg.hiresSteps || f.hiresSteps || stepsFor(f, cfg, 'standard');
+const clipSkipFor = (f, cfg, split) => (split || !f.classic ? 1 : cfg.clipSkip || f.clipSkip || 1);
 const samplingFor = (f, cfg) => ({ cfg: cfg.cfgScale ?? f.cfg, sampler_name: cfg.sampler || f.sampler, scheduler: cfg.scheduler || f.scheduler });
 // The negative prompt: the host's own replaces the built-in quality words;
 // outside 18+ the safety words are added for SD 1.5 / SDXL. Flux and Z-Image
@@ -197,10 +229,11 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
   // variation instead works at the final size (its loops do the refining).
   const hires = wantsHires && !init;
   const small = sizeFor(family, wantsHires ? 'standard' : request.quality, request.shape, cfg.tier);
-  const { width, height } = wantsHires ? hiresSize(small, cfg.tier) : small;
+  const { width, height } = wantsHires ? (f.hiresLong ? hiresLongSize(small, cfg.tier) : hiresSize(small, cfg.tier)) : small;
   const base = init ? { width, height } : small;
   const negative = negativeFor(family, cfg, permissive);
   const sampling = samplingFor(f, cfg);
+  const clipSkip = clipSkipFor(f, cfg, split);
   // Where the model, text encoder and VAE come from: one checkpoint (node 4),
   // or separate loaders (11 diffusion model, 12 text encoder(s), 13 VAE).
   const loaders = split
@@ -211,9 +244,13 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
           : { class_type: 'CLIPLoader', inputs: { clip_name: cfg.clip1, type: f.clipType || 'lumina2' } },
         13: { class_type: 'VAELoader', inputs: { vae_name: cfg.vae } },
       }
-    : { 4: { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: cfg.model } } };
+    : {
+      4: { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: cfg.model } },
+      ...(clipSkip > 1 ? { 15: { class_type: 'CLIPSetLastLayer', inputs: { clip: ['4', 1], stop_at_clip_layer: -clipSkip } } } : {}),
+    };
   const model = split ? ['11', 0] : ['4', 0];
-  const clip = split ? ['12', 0] : ['4', 1];
+  // CLIP skip (P9-08): CLIPSetLastLayer between the checkpoint and the encoders.
+  const clip = split ? ['12', 0] : clipSkip > 1 ? ['15', 0] : ['4', 1];
   const vae = split ? ['13', 0] : ['4', 2];
   const wf = {
     ...loaders,
@@ -253,31 +290,49 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
     wf[23] = { class_type: 'VAEEncode', inputs: { pixels: ['22', 0], vae } };
     wf[24] = {
       class_type: 'KSampler',
-      inputs: { ...wf[3].inputs, seed, steps: stepsFor(f, cfg, 'standard'), denoise: HIRES_DENOISE, latent_image: ['23', 0] },
+      inputs: { ...wf[3].inputs, seed, steps: hiresStepsFor(f, cfg), denoise: cfg.hiresDenoise ?? HIRES_DENOISE, latent_image: ['23', 0] },
     };
     wf[25] = { class_type: 'VAEDecode', inputs: { samples: ['24', 0], vae } };
     wf[SAVE_NODE].inputs.images = ['25', 0];
   }
   const detailer = detailerFor(request, cfg);
+  // The detailer's and Color Match's reference: the base image (P9-08), or
+  // for a variation the picture it starts from.
+  const reference = init ? ['1', 0] : ['8', 0];
+  // A Color Match pulls an image's colors back to the reference (P9-08).
+  const colorMatch = (id, target) => {
+    wf[id] = { class_type: 'ColorMatch', inputs: { image_ref: reference, image_target: target, method: COLOR_MATCH, strength: 1, multithread: true } };
+    return [String(id), 0];
+  };
+  const useColorMatch = cfg.colorMatch !== false;
   if (detailer) {
     // Find faces in the finished image and repaint each at a good size.
-    const guide = family === 'sd15' ? 512 : 1024;
-    const maxSize = family === 'sd15' ? 768 : DETAILER_MAX[cfg.tier] || DETAILER_MAX.medium;
+    const sd15 = family === 'sd15';
+    // The owner's sampling for classic-CFG checkpoints; other families keep their own.
+    const detailSampling = f.classic
+      ? { steps: DETAILER.steps, cfg: DETAILER.cfg, sampler_name: DETAILER.sampler, scheduler: DETAILER.scheduler }
+      : { steps: stepsFor(f, cfg, 'standard'), ...sampling };
     wf[40] = { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: cfg.detector } };
+    if (cfg.sam) wf[42] = { class_type: 'SAMLoader', inputs: { model_name: cfg.sam, device_mode: 'AUTO' } };
     wf[41] = {
       class_type: 'FaceDetailer',
       inputs: {
         image: wf[SAVE_NODE].inputs.images, model: wf[3].inputs.model, clip, vae, positive: wf[3].inputs.positive, negative: ['7', 0],
-        guide_size: guide, guide_size_for: true, max_size: maxSize, seed, steps: stepsFor(f, cfg, 'standard'), ...sampling,
+        guide_size: sd15 ? 512 : DETAILER.guide, guide_size_for: true, max_size: sd15 ? 768 : DETAILER.max, seed, ...detailSampling,
         denoise: cfg.detailerDenoise ?? DETAILER_DENOISE, feather: 5, noise_mask: true, force_inpaint: true,
-        bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: DETAILER_CROP, sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
+        bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: DETAILER.crop, sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
         sam_bbox_expansion: 0, sam_mask_hint_threshold: 0.7, sam_mask_hint_use_negative: 'False', drop_size: 10,
-        bbox_detector: ['40', 0], wildcard: '', cycle: Math.min(MAX_DETAILER_PASSES, Math.max(1, cfg.detailerPasses || 1)),
+        bbox_detector: ['40', 0], wildcard: '', cycle: Math.min(MAX_DETAILER_PASSES, Math.max(1, cfg.detailerPasses || DETAILER.passes)),
+        ...(cfg.sam ? { sam_model_opt: ['42', 0] } : {}),
       },
     };
     wf[SAVE_NODE].inputs.images = ['41', 0];
   }
-  // The loopback (P3-36a): loops 2…n start from the previous loop's image.
+  // Color Match after the repaints (hires and / or the detailer), or after a
+  // variation's first loop, back to the reference.
+  if (useColorMatch && (detailer || hires || init)) wf[SAVE_NODE].inputs.images = colorMatch(43, wf[SAVE_NODE].inputs.images);
+  // The loopback (P3-36a): loops 2…n start from the previous loop's image,
+  // each ending in the detailer and a Color Match (P9-08: colors fade otherwise).
   const loops = init ? Math.min(MAX_LOOPS, Math.max(1, cfg.varyLoops || DEFAULT_LOOPS)) : 1;
   let last = wf[SAVE_NODE].inputs.images;
   for (let k = 1; k < loops; k++) {
@@ -290,6 +345,7 @@ function buildWorkflow(request, cfg, { permissive = false, seed = crypto.randomI
       wf[b + 3] = { class_type: 'FaceDetailer', inputs: { ...wf[41].inputs, image: last, seed: seed + k } };
       last = [String(b + 3), 0];
     }
+    if (useColorMatch) last = colorMatch(b + 4, last);
   }
   wf[SAVE_NODE].inputs.images = last;
   return { workflow: wf, width, height, seed, hires, detailer, loops };
@@ -323,14 +379,18 @@ function buildUpscaleWorkflow(request, cfg, imageName, { permissive = false, see
   for (const k of ['3', '5', '8']) delete wf[k];
   const f = FAMILIES[cfg.kind === 'unet' || !FAMILIES[cfg.family]?.splitOnly ? cfg.family : 'sdxl'] || FAMILIES.sdxl;
   const tile = Math.min(2048, Math.max(512, Math.round((cfg.tileSize || TILE.size) / 64) * 64));
+  // The owner's Phase 5 sampling for classic-CFG checkpoints; other families keep their own.
+  const tileSampling = f.classic
+    ? { steps: TILE.steps, cfg: TILE.cfg, sampler_name: TILE.sampler, scheduler: TILE.scheduler }
+    : { steps: stepsFor(f, cfg, 'standard'), cfg: s.cfg, sampler_name: s.sampler_name, scheduler: s.scheduler };
   wf[1] = load;
   wf[20] = { class_type: 'UpscaleModelLoader', inputs: { model_name: cfg.upscaler } };
   wf[30] = {
     class_type: 'UltimateSDUpscale',
     inputs: {
       image: ['1', 0], model: s.model, positive: s.positive, negative: s.negative, vae, upscale_model: ['20', 0],
-      upscale_by: factor, seed, steps: stepsFor(f, cfg, 'standard'), cfg: s.cfg, sampler_name: s.sampler_name, scheduler: s.scheduler,
-      denoise: cfg.tileDenoise ?? TILE.denoise, mode_type: 'Linear', tile_width: tile, tile_height: tile, mask_blur: 8, tile_padding: 32,
+      upscale_by: factor, seed, ...tileSampling,
+      denoise: cfg.tileDenoise ?? TILE.denoise, mode_type: 'Linear', tile_width: tile, tile_height: tile, mask_blur: TILE.maskBlur, tile_padding: TILE.padding,
       seam_fix_mode: 'None', seam_fix_denoise: 1, seam_fix_width: 64, seam_fix_mask_blur: 8, seam_fix_padding: 16,
       force_uniform_tiles: true, tiled_decode: false, batch_size: 1,
     },
@@ -344,7 +404,20 @@ function buildUpscaleWorkflow(request, cfg, imageName, { permissive = false, see
     wf[id] = { class_type: 'UltimateSDUpscaleNoUpscale', inputs: { ...same, upscaled_image: [last, 0], seed: seed + i } };
     last = id;
   }
-  wf[SAVE_NODE] = { class_type: 'PreviewImage', inputs: { images: [last, 0] } };
+  let out = [last, 0];
+  // P9-08: colors back to the image being upscaled, then a saturation lift.
+  if (cfg.colorMatch !== false) {
+    wf[50] = { class_type: 'ColorMatch', inputs: { image_ref: ['1', 0], image_target: out, method: COLOR_MATCH, strength: 1, multithread: true } };
+    out = ['50', 0];
+  }
+  if (cfg.saturation !== false) {
+    wf[51] = {
+      class_type: 'Image Filter Adjustments',
+      inputs: { image: out, brightness: 0, contrast: 1, saturation: SATURATION, sharpness: 1, blur: 0, gaussian_blur: 0, edge_enhance: 0, detail_enhance: false },
+    };
+    out = ['51', 0];
+  }
+  wf[SAVE_NODE] = { class_type: 'PreviewImage', inputs: { images: out } };
   return { workflow: wf, width, height, seed };
 }
 
@@ -418,12 +491,22 @@ async function hasNode(url, node) {
 // the suggestion from this ComfyUI's list, cached per address for 10 minutes.
 const upscalerCache = new Map();
 const detectorCache = new Map();
+const samCache = new Map(); // P9-08
 async function resolveDetector(cfg) {
   if (cfg.detector) return cfg.detector;
   const hit = detectorCache.get(cfg.url);
   if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.name;
   const name = suggestDetector(await loaderOptions(cfg.url, 'UltralyticsDetectorProvider', 'model_name'));
   detectorCache.set(cfg.url, { at: Date.now(), name });
+  return name;
+}
+// P9-08: the SAM model for the face detailer: sam_vit_b if there is one.
+async function resolveSam(cfg) {
+  const hit = samCache.get(cfg.url);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.name;
+  const list = await loaderOptions(cfg.url, 'SAMLoader', 'model_name');
+  const name = list.find((n) => /sam_vit_b/i.test(n)) || list[0] || null;
+  samCache.set(cfg.url, { at: Date.now(), name });
   return name;
 }
 async function resolveUpscaler(cfg) {
@@ -654,6 +737,20 @@ async function generate(request, cfg, { permissive = false, signal } = {}) {
   await without(!request.upscale && detailerFor(request, cfg), NEEDS.detailer, { detailer: false }, 'made without the face detailer');
   await without(!!request.upscale && cfg.upscaleMode === 'tiled', NEEDS.tiled, { upscaleMode: 'model' }, 'upscaled with the upscale model only');
   await without(!!request.upscale && cfg.upscaleMode === 'tiled' && (cfg.tilePasses || 1) > 1, NEEDS.tilePasses, { tilePasses: 1 }, 'one tiled pass only');
+  // P9-08: SAM for the face outline, Color Match and the saturation lift are
+  // optional too (Impact Pack's SAM loader, KJNodes, WAS Node Suite).
+  if (!request.upscale && detailerFor(request, cfg)) {
+    await without(true, NEEDS.sam, { sam: null }, 'faces found without SAM');
+    if (!(await missingNodes(cfg.url, NEEDS.sam)).length) {
+      const sam = await resolveSam(cfg);
+      if (sam) cfg = { ...cfg, sam };
+      else notes.push('faces found without SAM: ComfyUI has no SAM model (models/sams)');
+    }
+  }
+  const tiled = !!request.upscale && cfg.upscaleMode === 'tiled';
+  const repaints = !request.upscale && (detailerFor(request, cfg) || hiresFor(request, cfg) || !!request.init);
+  await without(tiled || repaints, NEEDS.colorMatch, { colorMatch: false }, 'made without Color Match');
+  await without(tiled, NEEDS.saturation, { saturation: false }, 'upscaled without the saturation lift');
   let built;
   if (request.upscale) {
     if (!cfg.upscaler) throw fail('ENGINE', 'ComfyUI has no upscale models (models/upscale_models)');
@@ -801,6 +898,20 @@ function validateFlat(input, prev = {}) {
     }
     cfg.steps = Object.keys(steps).length ? steps : null;
   }
+  // P9-08: CLIP skip (1 or 2; blank = the model type's default) and the hires
+  // repaint's steps (a style's), and its strength (shared).
+  if (i.clipSkip !== undefined) {
+    if (i.clipSkip !== null && i.clipSkip !== 1 && i.clipSkip !== 2) return { error: 'CLIP skip is 1 or 2' };
+    cfg.clipSkip = i.clipSkip;
+  }
+  if (i.hiresSteps !== undefined) {
+    if (i.hiresSteps !== null && (!Number.isInteger(i.hiresSteps) || i.hiresSteps < 1 || i.hiresSteps > 150)) return { error: 'Hires steps are 1–150' };
+    cfg.hiresSteps = i.hiresSteps;
+  }
+  if (i.hiresDenoise !== undefined) {
+    if (i.hiresDenoise !== null && (typeof i.hiresDenoise !== 'number' || !(i.hiresDenoise >= 0.1 && i.hiresDenoise <= 0.8))) return { error: 'The hires strength is 0.1–0.8' };
+    cfg.hiresDenoise = i.hiresDenoise === null ? null : Math.round(i.hiresDenoise * 100) / 100;
+  }
   if (i.negative !== undefined) {
     if (!text(i.negative, 1000)) return { error: 'The negative prompt is up to 1000 characters' };
     cfg.negative = i.negative && i.negative.trim() ? i.negative.trim() : null;
@@ -865,7 +976,7 @@ function validateFlat(input, prev = {}) {
 }
 // ---- Styles (P9-04a) ----
 // What belongs to one style; everything else is shared by every style.
-const STYLE_KEYS = ['kind', 'model', 'family', 'clip1', 'clip2', 'vae', 'sampler', 'scheduler', 'steps', 'cfgScale', 'negative', 'promptPrefix', 'workflowMode', 'workflow', 'upscaleWorkflow', 'img2imgWorkflow'];
+const STYLE_KEYS = ['kind', 'model', 'family', 'clip1', 'clip2', 'vae', 'sampler', 'scheduler', 'steps', 'cfgScale', 'negative', 'promptPrefix', 'workflowMode', 'workflow', 'upscaleWorkflow', 'img2imgWorkflow', 'clipSkip', 'hiresSteps'];
 const MAX_STYLES = 20;
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 const omit = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
@@ -941,11 +1052,12 @@ function validateConfig(input, prev = {}) {
 const publicFlat = (cfg = {}) => ({
   enabled: !!cfg.enabled, url: cfg.url || '', model: cfg.model || null, family: cfg.family || null, tier: cfg.tier || 'medium',
   kind: cfg.kind || 'checkpoint', clip1: cfg.clip1 || null, clip2: cfg.clip2 || null, vae: cfg.vae || null,
-  hires: cfg.hires !== false, upscaler: cfg.upscaler || null,
+  hires: cfg.hires !== false, upscaler: cfg.upscaler || null, hiresDenoise: cfg.hiresDenoise ?? HIRES_DENOISE,
+  clipSkip: cfg.clipSkip ?? null, hiresSteps: cfg.hiresSteps ?? null,
   upscaleMode: cfg.upscaleMode || 'model', tileDenoise: cfg.tileDenoise ?? TILE.denoise, tileSize: cfg.tileSize || TILE.size,
   sampler: cfg.sampler || null, scheduler: cfg.scheduler || null, cfgScale: cfg.cfgScale ?? null, steps: cfg.steps || null, negative: cfg.negative || null,
   detailer: !!cfg.detailer, detector: cfg.detector || null, detailerDenoise: cfg.detailerDenoise ?? DETAILER_DENOISE,
-  detailerPasses: cfg.detailerPasses || 1, tilePasses: cfg.tilePasses || 1, varyLoops: cfg.varyLoops || DEFAULT_LOOPS,
+  detailerPasses: cfg.detailerPasses || DETAILER.passes, tilePasses: cfg.tilePasses || 1, varyLoops: cfg.varyLoops || DEFAULT_LOOPS,
   varySubtle: cfg.varySubtle ?? 0.3, varyStrong: cfg.varyStrong ?? 0.65,
   workflowMode: cfg.workflowMode || 'builtin',
   workflow: cfg.workflow ? JSON.stringify(cfg.workflow, null, 2) : '',
@@ -986,10 +1098,13 @@ module.exports = {
   suggestUpscaler,
   hiresSize,
   HIRES_MP,
-  DETAILER_MAX,
+  DETAILER,
+  hiresLongSize,
+  HIRES_LONG,
   buildUpscaleWorkflow,
   resolveUpscaler,
   upscalerCache,
+  samCache,
   detectorCache,
   nodeCache,
   missingNodes,
