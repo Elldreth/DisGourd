@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY (build order 7 in P11-00; start only when the owner says so)
+- **State:** READY (build order 8 in P11-00; start only when the owner says so)
 - **Effort:** S–M
 - **Depends on:** none
 - **Serialize with:** P11-05 (both touch the deploy README)

@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY (build order 6 in P11-00; start only when the owner says so)
+- **State:** READY (build order 7 in P11-00; start only when the owner says so)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** none (`routes/uploads.js` and the delete paths in `db/index.js` aren't touched by the other P11 units)

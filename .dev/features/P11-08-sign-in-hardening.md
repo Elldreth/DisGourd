@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY (build order 4 in P11-00; start only when the owner says so)
+- **State:** READY (build order 5 in P11-00; start only when the owner says so)
 - **Effort:** S–M
 - **Depends on:** none. Behind the tunnel, the last X-Forwarded-For hop is Cloudflare's view of the visitor, so the per-IP part works today. P11-05 makes it airtight.
 - **Serialize with:** P11-03 if it changes `auth/rateLimit.js`. Whichever goes second rebases.
