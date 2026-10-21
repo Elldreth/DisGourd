@@ -79,7 +79,7 @@ test('create: 3–10 people, only people you share a server with or friends; the
   ann.send({ op: 'dm_group_create', members: ['ben', 'dot', 'fay', 'gus', 'hal', 'ivy', 'joe', 'kit', 'lou', 'cyd'] });
   await wait(120);
   expect(ann.of('error').map((e) => e.code)).toEqual(['BAD_REQUEST', 'NOT_ALLOWED', 'NOT_FOUND', 'TOO_MANY']);
-  expect(ann.of('error')[1].error).toMatch(/not eve/);
+  expect(ann.of('error')[1].error).toBe("You can't add eve"); // P11-09: the same neutral words as blocking
 
   ann.send({ op: 'dm_group_create', members: ['ben', 'cyd', 'ann'], name: '  Gourd   Club ' }); // cyd as a friend; yourself is ignored
   await wait(120);
@@ -194,9 +194,9 @@ test('add (anyone, up to 10, the rule), remove (owner only), leave (ownership pa
   expect(db.getConversation(conv).ownerId).toBe(users.ben.id);
   expect(said(conv).slice(-2).map((m) => m.content)).toEqual(['ann left', 'ben is now the owner']);
   // Pairs can't take group ops.
-  gws.ben.send({ op: 'dm', to: 'cyd', content: 'just us' });
+  gws.ben.send({ op: 'dm', to: 'lou', content: 'just us' }); // they share Group Town (P11-09)
   await wait(80);
-  const pair = db.findPair(users.ben.id, users.cyd.id);
+  const pair = db.findPair(users.ben.id, users.lou.id);
   gws.ben.send({ op: 'dm_group_add', conversation: pair, members: ['dot'] });
   await wait(80);
   expect(gws.ben.of('error').at(-1)).toMatchObject({ op: 'dm_group_add', code: 'NOT_FOUND' });

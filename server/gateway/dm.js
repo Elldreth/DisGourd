@@ -65,7 +65,8 @@ function peopleToAdd(adderId, names) {
     const u = db.getUserByUsername(name);
     if (!u) return { code: 'NOT_FOUND', error: `There's no one called ${name}` };
     if (u.id === adderId) continue;
-    if (!db.canAddToGroup(adderId, u.id)) return { code: 'NOT_ALLOWED', error: `You can only add people you share a server with or are friends with (not ${u.username})` };
+    // P11-09: friends and people sharing a server, or anyone who allows everyone.
+    if (!db.canStartDm(adderId, u.id)) return { code: 'NOT_ALLOWED', error: `You can't add ${u.username}` };
     // P9-07a: either has blocked the other; it doesn't say which.
     if (db.eitherBlocked(adderId, u.id)) return { code: 'BLOCKED', error: `You can't add ${u.username}` };
     users.push(u);
@@ -118,6 +119,11 @@ const ops = {
     if (typeof msg.to === 'string' && msg.conversation == null) {
       const to = db.getUserByUsername(msg.to);
       if (to && db.eitherBlocked(userId, to.id)) return refuse(ws, msg.op, 'BLOCKED', BLOCKED_DM);
+      // P11-09: a new conversation needs their say-so (friends and shared
+      // servers by default); one that already exists keeps working.
+      if (to && to.id !== userId && !db.findPair(userId, to.id) && !db.canStartDm(userId, to.id)) {
+        return refuse(ws, msg.op, 'NOT_ALLOWED', BLOCKED_DM);
+      }
     }
     const conversationId = conversationFor(msg, userId, { create: true });
     if (!conversationId) return;

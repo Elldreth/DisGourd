@@ -4,8 +4,9 @@ import Modal from './Modal.jsx';
 // An in-app "are you sure?" (instead of the browser's confirm()). For
 // dangerous actions focus starts on Cancel; with `requireText` the confirm
 // button stays disabled until that exact text is typed (deleting a server
-// asks for its name), and focus starts in that box.
-export default function ConfirmDialog({ title, body, confirmLabel = 'Confirm', danger = false, requireText, onConfirm, onCancel }) {
+// asks for its name), and focus starts in that box. `children` go under the
+// body (suspending someone takes an optional reason).
+export default function ConfirmDialog({ title, body, confirmLabel = 'Confirm', danger = false, requireText, onConfirm, onCancel, children }) {
   const [typed, setTyped] = useState('');
   const cancelRef = useRef(null);
   const textRef = useRef(null);
@@ -24,6 +25,7 @@ export default function ConfirmDialog({ title, body, confirmLabel = 'Confirm', d
     >
       <Modal.Title>{title}</Modal.Title>
       {body && <p className="mt-2 text-sm text-gray-400">{body}</p>}
+      {children}
       {requireText && (
         <div className="mt-4">
           <label htmlFor={inputId} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">

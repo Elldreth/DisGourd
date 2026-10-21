@@ -52,6 +52,7 @@ const SIGNED_OUT_NOTES = {
   device: 'You were signed out of this device from another one.',
   signed_out_elsewhere: 'You were signed out: all other devices were signed out from another one.',
   password_changed: 'Your password was changed on another device, so you were signed out here.',
+  suspended: 'This account has been suspended by a site admin.', // P11-09
 };
 
 export default function App() {

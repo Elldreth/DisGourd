@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** REVIEW (build order 10 in P11-00)
+- **State:** COMPLETE (merged in #225; build order 10 in P11-00)
 - **Starting baseline:** main at f844a59 (#224 merged)
 - **Effort:** S–M
 - **Depends on:** P11-03

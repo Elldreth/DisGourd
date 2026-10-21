@@ -7,6 +7,7 @@ const linkPreviews = require('../linkPreviews');
 const imagine = require('../imagine');
 const { clientIpVia, proxyTrust } = require('../net/clientIp');
 const { newRegCode } = require('../auth/regCodes');
+const { endStaleSessions } = require('../gateway/delivery');
 
 const getJsonBody = readJsonBody;
 
@@ -166,6 +167,42 @@ const routes = [
         return sendJson(res, 200, { ok: true });
       }
       return sendJson(res, 404, { error: 'Not found' });
+    },
+  },
+  {
+    // People (P11-09): GET /admin/users?q= finds accounts; PUT
+    // /admin/users/:username { suspended, reason? } suspends or lifts one.
+    match: ({ pathSegments }) => pathSegments[0] === 'admin' && pathSegments[1] === 'users' && pathSegments.length <= 3,
+    run: async ({ req, res, parsedUrl, pathSegments }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can manage people' });
+      if (pathSegments.length === 2 && req.method === 'GET') {
+        const q = String((parsedUrl.query && parsedUrl.query.q) || '').trim().slice(0, 64);
+        return sendJson(res, 200, { users: db.searchUsersForAdmin(q) });
+      }
+      if (pathSegments.length === 3 && req.method === 'PUT') {
+        const { suspended, reason } = await getJsonBody(req);
+        if (typeof suspended !== 'boolean') return sendJson(res, 400, { error: 'suspended must be true or false' });
+        if (reason != null && (typeof reason !== 'string' || reason.length > 200)) return sendJson(res, 400, { error: 'The reason can be at most 200 characters' });
+        const target = db.getUserByUsername(pathSegments[2]);
+        if (!target || target.is_bot) return sendJson(res, 404, { error: 'User not found' });
+        if (suspended) {
+          if (target.id === userId) return sendJson(res, 400, { error: "You can't suspend yourself" });
+          if (target.site_admin && !target.suspended_at && db.countActiveSiteAdmins() <= 1) {
+            return sendJson(res, 400, { error: 'There must be at least one site admin who can sign in' });
+          }
+          const version = db.setSuspended(target.id, true, reason ? reason.trim() : null);
+          endStaleSessions(target.id, version, 'suspended'); // every socket: none has the new version
+        } else {
+          db.setSuspended(target.id, false);
+        }
+        // No instance-wide log yet: the console has it.
+        const me = db.getUserById(userId);
+        console.warn(`[admin] ${me.username} ${suspended ? 'suspended' : 'lifted the suspension of'} ${target.username}${suspended && reason ? ` (reason: ${String(reason).trim().slice(0, 200)})` : ''}`);
+        return sendJson(res, 200, db.adminUserView(db.getUserById(target.id)));
+      }
+      return sendJson(res, 405, { error: 'Method not allowed' });
     },
   },
 ];

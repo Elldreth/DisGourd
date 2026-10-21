@@ -48,6 +48,9 @@ function gateway(token) {
 test('dm_unread on connect keys counts by `with`', async () => {
   const alice = await register('alice');
   const bob = await register('bob');
+  // P11-09: they share a server, so bob can start a DM with alice.
+  const { db } = serverModule;
+  db.addMember(db.createSpaceWithDefaults('Unread', db.getUserByUsername('alice').id), db.getUserByUsername('bob').id, 'member');
 
   // Bob DMs Alice twice while Alice is offline.
   const bg = gateway(bob);
