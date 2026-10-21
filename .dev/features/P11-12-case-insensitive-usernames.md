@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** PLANNED (after P11-01)
+- **State:** PLANNED (after P11-01). Build order 12.
 - **Effort:** S–M
 - **Depends on:** P11-01 (both touch registration and SITE_ADMINS matching)
 - **Serialize with:** P11-01

@@ -2,13 +2,15 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY
+- **State:** READY (build order 8 in P11-00; start only when the owner says so)
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P11-13 (both touch `backup.js` and the README backup section). This goes first.
 - **Requirement Source:** P11-00 "Hosting setups" → secrets at rest (raised by the hosting research: Litestream to R2, SMTP, TURN).
 
 ## Problem
+> **The live setup (2026-10-21):** `JWT_SECRET` isn't set, so the generated `/config/.jwt-secret` is used, and VAPID is in `/config/.vapid.json`. Both sit on the cache drive next to the database and its nightly backups, on the same box. The first step, before any code: copy `/config` off the box (including those two files) and keep `TUNNEL_TOKEN` out of git and backups. Litestream to R2 is still only planned.
+
 - **JWT secret:** can come from the environment (`JWT_SECRET`). Otherwise it's a file in `/config`.
 - **VAPID keys:** can only be a file (`server/push.js:11`, `/config/.vapid.json`).
 - **kie.ai key:** typed into the app, it's stored in plain text in the database (`server/imagine/engines/kie.js:238`). `KIEAI_API_KEY` in the environment already wins.

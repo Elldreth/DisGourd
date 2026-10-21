@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY
+- **State:** READY (build order 6 in P11-00; start only when the owner says so)
 - **Effort:** M
 - **Depends on:** none
 - **Serialize with:** none (`routes/uploads.js` and the delete paths in `db/index.js` aren't touched by the other P11 units)
@@ -20,6 +20,7 @@
 - **Cleanup:**
   - When a channel message or DM is deleted (by its author, a moderator, a ban's "delete messages", a deleted channel or server, or a left conversation that disappears), remove the upload folders it referenced that no other message, avatar, server icon or emoji still uses. Do this after the transaction, best-effort, logged.
   - A daily sweep removes upload folders that nothing references and that are older than 24 hours (abandoned uploads, cancelled sends). It skips `.previews`.
+- **Cloudflare's edge cache:** Cloudflare caches `.jpg`, `.png`, `.gif`, `.mp4` and similar by default, and `/uploads` says `public, max-age=31536000, immutable`, so a deleted photo can still be served from Cloudflare's edge. The `private` cache header below stops new copies. After a deploy, purge the cache once (Cloudflare dashboard → Caching → Purge everything, or by prefix `/uploads/`). Until this lands, the Cache Rule in P11-00 ("Cloudflare settings to do now") bypasses the cache for `/uploads/*`.
 - **Serving** (`/uploads/...`):
   - Add `Content-Security-Policy: default-src 'none'; sandbox` and `Cross-Origin-Resource-Policy: same-origin`.
   - Change the cache to `private, max-age=86400`, so a deleted file leaves shared caches within a day. `/media/preview` keeps its own headers.
@@ -32,6 +33,7 @@
 - [ ] AC-4: the sweep removes an unreferenced folder older than a day and leaves a fresh one alone.
 - [ ] AC-5: `/uploads` responses carry the CSP sandbox, CORP and private cache headers; images, video and audio still show inline in the app (sandbox doesn't affect `<img>` / `<video>`).
 - [ ] AC-6: both suites pass.
+- [ ] AC-7 (live): after the deploy, `curl -sI https://<host>/uploads/<a real file>` shows `cf-cache-status: BYPASS` or `DYNAMIC` (not `HIT`).
 
 ## Expected Areas of Change
 `server/routes/uploads.js`, `server/db/migrations.js` (a new version for `uploads`), `server/db/index.js` (delete paths call a cleanup hook), a new `server/uploadsGc.js`, `server/server.js` (start the sweep, unref'd, not under test), the README (the new env vars), tests (`server/tests/uploads-quota.test.js`, `uploads-cleanup.test.js`).

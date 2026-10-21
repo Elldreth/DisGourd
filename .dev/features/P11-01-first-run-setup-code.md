@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY
+- **State:** READY (build order 9 in P11-00). The live instance already has accounts, so C1 can't happen there; this protects fresh installs (an empty volume, a second instance, a rebuild).
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** P11-12 (both touch registration). This goes first.

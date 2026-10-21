@@ -266,22 +266,22 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P10-09 | Code blocks in messages can be reached by keyboard (axe scrollable-region-focusable) | 10 | REVIEW | S | none | markdown.jsx, index.css, markdown.test.jsx |
 
 ## Security for the public cloud (P11)
-Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **P11-01 to P11-05 and P11-10 should land before the instance is public** (cloud VPS or the Unraid box; see the review's "Hosting setups").
+Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **The live setup (2026-10-21) is the Unraid box behind a Cloudflare Tunnel** (see the review's "Deployment as built"). **Build order: P11-10 first (the go-live blocker), then P11-02, 03, 08, 05, 04, 06, 14, 01, 07, 09, 12, 11, 13**, one PR each, starting only when the owner says so.
 
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
-| P11-00 | Security review for the public cloud (Container) | 11 | REVIEW | L | main 92f7178 | .dev/features/P11-00-security-review.md, .dev/security/ |
+| P11-00 | Security review for the public cloud (Container) | 11 | COMPLETE | L | main 92f7178 | .dev/features/P11-00-security-review.md, .dev/security/ |
 | P11-01 | First-run setup code; safe SITE_ADMINS (C1) | 11 | READY | S | none | config.js, routes/auth.js, server.js, SetupWizard.jsx, README |
 | P11-02 | Role hierarchy on the legacy member-tier route (H1) | 11 | READY | S | none | routes/spaces.js, tests |
 | P11-03 | Gateway abuse limits: `read` checks, per-user op limits, socket cap, search limit (H2) | 11 | READY | M | none | gateway/router.js, gateway/chat.js, gateway/index.js, routes/social.js, composer notice |
 | P11-04 | Upload quotas, cleanup with their messages, sandboxed serving (H2, M4) | 11 | READY | M | none | routes/uploads.js, migrations, db/index.js, uploadsGc.js (new) |
-| P11-05 | Cloud deployment: trusted proxies, no public app port, proxy sample, container hardening (H3, L8, L10) | 11 | READY | S–M | none | auth/rateLimit.js, static.js, deploy/cloud/ (new), Dockerfile, .dockerignore, README |
+| P11-05 | Behind the Cloudflare Tunnel: trust only cloudflared, read-only root, LAN egress rule, pinned images (H3 rest, L8, L10) | 11 | READY | S–M | none | auth/rateLimit.js, static.js, routes/admin.js, deploy/unraid-tunnel/ (new), docker-compose.yml, Dockerfile, README |
 | P11-06 | Security headers, CSP and same-origin CORS (M1) | 11 | READY | S–M | none (soft P11-05) | http/handler.js, static.js, proxy samples |
 | P11-07 | Session tokens out of URLs: first-frame socket auth, Origin check (M2, L5) | 11 | PLANNED | S–M | P11-03 | gateway/index.js, auth/tokens.js, useSocket.js |
 | P11-08 | Sign-in hardening: per-account limits, IPv6 /64, bounded limiter, common passwords (M3) | 11 | READY | S–M | none (soft P11-05) | auth/rateLimit.js, routes/auth.js, validate.js |
 | P11-09 | Instance safety: suspend accounts; who can DM me (M7, M9) | 11 | PLANNED | M | P11-03, P11-07; owner decision 2 | migrations, routes/admin.js, auth/tokens.js, gateway/dm.js, site-admin settings, PrivacySection |
-| P11-10 | Outbound requests: ComfyUI metadata block and tunnel docs; push endpoint vetting (M5, M10) | 11 | READY | S | none | engines/comfyui.js, net/safeFetch.js, routes/push.js, README |
-| P11-11 | Voice: TURN credentials from the server, relay-only option, honour forced mute (M8) | 11 | READY | M | none (coturn: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
+| P11-10 | **Push endpoint allowlist (go-live blocker, build order 1)**; ComfyUI metadata block (M10, M5) | 11 | READY | S | none | routes/push.js, push.js, db/index.js, net/safeFetch.js, engines/comfyui.js, README |
+| P11-11 | Voice: TURN credentials from the server (hosted TURN for the tunnel setup), relay-only option, honour forced mute (M8) | 11 | READY | M | none (which TURN: owner decision 3) | routes/voice.js (new), devProxy.js, voice.js, useVoiceCall.js |
 | P11-12 | Case-insensitive usernames and emails (M6) | 11 | PLANNED | S–M | P11-01 | migrations, db/index.js, routes/auth.js, config.js |
 | P11-13 | Low-severity sweep (L1–L7, L9) | 11 | PLANNED | S–M | P11-01…P11-12 | routes/auth.js, backup.js, routes/spaces.js, auth/tokens.js, invites, lockfiles |
-| P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning, what backups carry | 11 | READY | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |
+| P11-14 | Secrets from the environment: VAPID env vars, `_FILE` variants, saved kie.ai key warning; off-box copy of `/config` | 11 | READY | S | none | push.js, engines/kie.js, config.js, KiePage.jsx, README |

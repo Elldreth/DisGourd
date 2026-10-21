@@ -9,6 +9,8 @@
 - **Requirement Source:** P11-00 finding M2.
 
 ## Problem
+> **Priority after the tunnel (2026-10-21):** SWAG's access log is no longer in the path, and cloudflared doesn't log request URLs at its default level. Cloudflare terminates TLS, so it sees the token either way. What's left: the token in browser history and dev tools, and any log level or proxy added later. Build order 10.
+
 - The app opens `/gateway?token=…` (`web/src/useSocket.js:37`; `server/gateway/index.js:83`).
 - Every HTTP route also accepts `?token=` (`server/auth/tokens.js:60`).
 - Proxies, load balancers and log shippers record the request line, so a 7-day bearer token ends up in log files the owner doesn't fully control.

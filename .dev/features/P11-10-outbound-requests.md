@@ -1,43 +1,48 @@
-# P11-10 — Outbound requests: ComfyUI metadata block and tunnel docs; push endpoint vetting
+# P11-10 — Push endpoint allowlist (go-live blocker); ComfyUI metadata block
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** READY
+- **State:** READY. **Build order 1: the go-live blocker.** Start only when the owner says so.
 - **Effort:** S
 - **Depends on:** none
 - **Serialize with:** none
-- **Requirement Source:** P11-00 findings M5 and M10, and its "Hosting setups" section. Push vetting is a go-live item in both setups: from the Unraid box or a tailnet VPS it's the one server-side request that can reach the home LAN.
+- **Requirement Source:** P11-00 findings M10 (High on the home LAN) and M5, plus "Deployment as built (2026-10-21)". DisGourd runs on the Unraid box, so the server sits on the owner's LAN.
 
 ## Problem
-- The ComfyUI URL a site admin saves is fetched with no address checks (`server/imagine/engines/comfyui.js:428-437`), and `fetch` follows redirects. A stolen admin login can read the cloud metadata service (`169.254.169.254`) through the test and list replies. And exposing the home ComfyUI to the internet so the cloud server can reach it would expose a service that runs arbitrary code.
-- Push subscriptions accept any `https://` endpoint (`server/routes/push.js:8-10`). The server then POSTs to it (`server/push.js:69`), into its own network (the home LAN on Unraid, the tailnet from a VPS) or at third parties. It's the only outbound request that doesn't go through `safeFetch`.
+- **Push (the blocker):** push subscriptions accept any `https://` endpoint (`server/routes/push.js:8-10`), and the server POSTs to it whenever that user is mentioned or DMed while away (`server/push.js:69`). It's the only server-side request that doesn't go through `safeFetch`.
+  - Any member can register `https://192.168.1.1/…` (the router), the Unraid web UI, another container (`https://audiobookshelf/…`) or any https service on the LAN, then get themself mentioned. The server sends POSTs there from inside the home network.
+  - It's blind (the body is encrypted), but it reaches devices that were never meant to face the internet, and it can be used to make the server hammer a third party.
+- **ComfyUI (smaller):** the URL a site admin saves is fetched with no address checks (`server/imagine/engines/comfyui.js:428-437`), and `fetch` follows redirects. A stolen admin login can point it anywhere and read the answer back through the test and list replies. ComfyUI legitimately lives on the LAN, so LAN addresses must stay allowed; only link-local and metadata addresses are refused (they matter if this ever moves to a VPS).
 
 ## Scope
-- **ComfyUI:**
-  - Before each request (and on each redirect, using `redirect: 'manual'`, at most 3 hops), resolve the host and refuse link-local addresses (169.254.0.0/16, fe80::/10), `0.0.0.0/8`, and the metadata names (`metadata.google.internal`, `metadata`, `instance-data`).
-  - Loopback, LAN, CGNAT and tailnet ranges (100.64.0.0/10) stay allowed: that's where ComfyUI lives.
-  - Reuse `isBlockedAddress` pieces from `server/net/safeFetch.js` (export a `isLinkLocalOrMetadata`).
-  - Saving a refused URL says "That address isn't allowed for ComfyUI".
-- **Docs:** README section "ComfyUI from a cloud server". Run Tailscale (or WireGuard) on both machines and use the ComfyUI box's tailnet address. Never port-forward ComfyUI.
-  - **A Tailscale ACL** (a sample policy): the VPS gets a tag (`tag:disgourd`) that may reach only `home-pc:8188`. Nothing at home may reach the VPS except SSH from the owner's devices. The VPS doesn't accept subnet routes (`--accept-routes=false`) and isn't an exit node. Key expiry stays on for the owner's devices; a tagged node's key doesn't expire, so note how to revoke it.
-  - **On Unraid,** P11-05's LAN egress rule plays the same part. Optionally put it behind a reverse proxy with basic auth (the URL field refuses `user:pass@`, so that would need a header option; recorded, not planned).
-- **Push:**
-  - Accept only endpoints whose host is a known push service, or ends with one: `fcm.googleapis.com`, `updates.push.services.mozilla.com`, `*.push.services.mozilla.com`, `*.notify.windows.com`, `web.push.apple.com`.
-  - The list goes in `PUSH_HOSTS` and can be extended through the environment.
-  - At most 10 subscriptions per user (the oldest dropped).
-  - Also when sending: resolve the endpoint's host and skip it if any address is blocked by `isBlockedAddress` (covers a poisoned DNS answer or a list entry added by mistake). Log it once.
+**Push (do this first; it can ship on its own if the ComfyUI part waits):**
+- **Allowlist:** accept a subscription only if its endpoint's host is, or ends with, a known push service: `fcm.googleapis.com` (Chrome, Android, Edge on Android), `updates.push.services.mozilla.com` and `*.push.services.mozilla.com` (Firefox), `*.notify.windows.com` (Edge on Windows), `web.push.apple.com` (Safari, iOS).
+  - `https:` only, port 443 or none, and no `user:pass@`.
+  - The list is a constant; `PUSH_HOSTS_EXTRA` (comma-separated) adds to it.
+  - A refused subscription answers 400 "That push service isn't supported".
+- **When sending, too:** resolve the endpoint's host and skip it if any address is blocked by `isBlockedAddress` (`server/net/safeFetch.js`). That covers a poisoned DNS answer or a bad `PUSH_HOSTS_EXTRA` entry. Log it once per endpoint.
+- **Existing rows:** at start, delete saved subscriptions whose host isn't on the list (they couldn't be legitimate pushes anyway), and log how many.
+- **Cap:** at most 10 subscriptions per user; a new one past that drops the oldest.
+
+**ComfyUI:**
+- Before each request, and on each redirect (`redirect: 'manual'`, at most 3 hops), resolve the host and refuse link-local addresses (169.254.0.0/16, fe80::/10), `0.0.0.0/8`, and the metadata names (`metadata.google.internal`, `metadata`, `instance-data`).
+- Loopback, LAN, CGNAT and tailnet ranges stay allowed: that's where ComfyUI lives.
+- Reuse the address pieces from `server/net/safeFetch.js` (export an `isLinkLocalOrMetadata`).
+- Saving a refused URL says "That address isn't allowed for ComfyUI".
+- **Docs:** README "ComfyUI": keep ComfyUI LAN-only and never port-forward or tunnel it publicly (it runs arbitrary workflows). On Unraid, P11-05's egress rule lets DisGourd reach only ComfyUI:8188.
+  - For a VPS setup (not the live one), reach ComfyUI over Tailscale with a sample ACL: the VPS tag may reach only `home-pc:8188`, doesn't accept routes, and isn't an exit node.
 
 ## Acceptance criteria
-- [ ] AC-1: saving or testing `http://169.254.169.254/` (and a hostname resolving there, using an injected lookup in the test) → 400.
-- [ ] AC-2: a ComfyUI that redirects to a link-local address fails cleanly.
-- [ ] AC-3: `http://192.168.1.20:8188` and `http://100.101.102.103:8188` are accepted (the tests use a fake lookup; no network).
-- [ ] AC-4: a push subscription to `https://10.0.0.5/x` or `https://example.com/x` → 400; an FCM or Mozilla endpoint → 201.
-- [ ] AC-5: the existing imagine and push suites pass.
-- [ ] AC-6: a saved subscription whose host resolves to `192.168.1.1` or `100.100.1.1` (an injected lookup) isn't sent to.
-- [ ] AC-7: the README has the Tailscale ACL sample, and `tailscale`'s policy checker accepts it (or it's checked by hand against the docs if no tailnet is at hand).
+- [ ] AC-1: a push subscription to `https://192.168.1.1/x`, `https://10.0.0.5/x`, `https://audiobookshelf/x`, `https://example.com/x` or `https://fcm.googleapis.com.evil.example/x` → 400. A real FCM, Mozilla, WNS or Apple endpoint shape → 201.
+- [ ] AC-2: a saved subscription whose allowed host resolves to `192.168.1.1` (an injected lookup) isn't sent to, and a warning is logged.
+- [ ] AC-3: at start, saved rows with other hosts are deleted (a test seeds one of each).
+- [ ] AC-4: an 11th subscription drops the oldest.
+- [ ] AC-5: notifications still arrive for real subscriptions. The existing push tests pass, and on the sandbox a Chrome subscription still saves.
+- [ ] AC-6: saving or testing ComfyUI at `http://169.254.169.254/` (or a hostname resolving there, with an injected lookup) → 400. A ComfyUI that redirects to a link-local address fails cleanly. `http://192.168.1.20:8188` is still accepted (fake lookup, no network).
+- [ ] AC-7: the imagine suites pass.
 
 ## Expected Areas of Change
-`server/imagine/engines/comfyui.js`, `server/net/safeFetch.js` (one export), `server/routes/push.js`, `server/db/index.js` (subscription cap), the README, tests (`imagine-comfyui.test.js`, `push.test.js`).
+`server/routes/push.js`, `server/push.js`, `server/db/index.js` (subscription cap and clean-up), `server/net/safeFetch.js` (one export), `server/imagine/engines/comfyui.js`, the README, tests (`push.test.js`, `imagine-comfyui.test.js`).
 
 ## Not in scope
-Auth headers for ComfyUI.
+Auth headers for ComfyUI. Other server-side requests: link previews, preview images and kie.ai downloads already go through `safeFetch`, which blocks the LAN, loopback, CGNAT/Tailscale and ULA ranges after DNS and on every redirect.

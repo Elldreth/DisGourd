@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation (child of P11-00)
 - **Phase:** 11
-- **State:** PLANNED (after P11-03 and P11-07; all three touch `server/gateway/`)
+- **State:** PLANNED (after P11-03 and P11-07; all three touch `server/gateway/`). Build order 11.
 - **Effort:** M
 - **Depends on:** P11-03; owner decision 2 in P11-00 (the DM default)
 - **Serialize with:** P11-03, P11-07
