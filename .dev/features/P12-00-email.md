@@ -37,7 +37,7 @@ Build order: P12-01 → P12-02 → P12-03 → P12-04. P12-03 and P12-04 could ru
   - Each is single-use and short-lived: 30 minutes for a reset, 24 hours for a confirmation or an admin reset link.
   - Each is bound to the user and the purpose, and compared in constant time.
   - Links carry the token in the URL fragment (`/#reset=…`), so it isn't sent in request lines or logged by proxies. The app posts it in the request body.
-- **Links use `PUBLIC_URL`** (for example `https://disgourd.2108464.xyz`), never the request's Host header. Without `PUBLIC_URL`, email is off.
+- **Links use `PUBLIC_URL`** (for example `https://disgourd.example.com`), never the request's Host header. Without `PUBLIC_URL`, email is off.
 - **Plain text plus simple HTML:**
   - Every email has both, in the app's voice, with no remote images or tracking.
   - Each says which server sent it and "If this wasn't you, …".
@@ -57,4 +57,4 @@ P12-02 adds one migration. Its number is the next free one at build time, becaus
 
 ## Discovered Work
 - **Domain reputation:** number-only `.xyz` domains get extra suspicion from some spam filters. SPF, DKIM and DMARC through Resend should be enough. If inbox placement is poor, a cheap separate sending domain is the fallback (an owner decision, not code).
-- **Receiving replies:** Cloudflare Email Routing (free) can forward `admin@2108464.xyz` to the owner's mailbox. That's a docs note in P12-01, not app code.
+- **Receiving replies:** Cloudflare Email Routing (free) can forward `admin@example.com` to the owner's mailbox. That's a docs note in P12-01, not app code.

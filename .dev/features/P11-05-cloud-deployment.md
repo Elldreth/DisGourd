@@ -15,7 +15,7 @@
 
 **Still to do (this packet):**
 1. **Trust only cloudflared.** `TRUST_PROXY=1` makes `clientIp` (`server/auth/rateLimit.js:29-38`) trust `X-Forwarded-For` from *any* peer.
-   - Every container on `proxynet` (audiobookshelf, SWAG if it still runs, anything added later) can reach `disgourd:3000` and send any `X-Forwarded-For` or `CF-Connecting-IP`.
+   - Every container on `proxynet` (other apps, SWAG if it still runs, anything added later) can reach `disgourd:3000` and send any `X-Forwarded-For` or `CF-Connecting-IP`.
    - `server/static.js:38` trusts `X-Forwarded-Host` / `-Proto` even without TRUST_PROXY.
 2. **Check the client IP the app sees through the tunnel.** Cloudflare appends the visitor's address to `X-Forwarded-For` and sets `CF-Connecting-IP` to it, so the last-hop rule is probably right today. It hasn't been checked on the live box, though, and it's what every rate limit rests on.
 3. **`read_only: true`** + tmpfs `/tmp` on the DisGourd container.
@@ -29,7 +29,7 @@
   - **`CLIENT_IP_HEADER=cf-connecting-ip`:** when set and the peer is trusted, the address is that header (a single value Cloudflare sets and a visitor can't). Otherwise it's the right-most `X-Forwarded-For` hop that isn't a trusted proxy.
   - `originFor` reads `X-Forwarded-Host` / `-Proto` only from a trusted peer.
 - **A network only cloudflared shares:**
-  - Put DisGourd on its own Docker network (for example `disgourd-edge`, a fixed subnet such as `172.30.80.0/24`). Only `cloudflared` joins it as well; cloudflared stays on `proxynet` for audiobookshelf.
+  - Put DisGourd on its own Docker network (for example `disgourd-edge`, a fixed subnet such as `172.30.80.0/24`). Only `cloudflared` joins it as well; cloudflared stays on `proxynet` for the other apps.
   - Set `TRUSTED_PROXIES` to that subnet.
   - Then no other container can reach `disgourd:3000` at all. In the tunnel's public hostname, `http://disgourd:3000` keeps working, because cloudflared resolves it on the shared network.
 - **A site-admin check:** `GET /admin/client-ip` returns `{ ip, peer, via: 'cf-connecting-ip' | 'x-forwarded-for' | 'socket', trusted }`, for checking the live setup from a phone on mobile data. Site admins only. Add it to `web/devProxy.js`.
@@ -57,7 +57,7 @@
   - Without `CLIENT_IP_HEADER`, the right-most untrusted X-Forwarded-For hop is used.
 - [x] AC-2: `TRUST_PROXY=1` alone still behaves as today, and the existing tests pass.
 - [x] AC-3: `X-Forwarded-Host` from an untrusted peer doesn't change the og:image origin.
-- [ ] AC-4 (owner, live, by the owner or the hosting session): `GET /admin/client-ip` from a phone on mobile data shows the phone's public IP, via `cf-connecting-ip`, `trusted: true`. From another container on `proxynet` (for example `docker exec audiobookshelf wget -qO- http://disgourd:3000/auth-info`), the connection fails once DisGourd is off `proxynet`.
+- [ ] AC-4 (owner, live, by the owner or the hosting session): `GET /admin/client-ip` from a phone on mobile data shows the phone's public IP, via `cf-connecting-ip`, `trusted: true`. From another container on `proxynet` (for example `docker exec YOUR_OTHER_CONTAINER wget -qO- http://disgourd:3000/auth-info`), the connection fails once DisGourd is off `proxynet`.
 - [ ] AC-5 (owner, live): DisGourd starts and runs with `read_only: true` (login, upload, a link preview, a backup). Inside the container, `node -e "fetch('http://<router-ip>').then(()=>console.log('open'),()=>console.log('blocked'))"` prints `blocked`, and the same for the ComfyUI host:8188 prints `open`.
 - [~] AC-6 (partly: no Docker here; CI runs the smoke test): `docker compose -f deploy/unraid-tunnel/docker-compose.yml config` validates. `deploy/docker-smoke.sh` passes with `read_only` and the pinned image.
 - [x] AC-7: both suites pass.
@@ -91,10 +91,10 @@
 ## Verification Evidence
 | Acceptance Criterion | Status | Verification Type | Evidence |
 |---|---|---|---|
-| AC-1 | Verified | Jest `client-ip.test.js` + sandbox | From 172.30.80.5, `CF-Connecting-IP` wins; from 172.18.0.9 (another network) its own address counts; an IPv4-mapped peer matches. Without the header: right-most untrusted hop, spoofed left hops ignored. Sandbox (`app-sandbox-trust`, trusted = loopback): `CF-Connecting-IP: 198.51.100.7` with a spoofed XFF gave `198.51.100.7 via cf-connecting-ip`. The same request over the PC's LAN address (10.0.0.149, untrusted) gave `10.0.0.149 via socket, trusted false` |
+| AC-1 | Verified | Jest `client-ip.test.js` + sandbox | From 172.30.80.5, `CF-Connecting-IP` wins; from 172.18.0.9 (another network) its own address counts; an IPv4-mapped peer matches. Without the header: right-most untrusted hop, spoofed left hops ignored. Sandbox (`app-sandbox-trust`, trusted = loopback): `CF-Connecting-IP: 198.51.100.7` with a spoofed XFF gave `198.51.100.7 via cf-connecting-ip`. The same request over the PC's LAN address (192.168.1.50, untrusted) gave `192.168.1.50 via socket, trusted false` |
 | AC-2 | Verified | Jest | `TRUST_PROXY=1` alone trusts private and loopback peers (a SWAG-like 172.18.x peer gets the forwarded IP; a public peer doesn't). The existing `api.test.js` 0.4 case passes unchanged |
 | AC-3 | Verified | Jest `shareMeta.test.js` + sandbox | `X-Forwarded-Host` is honoured from 172.18.0.4 with trust on, and ignored from 203.0.113.9, or with trust off. Sandbox: the trusted peer's `X-Forwarded-Host: chat.example.org` → `https://chat.example.org/og-image.png` |
-| AC-4 | Owner, live | README step 4 | The route and its console check work in the sandbox (`via: socket` for a direct visit). The live check (`via: cf-connecting-ip`, and `audiobookshelf` can't reach `disgourd:3000`) is for after the owner's steps 2–3 |
+| AC-4 | Owner, live | README step 4 | The route and its console check work in the sandbox (`via: socket` for a direct visit). The live check (`via: cf-connecting-ip`, and another container can't reach `disgourd:3000`) is for after the owner's steps 2–3 |
 | AC-5 | Owner, live | README step 5 | Read-only is proven by CI's smoke run (`--read-only`). The egress rule's `blocked` / `open` checks are for the owner on the Unraid box; `egress.sh` passes `bash -n` |
 | AC-6 | Partly | PyYAML + CI | Both compose files parse (services, networks, `read_only`, no ports on the tunnel one). There's no Docker on this PC for `docker compose config`; CI's smoke job builds the pinned image and runs it read-only |
 | AC-7 | Verified | Jest, Vitest | Server 60 suites / 537 tests; web 107 files / 844 tests |
@@ -113,10 +113,15 @@
 ## Follow-up after the live setup (2026-10-21)
 The owner applied the steps on Unraid. Everything checked out:
 - `/admin/client-ip` showed the real IPv6, peer `172.30.80.2`, via `cf-connecting-ip`, `trusted: true`.
-- The `audiobookshelf` wget got "bad address".
+- The wget from another container got "bad address".
 - From DisGourd, the router and the Unraid UI were blocked; ComfyUI and api.kie.ai were open.
 
 Running it surfaced three gaps, now fixed in `deploy/unraid-tunnel/egress.sh` and its README:
 - **The host itself:** traffic from the container to the Unraid host goes through `INPUT`, not `DOCKER-USER`, so the host UI stayed reachable. `egress.sh` now also drops new connections from `disgourd-edge` in `INPUT` (and `remove` deletes that rule). The README checks include the host's own IP.
 - **Start order:** Unraid can run the User Script before Docker has made `DOCKER-USER`, so the script waits up to 60 × 2 s for it.
-- **The tunnel's name:** the tunnel container's name is a variable (`TUNNEL`; the owner's template calls it `Unraid-Cloudflared-Tunnel`). The script re-runs `docker network connect disgourd-edge "$TUNNEL"` each time, so a re-created template container gets its network back.
+- **The tunnel's name:** the tunnel container's name is a variable (`TUNNEL`; an Unraid template container has its own name). The script re-runs `docker network connect disgourd-edge "$TUNNEL"` each time, so a re-created template container gets its network back.
+- **Generic samples (the owner asked, 2026-10-21):**
+  - The root `docker-compose.yml` is generic: `./data`, no port, the hardening on, `REGISTRATION_MODE=code`, no `SITE_ADMINS` value.
+  - `deploy/` holds optional recipes with "change these" lists: `unraid-tunnel/`, `swag/` (now with its own compose file and `client_max_body_size 25m`), and a short `linux-vps/`.
+  - Personal details in docs and packets were replaced with placeholders. `/local/` (for your own notes and configs) and `/data/` are in `.gitignore`, and `local` is in `.dockerignore`.
+  - Older commits still contain the details; history wasn't rewritten.

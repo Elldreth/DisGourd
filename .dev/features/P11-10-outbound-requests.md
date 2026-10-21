@@ -10,7 +10,7 @@
 
 ## Problem
 - **Push (the blocker):** push subscriptions accept any `https://` endpoint (`server/routes/push.js:8-10`), and the server POSTs to it whenever that user is mentioned or DMed while away (`server/push.js:69`). It's the only server-side request that doesn't go through `safeFetch`.
-  - Any member can register `https://192.168.1.1/…` (the router), the Unraid web UI, another container (`https://audiobookshelf/…`) or any https service on the LAN, then get themself mentioned. The server sends POSTs there from inside the home network.
+  - Any member can register `https://192.168.1.1/…` (the router), the Unraid web UI, another container (`https://othercontainer/…`) or any https service on the LAN, then get themself mentioned. The server sends POSTs there from inside the home network.
   - It's blind (the body is encrypted), but it reaches devices that were never meant to face the internet, and it can be used to make the server hammer a third party.
 - **ComfyUI (smaller):** the URL a site admin saves is fetched with no address checks (`server/imagine/engines/comfyui.js:428-437`), and `fetch` follows redirects. A stolen admin login can point it anywhere and read the answer back through the test and list replies. ComfyUI legitimately lives on the LAN, so LAN addresses must stay allowed; only link-local and metadata addresses are refused (they matter if this ever moves to a VPS).
 
@@ -33,7 +33,7 @@
   - For a VPS setup (not the live one), reach ComfyUI over Tailscale with a sample ACL: the VPS tag may reach only `home-pc:8188`, doesn't accept routes, and isn't an exit node.
 
 ## Acceptance criteria
-- [x] AC-1: a push subscription to `https://192.168.1.1/x`, `https://10.0.0.5/x`, `https://audiobookshelf/x`, `https://example.com/x` or `https://fcm.googleapis.com.evil.example/x` → 400. A real FCM, Mozilla, WNS or Apple endpoint shape → 201.
+- [x] AC-1: a push subscription to `https://192.168.1.1/x`, `https://10.0.0.5/x`, `https://othercontainer/x`, `https://example.com/x` or `https://fcm.googleapis.com.evil.example/x` → 400. A real FCM, Mozilla, WNS or Apple endpoint shape → 201.
 - [x] AC-2: a saved subscription whose allowed host resolves to `192.168.1.1` (an injected lookup) isn't sent to, and a warning is logged.
 - [x] AC-3: at start, saved rows with other hosts are deleted (a test seeds one of each).
 - [x] AC-4: an 11th subscription drops the oldest.
@@ -63,7 +63,7 @@
 ## Verification Evidence
 | Acceptance Criterion | Status | Verification Type | Evidence |
 |---|---|---|---|
-| AC-1 | Verified | Jest `push-allowlist.test.js` + sandbox | 12 refused shapes (LAN IPs, `audiobookshelf`, look-alike hosts, http, :8443, credentials, an IPv6 literal) → 400; 6 real service shapes → 201. Sandbox :3005 as sandy: `192.168.1.1`, `audiobookshelf`, `10.0.0.5` and `fcm.googleapis.com.evil.example` → 400; an FCM endpoint → 201 |
+| AC-1 | Verified | Jest `push-allowlist.test.js` + sandbox | 12 refused shapes (LAN IPs, `othercontainer`, look-alike hosts, http, :8443, credentials, an IPv6 literal) → 400; 6 real service shapes → 201. Sandbox :3005 as sandy: `192.168.1.1`, `othercontainer`, `10.0.0.5` and `fcm.googleapis.com.evil.example` → 400; an FCM endpoint → 201 |
 | AC-2 | Verified | Jest | An allowed host resolving to 192.168.1.1 isn't sent to (the other device still is), and a warning names the host. A DNS failure sends nothing |
 | AC-3 | Verified | Jest + sandbox | Seeded rows: the LAN one goes, the FCM one stays. On the sandbox DB, a seeded `https://192.168.1.1/old` row was gone after the restart; a copy of the sandbox DB printed `[push] Removed 1 push subscription(s) that weren't for a known push service` |
 | AC-4 | Verified | Jest | 11 subscriptions → 10 kept, `dev1` dropped |

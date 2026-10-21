@@ -28,7 +28,7 @@ A forgotten password today means a lost account, and the only fix is for an admi
     - There's no site-wide member list yet, so typing the name is the way in.
     - If a member list arrives later, it gets the same action in each user's menu.
   - Making a link doesn't sign the user out; using it does.
-  - Recorded in the server log ("[admin] elldreth made a reset link for bob"), never the link itself. There's no admin audit log yet; if one is added later, this goes there.
+  - Recorded in the server log ("[admin] owner made a reset link for bob"), never the link itself. There's no admin audit log yet; if one is added later, this goes there.
   - A site admin can't make one for another site admin (the owner resets their own via email or the server console).
 - **Server console fallback:** `node server/tools/reset-link.js <username>` prints a link, for the owner locked out of the only admin account. Run it with `docker exec`; it uses the same token code. Documented in the README.
 - **`/auth-info`** adds `email: <bool>`.

@@ -4,7 +4,11 @@ node_modules/
 # Build output
 web/dist/
 
+# Your own deployment notes and configs; never committed.
+/local/
+
 # Runtime data (never commit user data or secrets)
+/data/
 uploads/
 server/db/*.db
 server/db/*.db-wal

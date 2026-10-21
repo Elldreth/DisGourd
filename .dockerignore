@@ -5,6 +5,7 @@ web/dist
 .github
 .claude
 data
+local
 uploads
 *.log
 npm-debug.log*

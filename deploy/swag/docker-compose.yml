@@ -1,0 +1,52 @@
+# DisGourd on Unraid (or any Docker host) behind SWAG (nginx + Let's Encrypt).
+# Clone the repo on the server, then from the repo folder:
+#   docker compose -f deploy/swag/docker-compose.yml up -d --build
+# and copy disgourd.subdomain.conf.sample into SWAG (see that file).
+#
+# Change these:
+#   /mnt/user/appdata/disgourd         where the database lives (fast local disk / cache)
+#   /mnt/user/your-share/disgourd-uploads  where uploads live (can be the array)
+#   proxynet                           the Docker network SWAG is on
+#   99:100                             the user that owns those folders (Unraid's nobody:users)
+#   TRUSTED_PROXIES                    the subnet of that network (docker network inspect proxynet)
+#
+# Storage is split on purpose: the database on the SSD/cache (SQLite wants
+# fast, non-FUSE storage), uploads on the array.
+
+services:
+  disgourd:
+    build: ../..
+    image: disgourd:latest
+    container_name: disgourd
+    restart: unless-stopped
+    # The folders below must belong to this user, once:
+    #   chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/your-share/disgourd-uploads
+    user: "99:100"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PORT=3000
+      - DB_PATH=/config/disgourd.db
+      - UPLOADS_DIR=/uploads
+      - REGISTRATION_MODE=code
+      # SWAG appends the visitor's address to X-Forwarded-For; trust only SWAG's network.
+      - TRUSTED_PROXIES=172.18.0.0/16
+    volumes:
+      - /mnt/user/appdata/disgourd:/config
+      - /mnt/user/your-share/disgourd-uploads:/uploads
+    # SWAG reaches DisGourd over the shared network, so no port is needed.
+    # For LAN testing only (plain HTTP; never forward it at the router):
+    # ports:
+    #   - "3000:3000"
+    networks:
+      - swag
+
+networks:
+  swag:
+    external: true
+    name: proxynet

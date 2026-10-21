@@ -20,9 +20,9 @@ The server can't send email. Everything else in P12 needs a reliable way to send
   | `SMTP_PORT` | `587` | 587 uses STARTTLS (required, never falls back to plain); 465 uses TLS from the start |
   | `SMTP_USER` | `resend` | |
   | `SMTP_PASS` / `SMTP_PASS_FILE` | the Resend API key | Never logged, returned or stored |
-  | `MAIL_FROM` | `DisGourd <no-reply@2108464.xyz>` | Required. Must be on a domain verified with the provider |
-  | `MAIL_REPLY_TO` | `admin@2108464.xyz` | Optional |
-  | `PUBLIC_URL` | `https://disgourd.2108464.xyz` | Required for links. Email is off without it |
+  | `MAIL_FROM` | `DisGourd <no-reply@example.com>` | Required. Must be on a domain verified with the provider |
+  | `MAIL_REPLY_TO` | `admin@example.com` | Optional |
+  | `PUBLIC_URL` | `https://disgourd.example.com` | Required for links. Email is off without it |
 
 - **Mailer (`server/mail/index.js`):**
   - Uses **nodemailer**: one well-known, dependency-free package, rather than writing SMTP by hand. The pinned version is added to `server/package.json`, and `npm audit` stays clean.

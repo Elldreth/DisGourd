@@ -1,5 +1,6 @@
 #!/bin/bash
-# DisGourd LAN egress rule (P11-05). Run on the Unraid host as root: an Unraid
+# DisGourd LAN egress rule (P11-05). Change LAN, COMFY and TUNNEL below first.
+# Run on the Unraid host as root: an Unraid
 # User Script (e.g. "disgourd_egress") set to "At Startup of Array", and again
 # by hand after a Docker restart. Safe to run twice.
 #
@@ -18,7 +19,7 @@ EDGE=172.30.80.0/24              # the disgourd-edge subnet (docker-compose.yml)
 LAN=192.168.1.0/24               # your home LAN: check with `ip route` (a 10.x LAN is also covered by 10/8 below)
 COMFY=192.168.1.20               # the ComfyUI machine (blank to block ComfyUI too)
 COMFY_PORT=8188
-TUNNEL=cloudflared               # the tunnel container's name (an Unraid template may call it e.g. Unraid-Cloudflared-Tunnel)
+TUNNEL=YOUR_TUNNEL_CONTAINER     # the tunnel container's name (`cloudflared` with this folder's compose file)
 CHAIN=DISGOURD-EGRESS
 
 remove() {

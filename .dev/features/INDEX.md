@@ -266,7 +266,7 @@ Kept as its own table so it doesn't collide with other sessions' rows. Review: `
 | P10-09 | Code blocks in messages can be reached by keyboard (axe scrollable-region-focusable) | 10 | COMPLETE | S | none | markdown.jsx, index.css, markdown.test.jsx |
 
 ## Security for the public cloud (P11)
-Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **The live setup (2026-10-21) is the Unraid box behind a Cloudflare Tunnel** (see the review's "Deployment as built"). **C1 is live (the database was started fresh): the owner creates the `elldreth` account before the tunnel is back (P11-00, "Step 0").** **Build order: P11-10 first (the go-live blocker), then P11-01, 02, 03, 08, 05, 04, 06, 14, 07, 09, 12, 11, 13**, one PR each, starting only when the owner says so.
+Kept as its own table so it doesn't collide with other sessions' rows. Review: `P11-00-security-review.md` (findings ranked Critical/High/Medium/Low, with file:line, exploit and fix). Proof script: `.dev/security/p11-00-proof.js`. **The live setup (2026-10-21) is the Unraid box behind a Cloudflare Tunnel** (see the review's "Deployment as built"). **C1 is live (the database was started fresh): the owner creates their account before the tunnel is back (P11-00, "Step 0").** **Build order: P11-10 first (the go-live blocker), then P11-01, 02, 03, 08, 05, 04, 06, 14, 07, 09, 12, 11, 13**, one PR each, starting only when the owner says so.
 
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|

@@ -92,12 +92,26 @@ a mic test — independent of the operating-system default.
 
 ## Run with Docker (always-on server / Unraid)
 
-A `Dockerfile` and `docker-compose.yml` are included. From a checkout on the
-server:
+A `Dockerfile` and a generic `docker-compose.yml` are included. From a checkout
+on the server:
 
 ```bash
 docker compose up -d --build
+docker logs disgourd     # the one-time setup code for the first account
 ```
+
+The root `docker-compose.yml` keeps data in `./data`, runs read-only with no
+capabilities, and publishes no port: put a reverse proxy or tunnel in front.
+Optional recipes, each with a "change these" list, are in `deploy/`:
+
+- `deploy/unraid-tunnel/`: Unraid behind a Cloudflare Tunnel (no open ports),
+  with a LAN egress firewall rule.
+- `deploy/swag/`: Unraid (or any Docker host) behind SWAG / nginx.
+- `deploy/linux-vps/`: a Linux VPS behind Caddy or a Cloudflare Tunnel.
+
+**Your own setup** (real domain, tokens, IPs, paths, the compose file you
+actually run) belongs in a `local/` folder at the top of your checkout. Git
+ignores it, so it never gets committed or pushed.
 
 Data lives on **mounted volumes**, never in the image, and the DB and uploads
 are split on purpose:
@@ -107,23 +121,21 @@ are split on purpose:
   `/mnt/user/...`); use a direct disk/cache path there.
 - **Uploads → wherever you have space** (that's what grows).
 
-Edit the env and volume paths in `docker-compose.yml`:
+To put the data elsewhere, change the volume paths:
 
 ```yaml
 environment:
-  - JWT_SECRET=<a long random string>   # openssl rand -hex 48
-  - SITE_ADMINS=<your-username>
-  - REGISTRATION_MODE=closed            # then invite with the in-app codes
+  - REGISTRATION_MODE=code              # people need a code you make in Settings
 volumes:
   - /path/on/ssd/disgourd:/config       # DB   (DB_PATH=/config/disgourd.db)
   - /path/on/big/storage:/uploads       # uploads (UPLOADS_DIR=/uploads)
 ```
 
 The container runs as a **non-root user** with a built-in health check
-(`docker ps` shows `healthy`). `docker-compose.yml` runs it as `99:100`
-(Unraid's nobody:users); the folders you mount must belong to that user. On a
-fresh install, create them and `chown -R 99:100` them once (or remove the
-`user:` line to use the image's own user, 1000:1000).
+(`docker ps` shows `healthy`), as the image's own user (1000:1000) unless you
+set `user:`. The Unraid recipes use `99:100` (Unraid's nobody:users); the
+folders you mount must belong to whichever user it runs as, so on a fresh
+install create them and `chown -R` them once.
 
 #### Upgrading to the non-root image
 
@@ -140,10 +152,10 @@ Fix it once on the host (Unraid terminal), using your own volume paths, then
 start the container again:
 
 ```bash
-chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/bigboi/media/images
+chown -R 99:100 /mnt/user/appdata/disgourd /mnt/user/your-share/disgourd-uploads
 ```
 
-(Use `1000:1000` instead if you removed the `user:` line.)
+(Use `1000:1000` instead if you don't set `user:`.)
 
 **Always set `JWT_SECRET`** to 32+ random characters. Short or placeholder
 values are ignored; the server then generates one and keeps it in a

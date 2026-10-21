@@ -9,7 +9,7 @@
 - **Requirement Source:** P11-00 finding M6.
 
 ## Problem
-`users.username` is `UNIQUE` but case-sensitive (`server/db/migrations.js:43`), and lookups are exact. `Elldreth` can be registered next to `elldreth` and impersonate them in DMs, mentions and member lists. Emails have the same issue (two accounts for one mailbox).
+`users.username` is `UNIQUE` but case-sensitive (`server/db/migrations.js:43`), and lookups are exact. `Sandy` can be registered next to `sandy` and impersonate them in DMs, mentions and member lists. Emails have the same issue (two accounts for one mailbox).
 
 ## Scope
 - **A migration (next version):**
