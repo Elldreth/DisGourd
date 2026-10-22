@@ -1,10 +1,13 @@
 import { useId, useState } from 'react';
 import * as api from '../api.js';
+import { copyText } from '../util.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 
 // Settings › Site admin › People (P11-09): find an account by name and
 // suspend it (signed out everywhere, can't sign in) or lift the suspension.
 // `me` is your own username: your row has no button (the server refuses it).
+// P12-03: "Reset link" makes a one-time password link (24 hours) to hand to
+// someone who can't use "Forgot password?"; it's shown once, with Copy.
 const day = (ts) => new Date(ts).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
 
 export default function PeopleAdmin({ me }) {
@@ -15,6 +18,20 @@ export default function PeopleAdmin({ me }) {
   const [asking, setAsking] = useState(null); // { person, suspend }
   const [reason, setReason] = useState('');
   const reasonId = useId();
+  const [resetAsk, setResetAsk] = useState(null); // the person a reset link is for
+  const [resetLink, setResetLink] = useState(null); // { username, url, hours, copied }
+
+  async function makeLink() {
+    const person = resetAsk;
+    setResetAsk(null);
+    setError('');
+    try {
+      const r = await api.makeResetLink(person.username);
+      setResetLink({ username: person.username, url: window.location.origin + r.path, hours: r.expiresInHours, copied: false });
+    } catch (err) {
+      setError(err.message || 'Could not make a reset link');
+    }
+  }
 
   async function find(e) {
     e.preventDefault();
@@ -61,6 +78,28 @@ export default function PeopleAdmin({ me }) {
           Find
         </button>
       </form>
+      {resetLink && (
+        <div role="status" className="space-y-2 rounded-lg bg-ink-700 p-3">
+          <p className="text-sm text-gray-200">
+            A reset link for <strong>{resetLink.username}</strong>. It works once, for {resetLink.hours} hours, and is shown only now. Send it to them privately.
+          </p>
+          <div className="flex gap-2">
+            <input readOnly value={resetLink.url} aria-label={`Reset link for ${resetLink.username}`} onFocus={(e) => e.target.select()} className="input flex-1 font-mono text-xs" />
+            <button
+              type="button"
+              onClick={async () => {
+                if (await copyText(resetLink.url)) setResetLink((l) => l && { ...l, copied: true });
+              }}
+              className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+            >
+              {resetLink.copied ? 'Copied' : 'Copy'}
+            </button>
+            <button type="button" onClick={() => setResetLink(null)} className="rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-ink-600">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
       {error && (
         <p role="alert" className="text-sm text-danger">
           {error}
@@ -88,6 +127,17 @@ export default function PeopleAdmin({ me }) {
                 {p.username === me ? (
                   <span className="shrink-0 px-3 text-sm text-gray-400">You</span>
                 ) : (
+                  <>
+                  {!p.siteAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setResetAsk(p)}
+                      aria-label={`Make a reset link for ${p.username}`}
+                      className="tap shrink-0 rounded-lg bg-ink-600 px-3 py-1.5 text-sm text-gray-200 transition hover:bg-ink-500"
+                    >
+                      Reset link
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -101,11 +151,21 @@ export default function PeopleAdmin({ me }) {
                   >
                     {p.suspended ? 'Lift suspension' : 'Suspend'}
                   </button>
+                  </>
                 )}
               </li>
             ))}
           </ul>
         ))}
+      {resetAsk && (
+        <ConfirmDialog
+          title={`Make a reset link for ${resetAsk.username}?`}
+          body="Anyone with the link can set a new password for this account, so only give it to them. It works once, for 24 hours, and replaces any earlier reset link. Using it signs them out everywhere."
+          confirmLabel="Make link"
+          onConfirm={makeLink}
+          onCancel={() => setResetAsk(null)}
+        />
+      )}
       {asking &&
         (asking.suspend ? (
           <ConfirmDialog

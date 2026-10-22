@@ -8,6 +8,7 @@ const imagine = require('../imagine');
 const { clientIpVia, proxyTrust } = require('../net/clientIp');
 const { newRegCode } = require('../auth/regCodes');
 const invitePolicy = require('../auth/invitePolicy');
+const { makeResetToken } = require('./password');
 const { endStaleSessions } = require('../gateway/delivery');
 const mail = require('../mail');
 const templates = require('../mail/templates');
@@ -224,6 +225,24 @@ const routes = [
         return sendJson(res, 200, { ok: true });
       }
       return sendJson(res, 404, { error: 'Not found' });
+    },
+  },
+  {
+    // POST /admin/users/:username/reset-link (P12-03): a one-time password
+    // reset link (24 hours) for someone without a confirmed email, handed over
+    // by the admin. Never for another site admin. Logged without the link.
+    match: ({ req, pathSegments }) => pathSegments[0] === 'admin' && pathSegments[1] === 'users' && pathSegments[3] === 'reset-link' && pathSegments.length === 4 && req.method === 'POST',
+    run: async ({ req, res, parsedUrl, pathSegments }) => {
+      const userId = authUserId(req, parsedUrl);
+      if (!userId) return sendJson(res, 401, { error: 'Unauthorized' });
+      if (!db.isSiteAdmin(userId)) return sendJson(res, 403, { error: 'Only site admins can make reset links' });
+      const target = db.getUserByUsername(pathSegments[2]);
+      if (!target || target.is_bot) return sendJson(res, 404, { error: 'User not found' });
+      if (target.site_admin) return sendJson(res, 403, { error: 'Site admins reset their own password (Forgot password, or the server console)' });
+      const raw = makeResetToken(target.id);
+      const me = db.getUserById(userId);
+      console.warn(`[admin] ${me.username} made a reset link for ${target.username}`);
+      return sendJson(res, 201, { path: `/#reset=${raw}`, expiresInHours: 24 });
     },
   },
   {

@@ -294,7 +294,7 @@ Container: `P12-00-email.md`. The owner's decisions (2026-10-21): Resend over SM
 | P12-00 | Email: password reset and security notices (Container) | 12 | PLANNED | L | P11-01, P11-12 | see children |
 | P12-01 | Sending email: SMTP from the environment, mailer with queue and caps, Site admin › Email with "Send test email", Resend and DNS docs | 12 | COMPLETE | S–M | P11-14 (soft) | mail/ (new), config.js, routes/admin.js, EmailPage.jsx, README |
 | P12-02 | Email addresses: optional, confirm by link, change with password, "require confirmed email" switch (migration: users rebuild, email_tokens) | 12 | COMPLETE | M | P12-01, P11-12 | migrations, db/index.js, routes/auth.js, Login.jsx, EmailSection.jsx, ConfirmEmailGate.jsx |
-| P12-03 | Password reset: "Forgot password?", one-time link, admin reset link, console tool | 12 | PLANNED | M | P12-02; P11-08 (soft) | routes/auth.js, tools/reset-link.js, ResetPassword.jsx, Login.jsx |
+| P12-03 | Password reset: "Forgot password?", one-time link, admin reset link, console tool | 12 | REVIEW | M | P12-02; P11-08 (soft) | routes/password.js (new), scripts/reset-link.js (new), ResetPassword.jsx (new), Login.jsx, PeopleAdmin.jsx |
 | P12-04 | Security notices: password changed, email changed, new device | 12 | PLANNED | S | P12-02 | routes/auth.js, mail/templates.js, Notifications settings |
 
 ## Small fixes from the live server (P13)
@@ -303,14 +303,14 @@ Container: `P12-00-email.md`. The owner's decisions (2026-10-21): Resend over SM
 | P13-01 | Registration codes that survive a phone keyboard: easy-to-type codes, matching ignores case, spaces and dashes, no autocorrect | 13 | COMPLETE | S | none | auth/regCodes.js (new), db/index.js, routes/admin.js, routes/auth.js, Login.jsx, SetupWizard.jsx |
 | P13-02 | kie.ai failures in plain words (kie.ai's side vs DisGourd's limit), one retry when nothing was charged, failed jobs logged | 13 | COMPLETE | S | none | imagine/engines/kie.js, imagine/runner.js, tests |
 | P13-03 | kie.ai safety blocks said plainly ("unsafe" and the like), advice by model and channel, no doubled full stop | 13 | COMPLETE | S | P13-02 | imagine/engines/kie.js, imagine/runner.js, tests |
-| P13-04 | An address nobody confirmed doesn't block sign-up: it gives way (a confirmed one still refuses) | 13 | REVIEW | S | P12-02 | db/index.js, routes/auth.js, routes/email.js, tests |
+| P13-04 | An address nobody confirmed doesn't block sign-up: it gives way (a confirmed one still refuses) | 13 | COMPLETE | S | P12-02 | db/index.js, routes/auth.js, routes/email.js, tests |
 
 ## Invites (P14)
 Container: `P14-00-invites.md`. The owner's decisions (2026-10-21): one invite link signs a new person up **and** joins them to the server; modes Open / Invite only / Closed (with "Invite links still let people sign up"); "Who can bring in new people with their invites" (Site admins only by default; the owner's setup: anyone who can invite, plus a confirmed email); easy invite codes; "Email this invite".
 
 | ID | Title | Phase | State | Effort | Depends on | Main files |
 |---|---|---|---|---|---|---|
-| P14-00 | One invite link: sign up and join in one step (Container) | 14 | PLANNED | M–L | P12-02, P13-01 | see children |
+| P14-00 | One invite link: sign up and join in one step (Container) | 14 | COMPLETE | M–L | P12-02, P13-01 | see children |
 | P14-01 | Server: sign up with an invite and auto-join, modes and "who can bring in new people", public invite preview, easy invite codes | 14 | COMPLETE | M | P12-02 | routes/auth.js, routes/invites.js, routes/spaces.js, routes/admin.js, config.js, auth/invitePolicy.js (new) |
 | P14-02 | App: invite landing page with sign-up, land in the server, Site admin › General settings, invite dialog line | 14 | COMPLETE | M | P14-01 | InviteLanding.jsx (new), App.jsx, inviteLink.js, RegistrationAdmin.jsx, InviteDialog.jsx |
 | P14-03 | "Email this invite" | 14 | COMPLETE | S | P14-01, P12-01 | routes/spaces.js, mail/templates.js, InviteDialog.jsx |

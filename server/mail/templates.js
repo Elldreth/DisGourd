@@ -86,4 +86,20 @@ function serverInvite({ serverName, publicUrl, inviter, space, link, expiresAt, 
   return { subject: `${inviter} invited you to ${space} on ${serverName}`, text, html };
 }
 
-module.exports = { layout, testEmail, confirmEmail, serverInvite, esc };
+// P12-03: "Reset your password", from "Forgot password?".
+function resetPassword({ serverName, publicUrl, username, link }) {
+  const { text, html } = layout({
+    serverName,
+    publicUrl,
+    heading: 'Reset your password',
+    paragraphs: [
+      `Hi ${username}, someone asked to reset the password for your ${serverName} account. If it was you, choose a new one with the button below.`,
+      'The link works once and expires in 30 minutes. Using it signs you out everywhere else.',
+      'If you didn’t ask for this, you can ignore this email: your password stays as it is.',
+    ],
+    button: { label: 'Choose a new password', url: link },
+  });
+  return { subject: `Reset your ${serverName} password`, text, html };
+}
+
+module.exports = { layout, testEmail, confirmEmail, serverInvite, resetPassword, esc };
