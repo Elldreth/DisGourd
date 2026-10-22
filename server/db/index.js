@@ -2066,6 +2066,15 @@ function useEmailToken(raw, purpose) {
   `).get(now, tokenHash(raw), purpose, now);
   return row || null;
 }
+// Look at a token without spending it (P12-03: check the new password first).
+function peekEmailToken(raw, purpose) {
+  if (typeof raw !== 'string' || raw.length < 20 || raw.length > 100) return null;
+  const row = db.prepare(`
+    SELECT user_id AS userId, email FROM email_tokens
+    WHERE token_hash = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?
+  `).get(tokenHash(raw), purpose, Date.now());
+  return row || null;
+}
 // The address a confirmation link is waiting on, if any.
 function pendingEmail(userId) {
   const row = db.prepare(`
@@ -2592,6 +2601,7 @@ function getUnfinishedImagineJobs() {
 if (versionBefore > 0 && versionBefore < 12) seedAllSpaceRoles();
 
 module.exports = {
+  peekEmailToken,
   releaseUnconfirmedEmail,
   getSpaceCard,
   createEmailToken,

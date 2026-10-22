@@ -17,6 +17,7 @@ export const apiPaths = [
   '/friends',
   '/blocks', // P9-07a
   '/email', // P12-02: the confirm link's POST
+  '/password', // P12-03: forgot and reset
   '/invites',
   '/search',
   '/admin',

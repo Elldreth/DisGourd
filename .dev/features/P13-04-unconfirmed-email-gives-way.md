@@ -2,7 +2,7 @@
 
 - **Unit Type:** Implementation
 - **Phase:** 13 (small fixes found on the live server)
-- **State:** REVIEW
+- **State:** COMPLETE (merged in #239; the owner's sign-up from the emailed invite worked live)
 - **Effort:** S
 - **Depends on:** P12-02
 - **Starting baseline:** main after #238

@@ -37,7 +37,7 @@
 - [x] AC-1: the email has the right subject, button link and expiry line; values are escaped.
 - [x] AC-2: only someone allowed (the invite's creator or a server manager) can send it; others get 403.
 - [x] AC-3: the per-sender limit and the mailer's limits hold. Email off → 409, and the button is hidden.
-- [ ] AC-4: live: an invite emailed from the owner's server arrives in an inbox, and its button opens the landing page (P14-02).
+- [x] AC-4: live: an invite emailed from the owner's server arrives in an inbox, and its button opens the landing page (P14-02).
 
 ## Expected Areas of Change
 `server/routes/spaces.js` (or `routes/invites.js`), `server/mail/templates.js`, `web/src/components/InviteDialog.jsx`, `api.js`; tests.
@@ -51,3 +51,4 @@
 | Suites | Server 653 (2 Linux-only skipped), web 878; `vite build` clean |
 | Sandbox | A throwaway copy of the sandbox DB on :3015, with a test-only transport printing each email. As sandy: Smoke Test's server menu → Invite → the dialog showed `5DBCH-3ZRRQ`, "New people can create an account with this link." and **Email this invite**. An address, then Send → "Sent to newfriend@example.org.". The log had the email: "sandy invited you to Smoke Test on DisGourd", the new-account paragraph, "This invite expires on October 28, 2026.", and "Join Smoke Test: http://localhost:3015/invite/5DBCH-3ZRRQ". The temporary entry and DB were removed |
 | AC-4 (live, partly) | **The owner's server (2026-10-21):** an invite emailed from Den of Thieves **arrived, but in Gmail's spam folder** (a brand-new sending domain, and invite-style wording; the plain test email had reached the inbox). Signing up from it with a second address was blocked by an unconfirmed claim on that address, which P13-04 fixes. Opening the landing page from the email is to be rechecked after P13-04 |
+| AC-4 (live, passed) | **After P13-04 (#239, 2026-10-21):** the owner signed up from the emailed invite with the second address, and it worked ("yeah, that worked"). Landing in spam is recorded as discovered work (less spam-like email) |

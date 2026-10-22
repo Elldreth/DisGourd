@@ -186,6 +186,19 @@ export function removeEmail(password) {
 export function resendEmailLink() {
   return request('/me/email/resend', { method: 'POST' });
 }
+// ---- Password reset (P12-03) ----
+// Always the same answer, whether or not the account exists.
+export function forgotPassword(login) {
+  return request('/password/forgot', { method: 'POST', auth: false, body: { login } });
+}
+// From a reset link: { ok, token } (or { ok, suspended }).
+export function resetPassword(token, newPassword) {
+  return request('/password/reset', { method: 'POST', auth: false, body: { token, newPassword } });
+}
+// Site admins: a one-time link (24 hours) to hand to someone. { path, expiresInHours }
+export function makeResetLink(username) {
+  return request(`/admin/users/${encodeURIComponent(username)}/reset-link`, { method: 'POST' });
+}
 // From the link in the email; works signed in or out.
 export function confirmEmail(token) {
   return request('/email/confirm', { method: 'POST', auth: false, body: { token } });

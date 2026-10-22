@@ -5,8 +5,17 @@
 const PREFIX = '#confirm-email=';
 
 export function captureConfirmToken(loc = window.location) {
-  if (!loc.hash.startsWith(PREFIX)) return '';
-  const token = loc.hash.slice(PREFIX.length).trim();
+  return captureHashToken(PREFIX, loc);
+}
+
+// P12-03: password reset links, <origin>/#reset=<token>, handled the same way.
+export function captureResetToken(loc = window.location) {
+  return captureHashToken('#reset=', loc);
+}
+
+function captureHashToken(prefix, loc) {
+  if (!loc.hash.startsWith(prefix)) return '';
+  const token = loc.hash.slice(prefix.length).trim();
   try {
     window.history.replaceState(null, '', loc.pathname + loc.search);
   } catch {

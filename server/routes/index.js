@@ -4,6 +4,7 @@
 const modules = [
   require('./auth'),
   require('./email'), // P12-02
+  require('./password'), // P12-03
   require('./admin'),
   require('./social'),
   require('./spaces'),

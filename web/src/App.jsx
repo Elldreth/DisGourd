@@ -39,8 +39,9 @@ import { useShortcuts, stepChannel } from './shortcuts.js';
 import ShortcutsSheet from './components/ShortcutsSheet.jsx';
 import { useOverlayHistory } from './overlayHistory.js';
 import { capturePendingInvite, clearPendingInvite } from './inviteLink.js';
-import { captureConfirmToken } from './emailLink.js';
+import { captureConfirmToken, captureResetToken } from './emailLink.js';
 import ConfirmEmailLink from './components/ConfirmEmailLink.jsx';
+import ResetPassword from './components/ResetPassword.jsx';
 import ConfirmEmailGate from './components/ConfirmEmailGate.jsx';
 import { registerServiceWorker, onOpenRequest } from './pwa.js';
 import { cooldownKey, startCooldown, renameCooldowns } from './slowmode.js';
@@ -106,6 +107,19 @@ export default function App() {
   const [pendingInvite, setPendingInvite] = useState(capturePendingInvite);
   // P12-02: a confirmation link opened this tab (#confirm-email=…).
   const [confirmToken, setConfirmToken] = useState(captureConfirmToken);
+  // P12-03: a password reset link opened this tab (#reset=…).
+  const [resetToken, setResetToken] = useState(captureResetToken);
+  // A link pasted into a tab that's already open only changes the hash.
+  useEffect(() => {
+    const onHash = () => {
+      const reset = captureResetToken();
+      if (reset) setResetToken(reset);
+      const confirm = captureConfirmToken();
+      if (confirm) setConfirmToken(confirm);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   // When logged out, find out whether this is a brand-new install (show setup).
   useEffect(() => {
@@ -574,6 +588,22 @@ export default function App() {
     } else if (it.kind === 'server') selectSpace(it.name);
     else if (it.key) selectDm(it.key);
     else startDm(it.username);
+  }
+
+  if (resetToken) {
+    return (
+      <ResetPassword
+        token={resetToken}
+        signedIn={!!token}
+        onDone={(t) => {
+          setResetToken('');
+          if (t) {
+            setSignedOutNote('');
+            setToken(t);
+          }
+        }}
+      />
+    );
   }
 
   if (confirmToken) {

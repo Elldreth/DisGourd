@@ -2,7 +2,7 @@
 
 - **Unit Type:** Container (children P14-01 … P14-03)
 - **Phase:** 14
-- **State:** PLANNED
+- **State:** COMPLETE (P14-01 #236, P14-02 #237, P14-03 #238)
 - **Effort:** M–L in total
 - **Depends on:** P12-02 (confirmed email, "Require a confirmed email"), P13-01 (easy-to-type codes)
 - **Requirement Source:** the owner, 2026-10-21. "Currently getting people into the disgourd server is difficult. You have to give them a url, then find the invite code buried in settings, then when they are joined to the system you have to go into another place in server settings to get them a link for inviting them to your server. It's a mess." And: "I'd like to create an invite link from my 'Den of Thieves' disgourd server and send it to them via email or copy/paste a link that they can click on which takes them first to create their Disgourd account but automatically gives them access to the Disgourd server that the invite was made from … once they're in Disgourd they should see the server in their server list and they would have already been added." The owner also wants it set up correctly for larger communities, and wants accounts verified by email.

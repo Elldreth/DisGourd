@@ -262,7 +262,27 @@ What uses it:
   confirmed address see only a "Confirm your email" step until they confirm
   one, and sign-up asks for an address. Site admins are never held back.
 
-Password reset and security notices come next (P12-03, P12-04).
+- **Forgot password?** On the sign-in page, once email works. Anyone can ask
+  with their username or email; the answer is the same either way, and the
+  link goes only to a *confirmed* address. It works once, within 30 minutes,
+  and signs that account out everywhere before signing in the device that
+  used it.
+
+**No email on the account, or email not set up?** A site admin can make a
+reset link in **Site admin › People › Reset link**: it works once, within
+24 hours, and is shown only then, for the admin to send privately. It isn't
+offered for other site admins. If you're the owner and locked out of the
+only admin account, make one from the server's console:
+
+```bash
+node server/scripts/reset-link.js <username>
+```
+
+In Docker: `docker exec disgourd node server/scripts/reset-link.js <username>`.
+It prints the link (with `PUBLIC_URL` when that's set). Neither kind of link is
+written to the server's log.
+
+Security notices come next (P12-04).
 
 **With Resend** (free for 3,000 emails a month, 100 a day):
 

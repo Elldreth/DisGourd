@@ -6,8 +6,10 @@ import AuthShell, { Field } from './AuthShell.jsx';
 // page: "You're invited to <server>", and either a sign-up form that joins it
 // (no code needed) or, when this link can't create accounts, sign-in only.
 // `onInviteGone()` forgets a code that turned out to be invalid.
+// P12-03: "Forgot password?" (only when the server can send email) swaps the
+// form for one field, username or email, and shows the server's answer.
 export default function Login({ onAuthed, notice = '', inviteCode = '', onInviteGone }) {
-  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [mode, setMode] = useState('login'); // 'login' | 'register' | 'forgot'
   const [invite, setInvite] = useState(null); // the invite's preview (P14-02)
   const [inviteNote, setInviteNote] = useState('');
   const [username, setUsername] = useState('');
@@ -16,6 +18,9 @@ export default function Login({ onAuthed, notice = '', inviteCode = '', onInvite
   const [code, setCode] = useState('');
   const [regMode, setRegMode] = useState('open'); // 'open' | 'code' | 'closed'
   const [emailRequired, setEmailRequired] = useState(false); // P12-02: the server requires a confirmed email
+  const [mailOn, setMailOn] = useState(false); // P12-03: the server can send email, so "Forgot password?" works
+  const [forgotLogin, setForgotLogin] = useState('');
+  const [forgotSent, setForgotSent] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -23,6 +28,7 @@ export default function Login({ onAuthed, notice = '', inviteCode = '', onInvite
     api.getAuthInfo().then((r) => {
       setRegMode(r.registration || 'open');
       setEmailRequired(!!r.emailRequired);
+      setMailOn(!!r.email);
     }).catch(() => {});
   }, []);
 
@@ -55,6 +61,61 @@ export default function Login({ onAuthed, notice = '', inviteCode = '', onInvite
   const needsCode = (regMode === 'invite' || regMode === 'code') && !(invite && invite.signUp);
 
   const isRegister = mode === 'register';
+
+  async function sendReset(e) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      const r = await api.forgotPassword(forgotLogin.trim());
+      setForgotSent(r.message);
+    } catch (err) {
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function backToSignIn() {
+    setMode('login');
+    setError('');
+    setForgotSent('');
+  }
+
+  const primary = 'w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-hover active:scale-[.98] disabled:opacity-60 disabled:active:scale-100';
+
+  if (mode === 'forgot') {
+    return (
+      <AuthShell title="Forgot your password?" subtitle="We’ll email a link to the account’s confirmed address." pose="confused">
+        {forgotSent ? (
+          <div className="space-y-4">
+            <p role="status" className="rounded-lg bg-ink-700 px-3 py-2 text-sm text-gray-200">{forgotSent}</p>
+            <p className="text-sm text-gray-400">No email address on the account? Ask a site admin for a reset link.</p>
+            <button type="button" autoFocus onClick={backToSignIn} className={primary}>Back to sign in</button>
+          </div>
+        ) : (
+          <form onSubmit={sendReset} className="space-y-4">
+            <Field label="Username or email">
+              <input
+                autoFocus
+                value={forgotLogin}
+                onChange={(e) => setForgotLogin(e.target.value)}
+                className="input"
+                autoComplete="username"
+                autoCapitalize="none"
+                required
+              />
+            </Field>
+            {error && <div className="rounded-lg bg-danger/15 px-3 py-2 text-sm text-danger">{error}</div>}
+            <button type="submit" disabled={busy} className={primary}>{busy ? 'Please wait…' : 'Send reset link'}</button>
+            <button type="button" onClick={backToSignIn} className="w-full rounded-lg px-4 py-2 text-sm text-gray-300 hover:bg-ink-700">
+              Back to sign in
+            </button>
+          </form>
+        )}
+      </AuthShell>
+    );
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -130,6 +191,21 @@ export default function Login({ onAuthed, notice = '', inviteCode = '', onInvite
               autoComplete={isRegister ? 'new-password' : 'current-password'}
             />
           </Field>
+          {!isRegister && mailOn && (
+            <div className="-mt-2 text-right">
+              <button
+                type="button"
+                className="text-xs font-semibold text-brand-hi hover:underline"
+                onClick={() => {
+                  setMode('forgot');
+                  setError('');
+                  setForgotLogin(username.trim());
+                }}
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
 
           {isRegister && needsCode && (
             <Field label="Registration code" hint="Ask the server owner">
@@ -154,7 +230,7 @@ export default function Login({ onAuthed, notice = '', inviteCode = '', onInvite
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-hover active:scale-[.98] disabled:opacity-60 disabled:active:scale-100"
+            className={primary}
           >
             {busy ? 'Please wait…' : isRegister ? 'Create account' : 'Sign in'}
           </button>
